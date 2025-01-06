@@ -1,5 +1,11 @@
+github.com/0xsoniclabs/Carmen/go v0.0.0-20241230125907-0745da71c1ba h1:Ow8tSIVLT/qAESI+DVj/Xt9cB3zpSm1kIHvaV61wxPQ=
+github.com/0xsoniclabs/Carmen/go v0.0.0-20241230125907-0745da71c1ba/go.mod h1:zOKJ4uKvBUVmHx4vKRIfmv+9gQ7yasru+7GNXxJdP3o=
+github.com/0xsoniclabs/Tosca v0.0.0-20250102101309-c64a219ca14d h1:jEIxnXWpJ/6yhtDIuuGZvZzqpA4KIuR47c+I1ublDl4=
+github.com/0xsoniclabs/Tosca v0.0.0-20250102101309-c64a219ca14d/go.mod h1:eemhOX7D96e+5cQrpw6eXXyeTdxZB7Xp69pXMBcy8Xc=
 github.com/0xsoniclabs/go-ethereum v0.0.0-20241022121122-7063a6b506bd h1:rrj5Iv72cwtmC1AAsMhI5qw6wPs3cKGB935OjqZpqjU=
 github.com/0xsoniclabs/go-ethereum v0.0.0-20241022121122-7063a6b506bd/go.mod h1:p4knNH76zBuqbEfc6CbZTOnaQNU0WvhzW5f0qq6aMoU=
+github.com/0xsoniclabs/lachesis-base v0.0.0-20241230130508-cacd1bcc6316 h1:RsnA10YCtjOGJnvZn9BG/WnkrMtOnggRgcceV11kQyk=
+github.com/0xsoniclabs/lachesis-base v0.0.0-20241230130508-cacd1bcc6316/go.mod h1:u0zb/GAlFZTAbOohyQDm9uozYujNVaD70dpRP3Fiqek=
 github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 h1:UQHMgLO+TxOElx5B5HZ4hJQsoJ/PvUvKRhJHDQXO8P8=
 github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1/go.mod h1:xomTg63KZ2rFqZQzSB4Vz2SUXa1BpHTVz9L5PTmPC4E=
 github.com/DataDog/zstd v1.5.6 h1:LbEglqepa/ipmmQJUDnSsfvA8e8IStVcGaFWDuxvGOY=
@@ -8,12 +14,6 @@ github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e h1:ahyvB3q25Yn
 github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e/go.mod h1:kGUqhHd//musdITWjFvNTHn90WG9bMLBEPQZ17Cmlpw=
 github.com/FactomProject/btcutilecc v0.0.0-20130527213604-d3a63a5752ec h1:1Qb69mGp/UtRPn422BH4/Y4Q3SLUrD9KHuDkm8iodFc=
 github.com/FactomProject/btcutilecc v0.0.0-20130527213604-d3a63a5752ec/go.mod h1:CD8UlnlLDiqb36L110uqiP2iSflVjx9g/3U9hCI4q2U=
-github.com/Fantom-foundation/Carmen/go v0.0.0-20241121102311-62fc85c89464 h1:xWayjc87Mk3ESu4xGtX6YYx7KrN+gJpCWZhqmZHDpxs=
-github.com/Fantom-foundation/Carmen/go v0.0.0-20241121102311-62fc85c89464/go.mod h1:vNRGm/b21hDlF8kYyKHkXq1s+jLMKpV4jGwXHylXIIg=
-github.com/Fantom-foundation/Tosca v0.0.0-20241028082205-7b33705a4675 h1:Meqtt0eM9UAw1ceQ1tGiD497V0IVfqj8c6UrFJhkFNE=
-github.com/Fantom-foundation/Tosca v0.0.0-20241028082205-7b33705a4675/go.mod h1:8i7r+dUOkXjEC61SaFoRet6JYjRaSoiM/PhviP6K4Y8=
-github.com/Fantom-foundation/lachesis-base v0.0.0-20240116072301-a75735c4ef00 h1:yw5QaA7u4t2/j7VIGrMt640Kuhsx6pEIHM3bj10glWc=
-github.com/Fantom-foundation/lachesis-base v0.0.0-20240116072301-a75735c4ef00/go.mod h1:Ogv5etzSmM2rQ4eN3OfmyitwWaaPjd4EIDiW/NAbYGk=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/VictoriaMetrics/fastcache v1.12.2 h1:N0y9ASrJ0F6h0QaC3o6uJb3NIZ9VKLjCM7NQbSmF7WI=
