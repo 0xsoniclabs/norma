@@ -23,11 +23,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/Fantom-foundation/Norma/driver"
-	"github.com/Fantom-foundation/Norma/driver/monitoring"
-	mon "github.com/Fantom-foundation/Norma/driver/monitoring"
-	"github.com/Fantom-foundation/Norma/driver/monitoring/utils"
-	opera "github.com/Fantom-foundation/Norma/driver/node"
+	"github.com/0xsoniclabs/Norma/driver"
+	"github.com/0xsoniclabs/Norma/driver/monitoring"
+	mon "github.com/0xsoniclabs/Norma/driver/monitoring"
+	"github.com/0xsoniclabs/Norma/driver/monitoring/utils"
+	opera "github.com/0xsoniclabs/Norma/driver/node"
 )
 
 type PprofData []byte

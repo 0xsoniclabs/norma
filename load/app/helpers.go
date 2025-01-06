@@ -19,7 +19,7 @@ package app
 import (
 	"context"
 	"fmt"
-	"github.com/Fantom-foundation/Norma/driver/rpc"
+	"github.com/0xsoniclabs/Norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"

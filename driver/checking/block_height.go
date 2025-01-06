@@ -21,7 +21,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Fantom-foundation/Norma/driver"
+	"github.com/0xsoniclabs/Norma/driver"
 )
 
 // BlockHeightChecker is a Checker checking if all Opera nodes achieved the same block height.

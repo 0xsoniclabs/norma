@@ -19,8 +19,8 @@ package checking
 import (
 	"fmt"
 
-	"github.com/Fantom-foundation/Norma/driver"
-	"github.com/Fantom-foundation/Norma/driver/rpc"
+	"github.com/0xsoniclabs/Norma/driver"
+	"github.com/0xsoniclabs/Norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )

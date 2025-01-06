@@ -22,10 +22,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Fantom-foundation/Norma/driver"
-	"github.com/Fantom-foundation/Norma/driver/docker"
-	"github.com/Fantom-foundation/Norma/driver/monitoring"
-	opera "github.com/Fantom-foundation/Norma/driver/node"
+	"github.com/0xsoniclabs/Norma/driver"
+	"github.com/0xsoniclabs/Norma/driver/docker"
+	"github.com/0xsoniclabs/Norma/driver/monitoring"
+	opera "github.com/0xsoniclabs/Norma/driver/node"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/exp/slices"
 )

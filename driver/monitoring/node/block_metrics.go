@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Fantom-foundation/Norma/driver/monitoring"
-	"github.com/Fantom-foundation/Norma/driver/monitoring/utils"
+	"github.com/0xsoniclabs/Norma/driver/monitoring"
+	"github.com/0xsoniclabs/Norma/driver/monitoring/utils"
 	"github.com/ethereum/go-ethereum/log"
 )
 

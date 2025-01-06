@@ -1,3 +1,5 @@
+github.com/0xsoniclabs/go-ethereum v0.0.0-20241022121122-7063a6b506bd h1:rrj5Iv72cwtmC1AAsMhI5qw6wPs3cKGB935OjqZpqjU=
+github.com/0xsoniclabs/go-ethereum v0.0.0-20241022121122-7063a6b506bd/go.mod h1:p4knNH76zBuqbEfc6CbZTOnaQNU0WvhzW5f0qq6aMoU=
 github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 h1:UQHMgLO+TxOElx5B5HZ4hJQsoJ/PvUvKRhJHDQXO8P8=
 github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1/go.mod h1:xomTg63KZ2rFqZQzSB4Vz2SUXa1BpHTVz9L5PTmPC4E=
 github.com/DataDog/zstd v1.5.6 h1:LbEglqepa/ipmmQJUDnSsfvA8e8IStVcGaFWDuxvGOY=
@@ -10,10 +12,8 @@ github.com/Fantom-foundation/Carmen/go v0.0.0-20241121102311-62fc85c89464 h1:xWa
 github.com/Fantom-foundation/Carmen/go v0.0.0-20241121102311-62fc85c89464/go.mod h1:vNRGm/b21hDlF8kYyKHkXq1s+jLMKpV4jGwXHylXIIg=
 github.com/Fantom-foundation/Tosca v0.0.0-20241028082205-7b33705a4675 h1:Meqtt0eM9UAw1ceQ1tGiD497V0IVfqj8c6UrFJhkFNE=
 github.com/Fantom-foundation/Tosca v0.0.0-20241028082205-7b33705a4675/go.mod h1:8i7r+dUOkXjEC61SaFoRet6JYjRaSoiM/PhviP6K4Y8=
-github.com/Fantom-foundation/go-ethereum-sonic v0.0.0-20241022121122-7063a6b506bd h1:WoAkgzLLlyh3Zpnd/3gW8Ym5sHtugLCA4rQdT5udVF8=
-github.com/Fantom-foundation/go-ethereum-sonic v0.0.0-20241022121122-7063a6b506bd/go.mod h1:p4knNH76zBuqbEfc6CbZTOnaQNU0WvhzW5f0qq6aMoU=
-github.com/Fantom-foundation/lachesis-base-sonic v0.0.0-20241018103023-632a59c242f5 h1:dv1iFhsUfIfixwoNJWWZItWqOfKLV1mLA8eJLA1wceU=
-github.com/Fantom-foundation/lachesis-base-sonic v0.0.0-20241018103023-632a59c242f5/go.mod h1:YaNcYnDsDooGLKqsrTt+tafplgorZ0l8C1IwmryrIWs=
+github.com/Fantom-foundation/lachesis-base v0.0.0-20240116072301-a75735c4ef00 h1:yw5QaA7u4t2/j7VIGrMt640Kuhsx6pEIHM3bj10glWc=
+github.com/Fantom-foundation/lachesis-base v0.0.0-20240116072301-a75735c4ef00/go.mod h1:Ogv5etzSmM2rQ4eN3OfmyitwWaaPjd4EIDiW/NAbYGk=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/VictoriaMetrics/fastcache v1.12.2 h1:N0y9ASrJ0F6h0QaC3o6uJb3NIZ9VKLjCM7NQbSmF7WI=

@@ -22,8 +22,8 @@ import (
 	"math/big"
 	"sync/atomic"
 
-	"github.com/Fantom-foundation/Norma/driver/rpc"
-	contract "github.com/Fantom-foundation/Norma/load/contracts/abi"
+	"github.com/0xsoniclabs/Norma/driver/rpc"
+	contract "github.com/0xsoniclabs/Norma/load/contracts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"

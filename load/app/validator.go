@@ -2,7 +2,7 @@ package app
 
 import (
 	"fmt"
-	contract "github.com/Fantom-foundation/Norma/load/contracts/abi"
+	contract "github.com/0xsoniclabs/Norma/load/contracts/abi"
 	"github.com/Fantom-foundation/go-opera/evmcore"
 	"github.com/Fantom-foundation/go-opera/inter/validatorpk"
 	"github.com/Fantom-foundation/go-opera/opera/contracts/sfc"

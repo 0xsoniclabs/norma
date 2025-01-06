@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Fantom-foundation/Norma/driver/parser"
+	"github.com/0xsoniclabs/Norma/driver/parser"
 )
 
 //go:generate mockgen -source shaper.go -destination shaper_mock.go -package shaper

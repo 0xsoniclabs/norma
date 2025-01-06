@@ -22,10 +22,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Fantom-foundation/Norma/driver"
-	"github.com/Fantom-foundation/Norma/driver/network"
-	"github.com/Fantom-foundation/Norma/driver/network/local"
-	"github.com/Fantom-foundation/Norma/load/app"
+	"github.com/0xsoniclabs/Norma/driver"
+	"github.com/0xsoniclabs/Norma/driver/network"
+	"github.com/0xsoniclabs/Norma/driver/network/local"
+	"github.com/0xsoniclabs/Norma/load/app"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 

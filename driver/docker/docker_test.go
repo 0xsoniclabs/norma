@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Fantom-foundation/Norma/driver/network"
+	"github.com/0xsoniclabs/Norma/driver/network"
 )
 
 func TestImplements(t *testing.T) {

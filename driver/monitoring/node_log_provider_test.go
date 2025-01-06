@@ -23,7 +23,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Fantom-foundation/Norma/driver"
+	"github.com/0xsoniclabs/Norma/driver"
 	"go.uber.org/mock/gomock"
 )
 

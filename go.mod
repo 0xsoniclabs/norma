@@ -1,4 +1,4 @@
-module github.com/Fantom-foundation/Norma
+module github.com/0xsoniclabs/Norma
 
 go 1.22.0
 
@@ -112,6 +112,4 @@ require (
 
 replace github.com/Fantom-foundation/go-opera => ./client
 
-replace github.com/ethereum/go-ethereum => github.com/Fantom-foundation/go-ethereum-sonic v0.0.0-20241022121122-7063a6b506bd
-
-replace github.com/Fantom-foundation/lachesis-base => github.com/Fantom-foundation/lachesis-base-sonic v0.0.0-20241018103023-632a59c242f5
+replace github.com/ethereum/go-ethereum => github.com/0xsoniclabs/go-ethereum v0.0.0-20241022121122-7063a6b506bd

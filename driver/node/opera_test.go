@@ -25,8 +25,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Fantom-foundation/Norma/driver"
-	"github.com/Fantom-foundation/Norma/driver/docker"
+	"github.com/0xsoniclabs/Norma/driver"
+	"github.com/0xsoniclabs/Norma/driver/docker"
 )
 
 func TestImplements(t *testing.T) {

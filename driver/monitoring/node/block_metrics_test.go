@@ -21,8 +21,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Fantom-foundation/Norma/driver"
-	"github.com/Fantom-foundation/Norma/driver/monitoring"
+	"github.com/0xsoniclabs/Norma/driver"
+	"github.com/0xsoniclabs/Norma/driver/monitoring"
 	"go.uber.org/mock/gomock"
 )
 

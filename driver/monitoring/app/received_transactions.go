@@ -19,9 +19,9 @@ package appmon
 import (
 	"fmt"
 
-	"github.com/Fantom-foundation/Norma/driver"
-	"github.com/Fantom-foundation/Norma/driver/monitoring"
-	"github.com/Fantom-foundation/Norma/driver/monitoring/utils"
+	"github.com/0xsoniclabs/Norma/driver"
+	"github.com/0xsoniclabs/Norma/driver/monitoring"
+	"github.com/0xsoniclabs/Norma/driver/monitoring/utils"
 )
 
 var (

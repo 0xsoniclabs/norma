@@ -18,14 +18,14 @@ package executor
 
 import (
 	"fmt"
-	"github.com/Fantom-foundation/Norma/driver/checking"
+	"github.com/0xsoniclabs/Norma/driver/checking"
 	"log"
 	"os"
 	"os/signal"
 	"time"
 
-	"github.com/Fantom-foundation/Norma/driver"
-	"github.com/Fantom-foundation/Norma/driver/parser"
+	"github.com/0xsoniclabs/Norma/driver"
+	"github.com/0xsoniclabs/Norma/driver/parser"
 	pq "github.com/jupp0r/go-priority-queue"
 )
 

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Fantom-foundation/Norma/driver"
+	"github.com/0xsoniclabs/Norma/driver"
 )
 
 // Node identifies a node in the network.

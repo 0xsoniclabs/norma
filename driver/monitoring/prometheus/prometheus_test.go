@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Fantom-foundation/Norma/driver"
-	"github.com/Fantom-foundation/Norma/driver/network"
-	"github.com/Fantom-foundation/Norma/driver/network/local"
+	"github.com/0xsoniclabs/Norma/driver"
+	"github.com/0xsoniclabs/Norma/driver/network"
+	"github.com/0xsoniclabs/Norma/driver/network/local"
 )
 
 func TestPrometheusCanBeRun(t *testing.T) {

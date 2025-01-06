@@ -22,10 +22,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Fantom-foundation/Norma/driver"
-	mon "github.com/Fantom-foundation/Norma/driver/monitoring"
-	"github.com/Fantom-foundation/Norma/driver/monitoring/utils"
-	opera "github.com/Fantom-foundation/Norma/driver/node"
+	"github.com/0xsoniclabs/Norma/driver"
+	mon "github.com/0xsoniclabs/Norma/driver/monitoring"
+	"github.com/0xsoniclabs/Norma/driver/monitoring/utils"
+	opera "github.com/0xsoniclabs/Norma/driver/node"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
