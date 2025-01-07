@@ -4,8 +4,6 @@ github.com/0xsoniclabs/Tosca v0.0.0-20250102101309-c64a219ca14d h1:jEIxnXWpJ/6yh
 github.com/0xsoniclabs/Tosca v0.0.0-20250102101309-c64a219ca14d/go.mod h1:eemhOX7D96e+5cQrpw6eXXyeTdxZB7Xp69pXMBcy8Xc=
 github.com/0xsoniclabs/go-ethereum v0.0.0-20241022121122-7063a6b506bd h1:rrj5Iv72cwtmC1AAsMhI5qw6wPs3cKGB935OjqZpqjU=
 github.com/0xsoniclabs/go-ethereum v0.0.0-20241022121122-7063a6b506bd/go.mod h1:p4knNH76zBuqbEfc6CbZTOnaQNU0WvhzW5f0qq6aMoU=
-github.com/0xsoniclabs/lachesis-base v0.0.0-20241230130508-cacd1bcc6316 h1:RsnA10YCtjOGJnvZn9BG/WnkrMtOnggRgcceV11kQyk=
-github.com/0xsoniclabs/lachesis-base v0.0.0-20241230130508-cacd1bcc6316/go.mod h1:u0zb/GAlFZTAbOohyQDm9uozYujNVaD70dpRP3Fiqek=
 github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 h1:UQHMgLO+TxOElx5B5HZ4hJQsoJ/PvUvKRhJHDQXO8P8=
 github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1/go.mod h1:xomTg63KZ2rFqZQzSB4Vz2SUXa1BpHTVz9L5PTmPC4E=
 github.com/DataDog/zstd v1.5.6 h1:LbEglqepa/ipmmQJUDnSsfvA8e8IStVcGaFWDuxvGOY=
@@ -14,6 +12,8 @@ github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e h1:ahyvB3q25Yn
 github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e/go.mod h1:kGUqhHd//musdITWjFvNTHn90WG9bMLBEPQZ17Cmlpw=
 github.com/FactomProject/btcutilecc v0.0.0-20130527213604-d3a63a5752ec h1:1Qb69mGp/UtRPn422BH4/Y4Q3SLUrD9KHuDkm8iodFc=
 github.com/FactomProject/btcutilecc v0.0.0-20130527213604-d3a63a5752ec/go.mod h1:CD8UlnlLDiqb36L110uqiP2iSflVjx9g/3U9hCI4q2U=
+github.com/Fantom-foundation/lachesis-base-sonic v0.0.0-20241018103023-632a59c242f5 h1:dv1iFhsUfIfixwoNJWWZItWqOfKLV1mLA8eJLA1wceU=
+github.com/Fantom-foundation/lachesis-base-sonic v0.0.0-20241018103023-632a59c242f5/go.mod h1:YaNcYnDsDooGLKqsrTt+tafplgorZ0l8C1IwmryrIWs=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/VictoriaMetrics/fastcache v1.12.2 h1:N0y9ASrJ0F6h0QaC3o6uJb3NIZ9VKLjCM7NQbSmF7WI=
