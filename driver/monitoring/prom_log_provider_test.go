@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Fantom-foundation/Norma/driver"
+	"github.com/0xsoniclabs/norma/driver"
 	"go.uber.org/mock/gomock"
 )
 

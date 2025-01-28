@@ -23,7 +23,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/Fantom-foundation/Norma/driver"
+	"github.com/0xsoniclabs/norma/driver"
 )
 
 //go:generate mockgen -source node_log_provider.go -destination node_log_provider_mock.go -package monitoring

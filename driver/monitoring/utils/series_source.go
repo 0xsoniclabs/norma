@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/Fantom-foundation/Norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"golang.org/x/exp/constraints"
 )
 

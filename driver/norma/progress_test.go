@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/Fantom-foundation/Norma/driver"
+	"github.com/0xsoniclabs/norma/driver"
 	"go.uber.org/mock/gomock"
 	"math/rand"
 	"testing"

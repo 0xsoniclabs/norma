@@ -25,14 +25,14 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/Fantom-foundation/Norma/driver"
-	"github.com/Fantom-foundation/Norma/driver/docker"
-	"github.com/Fantom-foundation/Norma/driver/network/rpc"
-	"github.com/Fantom-foundation/Norma/driver/node"
-	rpcdriver "github.com/Fantom-foundation/Norma/driver/rpc"
-	"github.com/Fantom-foundation/Norma/load/app"
-	"github.com/Fantom-foundation/Norma/load/controller"
-	"github.com/Fantom-foundation/Norma/load/shaper"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/docker"
+	"github.com/0xsoniclabs/norma/driver/network/rpc"
+	"github.com/0xsoniclabs/norma/driver/node"
+	rpcdriver "github.com/0xsoniclabs/norma/driver/rpc"
+	"github.com/0xsoniclabs/norma/load/app"
+	"github.com/0xsoniclabs/norma/load/controller"
+	"github.com/0xsoniclabs/norma/load/shaper"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 

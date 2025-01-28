@@ -23,10 +23,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Fantom-foundation/Norma/driver"
-	"github.com/Fantom-foundation/Norma/driver/rpc"
-	"github.com/Fantom-foundation/Norma/load/app"
-	"github.com/Fantom-foundation/Norma/load/shaper"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/rpc"
+	"github.com/0xsoniclabs/norma/load/app"
+	"github.com/0xsoniclabs/norma/load/shaper"
 )
 
 // AppController emits transactions to the testing network into a blockchain app to generate a load.

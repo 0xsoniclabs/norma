@@ -20,8 +20,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Fantom-foundation/Norma/driver"
-	"github.com/Fantom-foundation/Norma/driver/rpc"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/rpc"
 	"go.uber.org/mock/gomock"
 )
 

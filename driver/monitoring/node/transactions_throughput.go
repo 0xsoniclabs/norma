@@ -21,8 +21,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/Fantom-foundation/Norma/driver/monitoring"
-	"github.com/Fantom-foundation/Norma/driver/monitoring/utils"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
 )
 
 var (

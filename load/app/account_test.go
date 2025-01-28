@@ -1,7 +1,7 @@
 package app
 
 import (
-	"github.com/Fantom-foundation/Norma/driver/rpc"
+	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/mock/gomock"
 	"math/big"

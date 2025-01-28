@@ -29,8 +29,8 @@ import (
 	io "io"
 	reflect "reflect"
 
-	network "github.com/Fantom-foundation/Norma/driver/network"
-	rpc "github.com/Fantom-foundation/Norma/driver/rpc"
+	network "github.com/0xsoniclabs/norma/driver/network"
+	rpc "github.com/0xsoniclabs/norma/driver/rpc"
 	gomock "go.uber.org/mock/gomock"
 )
 

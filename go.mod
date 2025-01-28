@@ -1,11 +1,11 @@
-module github.com/Fantom-foundation/Norma
+module github.com/0xsoniclabs/norma
 
 go 1.22.0
 
 toolchain go1.22.3
 
 require (
-	github.com/Fantom-foundation/go-opera v0.0.0-00010101000000-000000000000
+	github.com/0xsoniclabs/sonic v0.0.0-00010101000000-000000000000
 	github.com/docker/docker v27.3.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/ethereum/go-ethereum v1.14.8
@@ -19,11 +19,11 @@ require (
 )
 
 require (
+	github.com/0xsoniclabs/carmen/go v0.0.0-20250113102336-97f8b8616eff // indirect
+	github.com/0xsoniclabs/tosca v0.0.0-20250109073452-a7eb49bdbd45 // indirect
 	github.com/DataDog/zstd v1.5.6 // indirect
 	github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e // indirect
 	github.com/FactomProject/btcutilecc v0.0.0-20130527213604-d3a63a5752ec // indirect
-	github.com/Fantom-foundation/Carmen/go v0.0.0-20241121102311-62fc85c89464 // indirect
-	github.com/Fantom-foundation/Tosca v0.0.0-20241028082205-7b33705a4675 // indirect
 	github.com/Fantom-foundation/lachesis-base v0.0.0-20240116072301-a75735c4ef00 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/VictoriaMetrics/fastcache v1.12.2 // indirect
@@ -110,8 +110,8 @@ require (
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
-replace github.com/Fantom-foundation/go-opera => ./client
+replace github.com/0xsoniclabs/sonic => ./client
 
-replace github.com/ethereum/go-ethereum => github.com/Fantom-foundation/go-ethereum-sonic v0.0.0-20241022121122-7063a6b506bd
+replace github.com/ethereum/go-ethereum => github.com/0xsoniclabs/go-ethereum v0.0.0-20241022121122-7063a6b506bd
 
 replace github.com/Fantom-foundation/lachesis-base => github.com/Fantom-foundation/lachesis-base-sonic v0.0.0-20241018103023-632a59c242f5

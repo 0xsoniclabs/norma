@@ -29,7 +29,7 @@ import (
 	big "math/big"
 	reflect "reflect"
 
-	rpc "github.com/Fantom-foundation/Norma/driver/rpc"
+	rpc "github.com/0xsoniclabs/norma/driver/rpc"
 	bind "github.com/ethereum/go-ethereum/accounts/abi/bind"
 	common "github.com/ethereum/go-ethereum/common"
 	types "github.com/ethereum/go-ethereum/core/types"

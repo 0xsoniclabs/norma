@@ -22,9 +22,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Fantom-foundation/Norma/driver"
-	"github.com/Fantom-foundation/Norma/driver/docker"
-	"github.com/Fantom-foundation/Norma/driver/network"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/docker"
+	"github.com/0xsoniclabs/norma/driver/network"
 )
 
 // PrometheusPort is the default port for the Prometheus service.

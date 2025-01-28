@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"text/template"
 
-	"github.com/Fantom-foundation/Norma/driver"
+	"github.com/0xsoniclabs/norma/driver"
 )
 
 // promCfg is the default Prometheus configuration.

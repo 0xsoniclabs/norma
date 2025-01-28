@@ -19,8 +19,8 @@ package driver
 import (
 	"io"
 
-	"github.com/Fantom-foundation/Norma/driver/network"
-	"github.com/Fantom-foundation/Norma/driver/rpc"
+	"github.com/0xsoniclabs/norma/driver/network"
+	"github.com/0xsoniclabs/norma/driver/rpc"
 )
 
 //go:generate mockgen -source node.go -destination node_mock.go -package driver

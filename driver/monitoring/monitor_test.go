@@ -22,9 +22,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Fantom-foundation/Norma/driver"
-	"github.com/Fantom-foundation/Norma/driver/docker"
-	opera "github.com/Fantom-foundation/Norma/driver/node"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/docker"
+	opera "github.com/0xsoniclabs/norma/driver/node"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/exp/slices"
 )

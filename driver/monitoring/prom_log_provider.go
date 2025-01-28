@@ -23,8 +23,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Fantom-foundation/Norma/driver"
-	"github.com/Fantom-foundation/Norma/driver/node"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/node"
 )
 
 //go:generate mockgen -source prom_log_provider.go -destination prom_log_provider_mock.go -package monitoring

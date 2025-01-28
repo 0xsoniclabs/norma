@@ -21,7 +21,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/Fantom-foundation/Norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
 )
 
 // Sensor is an abstraction of some input device capable of probing a node
