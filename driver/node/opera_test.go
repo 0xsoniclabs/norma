@@ -25,8 +25,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0xsoniclabs/Norma/driver"
-	"github.com/0xsoniclabs/Norma/driver/docker"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/docker"
 )
 
 func TestImplements(t *testing.T) {

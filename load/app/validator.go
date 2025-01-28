@@ -2,7 +2,7 @@ package app
 
 import (
 	"fmt"
-	contract "github.com/0xsoniclabs/Norma/load/contracts/abi"
+	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
 	"github.com/0xsoniclabs/sonic/evmcore"
 	"github.com/0xsoniclabs/sonic/inter/validatorpk"
 	"github.com/0xsoniclabs/sonic/opera/contracts/sfc"

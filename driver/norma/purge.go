@@ -19,7 +19,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/0xsoniclabs/Norma/driver/docker"
+	"github.com/0xsoniclabs/norma/driver/docker"
 	"github.com/urfave/cli/v2"
 )
 

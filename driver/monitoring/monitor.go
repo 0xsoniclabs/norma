@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/0xsoniclabs/Norma/driver"
+	"github.com/0xsoniclabs/norma/driver"
 )
 
 // Monitor instances are handling the life-cycle of sets of data sources for a

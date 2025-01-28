@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/0xsoniclabs/Norma/driver"
-	"github.com/0xsoniclabs/Norma/driver/monitoring"
-	netmon "github.com/0xsoniclabs/Norma/driver/monitoring/network"
-	nodemon "github.com/0xsoniclabs/Norma/driver/monitoring/node"
-	"github.com/0xsoniclabs/Norma/driver/network/local"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
+	netmon "github.com/0xsoniclabs/norma/driver/monitoring/network"
+	nodemon "github.com/0xsoniclabs/norma/driver/monitoring/node"
+	"github.com/0xsoniclabs/norma/driver/network/local"
 	"golang.org/x/exp/constraints"
 	"log"
 	"sort"

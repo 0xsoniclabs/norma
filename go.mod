@@ -1,4 +1,4 @@
-module github.com/0xsoniclabs/Norma
+module github.com/0xsoniclabs/norma
 
 go 1.22.0
 
@@ -19,8 +19,8 @@ require (
 )
 
 require (
-	github.com/0xsoniclabs/Carmen/go v0.0.0-20241230125907-0745da71c1ba // indirect
-	github.com/0xsoniclabs/Tosca v0.0.0-20250102101309-c64a219ca14d // indirect
+	github.com/0xsoniclabs/carmen/go v0.0.0-20250113102336-97f8b8616eff // indirect
+	github.com/0xsoniclabs/tosca v0.0.0-20250109073452-a7eb49bdbd45 // indirect
 	github.com/DataDog/zstd v1.5.6 // indirect
 	github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e // indirect
 	github.com/FactomProject/btcutilecc v0.0.0-20130527213604-d3a63a5752ec // indirect

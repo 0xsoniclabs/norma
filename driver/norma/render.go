@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/0xsoniclabs/Norma/analysis/report"
+	"github.com/0xsoniclabs/norma/analysis/report"
 	"github.com/urfave/cli/v2"
 )
 

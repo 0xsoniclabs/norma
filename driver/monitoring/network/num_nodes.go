@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"time"
 
-	mon "github.com/0xsoniclabs/Norma/driver/monitoring"
-	"github.com/0xsoniclabs/Norma/driver/monitoring/utils"
+	mon "github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
 )
 
 // NumberOfNodes retains a time-series for the number of nodes in the network

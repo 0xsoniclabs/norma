@@ -19,8 +19,8 @@ package driver
 import (
 	"time"
 
-	"github.com/0xsoniclabs/Norma/driver/parser"
-	"github.com/0xsoniclabs/Norma/driver/rpc"
+	"github.com/0xsoniclabs/norma/driver/parser"
+	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 

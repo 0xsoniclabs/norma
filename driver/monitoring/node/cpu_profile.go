@@ -23,11 +23,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/0xsoniclabs/Norma/driver"
-	"github.com/0xsoniclabs/Norma/driver/monitoring"
-	mon "github.com/0xsoniclabs/Norma/driver/monitoring"
-	"github.com/0xsoniclabs/Norma/driver/monitoring/utils"
-	opera "github.com/0xsoniclabs/Norma/driver/node"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
+	mon "github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
+	opera "github.com/0xsoniclabs/norma/driver/node"
 )
 
 type PprofData []byte

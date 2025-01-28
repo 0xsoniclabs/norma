@@ -22,10 +22,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/0xsoniclabs/Norma/driver"
-	mon "github.com/0xsoniclabs/Norma/driver/monitoring"
-	"github.com/0xsoniclabs/Norma/driver/monitoring/utils"
-	opera "github.com/0xsoniclabs/Norma/driver/node"
+	"github.com/0xsoniclabs/norma/driver"
+	mon "github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
+	opera "github.com/0xsoniclabs/norma/driver/node"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 

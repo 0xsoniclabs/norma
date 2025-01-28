@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0xsoniclabs/Norma/driver/network"
+	"github.com/0xsoniclabs/norma/driver/network"
 )
 
 func TestImplements(t *testing.T) {

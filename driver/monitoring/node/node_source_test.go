@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0xsoniclabs/Norma/driver"
-	mon "github.com/0xsoniclabs/Norma/driver/monitoring"
-	"github.com/0xsoniclabs/Norma/driver/monitoring/utils"
+	"github.com/0xsoniclabs/norma/driver"
+	mon "github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/exp/slices"
 )

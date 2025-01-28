@@ -23,8 +23,8 @@ import (
 	"math/rand"
 	"sync/atomic"
 
-	"github.com/0xsoniclabs/Norma/driver/rpc"
-	contract "github.com/0xsoniclabs/Norma/load/contracts/abi"
+	"github.com/0xsoniclabs/norma/driver/rpc"
+	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"

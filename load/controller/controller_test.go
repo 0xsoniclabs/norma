@@ -26,11 +26,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0xsoniclabs/Norma/driver"
-	"github.com/0xsoniclabs/Norma/driver/rpc"
-	"github.com/0xsoniclabs/Norma/load/app"
-	"github.com/0xsoniclabs/Norma/load/controller"
-	"github.com/0xsoniclabs/Norma/load/shaper"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/rpc"
+	"github.com/0xsoniclabs/norma/load/app"
+	"github.com/0xsoniclabs/norma/load/controller"
+	"github.com/0xsoniclabs/norma/load/shaper"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/mock/gomock"
 )

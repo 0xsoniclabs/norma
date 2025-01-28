@@ -20,10 +20,10 @@ import (
 	"log"
 	"time"
 
-	"github.com/0xsoniclabs/Norma/driver/monitoring/utils"
+	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
 
-	"github.com/0xsoniclabs/Norma/driver"
-	mon "github.com/0xsoniclabs/Norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver"
+	mon "github.com/0xsoniclabs/norma/driver/monitoring"
 )
 
 // SensorFactory is a factory for sensors targeting selected applications.

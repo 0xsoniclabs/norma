@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0xsoniclabs/Norma/driver/network"
+	"github.com/0xsoniclabs/norma/driver/network"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"

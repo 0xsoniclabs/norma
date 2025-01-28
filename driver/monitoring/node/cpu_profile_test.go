@@ -20,9 +20,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0xsoniclabs/Norma/driver"
-	"github.com/0xsoniclabs/Norma/driver/docker"
-	opera "github.com/0xsoniclabs/Norma/driver/node"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/docker"
+	opera "github.com/0xsoniclabs/norma/driver/node"
 )
 
 func TestCanCollectCpuProfileDateFromOperaNode(t *testing.T) {

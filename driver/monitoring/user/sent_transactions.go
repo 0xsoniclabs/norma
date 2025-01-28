@@ -19,9 +19,9 @@ package user
 import (
 	"fmt"
 
-	"github.com/0xsoniclabs/Norma/driver"
-	"github.com/0xsoniclabs/Norma/driver/monitoring"
-	"github.com/0xsoniclabs/Norma/driver/monitoring/utils"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
 )
 
 var (

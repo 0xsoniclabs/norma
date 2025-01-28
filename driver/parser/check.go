@@ -22,7 +22,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/0xsoniclabs/Norma/load/app"
+	"github.com/0xsoniclabs/norma/load/app"
 )
 
 const namePatternStr = "^[A-Za-z0-9-]+$"

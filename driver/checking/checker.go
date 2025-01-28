@@ -19,7 +19,7 @@ package checking
 import (
 	"errors"
 
-	"github.com/0xsoniclabs/Norma/driver"
+	"github.com/0xsoniclabs/norma/driver"
 )
 
 // Checker do the network consistency check at the end of the scenario.

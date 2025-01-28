@@ -19,7 +19,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/0xsoniclabs/Norma/driver/parser"
+	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/urfave/cli/v2"
 )
 

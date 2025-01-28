@@ -22,7 +22,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/0xsoniclabs/Norma/driver/parser"
+	"github.com/0xsoniclabs/norma/driver/parser"
 )
 
 // TestCheckScenarious iterates through all scenarios in this directory

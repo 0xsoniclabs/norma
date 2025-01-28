@@ -25,11 +25,11 @@ import (
 	"slices"
 	"time"
 
-	rpcdriver "github.com/0xsoniclabs/Norma/driver/rpc"
+	rpcdriver "github.com/0xsoniclabs/norma/driver/rpc"
 
-	"github.com/0xsoniclabs/Norma/driver"
-	"github.com/0xsoniclabs/Norma/driver/docker"
-	"github.com/0xsoniclabs/Norma/driver/network"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/docker"
+	"github.com/0xsoniclabs/norma/driver/network"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 

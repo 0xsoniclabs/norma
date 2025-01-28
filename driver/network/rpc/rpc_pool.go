@@ -22,9 +22,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0xsoniclabs/Norma/driver"
-	"github.com/0xsoniclabs/Norma/driver/network"
-	"github.com/0xsoniclabs/Norma/driver/node"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/network"
+	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 )

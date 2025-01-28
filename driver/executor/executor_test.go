@@ -22,8 +22,8 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/0xsoniclabs/Norma/driver"
-	"github.com/0xsoniclabs/Norma/driver/parser"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/parser"
 	"go.uber.org/mock/gomock"
 )
 

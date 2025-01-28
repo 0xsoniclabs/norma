@@ -29,7 +29,7 @@ import (
 	big "math/big"
 	reflect "reflect"
 
-	rpc "github.com/0xsoniclabs/Norma/driver/rpc"
+	rpc "github.com/0xsoniclabs/norma/driver/rpc"
 	types "github.com/ethereum/go-ethereum/core/types"
 	gomock "go.uber.org/mock/gomock"
 )

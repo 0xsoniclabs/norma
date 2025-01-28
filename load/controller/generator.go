@@ -19,8 +19,8 @@ package controller
 import (
 	"log"
 
-	"github.com/0xsoniclabs/Norma/driver"
-	"github.com/0xsoniclabs/Norma/load/app"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/load/app"
 )
 
 func runGeneratorLoop(user app.User, trigger <-chan struct{}, network driver.Network) {
