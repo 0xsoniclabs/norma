@@ -18,7 +18,17 @@ BUILD_DIR := $(CURDIR)/build
 
 .PHONY: all test clean
 
-all: normatool build-sonic-docker-image norma
+# Define a list of client versions
+CLIENT_VERSIONS := v2.0.2 v2.0.1 v2.0.0
+
+all: \
+    normatool \
+    norma \
+    pull-hello-world-image \
+    pull-alpine-image \
+    pull-prometheus-image \
+    build-sonic-docker-image \
+    $(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)) \
 
 pull-hello-world-image:
 	DOCKER_BUILDKIT=1 docker image pull hello-world
@@ -31,6 +41,10 @@ pull-prometheus-image:
 
 build-sonic-docker-image:
 	DOCKER_BUILDKIT=1 docker build . -t sonic
+
+# Build various client versions
+$(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)):
+	DOCKER_BUILDKIT=1 docker build --build-arg CLIENT_VERSION=$($(subst build-sonic-docker-image-,,$@)) . -t sonic:$(subst build-sonic-docker-image-,,$@)
 
 generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi # requires installed solc and Ethereum abigen - check README.md
 
