@@ -51,7 +51,8 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 			nodes := []driver.Node{}
 			for i := 0; i < N; i++ {
 				node, err := net.CreateNode(&driver.NodeConfig{
-					Name: fmt.Sprintf("T-%d", i),
+					Image: driver.ClientDockerImageName,
+					Name:  fmt.Sprintf("T-%d", i),
 				})
 				if err != nil {
 					t.Errorf("failed to create node: %v", err)
@@ -175,7 +176,8 @@ func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 
 	for i := 0; i < N; i++ {
 		_, err := net.CreateNode(&driver.NodeConfig{
-			Name: fmt.Sprintf("T-%d", i),
+			Name:  fmt.Sprintf("T-%d", i),
+			Image: driver.ClientDockerImageName,
 		})
 		if err != nil {
 			t.Errorf("failed to create node: %v", err)
@@ -235,7 +237,8 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 
 	for i := 0; i < N; i++ {
 		_, err := net.CreateNode(&driver.NodeConfig{
-			Name: fmt.Sprintf("T-%d", i),
+			Name:  fmt.Sprintf("T-%d", i),
+			Image: driver.ClientDockerImageName,
 		})
 		if err != nil {
 			t.Errorf("failed to create node: %v", err)
@@ -313,7 +316,8 @@ func TestLocalNetwork_NotifiesListenersOnNodeStartup(t *testing.T) {
 	listener.EXPECT().AfterNodeCreation(gomock.Any())
 
 	net.CreateNode(&driver.NodeConfig{
-		Name: "Test",
+		Name:  "Test",
+		Image: driver.ClientDockerImageName,
 	})
 
 	activeNodes = net.GetActiveNodes()
@@ -372,7 +376,8 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 			nodes := make([]driver.Node, 0, N)
 			for i := 0; i < N; i++ {
 				node, err := net.CreateNode(&driver.NodeConfig{
-					Name: fmt.Sprintf("T-%d", i),
+					Name:  fmt.Sprintf("T-%d", i),
+					Image: driver.ClientDockerImageName,
 				})
 				if err != nil {
 					t.Errorf("failed to create node: %s", err)
@@ -431,5 +436,34 @@ func TestLocalNetwork_Num_Validators_Started(t *testing.T) {
 				t.Errorf("invalid number of active nodes, got %d, want %d", got, want)
 			}
 		})
+	}
+}
+
+func TestLocalNetwork_Can_Run_Multiple_Client_Images(t *testing.T) {
+	t.Parallel()
+	config := driver.NetworkConfig{NumberOfValidators: 1}
+
+	net, err := NewLocalNetwork(&config)
+	if err != nil {
+		t.Fatalf("failed to create new local network: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = net.Shutdown()
+	})
+
+	images := []string{"sonic", "sonic:v2.0.2", "sonic:v2.0.1", "sonic:v2.0.0"}
+
+	for i, image := range images {
+		_, err := net.CreateNode(&driver.NodeConfig{
+			Name:  fmt.Sprintf("T-%d", i),
+			Image: image,
+		})
+		if err != nil {
+			t.Errorf("failed to create node: %v", err)
+		}
+	}
+
+	if err := net.Shutdown(); err != nil {
+		t.Errorf("failed to shut down network: %v", err)
 	}
 }

@@ -26,6 +26,8 @@ import (
 
 //go:generate mockgen -source network.go -destination network_mock.go -package driver
 
+const ClientDockerImageName = "sonic"
+
 // Network abstracts an execution environment for running scenarios.
 // Implementations may run nodes and applications locally, in docker images, or
 // remotely, on actual nodes. The interface is used by the scenario driver
@@ -94,6 +96,7 @@ type NodeConfig struct {
 	Name      string
 	Validator bool
 	Cheater   bool
+	Image     string
 	// TODO: add other parameters as needed
 	//  - features to include on the node
 	//  - state DB configuration

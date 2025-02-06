@@ -35,6 +35,7 @@ func TestCanCollectCpuProfileDateFromOperaNode(t *testing.T) {
 	})
 	node, err := opera.StartOperaDockerNode(docker, nil, &opera.OperaNodeConfig{
 		Label:         "test",
+		Image:         driver.ClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{NumberOfValidators: 1},
 	})
 	if err != nil {

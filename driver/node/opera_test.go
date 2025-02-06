@@ -45,6 +45,7 @@ func TestOperaNode_StartAndStop(t *testing.T) {
 	})
 	node, err := StartOperaDockerNode(docker, nil, &OperaNodeConfig{
 		Label:         "test",
+		Image:         driver.ClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{NumberOfValidators: 1},
 	})
 	t.Cleanup(func() {
@@ -72,6 +73,7 @@ func TestOperaNode_RpcServiceIsReadyAfterStartup(t *testing.T) {
 	})
 	node, err := StartOperaDockerNode(docker, nil, &OperaNodeConfig{
 		Label:         "test",
+		Image:         driver.ClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{NumberOfValidators: 1},
 	})
 	t.Cleanup(func() {
@@ -100,6 +102,7 @@ func TestOperaNode_StreamLog(t *testing.T) {
 
 	node, err := StartOperaDockerNode(docker, nil, &OperaNodeConfig{
 		Label:         "test",
+		Image:         driver.ClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{NumberOfValidators: 1},
 	})
 	if err != nil {
@@ -153,6 +156,7 @@ func TestOperaNode_MetricsExposed(t *testing.T) {
 
 	node, err := StartOperaDockerNode(docker, nil, &OperaNodeConfig{
 		Label:         "test",
+		Image:         driver.ClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{NumberOfValidators: 1},
 	})
 	if err != nil {
@@ -198,6 +202,7 @@ func TestClient_Stop_Graceful(t *testing.T) {
 
 	node, err := StartOperaDockerNode(client, nil, &OperaNodeConfig{
 		Label:         "test",
+		Image:         driver.ClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{NumberOfValidators: 1},
 	})
 	if err != nil {

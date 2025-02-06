@@ -1,0 +1,55 @@
+# This scenario simulates a network with the various versions of the client.
+# It stars a few nodes each running a different version of the client.
+# It deploys a few applications and sends a decent number of transactions.
+
+# The name of the scenario
+name: Network Consistency
+
+# The duration of the scenario's runtime, in seconds.
+duration: 180
+
+# The number of validator nodes in the network.
+num_validators: 1
+
+# The network scenario to exercise. 
+nodes:
+  - name: observer-A
+    start: 10
+    instances: 1
+    client:
+      imagename: "sonic:v2.0.2"
+
+  - name: observer-B
+    start: 10
+    instances: 1
+    client:
+      imagename: "sonic:v2.0.1"
+
+  - name: validator-A
+    start: 10
+    instances: 1
+    client:
+      imagename: "sonic:v2.0.0"
+      type: validator
+
+# In the network, there is a single application producing a constant load.
+applications:
+  - name: counter
+    type: counter
+    users: 20           # number of users using the app
+    rate:
+      constant: 10     # Tx/s
+
+  - name: erc20
+    type: erc20
+    start: 60
+    users: 20           # number of users using the app
+    rate:
+      constant: 10     # Tx/s
+
+  - name: uniswap
+    type: uniswap
+    start: 80
+    users: 20           # number of users using the app
+    rate:
+      constant: 10     # Tx/s

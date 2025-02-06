@@ -208,6 +208,11 @@ func scheduleNodeEvents(node *parser.Node, queue *eventQueue, net driver.Network
 	}
 	nodeIsCheater := false
 
+	image := driver.ClientDockerImageName
+	if node.Client.ImageName != "" {
+		image = node.Client.ImageName
+	}
+
 	for i := 0; i < instances; i++ {
 		name := fmt.Sprintf("%s-%d", node.Name, i)
 		var instance = new(driver.Node)
@@ -218,6 +223,7 @@ func scheduleNodeEvents(node *parser.Node, queue *eventQueue, net driver.Network
 			func() error {
 				newNode, err := net.CreateNode(&driver.NodeConfig{
 					Name:      name,
+					Image:     image,
 					Validator: nodeIsValidator,
 					Cheater:   nodeIsCheater,
 				})

@@ -65,8 +65,6 @@ func init() {
 	}
 }
 
-const operaDockerImageName = "sonic"
-
 // OperaNode implements the driver's Node interface by running a go-opera
 // client on a generic host.
 type OperaNode struct {
@@ -78,6 +76,8 @@ type OperaNode struct {
 type OperaNodeConfig struct {
 	// The label to be used to name this node. The label should not be empty.
 	Label string
+	// The Docker image to use for the node.
+	Image string
 	// The ID of the validator, nil if the node should not be a validator.
 	ValidatorId *int
 	// The configuration of the network the configured node should be part of.
@@ -113,7 +113,7 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 			return nil, err
 		}
 		return client.Start(&docker.ContainerConfig{
-			ImageName:       operaDockerImageName,
+			ImageName:       config.Image,
 			ShutdownTimeout: &shutdownTimeout,
 			PortForwarding:  portForwarding,
 			Environment: map[string]string{
