@@ -21,7 +21,7 @@
 #
 FROM golang:1.22 AS client-build
 
-# Download Sonic dependencies from the default bracnch first to cache them.
+# Download Sonic dependencies from the default branch first to cache them.
 # We assume tags/branches do not change majority of dependencies.
 RUN git clone https://github.com/0xsoniclabs/sonic.git /client
 
