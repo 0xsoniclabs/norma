@@ -22,7 +22,6 @@ BUILD_DIR := $(CURDIR)/build
 CLIENT_VERSIONS := v2.0.2 v2.0.1 v2.0.0
 
 all: \
-    normatool \
     norma \
     pull-hello-world-image \
     pull-alpine-image \
@@ -75,11 +74,8 @@ load/contracts/abi/Helper.abi: load/contracts/Helper.sol
 generate-mocks: # requires installed mockgen
 	go generate ./...
 
-norma: pull-prometheus-image normatool build-sonic-docker-image
+norma: pull-prometheus-image build-sonic-docker-image
 	go build -o $(BUILD_DIR)/norma ./driver/norma
-
-normatool: 
-	go build -o $(BUILD_DIR)/normatool ./driver/normatool
 
 test: pull-hello-world-image pull-alpine-image pull-prometheus-image build-sonic-docker-image
 	go test ./... -v

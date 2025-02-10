@@ -40,7 +40,7 @@ func fakeKey(n uint32) (k *ecdsa.PrivateKey, retErr error) {
 	return k, nil
 }
 
-// Run with `go run ./driver/normatool validator`
+// Run with `go run ./clients/sonic validator`
 var validatorCommand = cli.Command{
 	Name:  "validator",
 	Usage: "mimics sonictool validator",
@@ -81,11 +81,11 @@ func generateValidatorFrom(ctx *cli.Context) (err error) {
 	privkey := ctx.String("validator-private-key")
 
 	if id == 0 && privkey == "" {
-		return fmt.Errorf("At least one target (--validator-id or --validator-private-key) required for <normatool validator from>")
+		return fmt.Errorf("at least one target (--validator-id or --validator-private-key) required")
 	}
 
 	if id != 0 && privkey != "" {
-		return fmt.Errorf("Target ambiguous (--validator-id and --validator-private-key provided for <normatool validator from>)")
+		return fmt.Errorf("target ambiguous (both --validator-id and --validator-private-key provided")
 	}
 
 	var privateKeyECDSA *ecdsa.PrivateKey
