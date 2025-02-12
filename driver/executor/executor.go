@@ -208,7 +208,7 @@ func scheduleNodeEvents(node *parser.Node, queue *eventQueue, net driver.Network
 	}
 	nodeIsCheater := false
 
-	image := driver.ClientDockerImageName
+	image := driver.DefaultClientDockerImageName
 	if node.Client.ImageName != "" {
 		image = node.Client.ImageName
 	}

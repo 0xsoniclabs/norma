@@ -51,7 +51,7 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 			nodes := []driver.Node{}
 			for i := 0; i < N; i++ {
 				node, err := net.CreateNode(&driver.NodeConfig{
-					Image: driver.ClientDockerImageName,
+					Image: driver.DefaultClientDockerImageName,
 					Name:  fmt.Sprintf("T-%d", i),
 				})
 				if err != nil {
@@ -177,7 +177,7 @@ func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 	for i := 0; i < N; i++ {
 		_, err := net.CreateNode(&driver.NodeConfig{
 			Name:  fmt.Sprintf("T-%d", i),
-			Image: driver.ClientDockerImageName,
+			Image: driver.DefaultClientDockerImageName,
 		})
 		if err != nil {
 			t.Errorf("failed to create node: %v", err)
@@ -238,7 +238,7 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 	for i := 0; i < N; i++ {
 		_, err := net.CreateNode(&driver.NodeConfig{
 			Name:  fmt.Sprintf("T-%d", i),
-			Image: driver.ClientDockerImageName,
+			Image: driver.DefaultClientDockerImageName,
 		})
 		if err != nil {
 			t.Errorf("failed to create node: %v", err)
@@ -317,7 +317,7 @@ func TestLocalNetwork_NotifiesListenersOnNodeStartup(t *testing.T) {
 
 	net.CreateNode(&driver.NodeConfig{
 		Name:  "Test",
-		Image: driver.ClientDockerImageName,
+		Image: driver.DefaultClientDockerImageName,
 	})
 
 	activeNodes = net.GetActiveNodes()
@@ -377,7 +377,7 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 			for i := 0; i < N; i++ {
 				node, err := net.CreateNode(&driver.NodeConfig{
 					Name:  fmt.Sprintf("T-%d", i),
-					Image: driver.ClientDockerImageName,
+					Image: driver.DefaultClientDockerImageName,
 				})
 				if err != nil {
 					t.Errorf("failed to create node: %s", err)

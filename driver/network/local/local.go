@@ -122,7 +122,7 @@ func NewLocalNetwork(config *driver.NetworkConfig) (*LocalNetwork, error) {
 			validatorId := i + 1
 			nodeConfig := node.OperaNodeConfig{
 				ValidatorId:   &validatorId,
-				Image:         driver.ClientDockerImageName,
+				Image:         driver.DefaultClientDockerImageName,
 				NetworkConfig: config,
 				Label:         fmt.Sprintf("_validator-%d", validatorId),
 			}

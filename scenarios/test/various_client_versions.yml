@@ -32,7 +32,7 @@ nodes:
       imagename: "sonic:v2.0.0"
       type: validator
 
-# In the network, there is a single application producing a constant load.
+# In the network, there is a few applications producing the load.
 applications:
   - name: counter
     type: counter

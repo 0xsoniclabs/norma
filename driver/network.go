@@ -26,7 +26,8 @@ import (
 
 //go:generate mockgen -source network.go -destination network_mock.go -package driver
 
-const ClientDockerImageName = "sonic"
+// DefaultClientDockerImageName is the name of the docker image to use for clients.
+const DefaultClientDockerImageName = "sonic"
 
 // Network abstracts an execution environment for running scenarios.
 // Implementations may run nodes and applications locally, in docker images, or
