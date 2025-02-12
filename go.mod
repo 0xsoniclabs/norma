@@ -5,7 +5,7 @@ go 1.22.0
 toolchain go1.22.3
 
 require (
-	github.com/0xsoniclabs/sonic v0.0.0-00010101000000-000000000000
+	github.com/0xsoniclabs/sonic v0.0.0-20250205152531-9d2223dbefd8
 	github.com/docker/docker v27.3.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/ethereum/go-ethereum v1.14.8
@@ -109,8 +109,6 @@ require (
 	pgregory.net/rand v1.0.2 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
-
-replace github.com/0xsoniclabs/sonic => ./client
 
 replace github.com/ethereum/go-ethereum => github.com/0xsoniclabs/go-ethereum v0.0.0-20241022121122-7063a6b506bd
 

@@ -11,27 +11,44 @@
 # The build is done in independent stages, to allow for
 # caching of the intermediate results.
 
-# Stage 0: load dependencies
-FROM golang:1.22 AS client-dependencies
+#
+# Stage 1a: Build Client
+#
+# It prepeares an image with dependencies for the client.
+# Its caches the dependencies first, so that the build is faster.
+#
+# It checks out the required version of the client, and builds it.
+#
+FROM golang:1.22 AS client-build
 
+# Download Sonic dependencies from the default branch first to cache them.
+# We assume tags/branches do not change majority of dependencies.
+RUN git clone https://github.com/0xsoniclabs/sonic.git /client
+
+# Download Client dependencies from the default bracnch
 WORKDIR /client
-COPY client/go.mod ./go.mod
 RUN go mod download
 
+# Checkout required Client version and build it
+ARG CLIENT_VERSION=main
+WORKDIR /client
+RUN git checkout ${CLIENT_VERSION}
+RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
+
+#
+# Stage 1b: Build Norma
+#
+# It prepeares an image with dependencies for the norma.
+# Its caches the dependencies first, so that the build is faster.
+#
+# It checks out the local version of the norma, and builds it.
+#
+FROM golang:1.22 AS norma-build
+
+# Download Norma dependencies first to cache them for faster build when Norma changes.
 WORKDIR /
 COPY go.mod go.mod
 RUN go mod download
-
-# Stage 1: build the client
-FROM client-dependencies AS client-build
-
-WORKDIR /client
-
-# Copy the client code into the image.
-COPY client/ ./
-
-# Build sonic with caching
-RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
 
 # Build norma itself
 WORKDIR /norma
@@ -55,7 +72,7 @@ RUN apt-get update && \
     apt-get install iproute2 iputils-ping -y
 
 COPY --from=client-build /client/build/sonicd /client/build/sonictool ./
-COPY --from=client-build /norma/build/normatool ./
+COPY --from=norma-build /norma/build/normatool ./
 
 ENV STATE_DB_IMPL="geth"
 ENV VM_IMPL="geth"
