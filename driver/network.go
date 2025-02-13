@@ -29,6 +29,9 @@ import (
 // DefaultClientDockerImageName is the name of the docker image to use for clients.
 const DefaultClientDockerImageName = "sonic"
 
+// DefaultValidators is a default configuration for a single validator.
+var DefaultValidators = NewDefaultValidators(1)
+
 // Network abstracts an execution environment for running scenarios.
 // Implementations may run nodes and applications locally, in docker images, or
 // remotely, on actual nodes. The interface is used by the scenario driver
@@ -72,8 +75,8 @@ type Network interface {
 // NetworkConfig is a collection of network parameters to be used by factories
 // creating network instances.
 type NetworkConfig struct {
-	// NumberOfValidators is the (static) number of validators in the network.
-	NumberOfValidators int
+	// Validators is a list of validators to start up in the network.
+	Validators Validators
 	// RoundTripTime is the average round trip time between nodes in the network.
 	RoundTripTime time.Duration
 	// NetworkRules is a map of network rules to be applied to the network.
@@ -116,4 +119,57 @@ type ApplicationConfig struct {
 
 	// TODO: add other parameters as needed
 	//  - application type
+}
+
+// Validator is a configuration for a group of network start-up validators.
+type Validator struct {
+	Name      string
+	Instances int
+	ImageName string
+}
+
+// NewValidator creates a new Validator from a parser.Validator.
+func NewValidator(v parser.Validator) Validator {
+	instances := 1
+	if v.Instances != nil {
+		instances = *v.Instances
+	}
+	imageName := DefaultClientDockerImageName
+	if v.ImageName != "" {
+		imageName = v.ImageName
+	}
+	return Validator{
+		Name:      v.Name,
+		Instances: instances,
+		ImageName: imageName,
+	}
+}
+
+type Validators []Validator
+
+// NewDefaultValidators creates a new Validators with a single validator defining only the number of instances,
+// using the default client docker image.
+func NewDefaultValidators(instances int) Validators {
+	return []Validator{{Name: "validator", Instances: instances, ImageName: DefaultClientDockerImageName}}
+}
+
+// NewValidators creates a new Validators from a parser.Validators.
+func NewValidators(v []parser.Validator) Validators {
+	if len(v) == 0 {
+		return NewDefaultValidators(1)
+	}
+
+	validators := make([]Validator, len(v))
+	for i, val := range v {
+		validators[i] = NewValidator(val)
+	}
+	return validators
+}
+
+func (v Validators) GetNumValidators() int {
+	num := 0
+	for _, val := range v {
+		num += val.Instances
+	}
+	return num
 }

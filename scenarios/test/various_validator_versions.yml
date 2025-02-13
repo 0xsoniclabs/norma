@@ -1,33 +1,25 @@
-# This scenario simulates a network with the various versions of the client.
-# It stars a few nodes each running a different version of the client.
+# This scenario simulates a network with the various versions of validators.
+# It stars a few startup validator nodes, each running a different version of the client.
 # It deploys a few applications and sends a decent number of transactions.
 
 # The name of the scenario
-name: Network Consistency
+name: Various Validator Versions
 
 # The duration of the scenario's runtime, in seconds.
 duration: 180
 
-# The network scenario to exercise.
-nodes:
-  - name: observer-A
-    start: 10
-    instances: 1
-    client:
-      imagename: "sonic:v2.0.2"
+# Initial validator nodes in the network.
+validators:
+  - name: validator-dev
+  - name: validator-v2.0.2
+    imagename: "sonic:v2.0.2"
+  - name: validator-v2.0.1
+    instances: 2
+    imagename: "sonic:v2.0.1"
+  - name: validator-latest
+    instances: 3
+    imagename: "sonic"
 
-  - name: observer-B
-    start: 10
-    instances: 1
-    client:
-      imagename: "sonic:v2.0.1"
-
-  - name: validator-A
-    start: 10
-    instances: 1
-    client:
-      imagename: "sonic:v2.0.0"
-      type: validator
 
 # In the network, there is a few applications producing the load.
 applications:

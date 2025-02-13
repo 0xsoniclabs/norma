@@ -3,6 +3,7 @@
 name: No Load
 duration: 60    # seconds
 
+
 nodes:
   - name: A
     instances: 3

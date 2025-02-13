@@ -43,7 +43,7 @@ func TestCheckScenarious(t *testing.T) {
 				t.Fatalf("failed to parse file: %v", err)
 			}
 			if err = scenaro.Check(); err != nil {
-				t.Fatalf("scenaro check failed: %v", err)
+				t.Fatalf("scenaro check failed for: %s: %v", file, err)
 			}
 		})
 	}

@@ -11,8 +11,9 @@ name: Network Consistency
 # The duration of the scenario's runtime, in seconds.
 duration: 240
 
-# The number of validator nodes in the network.
-num_validators: 3
+# Initial validator nodes in the network.
+validators:
+    - instances: 3
 
 # The network scenario to exercise. 
 nodes:

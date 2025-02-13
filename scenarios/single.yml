@@ -7,9 +7,6 @@ name: Single Validator Network
 # The duration of the scenario's runtime, in seconds.
 duration: 60
 
-# The number of validator nodes in the network.
-num_validators: 1
-
 # In the network there is a single application producing constant load.
 applications:
   - name: load

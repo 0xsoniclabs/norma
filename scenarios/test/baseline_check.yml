@@ -5,8 +5,13 @@ name: Baseline Check
 
 # The duration of the scenario's runtime, in seconds.
 duration: 60
-num_validators: 2
 round_trip_time: "200ms"
+
+# Initial validator nodes in the network.
+validators:
+  - name: validator-latest
+    instances: 2
+    imagename: "sonic"
 
 # Network rules to be applied to the network.
 # It is an extensible list of key-value pairs.

@@ -32,8 +32,9 @@ func TestExecutor_RunEmptyScenario(t *testing.T) {
 	clock := NewSimClock()
 	net := driver.NewMockNetwork(ctrl)
 	scenario := parser.Scenario{
-		Name:     "Test",
-		Duration: 10,
+		Name:       "Test",
+		Duration:   10,
+		Validators: []parser.Validator{{Name: "validator"}},
 	}
 
 	if err := Run(clock, net, &scenario, true); err != nil {
@@ -49,8 +50,9 @@ func TestExecutor_RunSingleNodeScenario(t *testing.T) {
 
 	clock := NewSimClock()
 	scenario := parser.Scenario{
-		Name:     "Test",
-		Duration: 10,
+		Name:       "Test",
+		Duration:   10,
+		Validators: []parser.Validator{{Name: "validator"}},
 		Nodes: []parser.Node{{
 			Name:  "A",
 			Start: New[float32](3),
@@ -83,8 +85,9 @@ func TestExecutor_RunMultipleNodeScenario(t *testing.T) {
 
 	clock := NewSimClock()
 	scenario := parser.Scenario{
-		Name:     "Test",
-		Duration: 10,
+		Name:       "Test",
+		Duration:   10,
+		Validators: []parser.Validator{{Name: "validator"}},
 		Nodes: []parser.Node{{
 			Name:      "A",
 			Instances: New(2),
@@ -125,8 +128,9 @@ func TestExecutor_RunSingleApplicationScenario(t *testing.T) {
 
 	clock := NewSimClock()
 	scenario := parser.Scenario{
-		Name:     "Test",
-		Duration: 10,
+		Name:       "Test",
+		Duration:   10,
+		Validators: []parser.Validator{{Name: "validator"}},
 		Applications: []parser.Application{{
 			Name:  "A",
 			Type:  "counter",
@@ -158,8 +162,9 @@ func TestExecutor_RunMultipleApplicationScenario(t *testing.T) {
 
 	clock := NewSimClock()
 	scenario := parser.Scenario{
-		Name:     "Test",
-		Duration: 10,
+		Name:       "Test",
+		Duration:   10,
+		Validators: []parser.Validator{{Name: "validator"}},
 		Applications: []parser.Application{{
 			Name:      "A",
 			Type:      "counter",
@@ -196,8 +201,9 @@ func TestExecutor_TestUserAbort(t *testing.T) {
 
 	clock := NewWallTimeClock()
 	scenario := parser.Scenario{
-		Name:     "Test",
-		Duration: 5,
+		Name:       "Test",
+		Duration:   5,
+		Validators: []parser.Validator{{Name: "validator"}},
 		Nodes: []parser.Node{{
 			Name:  "A",
 			Start: New[float32](1),

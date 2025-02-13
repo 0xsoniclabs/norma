@@ -6,8 +6,10 @@
 name: A1
 duration: 300 # 5 minutes
 
-# backward compatibility, to be removed.
-num_validators: 4
+# Initial validator nodes in the network.
+validators:
+  - name: validator-1
+    instances: 4
 
 nodes:
   - name: validator

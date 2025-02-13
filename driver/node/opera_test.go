@@ -46,7 +46,7 @@ func TestOperaNode_StartAndStop(t *testing.T) {
 	node, err := StartOperaDockerNode(docker, nil, &OperaNodeConfig{
 		Label:         "test",
 		Image:         driver.DefaultClientDockerImageName,
-		NetworkConfig: &driver.NetworkConfig{NumberOfValidators: 1},
+		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
 	})
 	t.Cleanup(func() {
 		_ = node.Cleanup()
@@ -74,7 +74,7 @@ func TestOperaNode_RpcServiceIsReadyAfterStartup(t *testing.T) {
 	node, err := StartOperaDockerNode(docker, nil, &OperaNodeConfig{
 		Label:         "test",
 		Image:         driver.DefaultClientDockerImageName,
-		NetworkConfig: &driver.NetworkConfig{NumberOfValidators: 1},
+		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
 	})
 	t.Cleanup(func() {
 		_ = node.Cleanup()
@@ -103,7 +103,7 @@ func TestOperaNode_StreamLog(t *testing.T) {
 	node, err := StartOperaDockerNode(docker, nil, &OperaNodeConfig{
 		Label:         "test",
 		Image:         driver.DefaultClientDockerImageName,
-		NetworkConfig: &driver.NetworkConfig{NumberOfValidators: 1},
+		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
 	})
 	if err != nil {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
@@ -157,7 +157,7 @@ func TestOperaNode_MetricsExposed(t *testing.T) {
 	node, err := StartOperaDockerNode(docker, nil, &OperaNodeConfig{
 		Label:         "test",
 		Image:         driver.DefaultClientDockerImageName,
-		NetworkConfig: &driver.NetworkConfig{NumberOfValidators: 1},
+		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
 	})
 	if err != nil {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
@@ -203,7 +203,7 @@ func TestClient_Stop_Graceful(t *testing.T) {
 	node, err := StartOperaDockerNode(client, nil, &OperaNodeConfig{
 		Label:         "test",
 		Image:         driver.DefaultClientDockerImageName,
-		NetworkConfig: &driver.NetworkConfig{NumberOfValidators: 1},
+		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
 	})
 	if err != nil {
 		t.Fatalf("failed to create client node: %v", err)
