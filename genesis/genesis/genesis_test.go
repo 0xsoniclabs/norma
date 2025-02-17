@@ -24,16 +24,14 @@ import (
 
 func TestGenerateJsonGenesis(t *testing.T) {
 	// configure expected variables
-	const ValidatorCount = 9
-	if err := os.Setenv("VALIDATORS_COUNT", fmt.Sprintf("%d", ValidatorCount)); err != nil {
-		t.Fatalf("failed to set validator count: %v", err)
-	}
+	const ValidatorsCount = 9
 
 	// Create a temporary file
 	tmpFile := path.Join(t.TempDir(), "genesis.json")
 
 	// Call the GenerateJsonGenesis function
-	if err := GenerateJsonGenesis(tmpFile); err != nil {
+	rules := opera.FakeNetRules()
+	if err := GenerateJsonGenesis(tmpFile, ValidatorsCount, &rules); err != nil {
 		t.Fatalf("failed to generate genesis.json: %v", err)
 	}
 
@@ -67,7 +65,7 @@ func TestGenerateJsonGenesis(t *testing.T) {
 	}
 
 	// add validators to expected accounts
-	validators := makefakegenesis.GetFakeValidators(ValidatorCount)
+	validators := makefakegenesis.GetFakeValidators(ValidatorsCount)
 	totalSupply := utils.ToFtm(1000_000_000)
 	supplyEach := new(big.Int).Div(totalSupply, big.NewInt(int64(len(validators))))
 	for _, validator := range validators {
