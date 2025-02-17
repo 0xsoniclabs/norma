@@ -15,18 +15,16 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 	"math/big"
 	"os"
-	"strconv"
 	"time"
 )
 
-func GenerateJsonGenesis(jsonFile string) error {
-
-	// configuration is read from environment variables and defaults
-	validatorsCount := os.Getenv("VALIDATOR_COUNT")
-
+// GenerateJsonGenesis generates a genesis json file with the given number of validators
+// and network rules configurations.
+// The file is written to the given path.
+func GenerateJsonGenesis(jsonFile string, validatorsCount int, rules *opera.Rules) error {
 	jsonGenesis := makefakegenesis.GenesisJson{
-		Rules:         opera.FakeNetRules(),
-		BlockZeroTime: time.Now(),
+		Rules:         *rules,
+		BlockZeroTime: time.Unix(100, 0), // genesis files in each container must have the same timestamp
 	}
 
 	// Create infrastructure contracts.
@@ -63,14 +61,9 @@ func GenerateJsonGenesis(jsonFile string) error {
 		},
 	}
 
-	validatorsCountInt, err := strconv.ParseInt(validatorsCount, 10, 32)
-	if err != nil {
-		return fmt.Errorf("failed to parse validators count: %w", err)
-	}
-
 	// Create the validator account and provide some tokens.
 	totalSupply := futils.ToFtm(1000_000_000)
-	validators := makefakegenesis.GetFakeValidators(idx.Validator(validatorsCountInt))
+	validators := makefakegenesis.GetFakeValidators(idx.Validator(validatorsCount))
 	supplyEach := new(big.Int).Div(totalSupply, big.NewInt(int64(len(validators))))
 	for _, validator := range validators {
 		jsonGenesis.Accounts = append(jsonGenesis.Accounts, makefakegenesis.Account{
