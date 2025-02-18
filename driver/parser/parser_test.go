@@ -154,3 +154,26 @@ func TestParseExampleWithCheats(t *testing.T) {
 		t.Fatalf("parsing of input failed: %v", err)
 	}
 }
+
+func TestNetwork_Rules(t *testing.T) {
+	scenario, err := ParseBytes([]byte(networkRules))
+	if err != nil {
+		t.Fatalf("parsing of input failed: %v", err)
+	}
+
+	if val := scenario.NetworkRules["MAX_BLOCK_GAS"]; val != "10_000_000" {
+		t.Errorf("MAX_BLOCK_GAS should be defined")
+	}
+
+	if val := scenario.NetworkRules["MAX_EPOCH_GAS"]; val != "100_000_000" {
+		t.Errorf("MAX_EPOCH_GAS should be defined")
+	}
+}
+
+var networkRules = `
+name: Network Rules Example
+
+network_rules:
+     MAX_BLOCK_GAS: 10_000_000
+     MAX_EPOCH_GAS: 100_000_000
+`

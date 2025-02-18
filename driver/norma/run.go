@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"golang.org/x/exp/maps"
 	"io/fs"
 	"io/ioutil"
 	"os"
@@ -170,16 +171,15 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 	clock := executor.NewWallTimeClock()
 
 	// Startup network.
-	fmt.Printf("Creating network with: \n")
-	fmt.Printf("    Network max block gas: %d\n", scenario.GetMaxBlockGas())
-	fmt.Printf("    Network max epoch gas: %d\n", scenario.GetMaxEpochGas())
-	fmt.Printf("    Network RoundTripTime: %v\n", scenario.GetRoundTripTime())
+	fmt.Printf("Network RoundTripTime: %v\n", scenario.GetRoundTripTime())
+	for k, v := range scenario.NetworkRules {
+		fmt.Printf("Network Rule: %s: %s\n", k, v)
+	}
 
 	net, err := local.NewLocalNetwork(&driver.NetworkConfig{
 		NumberOfValidators: scenario.GetNumValidators(),
-		MaxBlockGas:        scenario.GetMaxBlockGas(),
-		MaxEpochGas:        scenario.GetMaxEpochGas(),
 		RoundTripTime:      scenario.GetRoundTripTime(),
+		NetworkRules:       maps.Clone(scenario.NetworkRules),
 	})
 	if err != nil {
 		return err

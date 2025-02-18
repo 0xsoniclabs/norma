@@ -74,12 +74,10 @@ type Network interface {
 type NetworkConfig struct {
 	// NumberOfValidators is the (static) number of validators in the network.
 	NumberOfValidators int
-	// MaxBlockGas is the maximum gas limit for a block in the network.
-	MaxBlockGas uint64
-	// MaxEpochGas is the maximum gas limit for an epoch in the network.
-	MaxEpochGas uint64
 	// RoundTripTime is the average round trip time between nodes in the network.
 	RoundTripTime time.Duration
+	// NetworkRules is a map of network rules to be applied to the network.
+	NetworkRules map[string]string
 }
 
 // NetworkListener can be registered to networks to get callbacks whenever there
