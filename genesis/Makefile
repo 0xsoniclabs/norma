@@ -19,10 +19,10 @@ BUILD_DIR := $(CURDIR)/build
 
 .PHONY: all test clean
 
-all: clientsonic
+all: genesistools
 
-clientsonic:
-	go build -o $(BUILD_DIR)/clientsonic ./app
+genesistools:
+	go build -o $(BUILD_DIR)/genesistools ./app
 
 test:
 	go test ./... -v
