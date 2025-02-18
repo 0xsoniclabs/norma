@@ -26,6 +26,9 @@ import (
 
 //go:generate mockgen -source network.go -destination network_mock.go -package driver
 
+// DefaultClientDockerImageName is the name of the docker image to use for clients.
+const DefaultClientDockerImageName = "sonic"
+
 // Network abstracts an execution environment for running scenarios.
 // Implementations may run nodes and applications locally, in docker images, or
 // remotely, on actual nodes. The interface is used by the scenario driver
@@ -71,12 +74,10 @@ type Network interface {
 type NetworkConfig struct {
 	// NumberOfValidators is the (static) number of validators in the network.
 	NumberOfValidators int
-	// MaxBlockGas is the maximum gas limit for a block in the network.
-	MaxBlockGas uint64
-	// MaxEpochGas is the maximum gas limit for an epoch in the network.
-	MaxEpochGas uint64
 	// RoundTripTime is the average round trip time between nodes in the network.
 	RoundTripTime time.Duration
+	// NetworkRules is a map of network rules to be applied to the network.
+	NetworkRules map[string]string
 }
 
 // NetworkListener can be registered to networks to get callbacks whenever there
@@ -94,6 +95,7 @@ type NodeConfig struct {
 	Name      string
 	Validator bool
 	Cheater   bool
+	Image     string
 	// TODO: add other parameters as needed
 	//  - features to include on the node
 	//  - state DB configuration

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"golang.org/x/exp/maps"
 	"io"
 	"regexp"
 	"slices"
@@ -65,8 +66,6 @@ func init() {
 	}
 }
 
-const operaDockerImageName = "sonic"
-
 // OperaNode implements the driver's Node interface by running a go-opera
 // client on a generic host.
 type OperaNode struct {
@@ -78,6 +77,8 @@ type OperaNode struct {
 type OperaNodeConfig struct {
 	// The label to be used to name this node. The label should not be empty.
 	Label string
+	// The Docker image to use for the node.
+	Image string
 	// The ID of the validator, nil if the node should not be a validator.
 	ValidatorId *int
 	// The configuration of the network the configured node should be part of.
@@ -105,27 +106,31 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 
 	host, err := network.RetryReturn(network.DefaultRetryAttempts, 1*time.Second, func() (*docker.Container, error) {
 		ports, err := network.GetFreePorts(len(operaServices.Services()))
+		if err != nil {
+			return nil, err
+		}
+
 		portForwarding := make(map[network.Port]network.Port, len(ports))
 		for i, service := range operaServices.Services() {
 			portForwarding[service.Port] = ports[i]
 		}
-		if err != nil {
-			return nil, err
+
+		envs := map[string]string{
+			"VALIDATOR_ID":     validatorId,
+			"VALIDATORS_COUNT": fmt.Sprintf("%d", config.NetworkConfig.NumberOfValidators),
+			"NETWORK_LATENCY":  fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
 		}
+		maps.Copy(envs, config.NetworkConfig.NetworkRules) // put in the network rules
+
 		return client.Start(&docker.ContainerConfig{
-			ImageName:       operaDockerImageName,
+			ImageName:       config.Image,
 			ShutdownTimeout: &shutdownTimeout,
 			PortForwarding:  portForwarding,
-			Environment: map[string]string{
-				"VALIDATOR_ID":     validatorId,
-				"VALIDATORS_COUNT": fmt.Sprintf("%d", config.NetworkConfig.NumberOfValidators),
-				"MAX_BLOCK_GAS":    fmt.Sprintf("%d", config.NetworkConfig.MaxBlockGas),
-				"MAX_EPOCH_GAS":    fmt.Sprintf("%d", config.NetworkConfig.MaxEpochGas),
-				"NETWORK_LATENCY":  fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
-			},
-			Network: dn,
+			Environment:     envs,
+			Network:         dn,
 		})
 	})
+
 	if err != nil {
 		return nil, err
 	}

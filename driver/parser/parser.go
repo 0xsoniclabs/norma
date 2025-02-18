@@ -25,48 +25,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const (
-	DefaultInstance = 1
-	// MaxBlockGas, MaxEpochGas defaults borrowed from example-genesis.json
-	DefaultMaxBlockGas = 20_500_000_000
-	DefaultMaxEpochGas = 1_500_000_000_000
-)
-
 // Scenario is the root element of a scenario description. It defines basic
 // scenario properties and lists a set of nodes and transaction source.
 type Scenario struct {
-	Name             string
-	Duration         float32
-	NumValidators    *int           `yaml:"num_validators,omitempty"`  // nil == 1
-	RoundTripTime    *time.Duration `yaml:"round_trip_time,omitempty"` // nil == 0
-	GenesisGasLimits GasLimits      `yaml:"genesis_gas_limit,omitempty"`
-	Nodes            []Node         `yaml:",omitempty"`
-	Applications     []Application  `yaml:",omitempty"`
-	Cheats           []Cheat        `yaml:",omitempty"`
-}
-
-// GasLimits is a configuration group for gas limit rules
-type GasLimits struct {
-	MaxBlockGas *uint64 `yaml:"max_block_gas,omitempty"`
-	MaxEpochGas *uint64 `yaml:"max_epoch_gas,omitempty"`
-}
-
-// GetMaxBlockGas returns MaxBlockGas
-func (s *Scenario) GetMaxBlockGas() uint64 {
-	if s.GenesisGasLimits.MaxBlockGas != nil {
-		return *s.GenesisGasLimits.MaxBlockGas
-	}
-
-	return DefaultMaxBlockGas
-}
-
-// GetMaxEpochGas returns MaxEpochGas
-func (s *Scenario) GetMaxEpochGas() uint64 {
-	if s.GenesisGasLimits.MaxEpochGas != nil {
-		return *s.GenesisGasLimits.MaxEpochGas
-	}
-
-	return DefaultMaxEpochGas
+	Name          string
+	Duration      float32
+	NumValidators *int              `yaml:"num_validators,omitempty"`  // nil == 1
+	RoundTripTime *time.Duration    `yaml:"round_trip_time,omitempty"` // nil == 0
+	Nodes         []Node            `yaml:",omitempty"`
+	Applications  []Application     `yaml:",omitempty"`
+	Cheats        []Cheat           `yaml:",omitempty"`
+	NetworkRules  map[string]string `yaml:"network_rules,omitempty"`
 }
 
 func (s *Scenario) GetNumValidators() int {
