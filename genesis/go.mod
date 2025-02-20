@@ -1,4 +1,4 @@
-module github.com/0xsoniclabs/clientsonic
+module github.com/0xsoniclabs/norma/genesistools
 
 go 1.22.0
 

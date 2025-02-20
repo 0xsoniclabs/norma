@@ -47,13 +47,13 @@ FROM golang:1.22 AS norma-build
 
 # Download dependencies supporting Sonic run first to cache them for faster build when Norma changes.
 WORKDIR /
-COPY clients/sonic/go.mod go.mod
+COPY genesis/go.mod go.mod
 RUN go mod download
 
 # Build norma itself
-WORKDIR /clientsonic
-COPY /clients/sonic/ ./
-RUN --mount=type=cache,target=/root/.cache/go-build make clientsonic
+WORKDIR /genesistools
+COPY /genesis/ ./
+RUN --mount=type=cache,target=/root/.cache/go-build make genesistools
 
 #
 # Stage 2: Build the final image
@@ -65,7 +65,7 @@ RUN apt-get update && \
     apt-get install iproute2 iputils-ping -y
 
 COPY --from=client-build /client/build/sonicd /client/build/sonictool ./
-COPY --from=norma-build /clientsonic/build/clientsonic ./
+COPY --from=norma-build /genesistools/build/genesistools ./
 
 ENV STATE_DB_IMPL="geth"
 ENV VM_IMPL="geth"
