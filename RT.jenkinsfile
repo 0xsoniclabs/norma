@@ -14,7 +14,7 @@ def enableC1 = false
 
 
 pipeline {
-	agent { label 'norma' }
+	agent { label 'x86-8-64-m' }
 	
 	options {
 		timestamps ()
@@ -29,6 +29,7 @@ pipeline {
 	environment {
 		GOROOT = '/usr/local/go'
 		DOCKER_API_VERSION = 1.45
+		GOMEMLIMIT = '60GiB'
 	}
 	
 	stages {
