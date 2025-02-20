@@ -36,7 +36,7 @@ RUN git checkout ${CLIENT_VERSION}
 RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
 
 #
-# Stage 1b: Build Norma
+# Stage 1b: Build Norma related tools supporting Client runs.
 #
 # It prepeares an image with dependencies for the norma.
 # Its caches the dependencies first, so that the build is faster.
@@ -45,26 +45,19 @@ RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
 #
 FROM golang:1.22 AS norma-build
 
-# Download Norma dependencies first to cache them for faster build when Norma changes.
+# Download dependencies supporting Sonic run first to cache them for faster build when Norma changes.
 WORKDIR /
-COPY go.mod go.mod
+COPY clients/sonic/go.mod go.mod
 RUN go mod download
 
 # Build norma itself
-WORKDIR /norma
-COPY . ./
-RUN --mount=type=cache,target=/root/.cache/go-build make normatool
+WORKDIR /clientsonic
+COPY /clients/sonic/ ./
+RUN --mount=type=cache,target=/root/.cache/go-build make clientsonic
 
-# This results in an image that contains the sonic binary
 #
-# The container can be run by typing:
-# > docker run -i -t sonic
-# or inspected opening terminal in it by
-# > docker run -i -t sonic /bin/sh
-#
-# sonic run can be customised by passing the environment variables, .e.g.:
-#
-# > docker run -e VALIDATOR_NUMBER=2 -e VALIDATORS_COUNT=5 -i -t sonic
+# Stage 2: Build the final image
+# It consists of the client binaries and the norma tools supporting runtime of the client.
 #
 FROM debian:bookworm
 
@@ -72,7 +65,7 @@ RUN apt-get update && \
     apt-get install iproute2 iputils-ping -y
 
 COPY --from=client-build /client/build/sonicd /client/build/sonictool ./
-COPY --from=norma-build /norma/build/normatool ./
+COPY --from=norma-build /clientsonic/build/clientsonic ./
 
 ENV STATE_DB_IMPL="geth"
 ENV VM_IMPL="geth"
