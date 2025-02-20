@@ -23,14 +23,11 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-// Run with `go run ./driver/norma`
-
 func main() {
 	app := &cli.App{
-		Name:      "Norma Network Runner",
-		HelpName:  "norma",
-		Usage:     "A set of tools for running network scenarios",
-		Copyright: "(c) 2023 Fantom Foundation",
+		Name:      "clientsonic",
+		Usage:     "Tools that support running of Sonic Client in Norma network",
+		Copyright: "(c) 2025 SonicLabs",
 		Flags:     []cli.Flag{},
 		Commands: []*cli.Command{
 			&validatorCommand,
