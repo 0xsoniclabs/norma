@@ -33,7 +33,7 @@ sed -i 's|GENESIS_RULES_PLACEHOLDER|'"$rules"'|g' "$GENESIS_PATH"
 # Set genesis validator accounts
 accounts=""
 for (( i=1; i<=${ADDRESS_LOAD_ACCOUNTS_COUNT}; i++ )); do
-  cmd=`./clientsonic validator from -id ${i}`
+  cmd=`./genesistools validator from -id ${i}`
   res=($cmd)
   validator_address=${res[7]}
 
@@ -53,7 +53,7 @@ validators=""
 for (( i=1; i<=${VALIDATORS_COUNT}; i++ )); do
   # Convert ID to zero-padded hex string
   id_256int_hex=$(printf "%064x" $i)
-  cmd=`./clientsonic validator from -id ${i}`
+  cmd=`./genesistools validator from -id ${i}`
   res=($cmd)
   validator_public_key=${res[6]}
   validator_address=${res[7]}
