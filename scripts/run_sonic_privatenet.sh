@@ -24,13 +24,13 @@ mkdir /datadir
 ##
 if [[ $VALIDATOR_ID -ne 0 ]]
 then
-	cmd=`./clientsonic validator from -id ${VALIDATOR_ID} -d ${datadir}`
+	cmd=`./genesistools validator from -id ${VALIDATOR_ID} -d ${datadir}`
 	res=($cmd)
 	VALIDATOR_PUBKEY=${res[0]}
 	VALIDATOR_ADDRESS=${res[1]}
 fi
 
-# Create password file - "password" is default norma/clientsonic accounts password
+# Create password file - "password" is default norma/genesistools accounts password
 echo password >> password.txt
 VALIDATOR_PASSWORD="password.txt"
 

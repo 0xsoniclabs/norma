@@ -25,7 +25,7 @@ import (
 
 func main() {
 	app := &cli.App{
-		Name:      "clientsonic",
+		Name:      "genesistools",
 		Usage:     "Tools that support running of Sonic Client in Norma network",
 		Copyright: "(c) 2025 SonicLabs",
 		Flags:     []cli.Flag{},
