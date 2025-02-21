@@ -117,7 +117,7 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 
 		envs := map[string]string{
 			"VALIDATOR_ID":     validatorId,
-			"VALIDATORS_COUNT": fmt.Sprintf("%d", config.NetworkConfig.NumberOfValidators),
+			"VALIDATORS_COUNT": fmt.Sprintf("%d", config.NetworkConfig.Validators.GetNumValidators()),
 			"NETWORK_LATENCY":  fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
 		}
 		maps.Copy(envs, config.NetworkConfig.NetworkRules) // put in the network rules

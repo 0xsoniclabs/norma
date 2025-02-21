@@ -2,8 +2,9 @@
 name: Slope Load Test
 duration: 120
 
-# The number of static validators present from begin to end.
-num_validators: 4
+# Initial validator nodes in the network.
+validators:
+    - instances: 4
 
 applications: 
   - name: load

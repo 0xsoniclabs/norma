@@ -30,7 +30,7 @@ import (
 type Scenario struct {
 	Name          string
 	Duration      float32
-	NumValidators *int              `yaml:"num_validators,omitempty"`  // nil == 1
+	Validators    []Validator
 	RoundTripTime *time.Duration    `yaml:"round_trip_time,omitempty"` // nil == 0
 	Nodes         []Node            `yaml:",omitempty"`
 	Applications  []Application     `yaml:",omitempty"`
@@ -38,18 +38,18 @@ type Scenario struct {
 	NetworkRules  map[string]string `yaml:"network_rules,omitempty"`
 }
 
-func (s *Scenario) GetNumValidators() int {
-	if s.NumValidators != nil {
-		return *s.NumValidators
-	}
-	return 1
-}
-
 func (s *Scenario) GetRoundTripTime() time.Duration {
 	if s.RoundTripTime != nil {
 		return *s.RoundTripTime
 	}
 	return 0
+}
+
+// Validator is a configuration for a group of network start-up validators.
+type Validator struct {
+	Name      string
+	Instances *int   `yaml:",omitempty"` // nil is interpreted as 1
+	ImageName string `yaml:",omitempty"` // empty is interpreted as DefaultClientDockerImageName
 }
 
 // Node is a configuration for a group of nodes with similar properties.
