@@ -57,7 +57,19 @@ func TestParseFailsOnUnknownKey(t *testing.T) {
 // configuration options.
 var smallExample = `
 name: Small Test
-num_validators: 5
+
+# Initial validator nodes in the network.
+validators:
+  - name: validator-1
+  - name: validator-2
+    imagename: "sonic:v2.0.2"
+  - name: validator-3
+    instances: 2
+    imagename: "sonic:v2.0.1"
+  - name: validator-4
+    instances: 3
+    imagename: "sonic"
+
 nodes:
   - name: A
     instances: 10
@@ -99,7 +111,8 @@ func TestParseSmallExampleWorks(t *testing.T) {
 // withClientType defines an example with client specification
 var withClientType = `
 name: Small Test
-num_validators: 5
+validators:
+  - name: validator-1
 nodes:
   - name: A
     instances: 10

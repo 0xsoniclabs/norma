@@ -111,23 +111,28 @@ func NewLocalNetwork(config *driver.NetworkConfig) (*LocalNetwork, error) {
 	net.RegisterListener(net.rpcWorkerPool)
 
 	// Start all validators.
-	net.validators = make([]*node.OperaNode, config.NumberOfValidators)
-	errs := make([]error, config.NumberOfValidators)
+	net.validators = make([]*node.OperaNode, config.Validators.GetNumValidators())
+	errs := make([]error, config.Validators.GetNumValidators())
 	var wg sync.WaitGroup
-	for i := 0; i < config.NumberOfValidators; i++ {
-		wg.Add(1)
-		i := i
-		go func() {
-			defer wg.Done()
-			validatorId := i + 1
-			nodeConfig := node.OperaNodeConfig{
-				ValidatorId:   &validatorId,
-				Image:         driver.DefaultClientDockerImageName,
-				NetworkConfig: config,
-				Label:         fmt.Sprintf("_validator-%d", validatorId),
-			}
-			net.validators[i], errs[i] = net.createNode(&nodeConfig)
-		}()
+	var idx int
+	for _, validator := range config.Validators {
+		for j := 0; j < validator.Instances; j++ {
+			wg.Add(1)
+			image := validator.ImageName
+			label := fmt.Sprintf("%s-%d", validator.Name, j)
+			go func(idx int) {
+				defer wg.Done()
+				validatorId := idx + 1
+				nodeConfig := node.OperaNodeConfig{
+					ValidatorId:   &validatorId,
+					Image:         image,
+					NetworkConfig: config,
+					Label:         label,
+				}
+				net.validators[idx], errs[idx] = net.createNode(&nodeConfig)
+			}(idx)
+			idx++
+		}
 	}
 	wg.Wait()
 

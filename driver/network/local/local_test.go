@@ -19,6 +19,7 @@ package local
 import (
 	"bufio"
 	"fmt"
+	"github.com/0xsoniclabs/norma/driver/parser"
 	"strings"
 	"testing"
 	"time"
@@ -35,7 +36,7 @@ func TestLocalNetworkIsNetwork(t *testing.T) {
 
 func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 	t.Parallel()
-	config := driver.NetworkConfig{NumberOfValidators: 1}
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 	for _, N := range []int{1, 3} {
 		N := N
 		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
@@ -83,8 +84,8 @@ func TestLocalNetwork_CanEnforceNetworkLatency(t *testing.T) {
 		t.Run(fmt.Sprintf("rtt=%v", rtt), func(t *testing.T) {
 			t.Parallel()
 			config := driver.NetworkConfig{
-				NumberOfValidators: 2,
-				RoundTripTime:      rtt,
+				Validators:    driver.NewDefaultValidators(2),
+				RoundTripTime: rtt,
 			}
 			net, err := NewLocalNetwork(&config)
 			if err != nil {
@@ -115,7 +116,7 @@ func TestLocalNetwork_CanEnforceNetworkLatency(t *testing.T) {
 
 func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
 	t.Parallel()
-	config := driver.NetworkConfig{NumberOfValidators: 1}
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 	for _, N := range []int{1, 3} {
 		N := N
 		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
@@ -164,7 +165,7 @@ func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
 func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 	t.Parallel()
 	N := 2
-	config := driver.NetworkConfig{NumberOfValidators: 1}
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 
 	net, err := NewLocalNetwork(&config)
 	if err != nil {
@@ -201,7 +202,7 @@ func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 	t.Parallel()
 	N := 3
-	config := driver.NetworkConfig{NumberOfValidators: 1}
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 
 	net, err := NewLocalNetwork(&config)
 	if err != nil {
@@ -264,7 +265,7 @@ func TestLocalNetwork_CanRunWithMultipleValidators(t *testing.T) {
 	t.Parallel()
 	for _, N := range []int{1, 3} {
 		N := N
-		config := driver.NetworkConfig{NumberOfValidators: N}
+		config := driver.NetworkConfig{Validators: driver.NewDefaultValidators(N)}
 		t.Run(fmt.Sprintf("num_validators=%d", N), func(t *testing.T) {
 			t.Parallel()
 			net, err := NewLocalNetwork(&config)
@@ -293,9 +294,41 @@ func TestLocalNetwork_CanRunWithMultipleValidators(t *testing.T) {
 	}
 }
 
+func TestLocalNetwork_CanRunWithVariousValidators(t *testing.T) {
+	t.Parallel()
+
+	var one = 1
+	var two = 2
+	var three = 3
+
+	validators := driver.NewValidators([]parser.Validator{
+		{},
+		{Name: "validator1", Instances: &three, ImageName: "sonic:v2.0.0"},
+		{Name: "validator2", Instances: &two, ImageName: "sonic:v2.0.1"},
+		{Name: "validator3", Instances: &one, ImageName: "sonic:v2.0.2"},
+		{Name: "validator4", ImageName: "sonic"},
+	})
+
+	config := driver.NetworkConfig{Validators: validators}
+	net, err := NewLocalNetwork(&config)
+	if err != nil {
+		t.Fatalf("failed to create new local network: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := net.Shutdown(); err != nil {
+			t.Fatalf("failed to shut down network: %v", err)
+		}
+	})
+
+	if got := net.GetActiveNodes(); len(got) != 8 {
+		t.Errorf("invalid number of active nodes, got %d, want 6", len(got))
+	}
+
+}
+
 func TestLocalNetwork_NotifiesListenersOnNodeStartup(t *testing.T) {
 	t.Parallel()
-	config := driver.NetworkConfig{NumberOfValidators: 2}
+	config := driver.NetworkConfig{Validators: driver.NewDefaultValidators(2)}
 	ctrl := gomock.NewController(t)
 	listener := driver.NewMockNetworkListener(ctrl)
 
@@ -308,7 +341,7 @@ func TestLocalNetwork_NotifiesListenersOnNodeStartup(t *testing.T) {
 	})
 
 	activeNodes := net.GetActiveNodes()
-	if got, want := len(activeNodes), config.NumberOfValidators; got != want {
+	if got, want := len(activeNodes), config.Validators.GetNumValidators(); got != want {
 		t.Errorf("invalid number of active nodes, got %d, want %d", got, want)
 	}
 
@@ -321,7 +354,7 @@ func TestLocalNetwork_NotifiesListenersOnNodeStartup(t *testing.T) {
 	})
 
 	activeNodes = net.GetActiveNodes()
-	if got, want := len(activeNodes), config.NumberOfValidators+1; got != want {
+	if got, want := len(activeNodes), config.Validators.GetNumValidators()+1; got != want {
 		t.Errorf("invalid number of active nodes, got %d, want %d", got, want)
 	}
 
@@ -329,7 +362,7 @@ func TestLocalNetwork_NotifiesListenersOnNodeStartup(t *testing.T) {
 
 func TestLocalNetwork_NotifiesListenersOnAppStartup(t *testing.T) {
 	t.Parallel()
-	config := driver.NetworkConfig{NumberOfValidators: 1}
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 	ctrl := gomock.NewController(t)
 	listener := driver.NewMockNetworkListener(ctrl)
 
@@ -354,7 +387,7 @@ func TestLocalNetwork_NotifiesListenersOnAppStartup(t *testing.T) {
 
 func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 	t.Parallel()
-	config := driver.NetworkConfig{NumberOfValidators: 1}
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 	for _, N := range []int{1, 3} {
 		N := N
 		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
@@ -421,7 +454,7 @@ func TestLocalNetwork_Num_Validators_Started(t *testing.T) {
 		i := i
 		t.Run(fmt.Sprintf("num_validators=%d", i), func(t *testing.T) {
 			t.Parallel()
-			config := driver.NetworkConfig{NumberOfValidators: i}
+			config := driver.NetworkConfig{Validators: driver.NewDefaultValidators(i)}
 			net, err := NewLocalNetwork(&config)
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
@@ -432,7 +465,7 @@ func TestLocalNetwork_Num_Validators_Started(t *testing.T) {
 				}
 			})
 
-			if got, want := len(net.GetActiveNodes()), config.NumberOfValidators; got != want {
+			if got, want := len(net.GetActiveNodes()), config.Validators.GetNumValidators(); got != want {
 				t.Errorf("invalid number of active nodes, got %d, want %d", got, want)
 			}
 		})
@@ -441,7 +474,7 @@ func TestLocalNetwork_Num_Validators_Started(t *testing.T) {
 
 func TestLocalNetwork_Can_Run_Multiple_Client_Images(t *testing.T) {
 	t.Parallel()
-	config := driver.NetworkConfig{NumberOfValidators: 1}
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 
 	net, err := NewLocalNetwork(&config)
 	if err != nil {

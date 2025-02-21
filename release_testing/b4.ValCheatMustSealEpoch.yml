@@ -7,7 +7,10 @@ name: B4
 duration: 90 # 1 minute sim > cheat > 30 seconds further
 
 # backward compatibility, to be removed.
-num_validators: 4
+# Initial validator nodes in the network.
+validators:
+  - name: validator-1
+    instances: 4
 
 nodes:
   - name: validator

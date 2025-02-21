@@ -38,9 +38,6 @@ func (s *Scenario) Check() error {
 	if s.Duration <= 0 {
 		errs = append(errs, fmt.Errorf("scenario duration must be > 0"))
 	}
-	if err := s.checkValidatorConstraints(); err != nil {
-		errs = append(errs, err)
-	}
 	if s.RoundTripTime != nil && *s.RoundTripTime < 0 {
 		errs = append(errs, fmt.Errorf("round trip time must be >= 0, is %v", *s.RoundTripTime))
 	}
@@ -285,13 +282,4 @@ func checkTimeInterval(start, end *float32, duration float32) error {
 		}
 	}
 	return errors.Join(errs...)
-}
-
-// checkValidatorConstraints makes sure that there is correct number of validators.
-func (s *Scenario) checkValidatorConstraints() error {
-	if s.NumValidators != nil && *s.NumValidators < 1 {
-		return fmt.Errorf("invalid number of validators: %d < 1", *s.NumValidators)
-	}
-
-	return nil
 }

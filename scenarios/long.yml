@@ -7,10 +7,7 @@ name: Long-Running Network
 # The duration of the scenario's runtime, in seconds.
 duration: 600
 
-# The number of validator nodes in the network.
-num_validators: 1
-
-# The network scenario to exercise. 
+# The network scenario to exercise.
 nodes:
   # We include three additional non-validator nodes for the full duration.
   - name: A
