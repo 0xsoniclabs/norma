@@ -79,6 +79,5 @@ EXPOSE 18546
 
 COPY genesis/example-genesis.json ./genesis.json
 COPY scripts/run_sonic_privatenet.sh ./run_sonic.sh
-COPY scripts/set_genesis.sh ./set_genesis.sh
 
 CMD ["./run_sonic.sh"]
