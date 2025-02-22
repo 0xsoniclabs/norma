@@ -10,14 +10,12 @@ datadir="/datadir"
 echo "val id=${VALIDATOR_ID}"
 echo "genesis validator count=${VALIDATORS_COUNT}"
 
-# Call set genesis script - add balance to all possible validators
-# VALIDATOR_COUNT defines genesis validator count
-# TODO change 100 funded validator addresses to specific number
-./set_genesis.sh genesis.json 100 ${VALIDATORS_COUNT} ${MAX_BLOCK_GAS} ${MAX_EPOCH_GAS}
+# Export genesis.json
+./genesistools genesis export genesis.json
 
 # Initialize datadir
 mkdir /datadir
-./sonictool --datadir ${datadir} genesis json --experimental genesis.json
+./sonictool --datadir ${datadir} genesis json --experimental /genesis.json
 
 ##
 ## if $VALIDATOR_ID is set, it is a validator
