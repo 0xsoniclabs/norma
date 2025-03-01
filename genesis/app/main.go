@@ -31,6 +31,7 @@ func main() {
 		Flags:     []cli.Flag{},
 		Commands: []*cli.Command{
 			&validatorCommand,
+			&genesisExportCommand,
 		},
 	}
 	if err := app.Run(os.Args); err != nil {

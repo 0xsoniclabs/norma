@@ -25,7 +25,7 @@ import (
 func TestGenerateJsonGenesis(t *testing.T) {
 	// configure expected variables
 	const ValidatorCount = 9
-	if err := os.Setenv("VALIDATOR_COUNT", fmt.Sprintf("%d", ValidatorCount)); err != nil {
+	if err := os.Setenv("VALIDATORS_COUNT", fmt.Sprintf("%d", ValidatorCount)); err != nil {
 		t.Fatalf("failed to set validator count: %v", err)
 	}
 
