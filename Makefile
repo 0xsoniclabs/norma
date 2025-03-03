@@ -44,7 +44,7 @@ build-sonic-docker-image-main:
 	DOCKER_BUILDKIT=1 docker build --build-context client-src=$(CLIENT_URL) . -t sonic
 
 build-sonic-docker-image-local:
-	DOCKER_BUILDKIT=1 docker build --build-context client-src=/Users/kjezek/sonic/sonic . -t sonic:local
+	DOCKER_BUILDKIT=1 docker build --build-context client-src=sonic . -t sonic:local
 
 # Build various client versions
 $(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)):
