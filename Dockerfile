@@ -19,20 +19,21 @@
 #
 # It checks out the required version of the client, and builds it.
 #
-FROM golang:1.22 AS client-build
+FROM golang:1.24 AS client-build
 
-# Download Sonic dependencies from the default branch first to cache them.
-# We assume tags/branches do not change majority of dependencies.
-RUN git clone https://github.com/0xsoniclabs/sonic.git /client
-
-# Download Client dependencies from the default bracnch
 WORKDIR /client
+
+# Download expected Client version from the outside defined location.
+# The 'client-src' parameter is passed as '--build-context' to the docker build command.
+
+# Download Sonic dependencies first to cache them.
+COPY --from=client-src go.mod .
 RUN go mod download
 
-# Checkout required Client version and build it
-ARG CLIENT_VERSION=main
-WORKDIR /client
-RUN git checkout ${CLIENT_VERSION}
+# Copy the rest of the client source code to build it.
+COPY --from=client-src . .
+
+# Build the client
 RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
 
 #
@@ -43,7 +44,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
 #
 # It checks out the local version of the norma, and builds it.
 #
-FROM golang:1.22 AS norma-build
+FROM golang:1.24 AS norma-build
 
 # Download dependencies supporting Sonic run first to cache them for faster build when Norma changes.
 WORKDIR /
