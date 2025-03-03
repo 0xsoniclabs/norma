@@ -1,0 +1,3 @@
+[submodule "sonic"]
+	path = sonic
+	url = git@github.com:0xsoniclabs/sonic.git
