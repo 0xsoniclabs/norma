@@ -19,7 +19,7 @@
 #
 # It checks out the required version of the client, and builds it.
 #
-FROM golang:1.22 AS client-build
+FROM golang:1.24 AS client-build
 
 # Download Sonic dependencies from the default branch first to cache them.
 # We assume tags/branches do not change majority of dependencies.
@@ -43,7 +43,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
 #
 # It checks out the local version of the norma, and builds it.
 #
-FROM golang:1.22 AS norma-build
+FROM golang:1.24 AS norma-build
 
 # Download dependencies supporting Sonic run first to cache them for faster build when Norma changes.
 WORKDIR /
@@ -77,8 +77,6 @@ EXPOSE 6060
 EXPOSE 18545
 EXPOSE 18546
 
-COPY genesis/example-genesis.json ./genesis.json
 COPY scripts/run_sonic_privatenet.sh ./run_sonic.sh
-COPY scripts/set_genesis.sh ./set_genesis.sh
 
 CMD ["./run_sonic.sh"]

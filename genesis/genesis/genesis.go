@@ -11,6 +11,8 @@ import (
 	"github.com/0xsoniclabs/sonic/opera/contracts/evmwriter"
 	"github.com/0xsoniclabs/sonic/opera/contracts/netinit"
 	"github.com/0xsoniclabs/sonic/opera/contracts/sfc"
+	"github.com/0xsoniclabs/sonic/scc"
+	"github.com/0xsoniclabs/sonic/scc/bls"
 	futils "github.com/0xsoniclabs/sonic/utils"
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 	"math/big"
@@ -19,14 +21,17 @@ import (
 	"time"
 )
 
+// GenerateJsonGenesis generates a genesis json file with the given number of validators
+// and other configurations.
+// The file is written to the given path.
 func GenerateJsonGenesis(jsonFile string) error {
 
 	// configuration is read from environment variables and defaults
-	validatorsCount := os.Getenv("VALIDATOR_COUNT")
+	validatorsCount := os.Getenv("VALIDATORS_COUNT")
 
 	jsonGenesis := makefakegenesis.GenesisJson{
 		Rules:         opera.FakeNetRules(),
-		BlockZeroTime: time.Now(),
+		BlockZeroTime: time.Unix(100, 0), // genesis files in each container must have the same timestamp
 	}
 
 	// Create infrastructure contracts.
@@ -104,6 +109,19 @@ func GenerateJsonGenesis(jsonFile string) error {
 			Data: tx.Data(),
 		})
 	}
+
+	// Create the genesis SCC committee.
+	key := bls.NewPrivateKeyForTests(0)
+	committee := scc.NewCommittee(scc.Member{
+		PublicKey:         key.PublicKey(),
+		ProofOfPossession: key.GetProofOfPossession(),
+		VotingPower:       1,
+	})
+	if err := committee.Validate(); err != nil {
+		return fmt.Errorf("failed to create valid committee: %w", err)
+	}
+
+	jsonGenesis.GenesisCommittee = &committee
 
 	encoded, err := json.MarshalIndent(jsonGenesis, "", "  ")
 	if err != nil {
