@@ -1,11 +1,9 @@
 module github.com/0xsoniclabs/norma/genesistools
 
-go 1.22.0
-
-toolchain go1.22.3
+go 1.24.0
 
 require (
-	github.com/0xsoniclabs/sonic v0.0.0-20250218144827-28263a9a85f9
+	github.com/0xsoniclabs/sonic v0.0.0-20250303103112-739f4dd95e96
 	github.com/Fantom-foundation/lachesis-base v0.0.0-20240116072301-a75735c4ef00
 	github.com/ethereum/go-ethereum v1.15.0
 	github.com/stretchr/testify v1.9.0
@@ -14,7 +12,7 @@ require (
 
 require (
 	github.com/0xsoniclabs/carmen/go v0.0.0-20250113102336-97f8b8616eff // indirect
-	github.com/0xsoniclabs/tosca v0.0.0-20250212104933-0462f7af062b // indirect
+	github.com/0xsoniclabs/tosca v0.0.0-20250221124739-3aac4e7427dc // indirect
 	github.com/DataDog/zstd v1.5.6 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/VictoriaMetrics/fastcache v1.12.2 // indirect
