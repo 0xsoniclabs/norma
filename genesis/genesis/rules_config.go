@@ -98,7 +98,7 @@ func register(key string, apply ruleUpdater) {
 	}
 }
 
-var naxBlockGas = func(value string, rules *opera.Rules) (err error) {
+var maxBlockGas = func(value string, rules *opera.Rules) (err error) {
 	rules.Blocks.MaxBlockGas, err = strconv.ParseUint(value, 10, 64)
 	return err
 }
