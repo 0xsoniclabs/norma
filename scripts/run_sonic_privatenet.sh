@@ -1,5 +1,7 @@
 #!/bin/bash
 
+echo "Sonic built from git version: $(cat sonic_git_version.txt)"
+
 # Get the local node's IP.
 list=`hostname -I`
 array=($list)

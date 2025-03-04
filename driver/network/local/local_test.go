@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/0xsoniclabs/norma/driver/parser"
+	"golang.org/x/exp/maps"
 	"strings"
 	"testing"
 	"time"
@@ -484,16 +485,63 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images(t *testing.T) {
 		_ = net.Shutdown()
 	})
 
-	images := []string{"sonic", "sonic:v2.0.2", "sonic:v2.0.1", "sonic:v2.0.0"}
+	images := []string{"sonic", "sonic:local", "sonic:v2.0.2", "sonic:v2.0.1", "sonic:v2.0.0"}
+	versions := make(chan string)
 
 	for i, image := range images {
-		_, err := net.CreateNode(&driver.NodeConfig{
+		node, err := net.CreateNode(&driver.NodeConfig{
 			Name:  fmt.Sprintf("T-%d", i),
 			Image: image,
 		})
 		if err != nil {
 			t.Errorf("failed to create node: %v", err)
 		}
+
+		// read logs and check the image name is correct
+		reader, err := node.StreamLog()
+		if err != nil {
+			t.Fatalf("cannot read logs: %e", err)
+		}
+		t.Cleanup(func() {
+			_ = reader.Close()
+		})
+
+		go func() {
+			scanner := bufio.NewScanner(reader)
+			for scanner.Scan() {
+				line := scanner.Text()
+				if strings.Contains(line, "Sonic built from git version:") {
+					parts := strings.SplitN(line, ":", 2)
+					if len(parts) == 2 {
+						versions <- strings.TrimSpace(parts[1])
+					}
+				}
+			}
+		}()
+	}
+
+	expectedVersions := map[string]struct{}{
+		"v2.0.0": {},
+		"v2.0.1": {},
+		"v2.0.2": {},
+		"main":   {},
+		"local":  {},
+	}
+
+	for i := 0; i < len(images); i++ {
+		select {
+		case version := <-versions:
+			if _, ok := expectedVersions[version]; !ok {
+				t.Errorf("unexpected version: %s", version)
+			}
+			delete(expectedVersions, version)
+		case <-time.After(180 * time.Second):
+			t.Errorf("timeout while waiting for version")
+		}
+	}
+
+	if len(expectedVersions) > 0 {
+		t.Errorf("missing versions: %v", maps.Keys(expectedVersions))
 	}
 
 	if err := net.Shutdown(); err != nil {
