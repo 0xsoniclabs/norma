@@ -27,7 +27,7 @@ var supportedNetworkRulesConfigurations = make(registry)
 // init registers all currently supported network rules.
 func init() {
 	// Blocks
-	register("MAX_BLOCK_GAS", naxBlockGas)
+	register("MAX_BLOCK_GAS", maxBlockGas)
 	register("MAX_EMPTY_BLOCK_SKIP_PERIOD", maxEmptyBlockSkipPeriod)
 
 	// Epochs
