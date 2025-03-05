@@ -230,6 +230,31 @@ func TestExecutor_TestUserAbort(t *testing.T) {
 	}
 }
 
+func TestExecutor_scheduleNetworkRulesEvents(t *testing.T) {
+	clock := NewSimClock()
+	scenario := parser.Scenario{
+		Name:     "Test",
+		Duration: 10,
+		NetworkRules: parser.NetworkRules{
+			Updates: []parser.NetworkRulesUpdate{
+				{Time: 2, Rules: map[string]string{"a": "b"}},
+				{Time: 6, Rules: map[string]string{"c": "d"}},
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	gomock.InOrder(
+		net.EXPECT().ApplyNetworkRules(map[string]string{"a": "b"}),
+		net.EXPECT().ApplyNetworkRules(map[string]string{"c": "d"}),
+	)
+
+	if err := Run(clock, net, &scenario, true); err != nil {
+		t.Errorf("failed to run scenario: %v", err)
+	}
+}
+
 func New[T any](value T) *T {
 	res := new(T)
 	*res = value
