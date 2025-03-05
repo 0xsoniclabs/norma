@@ -169,24 +169,57 @@ func TestParseExampleWithCheats(t *testing.T) {
 }
 
 func TestNetwork_Rules(t *testing.T) {
-	scenario, err := ParseBytes([]byte(networkRules))
+	scenario, err := ParseBytes([]byte(networkRulesPayload))
 	if err != nil {
 		t.Fatalf("parsing of input failed: %v", err)
 	}
 
-	if val := scenario.NetworkRules["MAX_BLOCK_GAS"]; val != "10_000_000" {
-		t.Errorf("MAX_BLOCK_GAS should be defined")
+	if got, want := scenario.NetworkRules.Genesis["MAX_BLOCK_GAS"], "20500000000"; got != want {
+		t.Errorf("unexpected value: got: %v, want: %v", got, want)
 	}
 
-	if val := scenario.NetworkRules["MAX_EPOCH_GAS"]; val != "100_000_000" {
-		t.Errorf("MAX_EPOCH_GAS should be defined")
+	if got, want := scenario.NetworkRules.Genesis["MAX_EPOCH_GAS"], "1500000000000"; got != want {
+		t.Errorf("unexpected value: got: %v, want: %v", got, want)
+	}
+
+	if got, want := scenario.NetworkRules.Updates[0].Time, float32(10); got != want {
+		t.Errorf("unexpected value: got: %v, want: %v", got, want)
+	}
+
+	if got, want := scenario.NetworkRules.Updates[0].Rules["MAX_BLOCK_GAS"], "20500000001"; got != want {
+		t.Errorf("unexpected value: got: %v, want: %v", got, want)
+	}
+
+	if got, want := scenario.NetworkRules.Updates[1].Time, float32(30); got != want {
+		t.Errorf("unexpected value: got: %v, want: %v", got, want)
+	}
+
+	if got, want := scenario.NetworkRules.Updates[1].Rules["MAX_EPOCH_GAS"], "1500000000002"; got != want {
+		t.Errorf("unexpected value: got: %v, want: %v", got, want)
+	}
+
+	if got, want := scenario.NetworkRules.Updates[1].Rules["MAX_EPOCH_DURATION"], "10s"; got != want {
+		t.Errorf("unexpected value: got: %v, want: %v", got, want)
 	}
 }
 
-var networkRules = `
+var networkRulesPayload = `
 name: Network Rules Example
 
 network_rules:
-     MAX_BLOCK_GAS: 10_000_000
-     MAX_EPOCH_GAS: 100_000_000
+  genesis:
+      MAX_BLOCK_GAS: 20500000000
+      MAX_EPOCH_GAS: 1500000000000
+      YET_ANOTHER_RULE: abcd
+  updates:
+      - time: 10
+        rules:
+          MAX_BLOCK_GAS: 20500000001
+          YET_ANOTHER_RULE: abcde
+      - time: 30
+        rules:
+          MAX_EPOCH_GAS: 1500000000002
+          MAX_EPOCH_DURATION: 10s
+          YET_ANOTHER_RULE: abcdef
+
 `

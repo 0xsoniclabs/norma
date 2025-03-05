@@ -172,13 +172,13 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 
 	// Startup network.
 	fmt.Printf("Network RoundTripTime: %v\n", scenario.GetRoundTripTime())
-	for k, v := range scenario.NetworkRules {
+	for k, v := range scenario.NetworkRules.Genesis {
 		fmt.Printf("Network Rule: %s: %s\n", k, v)
 	}
 
 	net, err := local.NewLocalNetwork(&driver.NetworkConfig{
 		Validators:    driver.NewValidators(scenario.Validators),
-		RoundTripTime: scenario.GetRoundTripTime(), NetworkRules: maps.Clone(scenario.NetworkRules),
+		RoundTripTime: scenario.GetRoundTripTime(), NetworkRules: maps.Clone(scenario.NetworkRules.Genesis),
 	})
 	if err != nil {
 		return err
