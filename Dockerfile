@@ -36,8 +36,6 @@ COPY --from=client-src . .
 # Build the client
 RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
 
-RUN git branch | grep \* | cut -d ' ' -f2 > sonic_git_version.txt
-
 #
 # Stage 1b: Build Norma related tools supporting Client runs.
 #
@@ -67,7 +65,7 @@ FROM debian:bookworm
 RUN apt-get update && \
     apt-get install iproute2 iputils-ping -y
 
-COPY --from=client-build /client/build/sonicd /client/build/sonictool /client/sonic_git_version.txt ./
+COPY --from=client-build /client/build/sonicd /client/build/sonictool ./
 COPY --from=norma-build /genesistools/build/genesistools ./
 
 ENV STATE_DB_IMPL="geth"

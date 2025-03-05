@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Sonic built from git version: $(cat sonic_git_version.txt)"
+echo "Sonic binary checksum: $(sha256sum   /sonicd | cut -d ' ' -f 1 )"
 
 # Get the local node's IP.
 list=`hostname -I`

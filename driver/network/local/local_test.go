@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/0xsoniclabs/norma/driver/parser"
-	"golang.org/x/exp/maps"
 	"strings"
 	"testing"
 	"time"
@@ -486,7 +485,7 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images(t *testing.T) {
 	})
 
 	images := []string{"sonic", "sonic:local", "sonic:v2.0.2", "sonic:v2.0.1", "sonic:v2.0.0"}
-	versions := make(chan string)
+	checksum := make(chan string)
 
 	for i, image := range images {
 		node, err := net.CreateNode(&driver.NodeConfig{
@@ -510,38 +509,28 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images(t *testing.T) {
 			scanner := bufio.NewScanner(reader)
 			for scanner.Scan() {
 				line := scanner.Text()
-				if strings.Contains(line, "Sonic built from git version:") {
+				if strings.Contains(line, "Sonic binary checksum:") {
 					parts := strings.SplitN(line, ":", 2)
 					if len(parts) == 2 {
-						versions <- strings.TrimSpace(parts[1])
+						checksum <- strings.TrimSpace(parts[1])
 					}
 				}
 			}
 		}()
 	}
 
-	expectedVersions := map[string]struct{}{
-		"v2.0.0": {},
-		"v2.0.1": {},
-		"v2.0.2": {},
-		"main":   {},
-		"local":  {},
-	}
-
-	for i := 0; i < len(images); i++ {
+	gotChecksums := make(map[string]struct{})
+	for len(gotChecksums) < len(images) {
 		select {
-		case version := <-versions:
-			if _, ok := expectedVersions[version]; !ok {
-				t.Errorf("unexpected version: %s", version)
-			}
-			delete(expectedVersions, version)
+		case val := <-checksum:
+			gotChecksums[val] = struct{}{}
 		case <-time.After(180 * time.Second):
-			t.Errorf("timeout while waiting for version")
+			t.Fatalf("timeout while waiting for checksums")
 		}
 	}
 
-	if len(expectedVersions) > 0 {
-		t.Errorf("missing versions: %v", maps.Keys(expectedVersions))
+	if got, want := len(gotChecksums), len(images); got != want {
+		t.Errorf("invalid number of checksum, got: %d, want %d", got, want)
 	}
 
 	if err := net.Shutdown(); err != nil {
