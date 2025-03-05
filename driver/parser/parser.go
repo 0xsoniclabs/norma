@@ -31,11 +31,11 @@ type Scenario struct {
 	Name          string
 	Duration      float32
 	Validators    []Validator
-	RoundTripTime *time.Duration    `yaml:"round_trip_time,omitempty"` // nil == 0
-	Nodes         []Node            `yaml:",omitempty"`
-	Applications  []Application     `yaml:",omitempty"`
-	Cheats        []Cheat           `yaml:",omitempty"`
-	NetworkRules  map[string]string `yaml:"network_rules,omitempty"`
+	RoundTripTime *time.Duration `yaml:"round_trip_time,omitempty"` // nil == 0
+	Nodes         []Node         `yaml:",omitempty"`
+	Applications  []Application  `yaml:",omitempty"`
+	Cheats        []Cheat        `yaml:",omitempty"`
+	NetworkRules  NetworkRules   `yaml:"network_rules,omitempty"`
 }
 
 func (s *Scenario) GetRoundTripTime() time.Duration {
@@ -43,6 +43,22 @@ func (s *Scenario) GetRoundTripTime() time.Duration {
 		return *s.RoundTripTime
 	}
 	return 0
+}
+
+// networkRules defines a set of network rules as a key value mapping.
+type networkRules map[string]string
+
+// NetworkRules defines a set of network rules that can be applied to the network.
+// It distinguishes between the genesis rules and a set of updates that can be applied at a specific time.
+type NetworkRules struct {
+	Genesis networkRules         `yaml:",omitempty"`
+	Updates []NetworkRulesUpdate `yaml:",omitempty"`
+}
+
+// NetworkRulesUpdate defines a network rule update that can be applied at a specific time.
+type NetworkRulesUpdate struct {
+	Time  float32
+	Rules networkRules
 }
 
 // Validator is a configuration for a group of network start-up validators.
