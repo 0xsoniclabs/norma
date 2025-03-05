@@ -19,14 +19,16 @@ BUILD_DIR := $(CURDIR)/build
 .PHONY: all test clean
 
 # Define a list of client versions
-CLIENT_VERSIONS := v2.0.2 v2.0.1 v2.0.0
+CLIENT_VERSIONS := v2.0.3 v2.0.2 v2.0.1 v2.0.0
+CLIENT_URL=https://github.com/0xsoniclabs/sonic.git
 
 all: \
     norma \
     pull-hello-world-image \
     pull-alpine-image \
     pull-prometheus-image \
-    build-sonic-docker-image \
+    build-sonic-docker-image-main \
+    build-sonic-docker-image-local \
     $(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)) \
 
 pull-hello-world-image:
@@ -38,12 +40,15 @@ pull-alpine-image:
 pull-prometheus-image:
 	DOCKER_BUILDKIT=1 docker image pull prom/prometheus:v2.44.0
 
-build-sonic-docker-image:
-	DOCKER_BUILDKIT=1 docker build . -t sonic
+build-sonic-docker-image-main:
+	DOCKER_BUILDKIT=1 docker build --build-context client-src=$(CLIENT_URL) . -t sonic
+
+build-sonic-docker-image-local:
+	DOCKER_BUILDKIT=1 docker build --build-context client-src=sonic . -t sonic:local
 
 # Build various client versions
 $(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)):
-	DOCKER_BUILDKIT=1 docker build --build-arg CLIENT_VERSION=$($(subst build-sonic-docker-image-,,$@)) . -t sonic:$(subst build-sonic-docker-image-,,$@)
+	DOCKER_BUILDKIT=1 docker build --build-context client-src=$(CLIENT_URL)\#$(subst build-sonic-docker-image-,,$@) . -t sonic:$(subst build-sonic-docker-image-,,$@)
 
 generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi # requires installed solc and Ethereum abigen - check README.md
 
@@ -74,10 +79,10 @@ load/contracts/abi/Helper.abi: load/contracts/Helper.sol
 generate-mocks: # requires installed mockgen
 	go generate ./...
 
-norma: pull-prometheus-image build-sonic-docker-image
+norma: pull-prometheus-image build-sonic-docker-image-main
 	go build -o $(BUILD_DIR)/norma ./driver/norma
 
-test: pull-hello-world-image pull-alpine-image pull-prometheus-image build-sonic-docker-image
+test: pull-hello-world-image pull-alpine-image pull-prometheus-image build-sonic-docker-image-main
 	go test ./... -v
 
 clean:
