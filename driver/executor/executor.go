@@ -67,6 +67,9 @@ func Run(clock Clock, network driver.Network, scenario *parser.Scenario, skipCon
 	for _, cheat := range scenario.Cheats {
 		scheduleCheatEvents(&cheat, queue, network, endTime)
 	}
+	for _, rule := range scenario.NetworkRules.Updates {
+		scheduleNetworkRulesEvents(rule, queue, network)
+	}
 
 	// Register a handler for Ctrl+C events.
 	abort := make(chan os.Signal, 1)
@@ -309,5 +312,12 @@ func scheduleCheatEvents(cheat *parser.Cheat, queue *eventQueue, net driver.Netw
 
 	queue.add(toSingleEvent(startTime, fmt.Sprintf("Attempting Cheat %s - currently unsupported cheat, nothing happens", cheat.Name), func() error {
 		return nil
+	}))
+}
+
+// scheduleNetworkRulesEvents schedules an event to apply network rules at a given time.
+func scheduleNetworkRulesEvents(rule parser.NetworkRulesUpdate, queue *eventQueue, network driver.Network) {
+	queue.add(toSingleEvent(Seconds(rule.Time), "Applying network rules", func() error {
+		return network.ApplyNetworkRules(driver.NetworkRules(rule.Rules))
 	}))
 }
