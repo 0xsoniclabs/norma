@@ -1,7 +1,5 @@
-# This scenario simulates a minimal network including two nodes
-# and a single application producing constant, low-throughput load.
-# This is to be used as a base-line check for Norma's stability.
-name: Baseline Check
+# This scenario extends baseline scenario by customizing network rules
+name: Custom Network Rules
 
 # The duration of the scenario's runtime, in seconds.
 duration: 60
@@ -12,6 +10,16 @@ validators:
   - name: validator-latest
     instances: 2
     imagename: "sonic"
+
+# Network rules to be applied to the network.
+# It is an extensible list of key-value pairs.
+# It defines rules for genesis (network bootstrap)
+# and updates of the rules during the network run.
+network_rules:
+  genesis:
+    MAX_BLOCK_GAS: 20500000000
+    MAX_EPOCH_GAS: 1500000000000
+    YET_ANOTHER_RULE: abcd
 
 # In the network there is a single application producing constant load.
 applications:
