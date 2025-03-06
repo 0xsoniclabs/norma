@@ -1,5 +1,7 @@
 #!/bin/bash
 
+echo "Sonic binary checksum: $(sha256sum   /sonicd | cut -d ' ' -f 1 )"
+
 # Get the local node's IP.
 list=`hostname -I`
 array=($list)
