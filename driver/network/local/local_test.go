@@ -484,16 +484,53 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images(t *testing.T) {
 		_ = net.Shutdown()
 	})
 
-	images := []string{"sonic", "sonic:v2.0.2", "sonic:v2.0.1", "sonic:v2.0.0"}
+	images := []string{"sonic", "sonic:local", "sonic:v2.0.2", "sonic:v2.0.1", "sonic:v2.0.0"}
+	checksum := make(chan string)
 
 	for i, image := range images {
-		_, err := net.CreateNode(&driver.NodeConfig{
+		node, err := net.CreateNode(&driver.NodeConfig{
 			Name:  fmt.Sprintf("T-%d", i),
 			Image: image,
 		})
 		if err != nil {
 			t.Errorf("failed to create node: %v", err)
 		}
+
+		// read logs and check the image name is correct
+		reader, err := node.StreamLog()
+		if err != nil {
+			t.Fatalf("cannot read logs: %e", err)
+		}
+		t.Cleanup(func() {
+			_ = reader.Close()
+		})
+
+		go func() {
+			scanner := bufio.NewScanner(reader)
+			for scanner.Scan() {
+				line := scanner.Text()
+				if strings.Contains(line, "Sonic binary checksum:") {
+					parts := strings.SplitN(line, ":", 2)
+					if len(parts) == 2 {
+						checksum <- strings.TrimSpace(parts[1])
+					}
+				}
+			}
+		}()
+	}
+
+	gotChecksums := make(map[string]struct{})
+	for len(gotChecksums) < len(images) {
+		select {
+		case val := <-checksum:
+			gotChecksums[val] = struct{}{}
+		case <-time.After(180 * time.Second):
+			t.Fatalf("timeout while waiting for checksums")
+		}
+	}
+
+	if got, want := len(gotChecksums), len(images); got != want {
+		t.Errorf("invalid number of checksum, got: %d, want %d", got, want)
 	}
 
 	if err := net.Shutdown(); err != nil {
