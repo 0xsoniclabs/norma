@@ -266,6 +266,10 @@ func (n *LocalNetwork) DialRandomRpc() (rpcdriver.RpcClient, error) {
 	return nodes[rand.Intn(len(nodes))].DialRpc()
 }
 
+func (n *LocalNetwork) ApplyNetworkRules(rules driver.NetworkRules) error {
+	return nil
+}
+
 // dialRandomGenesisValidatorRpc dials a random genesis validator node.
 // When network starts and still doesn't have any traffic, then first transaction must come from validator node.
 // Caused by: the regular nodes even when connected won't send transactions from their txpool,

@@ -70,6 +70,9 @@ type Network interface {
 	SendTransaction(tx *types.Transaction)
 
 	DialRandomRpc() (rpc.RpcClient, error)
+
+	// ApplyNetworkRules applies the given network rules to the network.
+	ApplyNetworkRules(rules NetworkRules) error
 }
 
 // NetworkConfig is a collection of network parameters to be used by factories
@@ -80,8 +83,11 @@ type NetworkConfig struct {
 	// RoundTripTime is the average round trip time between nodes in the network.
 	RoundTripTime time.Duration
 	// NetworkRules is a map of network rules to be applied to the network.
-	NetworkRules map[string]string
+	NetworkRules NetworkRules
 }
+
+// NetworkRules defines a set of network rules that can be applied to the network.
+type NetworkRules map[string]string
 
 // NetworkListener can be registered to networks to get callbacks whenever there
 // are changes in the network.

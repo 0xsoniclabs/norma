@@ -178,7 +178,8 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 
 	net, err := local.NewLocalNetwork(&driver.NetworkConfig{
 		Validators:    driver.NewValidators(scenario.Validators),
-		RoundTripTime: scenario.GetRoundTripTime(), NetworkRules: maps.Clone(scenario.NetworkRules.Genesis),
+		RoundTripTime: scenario.GetRoundTripTime(),
+		NetworkRules:  driver.NetworkRules(maps.Clone(scenario.NetworkRules.Genesis)),
 	})
 	if err != nil {
 		return err
