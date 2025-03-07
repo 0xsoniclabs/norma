@@ -1,6 +1,7 @@
 package genesis
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/0xsoniclabs/sonic/inter"
@@ -12,14 +13,14 @@ import (
 	"time"
 )
 
-// ruleKeyUpdater is a function that updates a rule in the network rules configuration for the given key.
-type ruleKeyUpdater func(key string, rules *opera.Rules) error
+// NetworkRules defines a set of network rules as a key value mapping.
+type NetworkRules map[string]string
 
 // ruleUpdater is a function that updates a rule in the network rules configuration using the given value.
 type ruleUpdater func(value string, rules *opera.Rules) error
 
 // registry is a map of network rules configuration functions.
-type registry map[string]ruleKeyUpdater
+type registry map[string]ruleUpdater
 
 // supportedNetworkRulesConfigurations is a map of currently configured network rules.
 var supportedNetworkRulesConfigurations = make(registry)
@@ -74,27 +75,96 @@ func init() {
 	register("MAX_EXTRA_DATA", maxExtraData)
 }
 
-// ConfigureNetworkRules configures the network rules based on the environment variables
+// ConfigureNetworkRulesEnv configures the network rules based on the environment variables
 // applying all registered rules.
-func ConfigureNetworkRules(rules *opera.Rules) error {
+func ConfigureNetworkRulesEnv(rules *opera.Rules) error {
 	var errs []error
 	for k, v := range supportedNetworkRulesConfigurations {
-		errs = append(errs, v(k, rules))
+		property := os.Getenv(k)
+		// apply only non-empty values
+		if property != "" {
+			errs = append(errs, v(property, rules))
+		}
 	}
 
 	return errors.Join(errs...)
 }
 
+// ConfigureNetworkRulesMap configures the network rules based on the given map of updates.
+func ConfigureNetworkRulesMap(rules *opera.Rules, updates map[string]string) error {
+	var errs []error
+	for k, v := range supportedNetworkRulesConfigurations {
+		property, ok := updates[k]
+		if ok {
+			errs = append(errs, v(property, rules))
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+// GenerateJsonNetworkRulesUpdates generates a JSON string with the differences between the original network rules
+// and the updated network rules configuration, provided on the input.
+func GenerateJsonNetworkRulesUpdates(rules opera.Rules, updates NetworkRules) (string, error) {
+	original := rules.String()
+
+	// apply the rules configuration
+	if err := ConfigureNetworkRulesMap(&rules, updates); err != nil {
+		return "", fmt.Errorf("failed to configure network rules: %w", err)
+	}
+
+	// Parse JSON into maps
+	var objA, objB map[string]any
+	if err := json.Unmarshal([]byte(original), &objA); err != nil {
+		return "", err
+	}
+	if err := json.Unmarshal([]byte(rules.String()), &objB); err != nil {
+		return "", err
+	}
+
+	diff := diffMapsSameStructure(objA, objB)
+	b, err := json.Marshal(diff)
+	if err != nil {
+		return "", err
+	}
+
+	return string(b), nil
+}
+
+// diffMapsSameStructure identifies and returns the differences between two maps that share the same structure.
+// This simplified diff function compares values only for matching keys in both maps.
+// It assumes that the two maps do not contain unique or additional keys.
+// The result is a map consisting of only the key-value pairs where the values differ between the two input maps.
+// Nested maps are fully supported and will be compared recursively.
+func diffMapsSameStructure(map1, map2 map[string]any) map[string]any {
+	result := make(map[string]any)
+
+	// Iterate over keys in map1
+	for key, value1 := range map1 {
+		if value2, exists := map2[key]; exists {
+			// Check if both values are maps
+			nestedMap1, ok1 := value1.(map[string]any)
+			nestedMap2, ok2 := value2.(map[string]any)
+			if ok1 && ok2 {
+				// Recurse on nested maps
+				nestedDiff := diffMapsSameStructure(nestedMap1, nestedMap2)
+				if len(nestedDiff) > 0 { // Add only non-empty differences
+					result[key] = nestedDiff
+				}
+			} else if value1 != value2 {
+				// Add differing values
+				result[key] = value2
+			}
+		}
+	}
+
+	return result
+}
+
 // register registers a new network rule configuration.
 func register(key string, apply ruleUpdater) {
-	supportedNetworkRulesConfigurations[key] = func(key string, rules *opera.Rules) error {
-		var err error
-		property := os.Getenv(key)
-		// apply only non-empty values
-		if property != "" {
-			err = apply(property, rules)
-		}
-		return err
+	supportedNetworkRulesConfigurations[key] = func(value string, rules *opera.Rules) error {
+		return apply(value, rules)
 	}
 }
 
