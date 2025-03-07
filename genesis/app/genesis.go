@@ -34,7 +34,7 @@ func exportGenesis(ctx *cli.Context) error {
 	rules := opera.FakeNetRules()
 
 	// apply the rules configuration
-	if err := genesis.ConfigureNetworkRules(&rules); err != nil {
+	if err := genesis.ConfigureNetworkRulesEnv(&rules); err != nil {
 		return fmt.Errorf("failed to configure network rules: %w", err)
 	}
 
