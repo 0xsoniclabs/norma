@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/0xsoniclabs/norma/driver/parser"
+	"github.com/0xsoniclabs/sonic/opera"
 	"strings"
 	"testing"
 	"time"
@@ -535,5 +536,48 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images(t *testing.T) {
 
 	if err := net.Shutdown(); err != nil {
 		t.Errorf("failed to shut down network: %v", err)
+	}
+}
+
+func TestLocalNetworkApplyNetworkRules_Success(t *testing.T) {
+	t.Parallel()
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
+	net, err := NewLocalNetwork(&config)
+	if err != nil {
+		t.Fatalf("failed to create new local network: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := net.Shutdown(); err != nil {
+			t.Fatalf("failed to shut down network, %v", err)
+		}
+	})
+
+	// fetch the base fee via RPC
+	client, err := net.DialRandomRpc()
+	if err != nil {
+		t.Fatalf("failed to dial random RPC: %v", err)
+	}
+	defer client.Close()
+
+	var originalRules opera.Rules
+	if err := client.Call(&originalRules, "eth_getRules", "latest"); err != nil {
+		t.Fatalf("failed to call eth_getRules: %v", err)
+	}
+
+	rules := driver.NetworkRules{}
+	wantFee := originalRules.Economy.MinBaseFee.Int64() + 123
+	rules["MIN_BASE_FEE"] = fmt.Sprintf("%d", wantFee)
+
+	if err := net.ApplyNetworkRules(rules); err != nil {
+		t.Errorf("failed to apply network rules: %v", err)
+	}
+
+	var result opera.Rules
+	if err := client.Call(&result, "eth_getRules", "latest"); err != nil {
+		t.Fatalf("failed to call eth_getRules: %v", err)
+	}
+
+	if got, want := result.Economy.MinBaseFee.Int64(), wantFee; got != want {
+		t.Errorf("invalid base fee, got %d, want %d", got, want)
 	}
 }

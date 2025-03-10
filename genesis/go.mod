@@ -3,7 +3,7 @@ module github.com/0xsoniclabs/norma/genesistools
 go 1.24.0
 
 require (
-	github.com/0xsoniclabs/sonic v0.0.0-20250303103112-739f4dd95e96
+	github.com/0xsoniclabs/sonic v0.0.0-20250307103210-6c3036738d08
 	github.com/Fantom-foundation/lachesis-base v0.0.0-20240116072301-a75735c4ef00
 	github.com/ethereum/go-ethereum v1.15.0
 	github.com/stretchr/testify v1.9.0
