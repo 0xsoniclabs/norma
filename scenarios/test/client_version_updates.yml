@@ -13,7 +13,7 @@ validators:
     imagename: "sonic:v2.0.2"
   - name: validator-v2.0.1
     imagename: "sonic:v2.0.1"
-  - name: validator-v2.0.1
+  - name: validator-v2.0.0
     imagename: "sonic:v2.0.0"
 
 # Append updated nodes in the network.
