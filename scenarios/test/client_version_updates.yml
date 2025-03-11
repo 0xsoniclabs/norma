@@ -1,0 +1,54 @@
+# This scenario simulates a network with running certain client versions from the start.
+# It starts later updated versions of the client to make sure the update succeeds.
+
+# The name of the scenario
+name: Network Version Updates
+
+# The duration of the scenario's runtime, in seconds.
+duration: 180
+
+# Initial validator nodes in the network.
+validators:
+  - name: validator-v2.0.2
+    imagename: "sonic:v2.0.2"
+  - name: validator-v2.0.1
+    imagename: "sonic:v2.0.1"
+  - name: validator-v2.0.1
+    imagename: "sonic:v2.0.0"
+
+# Append updated nodes in the network.
+nodes:
+  - name: node-latest-validator
+    instances: 1
+    start: 60
+    client:
+      imagename: "sonic:latest"
+    features:
+      - validator
+
+  - name: node-latest-observer
+    instances: 2
+    start: 60
+    client:
+      imagename: "sonic:latest"
+
+
+# In the network, there is a few applications producing the load.
+applications:
+  - name: counter
+    type: counter
+    users: 10           # number of users using the app
+    rate:
+      constant: 1    # Tx/s
+
+  - name: erc20
+    type: erc20
+    users: 10           # number of users using the app
+    rate:
+      constant: 1     # Tx/s
+
+  - name: uniswap
+    type: uniswap
+    users: 10           # number of users using the app
+    rate:
+      constant: 1     # Tx/s
