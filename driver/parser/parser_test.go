@@ -73,9 +73,6 @@ validators:
 nodes:
   - name: A
     instances: 10
-    features:
-      - validator
-      - archive
     start: 5
     end: 7.5
 
@@ -116,9 +113,6 @@ validators:
 nodes:
   - name: A
     instances: 10
-    features:
-      - validator
-      - archive
     start: 5
     end: 7.5
     client:
