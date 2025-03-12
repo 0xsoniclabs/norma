@@ -79,7 +79,7 @@ func TestLoadGeneration_CanRealizeConstantTrafficShape(t *testing.T) {
 			application.EXPECT().CreateUsers(gomock.Any(), 100).AnyTimes().Return(users, nil)
 
 			rpcClient.EXPECT().SuggestGasPrice(gomock.Any()).AnyTimes().Return(big.NewInt(0), nil)
-			user.EXPECT().GenerateTx(gomock.Any()).AnyTimes().Return(&transaction, nil)
+			user.EXPECT().GenerateTx().AnyTimes().Return(&transaction, nil)
 
 			clientFactory := app.NewMockRpcClientFactory(ctrl)
 			clientFactory.EXPECT().DialRandomRpc().AnyTimes().Return(rpcClient, nil)

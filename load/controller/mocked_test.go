@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"math/big"
 	"testing"
 	"time"
 
@@ -40,22 +39,18 @@ func TestMockedTrafficGenerating(t *testing.T) {
 	mockUser := app.NewMockUser(mockCtrl)
 
 	mockedRpcClient := rpc.NewMockRpcClient(mockCtrl)
-	mockedRpcClient.EXPECT().SuggestGasPrice(gomock.Any()).Return(big.NewInt(0), nil)
 	mockedRpcClient.EXPECT().Close()
 
 	appContext := app.NewMockAppContext(mockCtrl)
 	appContext.EXPECT().GetClient().Return(mockedRpcClient).AnyTimes()
 
 	mockedNetwork := driver.NewMockNetwork(mockCtrl)
-	mockedNetwork.EXPECT().DialRandomRpc().Return(mockedRpcClient, nil)
 
 	mockedApp := app.NewMockApplication(mockCtrl)
 	mockedApp.EXPECT().CreateUsers(appContext, numUsers).Return([]app.User{mockUser, mockUser}, nil)
 
 	// app should be called 10-times to generate 10 txs
-	mockedNetwork.EXPECT().DialRandomRpc().Return(mockedRpcClient, nil).MaxTimes(11)
-	mockedRpcClient.EXPECT().SuggestGasPrice(gomock.Any()).Return(big.NewInt(0), nil).MaxTimes(11)
-	mockUser.EXPECT().GenerateTx(gomock.Any()).Return(&demoTx, nil).MinTimes(5).MaxTimes(11)
+	mockUser.EXPECT().GenerateTx().Return(&demoTx, nil).MinTimes(5).MaxTimes(11)
 	// network should be called 10-times to send 10 txs
 	mockedNetwork.EXPECT().SendTransaction(&demoTx).MinTimes(5).MaxTimes(11)
 
