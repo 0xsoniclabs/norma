@@ -26,7 +26,6 @@
 package app
 
 import (
-	big "math/big"
 	reflect "reflect"
 
 	rpc "github.com/0xsoniclabs/norma/driver/rpc"
@@ -111,18 +110,18 @@ func (m *MockUser) EXPECT() *MockUserMockRecorder {
 }
 
 // GenerateTx mocks base method.
-func (m *MockUser) GenerateTx(currentGasPrice *big.Int) (*types.Transaction, error) {
+func (m *MockUser) GenerateTx() (*types.Transaction, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateTx", currentGasPrice)
+	ret := m.ctrl.Call(m, "GenerateTx")
 	ret0, _ := ret[0].(*types.Transaction)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GenerateTx indicates an expected call of GenerateTx.
-func (mr *MockUserMockRecorder) GenerateTx(currentGasPrice any) *gomock.Call {
+func (mr *MockUserMockRecorder) GenerateTx() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateTx", reflect.TypeOf((*MockUser)(nil).GenerateTx), currentGasPrice)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateTx", reflect.TypeOf((*MockUser)(nil).GenerateTx))
 }
 
 // GetSentTransactions mocks base method.

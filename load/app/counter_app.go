@@ -120,7 +120,7 @@ type CounterUser struct {
 	sentTxs  atomic.Uint64
 }
 
-func (g *CounterUser) GenerateTx(currentGasPrice *big.Int) (*types.Transaction, error) {
+func (g *CounterUser) GenerateTx() (*types.Transaction, error) {
 	// prepare tx data
 	data, err := g.abi.Pack("incrementCounter")
 	if err != nil || data == nil {
@@ -129,7 +129,7 @@ func (g *CounterUser) GenerateTx(currentGasPrice *big.Int) (*types.Transaction, 
 
 	// prepare tx
 	const gasLimit = 28036
-	tx, err := createTx(g.sender, g.contract, big.NewInt(0), data, currentGasPrice, gasLimit)
+	tx, err := createTx(g.sender, g.contract, big.NewInt(0), data, gasLimit)
 	if err == nil {
 		g.sentTxs.Add(1)
 	}
