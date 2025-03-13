@@ -237,8 +237,8 @@ func TestExecutor_scheduleNetworkRulesEvents(t *testing.T) {
 		Duration: 10,
 		NetworkRules: parser.NetworkRules{
 			Updates: []parser.NetworkRulesUpdate{
-				{Time: 2, Rules: map[string]string{"a": "b"}},
-				{Time: 6, Rules: map[string]string{"c": "d"}},
+				{Time: 2, Rules: map[string]string{"MAX_BLOCK_GAS": "20500000000"}},
+				{Time: 6, Rules: map[string]string{"MAX_EPOCH_GAS": "1500000000000"}},
 			},
 		},
 	}
@@ -246,8 +246,8 @@ func TestExecutor_scheduleNetworkRulesEvents(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	gomock.InOrder(
-		net.EXPECT().ApplyNetworkRules(map[string]string{"a": "b"}),
-		net.EXPECT().ApplyNetworkRules(map[string]string{"c": "d"}),
+		net.EXPECT().ApplyNetworkRules(map[string]string{"MAX_BLOCK_GAS": "20500000000"}),
+		net.EXPECT().ApplyNetworkRules(map[string]string{"MAX_EPOCH_GAS": "1500000000000"}),
 	)
 
 	if err := Run(clock, net, &scenario, true); err != nil {

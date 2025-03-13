@@ -75,6 +75,12 @@ func init() {
 	register("MAX_EXTRA_DATA", maxExtraData)
 }
 
+// IsSupportedNetworkRule returns true if the given key is a supported network rule configuration.
+func IsSupportedNetworkRule(key string) bool {
+	_, ok := supportedNetworkRulesConfigurations[key]
+	return ok
+}
+
 // ConfigureNetworkRulesEnv configures the network rules based on the environment variables
 // applying all registered rules.
 func ConfigureNetworkRulesEnv(rules *opera.Rules) error {

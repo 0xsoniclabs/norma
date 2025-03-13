@@ -9,6 +9,26 @@ import (
 	"testing"
 )
 
+func TestIsSupportedNetworkRule(t *testing.T) {
+	tests := []struct {
+		key      string
+		expected bool
+	}{
+		{"MAX_BLOCK_GAS", true},
+		{"MAX_EPOCH_GAS", true},
+		{"INVALID_RULE", false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.key, func(t *testing.T) {
+			result := IsSupportedNetworkRule(test.key)
+			if result != test.expected {
+				t.Errorf("IsSupportedNetworkRule(%s) = %v; want %v", test.key, result, test.expected)
+			}
+		})
+	}
+}
+
 func TestConfigureNetworkRules_Values_Set(t *testing.T) {
 	defaultRules := opera.MainNetRules()
 
