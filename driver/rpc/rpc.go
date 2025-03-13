@@ -18,7 +18,11 @@ package rpc
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"github.com/ethereum/go-ethereum"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -37,7 +41,10 @@ type RpcClient interface {
 
 	// -- ethereum client methods --
 	ChainID(ctx context.Context) (*big.Int, error)
-	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
+
+	// WaitTransactionReceipt waits for the receipt of the given transaction hash to be available.
+	// The function times out after 10 seconds.
+	WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
 
 	Close()
 }
@@ -56,4 +63,27 @@ type RpcClientImpl struct {
 
 func (r RpcClientImpl) Call(result interface{}, method string, args ...interface{}) error {
 	return r.RpcClient.Call(result, method, args...)
+}
+
+func (r RpcClientImpl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error) {
+	// Wait for the response with some exponential backoff.
+	const maxDelay = 100 * time.Millisecond
+	begin := time.Now()
+	delay := time.Millisecond
+	for time.Since(begin) < 120000*time.Second {
+		receipt, err := r.TransactionReceipt(context.Background(), txHash)
+		if errors.Is(err, ethereum.NotFound) {
+			time.Sleep(delay)
+			delay = 2 * delay
+			if delay > maxDelay {
+				delay = maxDelay
+			}
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to get transaction receipt: %w", err)
+		}
+		return receipt, nil
+	}
+	return nil, fmt.Errorf("failed to get transaction receipt: timeout")
 }
