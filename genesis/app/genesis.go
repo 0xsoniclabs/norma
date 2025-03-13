@@ -31,7 +31,7 @@ func exportGenesis(ctx *cli.Context) error {
 
 	filePath := ctx.Args().Get(0)
 
-	rules := opera.FakeNetRules()
+	rules := opera.FakeNetRules(opera.SonicFeatures)
 
 	// apply the rules configuration
 	if err := genesis.ConfigureNetworkRulesEnv(&rules); err != nil {
