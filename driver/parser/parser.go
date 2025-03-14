@@ -74,7 +74,6 @@ type Validator struct {
 // times to create larger, homogenious groups easier.
 type Node struct {
 	Name      string
-	Features  []string
 	Instances *int       `yaml:",omitempty"` // nil is interpreted as 1
 	Start     *float32   `yaml:",omitempty"` // nil is interpreted as 0
 	End       *float32   `yaml:",omitempty"` // nil is interpreted as end-of-scenario
@@ -100,16 +99,6 @@ func (n *Node) IsStaticValidator(s *Scenario) bool {
 	}
 
 	return n.IsValidator() && start == float32(0) && end == s.Duration
-}
-
-// IsCheater returns true if the node is defined as cheater in Features
-func (n *Node) IsCheater() bool {
-	for _, item := range n.Features {
-		if item == "cheater" {
-			return true
-		}
-	}
-	return false
 }
 
 // ClientType is an optional configuration for Node.
