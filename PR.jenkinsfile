@@ -13,6 +13,7 @@ pipeline {
 		GOROOT = '/usr/local/go'
 		DOCKER_API_VERSION = 1.45
 		GOMEMLIMIT = '60GiB'
+		GOCACHE = '/mnt/tmp-disk/go-cache'
 	}
 
 	stages {
