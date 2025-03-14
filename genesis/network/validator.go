@@ -1,10 +1,11 @@
-package app
+package network
 
 import (
 	"fmt"
-	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
 	"github.com/0xsoniclabs/sonic/evmcore"
+	"github.com/0xsoniclabs/sonic/gossip/contract/sfc100"
 	"github.com/0xsoniclabs/sonic/inter/validatorpk"
+	"github.com/0xsoniclabs/sonic/opera"
 	"github.com/0xsoniclabs/sonic/opera/contracts/sfc"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -13,16 +14,11 @@ import (
 )
 
 // RegisterValidatorNode registers a validator in the SFC contract.
-func RegisterValidatorNode(factory RpcClientFactory) (int, error) {
+func RegisterValidatorNode(backend ContractBackend) (int, error) {
 	newValId := 0
 
-	rpcClient, err := factory.DialRandomRpc()
-	if err != nil {
-		return 0, fmt.Errorf("failed to connect to network: %w", err)
-	}
-
 	// get a representation of the deployed contract
-	SFCContract, err := contract.NewSFC(sfc.ContractAddress, rpcClient)
+	SFCContract, err := sfc100.NewContract(sfc.ContractAddress, backend)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get SFC contract representation; %v", err)
 	}
@@ -35,9 +31,8 @@ func RegisterValidatorNode(factory RpcClientFactory) (int, error) {
 
 	newValId = int(lastValId.Int64()) + 1
 
-	const chainID = 0xfa3
 	privateKeyECDSA := evmcore.FakeKey(uint32(newValId))
-	txOpts, err := bind.NewKeyedTransactorWithChainID(privateKeyECDSA, big.NewInt(chainID))
+	txOpts, err := bind.NewKeyedTransactorWithChainID(privateKeyECDSA, big.NewInt(int64(opera.FakeNetRules(opera.SonicFeatures).NetworkID)))
 	if err != nil {
 		return 0, fmt.Errorf("failed to create txOpts; %v", err)
 	}
@@ -54,21 +49,13 @@ func RegisterValidatorNode(factory RpcClientFactory) (int, error) {
 		return 0, fmt.Errorf("failed to create validator; %v", err)
 	}
 
-	receipt, err := GetReceipt(tx.Hash(), rpcClient)
+	receipt, err := backend.WaitTransactionReceipt(tx.Hash())
 	if err != nil {
 		return 0, fmt.Errorf("failed to get receipt; %v", err)
 	}
 
 	if receipt.Status != types.ReceiptStatusSuccessful {
 		return 0, fmt.Errorf("failed to deploy helper contract: transaction reverted")
-	}
-
-	lastValId, err = SFCContract.LastValidatorID(nil)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get validator count; %v", err)
-	}
-	if newValId != int(lastValId.Int64()) {
-		return 0, fmt.Errorf("failed to create validator %d", newValId)
 	}
 
 	return newValId, nil
