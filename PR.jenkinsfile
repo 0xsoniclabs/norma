@@ -43,7 +43,7 @@ pipeline {
 
 		stage('Test Norma') {
 			steps {
-				sh 'make test'
+				sh 'go test ./...  -p 2 --parallel 2 --timeout 30m'
 			}
 		}
 	}
