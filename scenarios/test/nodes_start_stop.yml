@@ -16,13 +16,15 @@ nodes:
     start: 20
     end: 120
     instances: 2
-    features: [ validator ]
+    client:
+      type: validator
 
   - name: validator-B
     start: 40
     end: 80
     instances: 1
-    features: [ validator ]
+    client:
+      type: validator
 
   - name: observer-A
     start: 80
@@ -43,7 +45,8 @@ nodes:
     start: 140
     end: 200
     instances: 2
-    features: [ validator ]
+    client:
+      type: validator
 
 
 # In the network, there is a single application producing a constant load.

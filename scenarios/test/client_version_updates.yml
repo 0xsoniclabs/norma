@@ -23,8 +23,7 @@ nodes:
     start: 60
     client:
       imagename: "sonic:latest"
-    features:
-      - validator
+      type: validator
 
   - name: node-latest-observer
     instances: 2

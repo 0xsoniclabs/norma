@@ -4,7 +4,6 @@ go 1.24.0
 
 require (
 	github.com/0xsoniclabs/norma/genesistools v0.0.0-20250218144827-28263a9a85f9
-	github.com/0xsoniclabs/sonic v0.0.0-20250307103210-6c3036738d08
 	github.com/docker/docker v27.3.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/ethereum/go-ethereum v1.15.0
@@ -19,6 +18,7 @@ require (
 
 require (
 	github.com/0xsoniclabs/carmen/go v0.0.0-20250113102336-97f8b8616eff // indirect
+	github.com/0xsoniclabs/sonic v0.0.0-20250312080804-b5d41c48e0a1 // indirect
 	github.com/0xsoniclabs/tosca v0.0.0-20250221124739-3aac4e7427dc // indirect
 	github.com/DataDog/zstd v1.5.6 // indirect
 	github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e // indirect

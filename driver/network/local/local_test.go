@@ -20,7 +20,7 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/0xsoniclabs/norma/driver/parser"
-	"github.com/0xsoniclabs/sonic/opera"
+	"math/big"
 	"strings"
 	"testing"
 	"time"
@@ -559,7 +559,13 @@ func TestLocalNetworkApplyNetworkRules_Success(t *testing.T) {
 	}
 	defer client.Close()
 
-	var originalRules opera.Rules
+	type rulesType struct {
+		Economy struct {
+			MinBaseFee *big.Int
+		}
+	}
+
+	var originalRules rulesType
 	if err := client.Call(&originalRules, "eth_getRules", "latest"); err != nil {
 		t.Fatalf("failed to call eth_getRules: %v", err)
 	}
@@ -572,7 +578,7 @@ func TestLocalNetworkApplyNetworkRules_Success(t *testing.T) {
 		t.Errorf("failed to apply network rules: %v", err)
 	}
 
-	var result opera.Rules
+	var result rulesType
 	if err := client.Call(&result, "eth_getRules", "latest"); err != nil {
 		t.Fatalf("failed to call eth_getRules: %v", err)
 	}

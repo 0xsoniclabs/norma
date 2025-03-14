@@ -832,6 +832,28 @@ func TestGenerateJsonNetworkRulesUpdates_Exported_Json_Correct(t *testing.T) {
 		}
 	})
 
+	t.Run("single - fakenet rules", func(t *testing.T) {
+		for _, test := range tests {
+			t.Run(test.key, func(t *testing.T) {
+				updates := make(NetworkRules)
+				updates[test.key] = test.value
+				gotJson, err := GenerateJsonFakeNetNetworkRulesUpdates(updates)
+				if err != nil {
+					t.Fatalf("failed to generate json: %v", err)
+				}
+
+				b, err := json.Marshal(test.json)
+				if err != nil {
+					t.Fatalf("failed to marshal json: %v", err)
+				}
+
+				if got, want := gotJson, string(b); got != want {
+					t.Errorf("unexpected json: got: %s != want: %s", got, want)
+				}
+			})
+		}
+	})
+
 	t.Run("multiple", func(t *testing.T) {
 		// collect changes from all tests and merge them all to one update set
 		updates := make(NetworkRules)

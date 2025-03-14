@@ -109,6 +109,14 @@ func ConfigureNetworkRulesMap(rules *opera.Rules, updates map[string]string) err
 	return errors.Join(errs...)
 }
 
+// GenerateJsonFakeNetNetworkRulesUpdates generates a JSON string with the differences between the original network rules
+// and the updated network rules configuration, provided on the input.
+// This function uses the default fake network rules as the original configuration.
+func GenerateJsonFakeNetNetworkRulesUpdates(updates NetworkRules) (string, error) {
+	originalRules := opera.FakeNetRules(opera.SonicFeatures)
+	return GenerateJsonNetworkRulesUpdates(originalRules, updates)
+}
+
 // GenerateJsonNetworkRulesUpdates generates a JSON string with the differences between the original network rules
 // and the updated network rules configuration, provided on the input.
 func GenerateJsonNetworkRulesUpdates(rules opera.Rules, updates NetworkRules) (string, error) {

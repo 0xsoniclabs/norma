@@ -21,13 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/0xsoniclabs/norma/genesistools/genesis"
-	"github.com/0xsoniclabs/sonic/evmcore"
-	"github.com/0xsoniclabs/sonic/gossip/contract/driverauth100"
-	"github.com/0xsoniclabs/sonic/opera"
-	"github.com/0xsoniclabs/sonic/opera/contracts/driverauth"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/0xsoniclabs/norma/genesistools/network"
 	"log"
-	"math/big"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -209,7 +204,13 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 	newValId := 0
 	if config.Validator {
 		var err error
-		newValId, err = app.RegisterValidatorNode(n)
+		rpcClient, err := n.DialRandomRpc()
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to RPC; %v", err)
+		}
+		defer rpcClient.Close()
+
+		newValId, err = network.RegisterValidatorNode(rpcClient)
 		if err != nil {
 			return nil, err
 		}
@@ -280,40 +281,7 @@ func (n *LocalNetwork) ApplyNetworkRules(rules driver.NetworkRules) error {
 	}
 	defer client.Close()
 
-	// Bind contract to update network rules
-	contract, err := driverauth100.NewContract(driverauth.ContractAddress, client)
-	if err != nil {
-		return fmt.Errorf("failed to get driver auth contract representation; %v", err)
-	}
-
-	originalRules := opera.FakeNetRules()
-	diff, err := genesis.GenerateJsonNetworkRulesUpdates(originalRules, genesis.NetworkRules(rules))
-	if err != nil {
-		return fmt.Errorf("failed to generate network rules updates; %v", err)
-	}
-
-	// Use Fake ID for the network
-	// Driver owner is the first validator from the list i.e., index 1 (defined in genesis export in genesis.GenerateJsonGenesis)
-	txOpts, err := bind.NewKeyedTransactorWithChainID(evmcore.FakeKey(1), big.NewInt(int64(originalRules.NetworkID)))
-	if err != nil {
-		return fmt.Errorf("failed to create txOpts; %v", err)
-	}
-
-	tx, err := contract.UpdateNetworkRules(txOpts, []byte(diff))
-	if err != nil {
-		return fmt.Errorf("failed to update network rules; %v", err)
-	}
-
-	rec, err := app.GetReceipt(tx.Hash(), client)
-	if err != nil {
-		return fmt.Errorf("failed to get receipt; %v", err)
-	}
-
-	if rec.Status != types.ReceiptStatusSuccessful {
-		return fmt.Errorf("failed to update network rules: status: %v", rec.Status)
-	}
-
-	return nil
+	return network.ApplyNetworkRules(client, genesis.NetworkRules(rules))
 }
 
 // dialRandomGenesisValidatorRpc dials a random genesis validator node.
