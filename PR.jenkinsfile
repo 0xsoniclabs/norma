@@ -16,6 +16,12 @@ pipeline {
 	}
 
 	stages {
+	    stage('Prune Docker') {
+	        steps {
+	            sh 'docker system prune -a -f'
+	        }
+	    }
+
 		stage('Check Norma Format') {
 			steps {
 				catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
