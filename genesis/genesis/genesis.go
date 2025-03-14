@@ -63,9 +63,10 @@ func GenerateJsonGenesis(jsonFile string, validatorsCount int, rules *opera.Rule
 		},
 	}
 
-	// Create the validator account and provide some tokens.
+	// Create the validator account and provide tokens, pre-init a maximal limit of validators.
+	const maxValidators = 100
 	totalSupply := futils.ToFtm(1000_000_000)
-	validators := makefakegenesis.GetFakeValidators(idx.Validator(validatorsCount))
+	validators := makefakegenesis.GetFakeValidators(idx.Validator(maxValidators))
 	supplyEach := new(big.Int).Div(totalSupply, big.NewInt(int64(len(validators))))
 	for _, validator := range validators {
 		jsonGenesis.Accounts = append(jsonGenesis.Accounts, makefakegenesis.Account{
@@ -75,6 +76,8 @@ func GenerateJsonGenesis(jsonFile string, validatorsCount int, rules *opera.Rule
 		})
 	}
 
+	// set genesis validators only for the configured number of validators
+	validators = validators[0:validatorsCount]
 	var delegations []drivercall.Delegation
 	for _, val := range validators {
 		delegations = append(delegations, drivercall.Delegation{

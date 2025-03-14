@@ -13,9 +13,18 @@ pipeline {
 		GOROOT = '/usr/local/go'
 		DOCKER_API_VERSION = 1.45
 		GOMEMLIMIT = '60GiB'
+		GOCACHE = '/mnt/tmp-disk/go-cache'
+		TMPDIR = '/mnt/tmp-disk/'
 	}
 
 	stages {
+	    stage('Prune Docker') {
+	        steps {
+	            sh 'docker builder prune -a -f'
+	            sh 'docker system prune -a -f'
+	        }
+	    }
+
 		stage('Check Norma Format') {
 			steps {
 				catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
@@ -34,7 +43,7 @@ pipeline {
 
 		stage('Test Norma') {
 			steps {
-				sh 'make test'
+				sh 'go test ./...  -p 2 --parallel 2 --timeout 30m'
 			}
 		}
 	}
