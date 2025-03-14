@@ -14,6 +14,7 @@ pipeline {
 		DOCKER_API_VERSION = 1.45
 		GOMEMLIMIT = '60GiB'
 		GOCACHE = '/mnt/tmp-disk/go-cache'
+		TMPDIR = '/mnt/tmp-disk/'
 	}
 
 	stages {
