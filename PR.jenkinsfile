@@ -20,6 +20,7 @@ pipeline {
 	stages {
 	    stage('Prune Docker') {
 	        steps {
+	            sh 'docker builder prune -a -f'
 	            sh 'docker system prune -a -f'
 	        }
 	    }
