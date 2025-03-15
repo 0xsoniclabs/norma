@@ -19,6 +19,7 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"github.com/0xsoniclabs/norma/genesistools/genesis"
 	"regexp"
 	"strings"
 
@@ -73,6 +74,23 @@ func (s *Scenario) Check() error {
 			errs = append(errs, fmt.Errorf("cheat names must be unique, %s encountered multiple times", cheat.Name))
 		} else {
 			names[cheat.Name] = true
+		}
+	}
+
+	for key := range s.NetworkRules.Genesis {
+		if !genesis.IsSupportedNetworkRule(key) {
+			errs = append(errs, fmt.Errorf("unknown network rule: %v", key))
+		}
+	}
+
+	for _, rule := range s.NetworkRules.Updates {
+		if rule.Time < 0 {
+			errs = append(errs, fmt.Errorf("network rule update time must be >= 0, is %f", rule.Time))
+		}
+		for key := range rule.Rules {
+			if !genesis.IsSupportedNetworkRule(key) {
+				errs = append(errs, fmt.Errorf("unknown network rule: %v", key))
+			}
 		}
 	}
 

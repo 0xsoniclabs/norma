@@ -21,17 +21,14 @@ network_rules:
   genesis:
     MAX_BLOCK_GAS: 20500000000
     MAX_EPOCH_GAS: 1500000000000
-    YET_ANOTHER_RULE: abcd
   updates:
     - time: 10
       rules:
         MAX_BLOCK_GAS: 20500000001
-        YET_ANOTHER_RULE: abcde
     - time: 30
       rules:
         MAX_EPOCH_GAS: 1500000000002
         MAX_EPOCH_DURATION: 10s
-        YET_ANOTHER_RULE: abcdef
 
 # In the network there is a single application producing constant load.
 applications:
