@@ -17,8 +17,6 @@
 package app
 
 import (
-	"math/big"
-
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -38,6 +36,6 @@ type Application interface {
 // User produces a stream of transactions to Generate traffic on the chain.
 // Implementations are not required to be thread-safe.
 type User interface {
-	GenerateTx(currentGasPrice *big.Int) (*types.Transaction, error)
+	GenerateTx() (*types.Transaction, error)
 	GetSentTransactions() uint64
 }

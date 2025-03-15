@@ -120,7 +120,7 @@ type StoreUser struct {
 	sentTxs  atomic.Uint64
 }
 
-func (g *StoreUser) GenerateTx(currentGasPrice *big.Int) (*types.Transaction, error) {
+func (g *StoreUser) GenerateTx() (*types.Transaction, error) {
 	const updateSize = 260 // ~ 1 GB/minute new netto data at 1000 Tx/s
 
 	// prepare tx data -- since as single put is rather cheap, we use the 'fill' operation
@@ -136,7 +136,7 @@ func (g *StoreUser) GenerateTx(currentGasPrice *big.Int) (*types.Transaction, er
 
 	// prepare tx
 	const gasLimit = 52000 + 25000*updateSize // wild guess ...
-	tx, err := createTx(g.sender, g.contract, big.NewInt(0), data, currentGasPrice, gasLimit)
+	tx, err := createTx(g.sender, g.contract, big.NewInt(0), data, gasLimit)
 	if err == nil {
 		g.sentTxs.Add(1)
 	}

@@ -169,7 +169,7 @@ type ERC20User struct {
 	sentTxs    uint64
 }
 
-func (g *ERC20User) GenerateTx(currentGasPrice *big.Int) (*types.Transaction, error) {
+func (g *ERC20User) GenerateTx() (*types.Transaction, error) {
 	// choose random recipient
 	recipient := g.recipients[rand.Intn(len(g.recipients))]
 
@@ -181,7 +181,7 @@ func (g *ERC20User) GenerateTx(currentGasPrice *big.Int) (*types.Transaction, er
 
 	// prepare tx
 	const gasLimit = 52000 // Transfer method call takes 51349 of gas
-	tx, err := createTx(g.sender, g.contract, big.NewInt(0), data, currentGasPrice, gasLimit)
+	tx, err := createTx(g.sender, g.contract, big.NewInt(0), data, gasLimit)
 	if err == nil {
 		atomic.AddUint64(&g.sentTxs, 1)
 	}
