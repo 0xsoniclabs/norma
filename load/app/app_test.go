@@ -94,11 +94,7 @@ func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
 	numTransactions := 10
 	transactions := []*types.Transaction{}
 	for range numTransactions {
-		price, err := rpcClient.SuggestGasPrice(context.Background())
-		if err != nil {
-			return
-		}
-		tx, err := user.GenerateTx(price)
+		tx, err := user.GenerateTx()
 		if err != nil {
 			t.Fatal(err)
 		}

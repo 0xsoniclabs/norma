@@ -19,22 +19,24 @@ package app
 import (
 	"context"
 	"fmt"
+	"math/big"
+
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"math/big"
 )
 
-func createTx(from *Account, toAddress common.Address, value *big.Int, data []byte, gasPrice *big.Int, gasLimit uint64) (*types.Transaction, error) {
-	tx := types.NewTx(&types.LegacyTx{
-		Nonce:    from.getNextNonce(),
-		GasPrice: gasPrice,
-		Gas:      gasLimit,
-		To:       &toAddress,
-		Value:    value,
-		Data:     data,
+func createTx(from *Account, toAddress common.Address, value *big.Int, data []byte, gasLimit uint64) (*types.Transaction, error) {
+	tx := types.NewTx(&types.DynamicFeeTx{
+		Nonce:     from.getNextNonce(),
+		GasFeeCap: new(big.Int).Mul(big.NewInt(10_000), big.NewInt(1e9)),
+		GasTipCap: big.NewInt(0),
+		Gas:       gasLimit,
+		To:        &toAddress,
+		Value:     value,
+		Data:      data,
 	})
-	return types.SignTx(tx, types.NewEIP155Signer(from.chainID), from.privateKey)
+	return types.SignTx(tx, types.NewLondonSigner(from.chainID), from.privateKey)
 }
 
 // GetGasPrice obtains optimal gasPrice for regular transactions
