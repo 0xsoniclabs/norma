@@ -268,7 +268,7 @@ type UniswapUser struct {
 	sentTxs                 uint64
 }
 
-func (g *UniswapUser) GenerateTx(currentGasPrice *big.Int) (*types.Transaction, error) {
+func (g *UniswapUser) GenerateTx() (*types.Transaction, error) {
 	var data []byte
 	var err error
 
@@ -287,7 +287,7 @@ func (g *UniswapUser) GenerateTx(currentGasPrice *big.Int) (*types.Transaction, 
 	// prepare tx
 	// swapExactTokensForTokens consumes 157571 for 2 tokens + cca 94314 for each additional token
 	const gasLimit = 160_000 + (TokensInChain-2)*95000
-	tx, err := createTx(g.sender, g.routerAddress, big.NewInt(0), data, currentGasPrice, gasLimit)
+	tx, err := createTx(g.sender, g.routerAddress, big.NewInt(0), data, gasLimit)
 	if err == nil {
 		atomic.AddUint64(&g.sentTxs, 1)
 	}
