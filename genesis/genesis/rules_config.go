@@ -45,6 +45,7 @@ func init() {
 	register("UPGRADES_LONDON", upgradesLondon)
 	register("UPGRADES_LLR", upgradesLlr)
 	register("UPGRADES_SONIC", upgradesSonic)
+	register("UPGRADES_ALLEGRO", upgradesAllegro)
 
 	// Economy
 	register("MIN_GAS_PRICE", minGasPrice)
@@ -254,6 +255,11 @@ var upgradesLlr = func(value string, rules *opera.Rules) error {
 
 var upgradesSonic = func(value string, rules *opera.Rules) error {
 	rules.Upgrades.Sonic = value == "true"
+	return nil
+}
+
+var upgradesAllegro = func(value string, rules *opera.Rules) error {
+	rules.Upgrades.Allegro = value == "true"
 	return nil
 }
 

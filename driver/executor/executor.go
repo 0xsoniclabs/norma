@@ -317,7 +317,7 @@ func scheduleCheatEvents(cheat *parser.Cheat, queue *eventQueue, net driver.Netw
 
 // scheduleNetworkRulesEvents schedules an event to apply network rules at a given time.
 func scheduleNetworkRulesEvents(rule parser.NetworkRulesUpdate, queue *eventQueue, network driver.Network) {
-	queue.add(toSingleEvent(Seconds(rule.Time), "Applying network rules", func() error {
+	queue.add(toSingleEvent(Seconds(rule.Time), fmt.Sprintf("Applying network rules: %v", rule.Rules), func() error {
 		return network.ApplyNetworkRules(driver.NetworkRules(rule.Rules))
 	}))
 }
