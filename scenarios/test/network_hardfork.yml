@@ -28,6 +28,15 @@ network_rules:
       rules:
         UPGRADES_ALLEGRO: true  # hardfork enabled
 
+nodes:
+  - name: node-v202
+    start: 30
+    failing: true
+    client:
+      imagename: "sonic:v2.0.2"   # this node should stop working after the hardfork
+  - name: node-latest
+    start: 30
+
 # In the network, there is a few applications producing the load.
 applications:
   - name: counter

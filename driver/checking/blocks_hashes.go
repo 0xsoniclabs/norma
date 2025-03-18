@@ -100,10 +100,11 @@ func (*BlocksHashesChecker) Check(net driver.Network) (err error) {
 			return nil // finish successfully
 		}
 
-		// find a reference hash from a non-failing node
+		// find a reference hash from a non-failing nodes, and only nodes that reached this block height
 		var referenceHashes blockHashes
 		for i, block := range hashes {
-			if !nodes[i].IsExpectedFailure() {
+			// use only hash from a block that reached this block height and it is not expected to fail
+			if block != nil && !nodes[i].IsExpectedFailure() {
 				referenceHashes = *block
 				break
 			}
@@ -112,6 +113,7 @@ func (*BlocksHashesChecker) Check(net driver.Network) (err error) {
 		// check the hashes
 		for i, block := range hashes {
 			n := nodes[i]
+			// skip nodes that did not reach this block height, and potentially mark expected failed nodes
 			if block == nil {
 				if n.IsExpectedFailure() {
 					gotFailures[n.GetLabel()] = struct{}{}
