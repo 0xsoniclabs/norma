@@ -102,6 +102,7 @@ type NetworkListener interface {
 
 type NodeConfig struct {
 	Name      string
+	Failing   bool
 	Validator bool
 	Cheater   bool
 	Image     string
@@ -130,6 +131,7 @@ type ApplicationConfig struct {
 // Validator is a configuration for a group of network start-up validators.
 type Validator struct {
 	Name      string
+	Failing   bool
 	Instances int
 	ImageName string
 }
@@ -146,6 +148,7 @@ func NewValidator(v parser.Validator) Validator {
 	}
 	return Validator{
 		Name:      v.Name,
+		Failing:   v.Failing,
 		Instances: instances,
 		ImageName: imageName,
 	}

@@ -18,11 +18,11 @@ package checking
 
 import (
 	"fmt"
-
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"maps"
 )
 
 // BlocksHashesChecker is a Checker checking if all Opera nodes provides the same hashes for all blocks/stateRoots.
@@ -32,50 +32,99 @@ type BlocksHashesChecker struct {
 func (*BlocksHashesChecker) Check(net driver.Network) (err error) {
 	nodes := net.GetActiveNodes()
 	fmt.Printf("checking hashes for %d nodes\n", len(nodes))
+
 	rpcClients := make([]rpc.RpcClient, len(nodes))
+	defer func() {
+		for _, rpcClient := range rpcClients {
+			if rpcClient != nil {
+				rpcClient.Close()
+			}
+		}
+	}()
+
+	expectedFailures := make(map[string]struct{})
 	for i, n := range nodes {
+		if n.IsExpectedFailure() {
+			expectedFailures[n.GetLabel()] = struct{}{}
+		}
 		rpcClients[i], err = n.DialRpc()
 		if err != nil {
 			return fmt.Errorf("failed to dial RPC for node %s; %v", n.GetLabel(), err)
 		}
 	}
-	defer func() {
-		for _, rpcClient := range rpcClients {
-			rpcClient.Close()
-		}
-	}()
 
+	if len(expectedFailures) == len(nodes) {
+		return nil // all nodes are expected to fail, cannot get pivot hash, has to only end the test
+	}
+
+	check := func(referenceHashes, block blockHashes, blockNumber uint64) error {
+		if referenceHashes.StateRoot != block.StateRoot {
+			return fmt.Errorf("stateRoot of the block %d does not match", blockNumber)
+		}
+		if referenceHashes.ReceiptsRoot != block.ReceiptsRoot {
+			return fmt.Errorf("receiptsRoot of the block %d does not match", blockNumber)
+		}
+		if referenceHashes.Hash != block.Hash {
+			return fmt.Errorf("hash of the block %d does not match", blockNumber)
+		}
+
+		return nil
+	}
+
+	gotFailures := make(map[string]struct{})
 	for blockNumber := uint64(0); ; blockNumber++ {
-		var referenceHashes *blockHashes
 		var nodesLackingTheBlock = 0
+		var hashes []*blockHashes
 		for i, n := range nodes {
 			block, err := getBlockHashes(rpcClients[i], blockNumber)
 			if err != nil {
 				return fmt.Errorf("failed to get block %d detail at node %s; %v", blockNumber, n.GetLabel(), err)
 			}
+
 			if block == nil { // block does not exist on the node
 				if blockNumber <= 2 {
 					return fmt.Errorf("unable to check block hashes - block %d does not exists at node %s", blockNumber, n.GetLabel())
 				}
 				nodesLackingTheBlock++
-				continue
 			}
-			if referenceHashes == nil {
-				referenceHashes = block
-			} else {
-				if referenceHashes.StateRoot != block.StateRoot {
-					return fmt.Errorf("stateRoot of the block %d does not match", blockNumber)
-				}
-				if referenceHashes.ReceiptsRoot != block.ReceiptsRoot {
-					return fmt.Errorf("receiptsRoot of the block %d does not match", blockNumber)
-				}
-				if referenceHashes.Hash != block.Hash {
-					return fmt.Errorf("hash of the block %d does not match", blockNumber)
-				}
+
+			hashes = append(hashes, block)
+		}
+
+		// no node has the last block, i.e. we have reached the end of the chain
+		if nodesLackingTheBlock == len(nodes) {
+			if got, want := gotFailures, expectedFailures; !maps.Equal(got, want) {
+				return fmt.Errorf("unexpected failure set to provide the block hashes: got %v, want %v", got, want)
+			}
+
+			return nil // finish successfully
+		}
+
+		// find a reference hash from a non-failing node
+		var referenceHashes blockHashes
+		for i, block := range hashes {
+			if !nodes[i].IsExpectedFailure() {
+				referenceHashes = *block
+				break
 			}
 		}
-		if nodesLackingTheBlock == len(nodes) { // no node has the last block
-			return nil // finish successfully
+
+		// check the hashes
+		for i, block := range hashes {
+			n := nodes[i]
+			if block == nil {
+				if n.IsExpectedFailure() {
+					gotFailures[n.GetLabel()] = struct{}{}
+				}
+				continue // this node does not reach this block
+			}
+			if err := check(referenceHashes, *block, blockNumber); err != nil {
+				if n.IsExpectedFailure() {
+					gotFailures[n.GetLabel()] = struct{}{}
+				} else {
+					return err
+				}
+			}
 		}
 	}
 }

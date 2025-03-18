@@ -226,6 +226,7 @@ func scheduleNodeEvents(node *parser.Node, queue *eventQueue, net driver.Network
 			func() error {
 				newNode, err := net.CreateNode(&driver.NodeConfig{
 					Name:      name,
+					Failing:   node.Failing,
 					Image:     image,
 					Validator: nodeIsValidator,
 					Cheater:   nodeIsCheater,

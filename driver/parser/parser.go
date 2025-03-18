@@ -64,6 +64,7 @@ type NetworkRulesUpdate struct {
 // Validator is a configuration for a group of network start-up validators.
 type Validator struct {
 	Name      string
+	Failing   bool
 	Instances *int   `yaml:",omitempty"` // nil is interpreted as 1
 	ImageName string `yaml:",omitempty"` // empty is interpreted as DefaultClientDockerImageName
 }
@@ -74,6 +75,7 @@ type Validator struct {
 // times to create larger, homogenious groups easier.
 type Node struct {
 	Name      string
+	Failing   bool
 	Instances *int       `yaml:",omitempty"` // nil is interpreted as 1
 	Start     *float32   `yaml:",omitempty"` // nil is interpreted as 0
 	End       *float32   `yaml:",omitempty"` // nil is interpreted as end-of-scenario
