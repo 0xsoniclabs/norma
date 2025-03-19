@@ -17,6 +17,7 @@
 package checking
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -33,7 +34,9 @@ func TestBlockHashesCheckerValid(t *testing.T) {
 	rpc := rpc.NewMockRpcClient(ctrl)
 	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
 	node1.EXPECT().DialRpc().MinTimes(1).Return(rpc, nil)
+	node1.EXPECT().IsExpectedFailure().AnyTimes()
 	node2.EXPECT().DialRpc().MinTimes(1).Return(rpc, nil)
+	node2.EXPECT().IsExpectedFailure().AnyTimes()
 	result := blockHashes{
 		Hash:         common.Hash{0x11},
 		StateRoot:    common.Hash{0x22},
@@ -59,7 +62,9 @@ func TestBlockHashesCheckerInvalidStateRoot(t *testing.T) {
 	rpc2 := rpc.NewMockRpcClient(ctrl)
 	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
 	node1.EXPECT().DialRpc().MinTimes(1).Return(rpc1, nil)
+	node1.EXPECT().IsExpectedFailure().AnyTimes()
 	node2.EXPECT().DialRpc().MinTimes(1).Return(rpc2, nil)
+	node2.EXPECT().IsExpectedFailure().AnyTimes()
 	result1 := blockHashes{
 		Hash:         common.Hash{0x11},
 		StateRoot:    common.Hash{0x22},
@@ -94,8 +99,11 @@ func TestBlockHashesCheckerInvalidLastBlock(t *testing.T) {
 	rpc3 := rpc.NewMockRpcClient(ctrl)
 	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2, node3})
 	node1.EXPECT().DialRpc().MinTimes(1).Return(rpc1, nil)
+	node1.EXPECT().IsExpectedFailure().AnyTimes()
 	node2.EXPECT().DialRpc().MinTimes(1).Return(rpc2, nil)
+	node2.EXPECT().IsExpectedFailure().AnyTimes()
 	node3.EXPECT().DialRpc().MinTimes(1).Return(rpc3, nil)
+	node3.EXPECT().IsExpectedFailure().AnyTimes()
 	result1 := blockHashes{
 		Hash:         common.Hash{0x11},
 		StateRoot:    common.Hash{0x22},
@@ -124,5 +132,221 @@ func TestBlockHashesCheckerInvalidLastBlock(t *testing.T) {
 	err := new(BlocksHashesChecker).Check(net)
 	if err.Error() != "receiptsRoot of the block 3 does not match" {
 		t.Errorf("unexpected error from BlocksHashesChecker: %v", err)
+	}
+}
+
+func TestBlockHashes_ExpectedFailingNode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	rpc1 := rpc.NewMockRpcClient(ctrl)
+	rpc1.EXPECT().Close()
+
+	rpc2 := rpc.NewMockRpcClient(ctrl)
+	rpc2.EXPECT().Close()
+
+	node1 := driver.NewMockNode(ctrl)
+	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
+	node1.EXPECT().DialRpc().Return(rpc1, nil)
+	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
+
+	node2 := driver.NewMockNode(ctrl)
+	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
+	node2.EXPECT().DialRpc().Return(rpc2, nil)
+	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
+
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
+
+	result1 := blockHashes{
+		Hash:         common.Hash{0x11},
+		StateRoot:    common.Hash{0x22},
+		ReceiptsRoot: common.Hash{0x33},
+	}
+	result2 := blockHashes{
+		Hash:         common.Hash{0x11},
+		StateRoot:    common.Hash{0x22},
+		ReceiptsRoot: common.Hash{0xFF}, // different
+	}
+
+	gomock.InOrder(
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
+	)
+
+	gomock.InOrder(
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result2),
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result2),
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result2),
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
+	)
+
+	if err := new(BlocksHashesChecker).Check(net); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestBlockHashes_NoFailure_When_Expected(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	rpc1 := rpc.NewMockRpcClient(ctrl)
+	rpc1.EXPECT().Close()
+
+	rpc2 := rpc.NewMockRpcClient(ctrl)
+	rpc2.EXPECT().Close()
+
+	node1 := driver.NewMockNode(ctrl)
+	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
+	node1.EXPECT().DialRpc().Return(rpc1, nil)
+	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
+
+	node2 := driver.NewMockNode(ctrl)
+	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
+	node2.EXPECT().DialRpc().Return(rpc2, nil)
+	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
+
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
+
+	result1 := blockHashes{
+		Hash:         common.Hash{0x11},
+		StateRoot:    common.Hash{0x22},
+		ReceiptsRoot: common.Hash{0x33},
+	}
+
+	gomock.InOrder(
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
+	)
+
+	gomock.InOrder(
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
+	)
+
+	if err := new(BlocksHashesChecker).Check(net); err == nil || !strings.Contains(err.Error(), "unexpected failure set to provide the block hashes") {
+		t.Errorf("unexpected success")
+	}
+}
+
+func TestBlockHashes_NoFailure_Diff_Block_Height(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	rpc1 := rpc.NewMockRpcClient(ctrl)
+	rpc1.EXPECT().Close()
+
+	rpc2 := rpc.NewMockRpcClient(ctrl)
+	rpc2.EXPECT().Close()
+
+	node1 := driver.NewMockNode(ctrl)
+	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
+	node1.EXPECT().DialRpc().Return(rpc1, nil)
+	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
+
+	node2 := driver.NewMockNode(ctrl)
+	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
+	node2.EXPECT().DialRpc().Return(rpc2, nil)
+	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
+
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
+
+	result1 := blockHashes{
+		Hash:         common.Hash{0x11},
+		StateRoot:    common.Hash{0x22},
+		ReceiptsRoot: common.Hash{0x33},
+	}
+
+	gomock.InOrder(
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
+	)
+
+	gomock.InOrder(
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
+	)
+
+	if err := new(BlocksHashesChecker).Check(net); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestBlockHashes_Failing_Delays_And_OK_Nodes(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	rpc1 := rpc.NewMockRpcClient(ctrl)
+	rpc1.EXPECT().Close()
+
+	rpc2 := rpc.NewMockRpcClient(ctrl)
+	rpc2.EXPECT().Close()
+
+	rpc3 := rpc.NewMockRpcClient(ctrl)
+	rpc3.EXPECT().Close()
+
+	node1 := driver.NewMockNode(ctrl)
+	node1.EXPECT().IsExpectedFailure().AnyTimes()
+	node1.EXPECT().DialRpc().Return(rpc1, nil)
+	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
+
+	node2 := driver.NewMockNode(ctrl)
+	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
+	node2.EXPECT().DialRpc().Return(rpc2, nil)
+	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
+
+	node3 := driver.NewMockNode(ctrl)
+	node3.EXPECT().IsExpectedFailure().AnyTimes()
+	node3.EXPECT().DialRpc().Return(rpc3, nil)
+	node3.EXPECT().GetLabel().AnyTimes().Return("node3")
+
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2, node3})
+
+	result1 := blockHashes{
+		Hash:         common.Hash{0x11},
+		StateRoot:    common.Hash{0x22},
+		ReceiptsRoot: common.Hash{0x33},
+	}
+
+	result2 := blockHashes{
+		Hash:         common.Hash{0x11},
+		StateRoot:    common.Hash{0x22},
+		ReceiptsRoot: common.Hash{0xFF}, // different
+	}
+
+	gomock.InOrder(
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
+	)
+
+	gomock.InOrder(
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result2),
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result2),
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result2),
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result2),
+		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
+	)
+
+	gomock.InOrder(
+		rpc3.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc3.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc3.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
+		rpc3.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil earlier than others
+		rpc3.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil earlier than others
+	)
+
+	if err := new(BlocksHashesChecker).Check(net); err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
 }

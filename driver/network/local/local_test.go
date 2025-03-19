@@ -632,3 +632,34 @@ func TestLocalNetworkApplyNetworkRules_Success(t *testing.T) {
 		t.Errorf("invalid base fee, got %d, want %d", got, want)
 	}
 }
+
+func TestLocalNetwork_FailingFlagPropagated(t *testing.T) {
+	t.Parallel()
+	config := driver.NetworkConfig{Validators: []driver.Validator{
+		{Name: "validator", Failing: true, Instances: 1, ImageName: driver.DefaultClientDockerImageName}},
+	}
+	net, err := NewLocalNetwork(&config)
+	if err != nil {
+		t.Fatalf("failed to create new local network: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := net.Shutdown(); err != nil {
+			t.Fatalf("failed to shut down network: %v", err)
+		}
+	})
+
+	if _, err := net.CreateNode(&driver.NodeConfig{
+		Name:    "node",
+		Failing: true,
+		Image:   driver.DefaultClientDockerImageName,
+	}); err != nil {
+		t.Fatalf("failed to create node: %v", err)
+	}
+
+	for _, node := range net.GetActiveNodes() {
+		if !node.IsExpectedFailure() {
+			t.Errorf("node is not failing: %s", node.GetLabel())
+		}
+	}
+
+}
