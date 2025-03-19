@@ -51,6 +51,19 @@ func TestNewValidator(t *testing.T) {
 				ImageName: DefaultClientDockerImageName,
 			},
 		},
+		{
+			name: "Failing validator",
+			input: parser.Validator{
+				Name:    "validator1",
+				Failing: true,
+			},
+			expected: Validator{
+				Name:      "validator1",
+				Failing:   true,
+				Instances: 1,
+				ImageName: DefaultClientDockerImageName,
+			},
+		},
 	}
 
 	for _, tt := range tests {

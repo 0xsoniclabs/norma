@@ -33,6 +33,9 @@ type Node interface {
 	// to label data and should be unique within a single scenario run.
 	GetLabel() string
 
+	// IsExpectedFailure returns true if the node is supposed to fail during network execution.
+	IsExpectedFailure() bool
+
 	// Hostname returns the hostname of the host.
 	Hostname() string
 

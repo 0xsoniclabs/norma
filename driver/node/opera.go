@@ -70,6 +70,7 @@ func init() {
 // client on a generic host.
 type OperaNode struct {
 	host      network.Host
+	failing   bool
 	container *docker.Container
 	label     string
 }
@@ -77,6 +78,8 @@ type OperaNode struct {
 type OperaNodeConfig struct {
 	// The label to be used to name this node. The label should not be empty.
 	Label string
+	// Failing if true, the node is expected to fail at some point of execution.
+	Failing bool
 	// The Docker image to use for the node.
 	Image string
 	// The ID of the validator, nil if the node should not be a validator.
@@ -136,6 +139,7 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 	}
 	node := &OperaNode{
 		host:      host,
+		failing:   config.Failing,
 		container: host,
 		label:     config.Label,
 	}
@@ -154,6 +158,10 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 
 func (n *OperaNode) GetLabel() string {
 	return n.label
+}
+
+func (n *OperaNode) IsExpectedFailure() bool {
+	return n.failing
 }
 
 // Hostname returns the hostname of the node.

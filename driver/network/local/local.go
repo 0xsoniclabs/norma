@@ -127,6 +127,7 @@ func NewLocalNetwork(config *driver.NetworkConfig) (*LocalNetwork, error) {
 				validatorId := idx + 1
 				nodeConfig := node.OperaNodeConfig{
 					ValidatorId:   &validatorId,
+					Failing:       validator.Failing,
 					Image:         image,
 					NetworkConfig: config,
 					Label:         label,
@@ -219,6 +220,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 	if config.Cheater {
 		_, err := n.createNode(&node.OperaNodeConfig{
 			Label:         "cheater-" + config.Name,
+			Failing:       config.Failing,
 			Image:         config.Image,
 			NetworkConfig: &n.config,
 			ValidatorId:   &newValId,
@@ -230,6 +232,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 
 	return n.createNode(&node.OperaNodeConfig{
 		Label:         config.Name,
+		Failing:       config.Failing,
 		Image:         config.Image,
 		NetworkConfig: &n.config,
 		ValidatorId:   &newValId,

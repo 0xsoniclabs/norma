@@ -18,6 +18,7 @@ package checking
 
 import (
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 
@@ -33,7 +34,12 @@ func (*BlockHeightChecker) Check(net driver.Network) error {
 	fmt.Printf("checking block heights for %d nodes\n", len(nodes))
 	heights := make([]int64, len(nodes))
 	maxHeight := int64(0)
+	expectedFailures := make(map[string]struct{})
 	for i, n := range nodes {
+		if n.IsExpectedFailure() {
+			expectedFailures[n.GetLabel()] = struct{}{}
+		}
+
 		height, err := getBlockHeight(n)
 		if err != nil {
 			return fmt.Errorf("failed to get block height of node %s; %v", n.GetLabel(), err)
@@ -49,11 +55,23 @@ func (*BlockHeightChecker) Check(net driver.Network) error {
 		}
 		heights[i] = height
 	}
+
+	gotFailures := make(map[string]struct{})
 	for i, n := range nodes {
 		if heights[i] < maxHeight-1 {
-			return fmt.Errorf("node %s reports too old block %d (max block is %d)", n.GetLabel(), heights[i], maxHeight)
+			if n.IsExpectedFailure() {
+				gotFailures[n.GetLabel()] = struct{}{}
+
+			} else {
+				return fmt.Errorf("node %s reports too old block %d (max block is %d)", n.GetLabel(), heights[i], maxHeight)
+			}
 		}
 	}
+
+	if got, want := gotFailures, expectedFailures; !maps.Equal(got, want) {
+		return fmt.Errorf("unexpected failure set to provide the block height, got %v, want %v", got, want)
+	}
+
 	return nil
 }
 
