@@ -19,11 +19,12 @@ package local
 import (
 	"bufio"
 	"fmt"
-	"github.com/0xsoniclabs/norma/driver/parser"
 	"math/big"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/0xsoniclabs/norma/driver/parser"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/node"
@@ -55,6 +56,50 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 				node, err := net.CreateNode(&driver.NodeConfig{
 					Image: driver.DefaultClientDockerImageName,
 					Name:  fmt.Sprintf("T-%d", i),
+				})
+				if err != nil {
+					t.Errorf("failed to create node: %v", err)
+					continue
+				}
+				nodes = append(nodes, node)
+			}
+
+			for _, node := range nodes {
+				if err := node.Stop(); err != nil {
+					t.Errorf("failed to stop node: %v", err)
+				}
+			}
+
+			for _, node := range nodes {
+				if err := node.Cleanup(); err != nil {
+					t.Errorf("failed to cleanup node: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestLocalNetwork_CanStartValidatorsAndShutThemDown(t *testing.T) {
+	t.Parallel()
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
+	for _, N := range []int{1, 3} {
+		N := N
+		t.Run(fmt.Sprintf("num_validators=%d", N), func(t *testing.T) {
+			t.Parallel()
+			net, err := NewLocalNetwork(&config)
+			if err != nil {
+				t.Fatalf("failed to create new local network: %v", err)
+			}
+			t.Cleanup(func() {
+				_ = net.Shutdown()
+			})
+
+			nodes := []driver.Node{}
+			for i := 0; i < N; i++ {
+				node, err := net.CreateNode(&driver.NodeConfig{
+					Image:     driver.DefaultClientDockerImageName,
+					Name:      fmt.Sprintf("T-%d", i),
+					Validator: true,
 				})
 				if err != nil {
 					t.Errorf("failed to create node: %v", err)
