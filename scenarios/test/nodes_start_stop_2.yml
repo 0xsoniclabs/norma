@@ -9,19 +9,14 @@ name: Various Number of Nodes
 # The duration of the scenario's runtime, in seconds.
 duration: 120
 
-validators:
-  - name: validators
-    instances: 5
-
 # The network scenario to exercise. 
 nodes:
   # Change the number of nodes during the scenario.
-  - name: validator-A
+  - name: validator-A-0
     start: 20
-    instances: 2
     client:
       type: validator
-
+  
   - name: validator-B
     start: 40
     end: 80

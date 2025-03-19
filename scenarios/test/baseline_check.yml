@@ -11,7 +11,8 @@ round_trip_time: "200ms"
 validators:
   - name: validator-latest
     instances: 12
-    imagename: "sonic"
+    client:
+      type: validator
 
 # Network rules to be applied to the network.
 # It is an extensible list of key-value pairs.
