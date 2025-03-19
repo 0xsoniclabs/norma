@@ -9,22 +9,22 @@ name: Various Number of Nodes
 # The duration of the scenario's runtime, in seconds.
 duration: 240
 
-validators:
-  - instances: 3
+# Shortens epoch duration to reflect changes in validator registrations.
+network_rules:
+  genesis:
+    MAX_EPOCH_DURATION: 5s
 
 # The network scenario to exercise. 
 nodes:
   # Change the number of nodes during the scenario.
   - name: validator-A
     start: 20
-    end: 120
-    instances: 2
+    instances: 1
     client:
       type: validator
 
   - name: validator-B
     start: 40
-    end: 80
     instances: 1
     client:
       type: validator
@@ -47,7 +47,7 @@ nodes:
   - name: validator-C
     start: 140
     end: 200
-    instances: 2
+    instances: 1
     client:
       type: validator
 
@@ -56,6 +56,6 @@ nodes:
 applications:
   - name: load
     type: counter
-    users: 20           # number of users using the app
+    users: 1000           # number of users using the app
     rate:
-      constant: 10     # Tx/s
+      constant: 100       # Tx/s
