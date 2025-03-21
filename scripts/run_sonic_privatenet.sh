@@ -6,17 +6,17 @@ echo "Sonic binary checksum: $(sha256sum   /sonicd | cut -d ' ' -f 1 )"
 list=`hostname -I`
 array=($list)
 external_ip=${array[0]}
-echo "Sonic is going to export its services on ${external_ip}"
 
-datadir="/datadir"
+echo "Sonic is going to export its services on ${external_ip}"
 echo "val id=${VALIDATOR_ID}"
 echo "genesis validator count=${VALIDATORS_COUNT}"
 
 # Export genesis.json
 ./genesistools genesis export genesis.json
 
+datadir=$STATE_DB_DATADIR
 # Initialize datadir
-mkdir /datadir
+mkdir -p ${datadir}
 ./sonictool --datadir ${datadir} genesis json --experimental /genesis.json
 
 ##

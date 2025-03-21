@@ -79,8 +79,7 @@ type ContainerConfig struct {
 	Environment     map[string]string
 	Entrypoint      []string // Entrypoint to run when starting the container. Optional.
 	Network         *Network // Docker network to join, nil to join bridge network
-	MountDatadir    *string  // mount client datadir to this path on host
-	MountGenesis    *string  // mount client genesis to this path on host
+	DataDirBinding  *string  // mount client datadir to this path on host
 }
 
 // NewClient creates a new client facilitating the creation of Docker
@@ -156,6 +155,11 @@ func (c *Client) Start(config *ContainerConfig) (*Container, error) {
 		}}
 	}
 
+	var binds []string
+	if config.DataDirBinding != nil {
+		binds = append(binds, *config.DataDirBinding)
+	}
+
 	init := true
 	stopTimeout := int(config.ShutdownTimeout.Seconds())
 	resp, err := c.cli.ContainerCreate(context.Background(), &container.Config{
@@ -171,6 +175,7 @@ func (c *Client) Start(config *ContainerConfig) (*Container, error) {
 		PortBindings: portMapping,
 		Init:         &init,
 		CapAdd:       []string{"NET_ADMIN"},
+		Binds:        binds,
 	}, nil, nil, "")
 	if err != nil {
 		return nil, err
