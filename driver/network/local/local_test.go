@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"math/big"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -615,6 +617,79 @@ func TestLocalNetwork_FailingFlagPropagated(t *testing.T) {
 		if !node.IsExpectedFailure() {
 			t.Errorf("node is not failing: %s", node.GetLabel())
 		}
+	}
+
+}
+
+func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
+	t.Parallel()
+	temp := t.TempDir()
+
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators, OutputDir: temp}
+	net, err := NewLocalNetwork(&config)
+	if err != nil {
+		t.Fatalf("failed to create new local network: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := net.Shutdown(); err != nil {
+			t.Fatalf("failed to shut down network: %v", err)
+		}
+	})
+
+	dataVolume := "abcd"
+	node, err := net.CreateNode(&driver.NodeConfig{
+		Name:       "node",
+		DataVolume: &dataVolume,
+		Image:      driver.DefaultClientDockerImageName,
+	})
+	if err != nil {
+		t.Fatalf("failed to create node: %v", err)
+	}
+
+	getModificationTime := func() *time.Time {
+		var carmenModTime *time.Time
+		localDirBinding := fmt.Sprintf("%s/%s", temp, dataVolume)
+		if err := filepath.Walk(localDirBinding, func(path string, info os.FileInfo, err error) error {
+			if strings.HasSuffix(path, "carmen/live/~lock") {
+				carmenModTime = new(time.Time)
+				*carmenModTime = info.ModTime()
+			}
+			return nil
+		}); err != nil {
+			t.Fatalf("failed to walk the path: %v", err)
+		}
+		return carmenModTime
+	}
+
+	// save modification time of the database lock
+	prevModTime := getModificationTime()
+	if prevModTime == nil {
+		t.Fatalf("directory does not contain database files")
+	}
+
+	// stop the node
+	if err := net.RemoveNode(node); err != nil {
+		t.Fatalf("failed to remove node: %v", err)
+	}
+	if err := node.Stop(); err != nil {
+		t.Fatalf("failed to stop node: %v", err)
+	}
+	if err := node.Cleanup(); err != nil {
+		t.Fatalf("failed to cleanup node: %v", err)
+	}
+
+	// re-run another node on the same data volume
+	if _, err := net.CreateNode(&driver.NodeConfig{
+		Name:       "node2",
+		DataVolume: &dataVolume,
+		Image:      driver.DefaultClientDockerImageName,
+	}); err != nil {
+		t.Fatalf("failed to create node: %v", err)
+	}
+
+	// the database lock should have been updated
+	if got, want := *getModificationTime(), *prevModTime; got.Equal(want) {
+		t.Errorf("got modification time %v, wanted modification time %v", got, want)
 	}
 
 }

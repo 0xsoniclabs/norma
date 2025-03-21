@@ -180,6 +180,7 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 		Validators:    driver.NewValidators(scenario.Validators),
 		RoundTripTime: scenario.GetRoundTripTime(),
 		NetworkRules:  driver.NetworkRules(maps.Clone(scenario.NetworkRules.Genesis)),
+		OutputDir:     outputDir,
 	})
 	if err != nil {
 		return err

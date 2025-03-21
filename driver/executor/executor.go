@@ -225,11 +225,12 @@ func scheduleNodeEvents(node *parser.Node, queue *eventQueue, net driver.Network
 			fmt.Sprintf("[%s] Creating node", name),
 			func() error {
 				newNode, err := net.CreateNode(&driver.NodeConfig{
-					Name:      name,
-					Failing:   node.Failing,
-					Image:     image,
-					Validator: nodeIsValidator,
-					Cheater:   nodeIsCheater,
+					Name:       name,
+					Failing:    node.Failing,
+					Image:      image,
+					Validator:  nodeIsValidator,
+					Cheater:    nodeIsCheater,
+					DataVolume: node.Client.DataVolume,
 				})
 
 				*instance = newNode
