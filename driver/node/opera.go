@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"golang.org/x/exp/maps"
 	"io"
+	"os"
 	"regexp"
 	"slices"
 	"time"
@@ -88,6 +89,9 @@ type OperaNodeConfig struct {
 	NetworkConfig *driver.NetworkConfig
 	// ValidatorPubkey is nil if not a validator, else used as pubkey for the validator.
 	ValidatorPubkey *string
+	// MountDataDir is the directory where the node should store its state.
+	// Temporary location is used if nil.
+	MountDataDir *string
 }
 
 // labelPattern restricts labels for nodes to non-empty alpha-numerical strings
@@ -123,6 +127,21 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 			"VALIDATORS_COUNT": fmt.Sprintf("%d", config.NetworkConfig.Validators.GetNumValidators()),
 			"NETWORK_LATENCY":  fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
 		}
+
+		const dataDir = "/datadir"
+		envs["STATE_DB_DATADIR"] = dataDir
+
+		// when configured, mount the datadir to the host
+		var dataDirBinding *string
+		if config.MountDataDir != nil {
+			if err := os.MkdirAll(*config.MountDataDir, 0777); err != nil {
+				return nil, err
+			}
+
+			dataDirBinding = new(string)
+			*dataDirBinding = fmt.Sprintf("%s:%s", *config.MountDataDir, dataDir)
+		}
+
 		maps.Copy(envs, config.NetworkConfig.NetworkRules) // put in the network rules
 
 		return client.Start(&docker.ContainerConfig{
@@ -131,6 +150,7 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 			PortForwarding:  portForwarding,
 			Environment:     envs,
 			Network:         dn,
+			DataDirBinding:  dataDirBinding,
 		})
 	})
 

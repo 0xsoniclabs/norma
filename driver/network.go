@@ -84,6 +84,8 @@ type NetworkConfig struct {
 	RoundTripTime time.Duration
 	// NetworkRules is a map of network rules to be applied to the network.
 	NetworkRules NetworkRules
+	// OutputDir is the directory where temp data are written.
+	OutputDir string
 }
 
 // NetworkRules defines a set of network rules that can be applied to the network.
@@ -101,15 +103,12 @@ type NetworkListener interface {
 }
 
 type NodeConfig struct {
-	Name      string
-	Failing   bool
-	Validator bool
-	Cheater   bool
-	Image     string
-	// TODO: add other parameters as needed
-	//  - features to include on the node
-	//  - state DB configuration
-	//  - EVM configuration
+	Name       string
+	Failing    bool
+	Validator  bool
+	Cheater    bool
+	Image      string
+	DataVolume *string
 }
 
 type ApplicationConfig struct {
