@@ -30,7 +30,7 @@ type Application interface {
 
 	// GetReceivedTransactions returns the total number of transactions
 	// received by this application up to the current point in time.
-	GetReceivedTransactions(rpcClient rpc.RpcClient) (uint64, error)
+	GetReceivedTransactions(rpcClient rpc.Client) (uint64, error)
 }
 
 // User produces a stream of transactions to Generate traffic on the chain.

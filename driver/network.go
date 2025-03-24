@@ -69,7 +69,7 @@ type Network interface {
 
 	SendTransaction(tx *types.Transaction)
 
-	DialRandomRpc() (rpc.RpcClient, error)
+	DialRandomRpc() (rpc.Client, error)
 
 	// ApplyNetworkRules applies the given network rules to the network.
 	ApplyNetworkRules(rules NetworkRules) error

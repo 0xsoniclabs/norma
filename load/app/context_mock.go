@@ -86,10 +86,10 @@ func (mr *MockAppContextMockRecorder) FundAccounts(accounts, value any) *gomock.
 }
 
 // GetClient mocks base method.
-func (m *MockAppContext) GetClient() rpc.RpcClient {
+func (m *MockAppContext) GetClient() rpc.Client {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetClient")
-	ret0, _ := ret[0].(rpc.RpcClient)
+	ret0, _ := ret[0].(rpc.Client)
 	return ret0
 }
 
@@ -169,8 +169,8 @@ type MockRpcClientFactoryMockRecorder struct {
 	mock *MockRpcClientFactory
 }
 
-// NewMockRpcClientFactory creates a new mock instance.
-func NewMockRpcClientFactory(ctrl *gomock.Controller) *MockRpcClientFactory {
+// NewMockClientFactory creates a new mock instance.
+func NewMockClientFactory(ctrl *gomock.Controller) *MockRpcClientFactory {
 	mock := &MockRpcClientFactory{ctrl: ctrl}
 	mock.recorder = &MockRpcClientFactoryMockRecorder{mock}
 	return mock
@@ -182,10 +182,10 @@ func (m *MockRpcClientFactory) EXPECT() *MockRpcClientFactoryMockRecorder {
 }
 
 // DialRandomRpc mocks base method.
-func (m *MockRpcClientFactory) DialRandomRpc() (rpc.RpcClient, error) {
+func (m *MockRpcClientFactory) DialRandomRpc() (rpc.Client, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DialRandomRpc")
-	ret0, _ := ret[0].(rpc.RpcClient)
+	ret0, _ := ret[0].(rpc.Client)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

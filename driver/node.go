@@ -54,7 +54,7 @@ type Node interface {
 	GetServiceUrl(*network.ServiceDescription) *URL
 
 	// DialRpc establish an RPC connection with the node and returns the RPC client.
-	DialRpc() (rpc.RpcClient, error)
+	DialRpc() (rpc.Client, error)
 
 	// StreamLog provides a reader that is continuously providing the host log.
 	// It is up to the caller to close the stream.
