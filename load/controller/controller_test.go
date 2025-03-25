@@ -45,7 +45,7 @@ func TestLoadGeneration_CanRealizeConstantTrafficShape(t *testing.T) {
 		t.Run(fmt.Sprintf("linear rate %v", rate), func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			net := driver.NewMockNetwork(ctrl)
-			rpcClient := rpc.NewMockRpcClient(ctrl)
+			rpcClient := rpc.NewMockClient(ctrl)
 			application := app.NewMockApplication(ctrl)
 			user := app.NewMockUser(ctrl)
 			transaction := types.Transaction{}
@@ -81,7 +81,7 @@ func TestLoadGeneration_CanRealizeConstantTrafficShape(t *testing.T) {
 			rpcClient.EXPECT().SuggestGasPrice(gomock.Any()).AnyTimes().Return(big.NewInt(0), nil)
 			user.EXPECT().GenerateTx().AnyTimes().Return(&transaction, nil)
 
-			clientFactory := app.NewMockRpcClientFactory(ctrl)
+			clientFactory := app.NewMockClientFactory(ctrl)
 			clientFactory.EXPECT().DialRandomRpc().AnyTimes().Return(rpcClient, nil)
 
 			shaper := shaper.NewConstantShaper(float64(rate))

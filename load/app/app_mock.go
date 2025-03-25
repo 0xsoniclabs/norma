@@ -72,7 +72,7 @@ func (mr *MockApplicationMockRecorder) CreateUsers(context, numUsers any) *gomoc
 }
 
 // GetReceivedTransactions mocks base method.
-func (m *MockApplication) GetReceivedTransactions(rpcClient rpc.RpcClient) (uint64, error) {
+func (m *MockApplication) GetReceivedTransactions(rpcClient rpc.Client) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetReceivedTransactions", rpcClient)
 	ret0, _ := ret[0].(uint64)

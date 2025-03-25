@@ -33,44 +33,58 @@ import (
 
 //go:generate mockgen -source rpc.go -destination rpc_mock.go -package rpc
 
-type RpcClient interface {
+// Client is an interface that provides a subset of the Ethereum client and RPC client interfaces.
+type Client interface {
+	ethRpcClient
+	rpcClient
+
+	// WaitTransactionReceipt waits for the transaction receipt of the given transaction hash.
+	// It returns an error if the receipt could not be obtained within a certain time frame.
+	// This method retries with exponential backoff to fetch the transaction receipt,
+	//  until a certain timeout is reached.
+	WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
+}
+
+func WrapRpcClient(rpcClient *rpc.Client) *Impl {
+	return &Impl{
+		ethRpcClient:     ethclient.NewClient(rpcClient),
+		rpcClient:        rpcClient,
+		txReceiptTimeout: 60 * time.Second,
+	}
+}
+
+// ethRpcClient is a subset of the Ethereum client interface that is used by the application.
+type ethRpcClient interface {
 	bind.ContractBackend
-	Call(result interface{}, method string, args ...interface{}) error
 	NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error)
 	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
-
-	// -- ethereum client methods --
 	ChainID(ctx context.Context) (*big.Int, error)
-
-	// WaitTransactionReceipt waits for the receipt of the given transaction hash to be available.
-	// The function times out after 10 seconds.
-	WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
+	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 
 	Close()
 }
 
-func WrapRpcClient(rpcClient *rpc.Client) *RpcClientImpl {
-	return &RpcClientImpl{
-		Client:    ethclient.NewClient(rpcClient),
-		RpcClient: rpcClient,
-	}
+// rpcClient is a subset of the RPC client interface that is used by the application.
+type rpcClient interface {
+	Call(result interface{}, method string, args ...interface{}) error
 }
 
-type RpcClientImpl struct {
-	*ethclient.Client
-	RpcClient *rpc.Client
+type Impl struct {
+	ethRpcClient
+	rpcClient
+	txReceiptTimeout time.Duration
 }
 
-func (r RpcClientImpl) Call(result interface{}, method string, args ...interface{}) error {
-	return r.RpcClient.Call(result, method, args...)
+func (r Impl) Call(result interface{}, method string, args ...interface{}) error {
+	return r.rpcClient.Call(result, method, args...)
 }
 
-func (r RpcClientImpl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error) {
+func (r Impl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error) {
 	// Wait for the response with some exponential backoff.
-	const maxDelay = 100 * time.Millisecond
+	const maxDelay = 5 * time.Second
 	begin := time.Now()
 	delay := time.Millisecond
-	for time.Since(begin) < 120000*time.Second {
+	for time.Since(begin) < r.txReceiptTimeout {
 		receipt, err := r.TransactionReceipt(context.Background(), txHash)
 		if errors.Is(err, ethereum.NotFound) {
 			time.Sleep(delay)

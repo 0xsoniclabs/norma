@@ -272,7 +272,7 @@ func (n *LocalNetwork) SendTransaction(tx *types.Transaction) {
 	n.rpcWorkerPool.SendTransaction(tx)
 }
 
-func (n *LocalNetwork) DialRandomRpc() (rpcdriver.RpcClient, error) {
+func (n *LocalNetwork) DialRandomRpc() (rpcdriver.Client, error) {
 	nodes := n.GetActiveNodes()
 	return nodes[rand.Intn(len(nodes))].DialRpc()
 }
@@ -291,7 +291,7 @@ func (n *LocalNetwork) ApplyNetworkRules(rules driver.NetworkRules) error {
 // When network starts and still doesn't have any traffic, then first transaction must come from validator node.
 // Caused by: the regular nodes even when connected won't send transactions from their txpool,
 // because they don't know whether they are on head or not if blockchain is empty.
-func (n *LocalNetwork) dialRandomGenesisValidatorRpc() (rpcdriver.RpcClient, error) {
+func (n *LocalNetwork) dialRandomGenesisValidatorRpc() (rpcdriver.Client, error) {
 	return n.validators[rand.Intn(len(n.validators))].DialRpc()
 }
 

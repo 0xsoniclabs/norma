@@ -40,7 +40,7 @@ func createTx(from *Account, toAddress common.Address, value *big.Int, data []by
 }
 
 // GetGasPrice obtains optimal gasPrice for regular transactions
-func GetGasPrice(rpcClient rpc.RpcClient) (*big.Int, error) {
+func GetGasPrice(rpcClient rpc.Client) (*big.Int, error) {
 	gasPrice, err := rpcClient.SuggestGasPrice(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to suggest gas price; %v", err)

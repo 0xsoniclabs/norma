@@ -242,7 +242,7 @@ func (f *UniswapApplication) CreateUsers(appContext AppContext, numUsers int) ([
 	return users, nil
 }
 
-func (f *UniswapApplication) GetReceivedTransactions(rpcClient rpc.RpcClient) (uint64, error) {
+func (f *UniswapApplication) GetReceivedTransactions(rpcClient rpc.Client) (uint64, error) {
 	// get a representation of the deployed contract
 	routerContract, err := contract.NewUniswapRouter(f.routerAddress, rpcClient)
 	if err != nil {

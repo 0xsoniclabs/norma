@@ -84,10 +84,10 @@ func (mr *MockNetworkMockRecorder) CreateNode(config any) *gomock.Call {
 }
 
 // DialRandomRpc mocks base method.
-func (m *MockNetwork) DialRandomRpc() (rpc.RpcClient, error) {
+func (m *MockNetwork) DialRandomRpc() (rpc.Client, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DialRandomRpc")
-	ret0, _ := ret[0].(rpc.RpcClient)
+	ret0, _ := ret[0].(rpc.Client)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

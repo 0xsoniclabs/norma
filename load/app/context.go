@@ -35,7 +35,7 @@ import (
 // with the network, such as deploying contracts, sending transactions, and waiting for
 // receipts.
 type AppContext interface {
-	GetClient() rpc.RpcClient
+	GetClient() rpc.Client
 	GetTreasure() *Account
 	GetTransactOptions(account *Account) (*bind.TransactOpts, error)
 	GetReceipt(txHash common.Hash) (*types.Receipt, error)
@@ -45,7 +45,7 @@ type AppContext interface {
 }
 
 type RpcClientFactory interface {
-	DialRandomRpc() (rpc.RpcClient, error)
+	DialRandomRpc() (rpc.Client, error)
 }
 
 func NewContext(factory RpcClientFactory, treasury *Account) (*appContext, error) {
@@ -75,7 +75,7 @@ func NewContext(factory RpcClientFactory, treasury *Account) (*appContext, error
 }
 
 type appContext struct {
-	rpcClient rpc.RpcClient    // < access to the network
+	rpcClient rpc.Client       // < access to the network
 	treasury  *Account         // < the account paying for management tasks
 	helper    *contract.Helper // < a contract used for on-chain operations
 }
@@ -84,7 +84,7 @@ func (c *appContext) Close() {
 	c.rpcClient.Close()
 }
 
-func (c *appContext) GetClient() rpc.RpcClient {
+func (c *appContext) GetClient() rpc.Client {
 	return c.rpcClient
 }
 

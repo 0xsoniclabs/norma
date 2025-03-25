@@ -39,7 +39,7 @@ type AppController struct {
 	network     driver.Network
 	trigger     chan struct{}
 	users       []app.User
-	rpcClient   rpc.RpcClient
+	rpcClient   rpc.Client
 }
 
 func NewAppController(application app.Application, shaper shaper.Shaper, numUsers int, context app.AppContext, network driver.Network) (*AppController, error) {

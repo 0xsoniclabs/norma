@@ -98,7 +98,7 @@ func (f *CounterApplication) CreateUsers(appContext AppContext, numUsers int) ([
 	return users, err
 }
 
-func (f *CounterApplication) GetReceivedTransactions(rpcClient rpc.RpcClient) (uint64, error) {
+func (f *CounterApplication) GetReceivedTransactions(rpcClient rpc.Client) (uint64, error) {
 	// get a representation of the deployed contract
 	counterContract, err := contract.NewCounter(f.contractAddress, rpcClient)
 	if err != nil {

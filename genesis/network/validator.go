@@ -51,7 +51,7 @@ func RegisterValidatorNode(backend ContractBackend) (int, error) {
 
 	receipt, err := backend.WaitTransactionReceipt(tx.Hash())
 	if err != nil {
-		return 0, fmt.Errorf("failed to get receipt; %v", err)
+		return 0, fmt.Errorf("failed to create validator, receipt error: %v", err)
 	}
 
 	if receipt.Status != types.ReceiptStatusSuccessful {

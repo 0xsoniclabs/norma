@@ -38,7 +38,7 @@ func TestMockedTrafficGenerating(t *testing.T) {
 	numUsers := 2
 	mockUser := app.NewMockUser(mockCtrl)
 
-	mockedRpcClient := rpc.NewMockRpcClient(mockCtrl)
+	mockedRpcClient := rpc.NewMockClient(mockCtrl)
 	mockedRpcClient.EXPECT().Close()
 
 	appContext := app.NewMockAppContext(mockCtrl)
