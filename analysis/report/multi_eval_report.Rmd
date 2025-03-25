@@ -15,7 +15,7 @@ figure_dimensions <- c(10, 4)
 # load monitoring data
 all_data <- read_csv(params$datafile)
 
-# comput the start time of each run
+# compute the start time of each run
 start_times <- all_data %>%
     dplyr::filter(metric == "SentTransactions") %>%  # filter metric
     select(run, time) %>%
@@ -40,7 +40,7 @@ sent_rate <- all_data_with_start_time %>%
     dplyr::filter(metric == "SentTransactions") %>%   # filter metric
     select(run, time, app, workers, value, start) %>% # filter relevant columns
     mutate(value = as.numeric(value)) %>%             # convert value to integer
-    group_by(run, app, workers) %>%                   # one group per account
+    group_by(run, app, workers) %>%                   # group by run, app and workers (one group per account)
     arrange(app, workers, time) %>%                   # sort by time in groups
     reframe(
         run = run,                                    # preserve the run
@@ -73,7 +73,7 @@ received <- all_data_with_start_time %>%
     arrange(simtime) %>%
     reframe(
         simtime = simtime,
-        total = cumsum(increment),
+        total = cumsum(increment)
     )
 
 
@@ -87,7 +87,7 @@ ggplot() +
     theme(plot.title = element_text(hjust = 0.5))      # center title
 ```
 
-The following chart compares the througput of the runs over time.
+The following chart compares the throughput of the runs over time.
 
 ```{r throughput_over_time, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 received_rate <- all_data_with_start_time %>%
