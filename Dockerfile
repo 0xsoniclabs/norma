@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# This is a multi stages Dockerfile, which builds go-opera
+# This is a multi-stage Dockerfile, which builds go-opera
 # from the client/ directory first, and runs the binary then.
 #
 # This Dockerfile requires running installation of Docker,
@@ -14,8 +14,8 @@
 #
 # Stage 1a: Build Client
 #
-# It prepeares an image with dependencies for the client.
-# Its caches the dependencies first, so that the build is faster.
+# It prepares an image with dependencies for the client.
+# It caches the dependencies first, so that the build is faster.
 #
 # It checks out the required version of the client, and builds it.
 #
@@ -23,7 +23,7 @@ FROM golang:1.24 AS client-build
 
 WORKDIR /client
 
-# Download expected Client version from the outside defined location.
+# Download expected client version from the outside defined location.
 # The 'client-src' parameter is passed as '--build-context' to the docker build command.
 
 # Download Sonic dependencies first to cache them.
@@ -37,28 +37,28 @@ COPY --from=client-src . .
 RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
 
 #
-# Stage 1b: Build Norma related tools supporting Client runs.
+# Stage 1b: Build Normarelated tools supporting Client runs.
 #
-# It prepeares an image with dependencies for the norma.
-# Its caches the dependencies first, so that the build is faster.
+# It prepares an image with dependencies for the norma.
+# It caches the dependencies first, so that the build is faster.
 #
 # It checks out the local version of the norma, and builds it.
 #
 FROM golang:1.24 AS norma-build
 
-# Download dependencies supporting Sonic run first to cache them for faster build when Norma changes.
+# Download dependencies supporting Sonic run first to cache them for faster build when Normachanges.
 WORKDIR /
 COPY genesis/go.mod go.mod
 RUN go mod download
 
-# Build norma itself
+# Build Normaitself
 WORKDIR /genesistools
-COPY /genesis/ ./
+COPY genesis/ ./
 RUN --mount=type=cache,target=/root/.cache/go-build make genesistools
 
 #
 # Stage 2: Build the final image
-# It consists of the client binaries and the norma tools supporting runtime of the client.
+# It consists of the client binaries and the Normatools supporting runtime of the client.
 #
 FROM debian:bookworm
 
