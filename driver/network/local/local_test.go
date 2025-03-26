@@ -646,10 +646,12 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 		t.Fatalf("failed to create node: %v", err)
 	}
 
+	var visitedDirs []string
 	getModificationTime := func() *time.Time {
 		var carmenModTime *time.Time
 		localDirBinding := fmt.Sprintf("%s/%s", temp, dataVolume)
 		if err := filepath.Walk(localDirBinding, func(path string, info os.FileInfo, err error) error {
+			visitedDirs = append(visitedDirs, path)
 			if strings.HasSuffix(path, "carmen/live/~lock") {
 				carmenModTime = new(time.Time)
 				*carmenModTime = info.ModTime()
@@ -664,7 +666,7 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	// save modification time of the database lock
 	prevModTime := getModificationTime()
 	if prevModTime == nil {
-		t.Fatalf("directory does not contain database files")
+		t.Fatalf("directory does not contain database files: %v", visitedDirs)
 	}
 
 	// stop the node
