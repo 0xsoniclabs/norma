@@ -646,25 +646,26 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 		t.Fatalf("failed to create node: %v", err)
 	}
 
-	var visitedDirs []string
-	getModificationTime := func() *time.Time {
+	getModificationTime := func() (*time.Time, []string, error) {
 		var carmenModTime *time.Time
+		var visitedDirs []string
 		localDirBinding := fmt.Sprintf("%s/%s", temp, dataVolume)
-		if err := filepath.Walk(localDirBinding, func(path string, info os.FileInfo, err error) error {
+		err := filepath.Walk(localDirBinding, func(path string, info os.FileInfo, err error) error {
 			visitedDirs = append(visitedDirs, path)
 			if strings.HasSuffix(path, "carmen/live/~lock") {
 				carmenModTime = new(time.Time)
 				*carmenModTime = info.ModTime()
 			}
 			return nil
-		}); err != nil {
-			t.Fatalf("failed to walk the path: %v", err)
-		}
-		return carmenModTime
+		})
+		return carmenModTime, visitedDirs, err
 	}
 
 	// save modification time of the database lock
-	prevModTime := getModificationTime()
+	prevModTime, visitedDirs, err := getModificationTime()
+	if err != nil {
+		t.Fatalf("failed to get modification time: %v", err)
+	}
 	if prevModTime == nil {
 		t.Fatalf("directory does not contain database files: %v", visitedDirs)
 	}
@@ -690,7 +691,11 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	}
 
 	// the database lock should have been updated
-	if got, want := *getModificationTime(), *prevModTime; got.Equal(want) {
+	currModTime, visitedDirs, err := getModificationTime()
+	if err != nil {
+		t.Fatalf("failed to get modification time: %v", err)
+	}
+	if got, want := *currModTime, *prevModTime; got.Equal(want) {
 		t.Errorf("got modification time %v, wanted modification time %v", got, want)
 	}
 
