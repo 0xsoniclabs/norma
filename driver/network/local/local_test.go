@@ -652,7 +652,7 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 		localDirBinding := fmt.Sprintf("%s/%s", temp, dataVolume)
 		err := filepath.Walk(localDirBinding, func(path string, info os.FileInfo, err error) error {
 			visitedDirs = append(visitedDirs, path)
-			if strings.HasSuffix(path, "carmen/live/~lock") {
+			if strings.HasSuffix(path, "transactions.rlp") {
 				carmenModTime = new(time.Time)
 				*carmenModTime = info.ModTime()
 			}
