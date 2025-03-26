@@ -80,7 +80,6 @@ type Node struct {
 	Start     *float32   `yaml:",omitempty"` // nil is interpreted as 0
 	End       *float32   `yaml:",omitempty"` // nil is interpreted as end-of-scenario
 	Client    ClientType `yaml:",omitempty"`
-	Mount     *string    `yaml:",omitempty"`
 }
 
 // IsValidator returns true if the node is defined as validator in Features
@@ -107,8 +106,9 @@ func (n *Node) IsStaticValidator(s *Scenario) bool {
 // ImageName can be used to specify the exact client version for the defined Node.
 // Type can be used to configure the launching command of the client
 type ClientType struct {
-	ImageName string `yaml:",omitempty"` // nil is interpreted as main
-	Type      string `yaml:",omitempty"` // nil is interpreted as observer
+	ImageName  string  `yaml:",omitempty"`            // nil is interpreted as main
+	Type       string  `yaml:",omitempty"`            // nil is interpreted as observer
+	DataVolume *string `yaml:"data_volume,omitempty"` // nil is interpreted as empty
 }
 
 // Application is a load generator in the simulated network. Each application defines

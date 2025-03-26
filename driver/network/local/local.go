@@ -230,12 +230,19 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 		}
 	}
 
+	var datadir *string
+	if config.DataVolume != nil {
+		datadir = new(string)
+		*datadir = fmt.Sprintf("%s/%s", n.config.OutputDir, *config.DataVolume)
+	}
+
 	return n.createNode(&node.OperaNodeConfig{
 		Label:         config.Name,
 		Failing:       config.Failing,
 		Image:         config.Image,
 		NetworkConfig: &n.config,
 		ValidatorId:   &newValId,
+		MountDataDir:  datadir,
 	})
 }
 
