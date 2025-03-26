@@ -631,6 +631,9 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temporary directory: %v", err)
 	}
+	defer func() {
+		os.RemoveAll(temp)
+	}()
 
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators, OutputDir: temp}
 	net, err := NewLocalNetwork(&config)
