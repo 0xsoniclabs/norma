@@ -19,13 +19,14 @@ package local
 import (
 	"bufio"
 	"fmt"
-	"github.com/0xsoniclabs/norma/driver/parser"
 	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/0xsoniclabs/norma/driver/parser"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/node"
@@ -623,17 +624,7 @@ func TestLocalNetwork_FailingFlagPropagated(t *testing.T) {
 
 func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	t.Parallel()
-
-	// jenkins uses different access privileges for docker
-	// i.e. we need to create a temporary directory in /tmp for docker mount
-	// as the test cleanup cannot delete the directory if the mount is in the subdirectory of this test.
-	temp, err := os.MkdirTemp("/tmp", fmt.Sprintf("%s-docker-volume-*", t.Name()))
-	if err != nil {
-		t.Fatalf("failed to create temporary directory: %v", err)
-	}
-	defer func() {
-		os.RemoveAll(temp)
-	}()
+	temp := t.TempDir()
 
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators, OutputDir: temp}
 	net, err := NewLocalNetwork(&config)

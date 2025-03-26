@@ -15,6 +15,7 @@ pipeline {
 		GOMEMLIMIT = '60GiB'
 		GOCACHE = '/mnt/tmp-disk/go-cache'
 		TMPDIR = '/mnt/tmp-disk/'
+		GOTMPDIR = '/mnt/tmp-disk/'
 	}
 
 	stages {
