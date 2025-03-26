@@ -31,7 +31,7 @@ func TestBlockHashesCheckerValid(t *testing.T) {
 	net := driver.NewMockNetwork(ctrl)
 	node1 := driver.NewMockNode(ctrl)
 	node2 := driver.NewMockNode(ctrl)
-	rpc := rpc.NewMockRpcClient(ctrl)
+	rpc := rpc.NewMockClient(ctrl)
 	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
 	node1.EXPECT().DialRpc().MinTimes(1).Return(rpc, nil)
 	node1.EXPECT().IsExpectedFailure().AnyTimes()
@@ -58,8 +58,8 @@ func TestBlockHashesCheckerInvalidStateRoot(t *testing.T) {
 	net := driver.NewMockNetwork(ctrl)
 	node1 := driver.NewMockNode(ctrl)
 	node2 := driver.NewMockNode(ctrl)
-	rpc1 := rpc.NewMockRpcClient(ctrl)
-	rpc2 := rpc.NewMockRpcClient(ctrl)
+	rpc1 := rpc.NewMockClient(ctrl)
+	rpc2 := rpc.NewMockClient(ctrl)
 	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
 	node1.EXPECT().DialRpc().MinTimes(1).Return(rpc1, nil)
 	node1.EXPECT().IsExpectedFailure().AnyTimes()
@@ -94,9 +94,9 @@ func TestBlockHashesCheckerInvalidLastBlock(t *testing.T) {
 	node1 := driver.NewMockNode(ctrl)
 	node2 := driver.NewMockNode(ctrl)
 	node3 := driver.NewMockNode(ctrl)
-	rpc1 := rpc.NewMockRpcClient(ctrl)
-	rpc2 := rpc.NewMockRpcClient(ctrl)
-	rpc3 := rpc.NewMockRpcClient(ctrl)
+	rpc1 := rpc.NewMockClient(ctrl)
+	rpc2 := rpc.NewMockClient(ctrl)
+	rpc3 := rpc.NewMockClient(ctrl)
 	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2, node3})
 	node1.EXPECT().DialRpc().MinTimes(1).Return(rpc1, nil)
 	node1.EXPECT().IsExpectedFailure().AnyTimes()
@@ -137,10 +137,10 @@ func TestBlockHashesCheckerInvalidLastBlock(t *testing.T) {
 
 func TestBlockHashes_ExpectedFailingNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	rpc1 := rpc.NewMockRpcClient(ctrl)
+	rpc1 := rpc.NewMockClient(ctrl)
 	rpc1.EXPECT().Close()
 
-	rpc2 := rpc.NewMockRpcClient(ctrl)
+	rpc2 := rpc.NewMockClient(ctrl)
 	rpc2.EXPECT().Close()
 
 	node1 := driver.NewMockNode(ctrl)
@@ -188,10 +188,10 @@ func TestBlockHashes_ExpectedFailingNode(t *testing.T) {
 
 func TestBlockHashes_NoFailure_When_Expected(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	rpc1 := rpc.NewMockRpcClient(ctrl)
+	rpc1 := rpc.NewMockClient(ctrl)
 	rpc1.EXPECT().Close()
 
-	rpc2 := rpc.NewMockRpcClient(ctrl)
+	rpc2 := rpc.NewMockClient(ctrl)
 	rpc2.EXPECT().Close()
 
 	node1 := driver.NewMockNode(ctrl)
@@ -234,10 +234,10 @@ func TestBlockHashes_NoFailure_When_Expected(t *testing.T) {
 
 func TestBlockHashes_NoFailure_Diff_Block_Height(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	rpc1 := rpc.NewMockRpcClient(ctrl)
+	rpc1 := rpc.NewMockClient(ctrl)
 	rpc1.EXPECT().Close()
 
-	rpc2 := rpc.NewMockRpcClient(ctrl)
+	rpc2 := rpc.NewMockClient(ctrl)
 	rpc2.EXPECT().Close()
 
 	node1 := driver.NewMockNode(ctrl)
@@ -283,13 +283,13 @@ func TestBlockHashes_NoFailure_Diff_Block_Height(t *testing.T) {
 func TestBlockHashes_Failing_Delays_And_OK_Nodes(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	rpc1 := rpc.NewMockRpcClient(ctrl)
+	rpc1 := rpc.NewMockClient(ctrl)
 	rpc1.EXPECT().Close()
 
-	rpc2 := rpc.NewMockRpcClient(ctrl)
+	rpc2 := rpc.NewMockClient(ctrl)
 	rpc2.EXPECT().Close()
 
-	rpc3 := rpc.NewMockRpcClient(ctrl)
+	rpc3 := rpc.NewMockClient(ctrl)
 	rpc3.EXPECT().Close()
 
 	node1 := driver.NewMockNode(ctrl)

@@ -220,7 +220,7 @@ func (n *OperaNode) Cleanup() error {
 	return n.host.Cleanup()
 }
 
-func (n *OperaNode) DialRpc() (rpcdriver.RpcClient, error) {
+func (n *OperaNode) DialRpc() (rpcdriver.Client, error) {
 	url := n.GetServiceUrl(&OperaRpcService)
 	if url == nil {
 		return nil, fmt.Errorf("node %s does not export an RPC server", n.label)

@@ -13,7 +13,7 @@ func TestAccount_CreateAccount_AccountsUniq(t *testing.T) {
 	const loops = 100
 
 	ctrl := gomock.NewController(t)
-	rpcClient := rpc.NewMockRpcClient(ctrl)
+	rpcClient := rpc.NewMockClient(ctrl)
 	rpcClient.EXPECT().NonceAt(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(uint64(0), nil)
 
 	accounts := make(map[common.Address]struct{}, loops)

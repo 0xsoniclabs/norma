@@ -142,7 +142,7 @@ func (f *ERC20Application) CreateUsers(appContext AppContext, numUsers int) ([]U
 	return users, nil
 }
 
-func (f *ERC20Application) GetReceivedTransactions(rpcClient rpc.RpcClient) (uint64, error) {
+func (f *ERC20Application) GetReceivedTransactions(rpcClient rpc.Client) (uint64, error) {
 	// get a representation of the deployed contract
 	ERC20Contract, err := contract.NewERC20(f.contractAddress, rpcClient)
 	if err != nil {

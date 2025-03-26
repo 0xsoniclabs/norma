@@ -33,7 +33,7 @@ func (*BlocksHashesChecker) Check(net driver.Network) (err error) {
 	nodes := net.GetActiveNodes()
 	fmt.Printf("checking hashes for %d nodes\n", len(nodes))
 
-	rpcClients := make([]rpc.RpcClient, len(nodes))
+	rpcClients := make([]rpc.Client, len(nodes))
 	defer func() {
 		for _, rpcClient := range rpcClients {
 			if rpcClient != nil {
@@ -137,7 +137,7 @@ type blockHashes struct {
 	ReceiptsRoot common.Hash
 }
 
-func getBlockHashes(rpcClient rpc.RpcClient, blockNumber uint64) (*blockHashes, error) {
+func getBlockHashes(rpcClient rpc.Client, blockNumber uint64) (*blockHashes, error) {
 	var block *blockHashes
 	err := rpcClient.Call(&block, "eth_getBlockByNumber", hexutil.EncodeUint64(blockNumber), false)
 	if err != nil {

@@ -30,7 +30,7 @@ func TestBlockHeightCheckerValid(t *testing.T) {
 	net := driver.NewMockNetwork(ctrl)
 	node1 := driver.NewMockNode(ctrl)
 	node2 := driver.NewMockNode(ctrl)
-	rpc := rpc.NewMockRpcClient(ctrl)
+	rpc := rpc.NewMockClient(ctrl)
 	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
 	node1.EXPECT().DialRpc().MinTimes(1).Return(rpc, nil)
 	node1.EXPECT().IsExpectedFailure()
@@ -62,8 +62,8 @@ func TestBlockHeightCheckerInvalid(t *testing.T) {
 			net := driver.NewMockNetwork(ctrl)
 			node1 := driver.NewMockNode(ctrl)
 			node2 := driver.NewMockNode(ctrl)
-			rpc1 := rpc.NewMockRpcClient(ctrl)
-			rpc2 := rpc.NewMockRpcClient(ctrl)
+			rpc1 := rpc.NewMockClient(ctrl)
+			rpc2 := rpc.NewMockClient(ctrl)
 			net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
 			node1.EXPECT().DialRpc().MinTimes(1).Return(rpc1, nil)
 			node1.EXPECT().IsExpectedFailure().AnyTimes()
@@ -87,7 +87,7 @@ func TestBlockHeightCheckerInvalid(t *testing.T) {
 
 func TestBlockHeight_ExpectedFailingNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	rpc := rpc.NewMockRpcClient(ctrl)
+	rpc := rpc.NewMockClient(ctrl)
 	rpc.EXPECT().Close().Times(2)
 
 	node1 := driver.NewMockNode(ctrl)
@@ -115,7 +115,7 @@ func TestBlockHeight_ExpectedFailingNode(t *testing.T) {
 
 func TestBlockHeight_NoFailure_When_Expected(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	rpc := rpc.NewMockRpcClient(ctrl)
+	rpc := rpc.NewMockClient(ctrl)
 	rpc.EXPECT().Close().Times(2)
 
 	node1 := driver.NewMockNode(ctrl)

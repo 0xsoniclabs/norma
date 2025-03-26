@@ -98,7 +98,7 @@ func (f *StoreApplication) CreateUsers(appContext AppContext, numUsers int) ([]U
 	return users, err
 }
 
-func (f *StoreApplication) GetReceivedTransactions(rpcClient rpc.RpcClient) (uint64, error) {
+func (f *StoreApplication) GetReceivedTransactions(rpcClient rpc.Client) (uint64, error) {
 	// get a representation of the deployed contract
 	storeContract, err := contract.NewStore(f.contractAddress, rpcClient)
 	if err != nil {

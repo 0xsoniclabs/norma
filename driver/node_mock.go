@@ -55,10 +55,10 @@ func (mr *MockNodeMockRecorder) Cleanup() *gomock.Call {
 }
 
 // DialRpc mocks base method.
-func (m *MockNode) DialRpc() (rpc.RpcClient, error) {
+func (m *MockNode) DialRpc() (rpc.Client, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DialRpc")
-	ret0, _ := ret[0].(rpc.RpcClient)
+	ret0, _ := ret[0].(rpc.Client)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
