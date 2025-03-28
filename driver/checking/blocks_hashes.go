@@ -25,12 +25,19 @@ import (
 	"maps"
 )
 
-// BlocksHashesChecker is a Checker checking if all Opera nodes provides the same hashes for all blocks/stateRoots.
-type BlocksHashesChecker struct {
+func init() {
+	RegisterNetworkChecker("blocks_hashes", func(net driver.Network) Checker {
+		return &BlocksHashesChecker{net: net}
+	})
 }
 
-func (*BlocksHashesChecker) Check(net driver.Network) (err error) {
-	nodes := net.GetActiveNodes()
+// BlocksHashesChecker is a Checker checking if all Opera nodes provides the same hashes for all blocks/stateRoots.
+type BlocksHashesChecker struct {
+	net driver.Network
+}
+
+func (c *BlocksHashesChecker) Check() (err error) {
+	nodes := c.net.GetActiveNodes()
 	fmt.Printf("checking hashes for %d nodes\n", len(nodes))
 
 	rpcClients := make([]rpc.Client, len(nodes))

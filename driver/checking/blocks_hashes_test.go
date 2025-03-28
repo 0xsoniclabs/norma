@@ -47,7 +47,8 @@ func TestBlockHashesCheckerValid(t *testing.T) {
 		rpc.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).AnyTimes(),
 		rpc.EXPECT().Close().Times(2),
 	)
-	err := new(BlocksHashesChecker).Check(net)
+	c := BlocksHashesChecker{net: net}
+	err := c.Check()
 	if err != nil {
 		t.Errorf("unexpected error from BlocksHashesChecker: %v", err)
 	}
@@ -82,7 +83,8 @@ func TestBlockHashesCheckerInvalidStateRoot(t *testing.T) {
 	rpc1.EXPECT().Close()
 	rpc2.EXPECT().Close()
 
-	err := new(BlocksHashesChecker).Check(net)
+	c := BlocksHashesChecker{net: net}
+	err := c.Check()
 	if err.Error() != "stateRoot of the block 3 does not match" {
 		t.Errorf("unexpected error from BlocksHashesChecker: %v", err)
 	}
@@ -129,7 +131,8 @@ func TestBlockHashesCheckerInvalidLastBlock(t *testing.T) {
 	rpc2.EXPECT().Close()
 	rpc3.EXPECT().Close()
 
-	err := new(BlocksHashesChecker).Check(net)
+	c := BlocksHashesChecker{net: net}
+	err := c.Check()
 	if err.Error() != "receiptsRoot of the block 3 does not match" {
 		t.Errorf("unexpected error from BlocksHashesChecker: %v", err)
 	}
@@ -181,7 +184,8 @@ func TestBlockHashes_ExpectedFailingNode(t *testing.T) {
 		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
 	)
 
-	if err := new(BlocksHashesChecker).Check(net); err != nil {
+	c := BlocksHashesChecker{net: net}
+	if err := c.Check(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -227,7 +231,8 @@ func TestBlockHashes_NoFailure_When_Expected(t *testing.T) {
 		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
 	)
 
-	if err := new(BlocksHashesChecker).Check(net); err == nil || !strings.Contains(err.Error(), "unexpected failure set to provide the block hashes") {
+	c := BlocksHashesChecker{net: net}
+	if err := c.Check(); err == nil || !strings.Contains(err.Error(), "unexpected failure set to provide the block hashes") {
 		t.Errorf("unexpected success")
 	}
 }
@@ -275,7 +280,8 @@ func TestBlockHashes_NoFailure_Diff_Block_Height(t *testing.T) {
 		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
 	)
 
-	if err := new(BlocksHashesChecker).Check(net); err != nil {
+	c := BlocksHashesChecker{net: net}
+	if err := c.Check(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -346,7 +352,8 @@ func TestBlockHashes_Failing_Delays_And_OK_Nodes(t *testing.T) {
 		rpc3.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil earlier than others
 	)
 
-	if err := new(BlocksHashesChecker).Check(net); err != nil {
+	c := BlocksHashesChecker{net: net}
+	if err := c.Check(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
