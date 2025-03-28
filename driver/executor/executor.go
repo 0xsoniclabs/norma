@@ -47,9 +47,10 @@ func Run(clock Clock, network driver.Network, scenario *parser.Scenario, skipCon
 
 	// schedule network consistency just before the end of simulation
 	if !skipConsistencyCheck {
+		checkers := checking.InitNetworkCheckers(network)
 		queue.add(toSingleEvent(endTime-1, "consistency check", func() error {
 			log.Printf("Checking network consistency ...\n")
-			return checking.CheckNetworkConsistency(network)
+			return checkers.Check()
 		}))
 	} else {
 		fmt.Printf("Network checks skipped\n")
