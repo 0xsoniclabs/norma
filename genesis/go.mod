@@ -3,15 +3,16 @@ module github.com/0xsoniclabs/norma/genesistools
 go 1.24.0
 
 require (
-	github.com/0xsoniclabs/sonic v0.0.0-20250312080804-b5d41c48e0a1
+	github.com/0xsoniclabs/sonic v0.0.0-20250328085816-83895ddcfcb2
 	github.com/Fantom-foundation/lachesis-base v0.0.0-20240116072301-a75735c4ef00
 	github.com/ethereum/go-ethereum v1.15.0
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli/v2 v2.27.5
+	go.uber.org/mock v0.4.0
 )
 
 require (
-	github.com/0xsoniclabs/carmen/go v0.0.0-20250113102336-97f8b8616eff // indirect
+	github.com/0xsoniclabs/carmen/go v0.0.0-20250318153505-712d1a76e929 // indirect
 	github.com/0xsoniclabs/tosca v0.0.0-20250221124739-3aac4e7427dc // indirect
 	github.com/DataDog/zstd v1.5.6 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
@@ -73,12 +74,11 @@ require (
 	github.com/tklauser/numcpus v0.8.0 // indirect
 	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	go.uber.org/mock v0.4.0 // indirect
-	golang.org/x/crypto v0.32.0 // indirect
-	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0 // indirect
-	golang.org/x/sync v0.10.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/crypto v0.35.0 // indirect
+	golang.org/x/exp v0.0.0-20241204233417-43b7b7cde48d // indirect
+	golang.org/x/sync v0.11.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	pgregory.net/rand v1.0.2 // indirect

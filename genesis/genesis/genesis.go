@@ -110,10 +110,6 @@ func GenerateJsonGenesis(jsonFile string, validatorsCount int, rules *opera.Rule
 		ProofOfPossession: key.GetProofOfPossession(),
 		VotingPower:       1,
 	})
-	if err := committee.Validate(); err != nil {
-		return fmt.Errorf("failed to create valid committee: %w", err)
-	}
-
 	jsonGenesis.GenesisCommittee = &committee
 
 	encoded, err := json.MarshalIndent(jsonGenesis, "", "  ")
