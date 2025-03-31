@@ -12,13 +12,13 @@ require (
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/urfave/cli/v2 v2.27.5
 	go.uber.org/mock v0.5.0
-	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
+	golang.org/x/exp v0.0.0-20241204233417-43b7b7cde48d
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	github.com/0xsoniclabs/carmen/go v0.0.0-20250113102336-97f8b8616eff // indirect
-	github.com/0xsoniclabs/sonic v0.0.0-20250312080804-b5d41c48e0a1 // indirect
+	github.com/0xsoniclabs/carmen/go v0.0.0-20250318153505-712d1a76e929 // indirect
+	github.com/0xsoniclabs/sonic v0.0.0-20250328085816-83895ddcfcb2 // indirect
 	github.com/0xsoniclabs/tosca v0.0.0-20250221124739-3aac4e7427dc // indirect
 	github.com/DataDog/zstd v1.5.6 // indirect
 	github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e // indirect
@@ -98,10 +98,10 @@ require (
 	go.opentelemetry.io/otel/metric v1.31.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.31.0 // indirect
 	go.opentelemetry.io/otel/trace v1.31.0 // indirect
-	golang.org/x/crypto v0.32.0 // indirect
-	golang.org/x/sync v0.10.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/crypto v0.35.0 // indirect
+	golang.org/x/sync v0.11.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20241015192408-796eee8c2d53 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241015192408-796eee8c2d53 // indirect
 	google.golang.org/protobuf v1.35.1 // indirect
