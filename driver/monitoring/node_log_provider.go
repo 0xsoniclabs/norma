@@ -53,9 +53,6 @@ type NodeLogProvider interface {
 // while the parsed blocks from the logs are distributed to all registered listeners.
 // Furthermore, all collected logs are writen to a configurable output directory.
 type NodeLogDispatcher struct {
-	nodes     map[Node]bool
-	nodesLock sync.Mutex
-
 	listeners     map[LogListener]bool
 	listenersLock sync.Mutex
 
@@ -75,7 +72,6 @@ func NewNodeLogDispatcher(network driver.Network, outputDir string) (*NodeLogDis
 
 	res := &NodeLogDispatcher{
 		network:   network,
-		nodes:     make(map[Node]bool, 50),
 		listeners: make(map[LogListener]bool, 50),
 		logDir:    logDir,
 	}
@@ -112,59 +108,27 @@ func (n *NodeLogDispatcher) UnregisterLogListener(listener LogListener) {
 
 func (n *NodeLogDispatcher) AfterNodeCreation(node driver.Node) {
 	nodeId := node.GetLabel()
-	n.nodesLock.Lock()
-	defer n.nodesLock.Unlock()
 
-	// open new log stream only when the node has not been in the map yet
-	if _, exists := n.nodes[Node(nodeId)]; !exists {
-		n.wg.Add(1)
+	n.wg.Add(1)
 
-		// Start a goroutine collecting the log and writting it into a file.
-		go n.runLogCollector(node)
+	// Start a goroutine collecting the log and writting it into a file.
+	go n.runLogCollector(node)
 
-		// Start a goroutine parsing the log and dispatching block information.
-		logStream, err := node.StreamLog()
-		if err != nil {
-			log.Printf("failed to obtain logs of node, will not be able to track blocks: %v", err)
-			return // do not start dispatch on error
-		}
-		n.wg.Add(1)
-		n.startDispatcher(Node(nodeId), logStream)
-
-		n.nodes[Node(nodeId)] = true
+	// Start a goroutine parsing the log and dispatching block information.
+	logStream, err := node.StreamLog()
+	if err != nil {
+		log.Printf("failed to obtain logs of node, will not be able to track blocks: %v", err)
+		return // do not start dispatch on error
 	}
+	n.wg.Add(1)
+	n.startDispatcher(Node(nodeId), logStream)
 }
 
-func (n *NodeLogDispatcher) AfterNodeRemoval(node driver.Node) {
-	n.nodesLock.Lock()
-	defer n.nodesLock.Unlock()
-
-	nodeId := node.GetLabel()
-	delete(n.nodes, Node(nodeId))
+func (n *NodeLogDispatcher) AfterNodeRemoval(_ driver.Node) {
 }
 
 func (n *NodeLogDispatcher) AfterApplicationCreation(driver.Application) {
 	// ignored
-}
-
-// getNodes returns all nodes so far accumulated in this registry.
-func (n *NodeLogDispatcher) getNodes() []Node {
-	n.nodesLock.Lock()
-	defer n.nodesLock.Unlock()
-
-	res := make([]Node, 0, len(n.nodes))
-	for k := range n.nodes {
-		res = append(res, k)
-	}
-	return res
-}
-
-// Size returns the count of nodes accumulated in this registry.
-func (n *NodeLogDispatcher) getNumNodes() int {
-	n.nodesLock.Lock()
-	defer n.nodesLock.Unlock()
-
-	return len(n.nodes)
 }
 
 func (n *NodeLogDispatcher) startDispatcher(node Node, reader io.ReadCloser) {
