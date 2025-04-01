@@ -8,6 +8,12 @@ name: Network Consistency
 # The duration of the scenario's runtime, in seconds.
 duration: 180
 
+# Older client versions does not support Allegro, i.e., we must disable it.
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: false
+
 # The network scenario to exercise.
 nodes:
   - name: observer-A
