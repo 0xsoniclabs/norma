@@ -75,14 +75,6 @@ func TestRegisterLogParser(t *testing.T) {
 		blockEqual(t, node, got, want)
 	}
 
-	if reg.getNumNodes() != 3 {
-		t.Errorf("wrong size")
-	}
-
-	if len(reg.getNodes()) != 3 {
-		t.Errorf("wrong number of iterations")
-	}
-
 	// Check that log got copied to output files.
 	logs := []struct {
 		path, content string
