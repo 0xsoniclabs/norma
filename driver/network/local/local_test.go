@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"math/big"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -615,6 +617,96 @@ func TestLocalNetwork_FailingFlagPropagated(t *testing.T) {
 		if !node.IsExpectedFailure() {
 			t.Errorf("node is not failing: %s", node.GetLabel())
 		}
+	}
+
+}
+
+func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
+	t.Parallel()
+
+	// jenkins uses different access privileges for docker
+	// i.e. we need to create a temporary directory in /tmp for docker mount
+	// as the test cleanup cannot delete the directory if the mount is in the subdirectory of this test.
+	temp, err := os.MkdirTemp("/tmp", fmt.Sprintf("%s-docker-volume-*", t.Name()))
+	if err != nil {
+		t.Fatalf("failed to create temporary directory: %v", err)
+	}
+	defer func() {
+		os.RemoveAll(temp)
+	}()
+
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators, OutputDir: temp}
+	net, err := NewLocalNetwork(&config)
+	if err != nil {
+		t.Fatalf("failed to create new local network: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := net.Shutdown(); err != nil {
+			t.Fatalf("failed to shut down network: %v", err)
+		}
+	})
+
+	dataVolume := "abcd"
+	node, err := net.CreateNode(&driver.NodeConfig{
+		Name:       "node",
+		DataVolume: &dataVolume,
+		Image:      driver.DefaultClientDockerImageName,
+	})
+	if err != nil {
+		t.Fatalf("failed to create node: %v", err)
+	}
+
+	getModificationTime := func() (*time.Time, []string, error) {
+		var carmenModTime *time.Time
+		var visitedDirs []string
+		localDirBinding := fmt.Sprintf("%s/%s", temp, dataVolume)
+		err := filepath.Walk(localDirBinding, func(path string, info os.FileInfo, err error) error {
+			visitedDirs = append(visitedDirs, path)
+			if strings.HasSuffix(path, "transactions.rlp") {
+				carmenModTime = new(time.Time)
+				*carmenModTime = info.ModTime()
+			}
+			return nil
+		})
+		return carmenModTime, visitedDirs, err
+	}
+
+	// save modification time of the database lock
+	prevModTime, visitedDirs, err := getModificationTime()
+	if err != nil {
+		t.Fatalf("failed to get modification time: %v", err)
+	}
+	if prevModTime == nil {
+		t.Fatalf("directory does not contain database files: %v", visitedDirs)
+	}
+
+	// stop the node
+	if err := net.RemoveNode(node); err != nil {
+		t.Fatalf("failed to remove node: %v", err)
+	}
+	if err := node.Stop(); err != nil {
+		t.Fatalf("failed to stop node: %v", err)
+	}
+	if err := node.Cleanup(); err != nil {
+		t.Fatalf("failed to cleanup node: %v", err)
+	}
+
+	// re-run another node on the same data volume
+	if _, err := net.CreateNode(&driver.NodeConfig{
+		Name:       "node2",
+		DataVolume: &dataVolume,
+		Image:      driver.DefaultClientDockerImageName,
+	}); err != nil {
+		t.Fatalf("failed to create node: %v", err)
+	}
+
+	// the database lock should have been updated
+	currModTime, visitedDirs, err := getModificationTime()
+	if err != nil {
+		t.Fatalf("failed to get modification time: %v", err)
+	}
+	if got, want := *currModTime, *prevModTime; got.Equal(want) {
+		t.Errorf("got modification time %v, wanted modification time %v", got, want)
 	}
 
 }
