@@ -1,10 +1,12 @@
 #!/bin/bash
 
+yaml_dir="./scenarios/network_rules"
+
 # Path to the input YAML file
-input_yaml="network_rules_constraints.yml"
+input_yaml="${yaml_dir}/network_rules_constraints.yml"
 
 # Path to the output directory
-output_dir="./"
+output_dir="${yaml_dir}/"
 
 # Extract keys from rules_config.go
 keys=(
@@ -33,11 +35,11 @@ keys=(
 #  "BLOCK_VOTE_GAS"
 #  "EPOCH_VOTE_GAS"
 #  "MISBEHAVIOUR_PROOF_GAS"
-  "SHORT_ALLOC_PER_SEC: 0s"
+  "SHORT_ALLOC_PER_SEC: 0"
   "SHORT_MAX_ALLOC_PERIOD: 0s"
   "SHORT_STARTUP_ALLOC_PERIOD: 0s"
 #  "SHORT_MIN_STARTUP_GAS"
-  "LONG_ALLOC_PER_SEC: 0s"
+  "LONG_ALLOC_PER_SEC: 0"
   "LONG_MAX_ALLOC_PERIOD: 0s"
   "LONG_STARTUP_ALLOC_PERIOD: 0s"
 #  "LONG_MIN_STARTUP_GAS"
