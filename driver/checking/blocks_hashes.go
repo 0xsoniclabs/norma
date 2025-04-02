@@ -19,6 +19,7 @@ package checking
 import (
 	"fmt"
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -26,17 +27,17 @@ import (
 )
 
 func init() {
-	RegisterNetworkChecker("blocks_hashes", func(net driver.Network) Checker {
-		return &BlocksHashesChecker{net: net}
+	RegisterNetworkCheck("blocks_hashes", func(net driver.Network, monitor *monitoring.Monitor) Checker {
+		return &blocksHashesChecker{net: net}
 	})
 }
 
-// BlocksHashesChecker is a Checker checking if all Opera nodes provides the same hashes for all blocks/stateRoots.
-type BlocksHashesChecker struct {
+// blocksHashesChecker is a Checker checking if all Opera nodes provides the same hashes for all blocks/stateRoots.
+type blocksHashesChecker struct {
 	net driver.Network
 }
 
-func (c *BlocksHashesChecker) Check() (err error) {
+func (c *blocksHashesChecker) Check() (err error) {
 	nodes := c.net.GetActiveNodes()
 	fmt.Printf("checking hashes for %d nodes\n", len(nodes))
 

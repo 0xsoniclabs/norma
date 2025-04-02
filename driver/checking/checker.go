@@ -18,12 +18,12 @@ package checking
 
 import (
 	"errors"
-
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
 )
 
 // Factory is a function that creates a Checker.
-type Factory func(driver.Network) Checker
+type Factory func(driver.Network, *monitoring.Monitor) Checker
 
 // registry is a mapping of Checker registrations.
 type registry map[string]Factory
@@ -35,19 +35,19 @@ type Checker interface {
 	Check() error
 }
 
-// Checkers is a slice of Checker.
-type Checkers []Checker
+// Checks is a slice of Checker.
+type Checks []Checker
 
-// RegisterNetworkChecker registers a new Checker via its factory.
-func RegisterNetworkChecker(name string, factory Factory) {
+// RegisterNetworkCheck registers a new Checker via its factory.
+func RegisterNetworkCheck(name string, factory Factory) {
 	registrations[name] = factory
 }
 
-// InitNetworkCheckers initializes the Checkers with the given network.
-func InitNetworkCheckers(network driver.Network) Checkers {
+// InitNetworkChecks initializes the Checks with the given network.
+func InitNetworkChecks(network driver.Network, monitor *monitoring.Monitor) Checks {
 	var checkers []Checker
 	for _, factory := range registrations {
-		checker := factory(network)
+		checker := factory(network, monitor)
 		checkers = append(checkers, checker)
 	}
 
@@ -55,7 +55,7 @@ func InitNetworkCheckers(network driver.Network) Checkers {
 }
 
 // Check executes all checkers and returns an error if any of them find an issue.
-func (c Checkers) Check() error {
+func (c Checks) Check() error {
 	errs := make([]error, len(c))
 	for i, checker := range c {
 		errs[i] = checker.Check()
