@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 
+	globalflags "github.com/0xsoniclabs/norma/driver/global_flags"
 	"github.com/urfave/cli/v2"
 )
 
@@ -40,6 +41,13 @@ func main() {
 			&diffCommand,
 		},
 	}
+
+	app.Flags = append(app.Flags, globalflags.AllLoggerFlags...)
+
+	app.Before = func(c *cli.Context) error {
+		return globalflags.SetupLogger(c)
+	}
+
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
