@@ -14,6 +14,7 @@ import (
 
 func TestExportGenesis(t *testing.T) {
 	const ValidatorCount = 9
+	const MaxValidatorsCount = 100
 	const MaxBlockGas = 2000000
 
 	// Create a temporary file
@@ -74,7 +75,7 @@ func TestExportGenesis(t *testing.T) {
 		}
 	}
 
-	if got, want := validators, ValidatorCount; got != want {
+	if got, want := validators, MaxValidatorsCount; got != want {
 		t.Errorf("unexpected number of validators, wanted %v, got %v", want, got)
 	}
 }
