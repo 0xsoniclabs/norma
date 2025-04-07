@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	globalflags "github.com/0xsoniclabs/norma/driver/global_flags"
+	"github.com/0xsoniclabs/norma/driver/globalflags"
 	"github.com/urfave/cli/v2"
 )
 
