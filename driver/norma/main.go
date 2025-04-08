@@ -32,7 +32,7 @@ func main() {
 		HelpName:  "norma",
 		Usage:     "A set of tools for running network scenarios",
 		Copyright: "(c) 2023 Fantom Foundation",
-		Flags:     []cli.Flag{},
+		Flags:     globalflags.AllGlobalFlags,
 		Commands: []*cli.Command{
 			&checkCommand,
 			&runCommand,
@@ -40,12 +40,7 @@ func main() {
 			&renderCommand,
 			&diffCommand,
 		},
-	}
-
-	app.Flags = append(app.Flags, globalflags.AllLoggerFlags...)
-
-	app.Before = func(c *cli.Context) error {
-		return globalflags.SetupLogger(c)
+		Before: globalflags.ProcessGlobalFlags,
 	}
 
 	if err := app.Run(os.Args); err != nil {

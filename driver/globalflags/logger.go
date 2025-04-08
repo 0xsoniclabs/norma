@@ -12,14 +12,25 @@ import (
 var (
 	verbosityFlag = cli.IntFlag{
 		Name:  "verbosity",
-		Usage: "Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail",
+		Usage: "Changes logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail",
 		Value: 3,
 	}
 
 	vmoduleFlag = cli.StringFlag{
-		Name:  "vmodule",
-		Usage: "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
-		Value: "",
+		Name: "vmodule",
+		Usage: `Changes per-module verbosity:
+
+                  The syntax of the argument is a comma-separated list of pattern=N, where the
+                  pattern is a literal file name or "glob" pattern matching and N is a V level.
+
+                  For instance:
+                  - pattern="gopher.go=3"
+                  sets the V level to 3 in all Go files named "gopher.go"
+                  - pattern="foo=3"
+                  sets V to 3 in all files of any packages whose import path ends in "foo"
+                  - pattern="foo/*=3"
+                  sets V to 3 in all files of any packages whose import path contains "foo"
+`,
 	}
 )
 
@@ -28,6 +39,7 @@ var AllLoggerFlags = []cli.Flag{
 	&vmoduleFlag,
 }
 
+// SetupLogger sets up the logger for the application using the provided context.
 func SetupLogger(ctx *cli.Context) error {
 
 	output := io.Writer(os.Stdout)
