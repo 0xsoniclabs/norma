@@ -25,6 +25,7 @@ import (
 func TestGenerateJsonGenesis(t *testing.T) {
 	// configure expected variables
 	const ValidatorsCount = 9
+	const MaxValidatorsCount = 100
 
 	// Create a temporary file
 	tmpFile := path.Join(t.TempDir(), "genesis.json")
@@ -64,7 +65,7 @@ func TestGenerateJsonGenesis(t *testing.T) {
 	}
 
 	// add validators to expected accounts
-	validators := makefakegenesis.GetFakeValidators(ValidatorsCount)
+	validators := makefakegenesis.GetFakeValidators(MaxValidatorsCount)
 	totalSupply := utils.ToFtm(1000_000_000)
 	supplyEach := new(big.Int).Div(totalSupply, big.NewInt(int64(len(validators))))
 	for _, validator := range validators {
@@ -93,6 +94,7 @@ func TestGenerateJsonGenesis(t *testing.T) {
 		}
 	}
 
+	validators = validators[0:ValidatorsCount]
 	var delegations []drivercall.Delegation
 	for _, val := range validators {
 		delegations = append(delegations, drivercall.Delegation{
