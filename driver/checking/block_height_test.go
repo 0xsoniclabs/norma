@@ -41,9 +41,10 @@ func TestBlockHeightCheckerValid(t *testing.T) {
 	rpc.EXPECT().Call(gomock.Any(), "eth_blockNumber").Times(2).SetArg(0, blockHeight)
 	rpc.EXPECT().Close().Times(2)
 
-	err := new(BlockHeightChecker).Check(net)
+	c := blockHeightChecker{net: net}
+	err := c.Check()
 	if err != nil {
-		t.Errorf("unexpected error from BlockHeightChecker: %v", err)
+		t.Errorf("unexpected error from blockHeightChecker: %v", err)
 	}
 }
 
@@ -77,9 +78,10 @@ func TestBlockHeightCheckerInvalid(t *testing.T) {
 			rpc1.EXPECT().Close()
 			rpc2.EXPECT().Close()
 
-			err := new(BlockHeightChecker).Check(net)
+			c := blockHeightChecker{net: net}
+			err := c.Check()
 			if err == nil || !strings.Contains(err.Error(), "reports too old block") {
-				t.Errorf("unexpected error from BlockHeightChecker: %v", err)
+				t.Errorf("unexpected error from blockHeightChecker: %v", err)
 			}
 		})
 	}
@@ -108,7 +110,8 @@ func TestBlockHeight_ExpectedFailingNode(t *testing.T) {
 		rpc.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, "10"), // block is late
 	)
 
-	if err := new(BlockHeightChecker).Check(net); err != nil {
+	c := blockHeightChecker{net: net}
+	if err := c.Check(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -136,7 +139,8 @@ func TestBlockHeight_NoFailure_When_Expected(t *testing.T) {
 		rpc.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, "1000"),
 	)
 
-	if err := new(BlockHeightChecker).Check(net); err == nil || !strings.Contains(err.Error(), "unexpected failure set to provide the block height") {
+	c := blockHeightChecker{net: net}
+	if err := c.Check(); err == nil || !strings.Contains(err.Error(), "unexpected failure set to provide the block height") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

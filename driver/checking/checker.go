@@ -18,23 +18,47 @@ package checking
 
 import (
 	"errors"
-
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
 )
 
-// Checker do the network consistency check at the end of the scenario.
+// Factory is a function that creates a Checker.
+type Factory func(driver.Network, *monitoring.Monitor) Checker
+
+// registry is a mapping of Checker registrations.
+type registry map[string]Factory
+
+var registrations = make(registry)
+
+// Checker does the consistency check at the end of the scenario.
 type Checker interface {
-	Check(net driver.Network) error
+	Check() error
 }
 
-func CheckNetworkConsistency(net driver.Network) error {
-	checkers := []Checker{
-		new(BlockHeightChecker),
-		new(BlocksHashesChecker),
+// Checks is a slice of Checker.
+type Checks []Checker
+
+// RegisterNetworkCheck registers a new Checker via its factory.
+func RegisterNetworkCheck(name string, factory Factory) {
+	registrations[name] = factory
+}
+
+// InitNetworkChecks initializes the Checks with the given network.
+func InitNetworkChecks(network driver.Network, monitor *monitoring.Monitor) Checks {
+	var checkers []Checker
+	for _, factory := range registrations {
+		checker := factory(network, monitor)
+		checkers = append(checkers, checker)
 	}
-	errs := make([]error, len(checkers))
-	for i, checker := range checkers {
-		errs[i] = checker.Check(net)
+
+	return checkers
+}
+
+// Check executes all checkers and returns an error if any of them find an issue.
+func (c Checks) Check() error {
+	errs := make([]error, len(c))
+	for i, checker := range c {
+		errs[i] = checker.Check()
 	}
 	return errors.Join(errs...)
 }

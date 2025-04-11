@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/0xsoniclabs/norma/driver/checking"
 	"golang.org/x/exp/maps"
 	"io/fs"
 	"io/ioutil"
@@ -241,11 +242,17 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 		}
 	}()
 
+	var checks []checking.Checker
+	if !skipChecks {
+		// Initialize network consistency checks.
+		checks = checking.InitNetworkChecks(net, monitor)
+	}
+
 	// Run scenario.
 	fmt.Printf("Running '%s' ...\n", path)
 	logger := startProgressLogger(monitor, net)
 	defer logger.shutdown()
-	err = executor.Run(clock, net, &scenario, skipChecks)
+	err = executor.Run(clock, net, &scenario, checks)
 	if err != nil {
 		return err
 	}

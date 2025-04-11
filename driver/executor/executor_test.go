@@ -18,6 +18,7 @@ package executor
 
 import (
 	"fmt"
+	"github.com/0xsoniclabs/norma/driver/checking"
 	"reflect"
 	"syscall"
 	"testing"
@@ -37,7 +38,7 @@ func TestExecutor_RunEmptyScenario(t *testing.T) {
 		Validators: []parser.Validator{{Name: "validator"}},
 	}
 
-	if err := Run(clock, net, &scenario, true); err != nil {
+	if err := Run(clock, net, &scenario, nil); err != nil {
 		t.Errorf("failed to run empty scenario: %v", err)
 	}
 	want := Seconds(10)
@@ -72,7 +73,7 @@ func TestExecutor_RunSingleNodeScenario(t *testing.T) {
 		node.EXPECT().Cleanup(),
 	)
 
-	if err := Run(clock, net, &scenario, true); err != nil {
+	if err := Run(clock, net, &scenario, nil); err != nil {
 		t.Errorf("failed to run scenario: %v", err)
 	}
 	want := Seconds(10)
@@ -115,7 +116,7 @@ func TestExecutor_RunMultipleNodeScenario(t *testing.T) {
 		node2.EXPECT().Cleanup(),
 	)
 
-	if err := Run(clock, net, &scenario, true); err != nil {
+	if err := Run(clock, net, &scenario, nil); err != nil {
 		t.Errorf("failed to run scenario: %v", err)
 	}
 	want := Seconds(10)
@@ -149,7 +150,7 @@ func TestExecutor_RunSingleApplicationScenario(t *testing.T) {
 	app.EXPECT().Start()
 	app.EXPECT().Stop()
 
-	if err := Run(clock, net, &scenario, true); err != nil {
+	if err := Run(clock, net, &scenario, nil); err != nil {
 		t.Errorf("failed to run scenario: %v", err)
 	}
 	want := Seconds(10)
@@ -188,7 +189,7 @@ func TestExecutor_RunMultipleApplicationScenario(t *testing.T) {
 	app2.EXPECT().Start()
 	app2.EXPECT().Stop()
 
-	if err := Run(clock, net, &scenario, true); err != nil {
+	if err := Run(clock, net, &scenario, nil); err != nil {
 		t.Errorf("failed to run scenario: %v", err)
 	}
 	want := Seconds(10)
@@ -221,7 +222,8 @@ func TestExecutor_TestUserAbort(t *testing.T) {
 		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	}).Return(node, nil)
 
-	if err := Run(clock, net, &scenario, true); err == nil {
+	checks := checking.InitNetworkChecks(net, nil)
+	if err := Run(clock, net, &scenario, checks); err == nil {
 		t.Errorf("a user interrupt error should be reported")
 	}
 	want := Seconds(1)
@@ -250,7 +252,7 @@ func TestExecutor_scheduleNetworkRulesEvents(t *testing.T) {
 		net.EXPECT().ApplyNetworkRules(map[string]string{"MAX_EPOCH_GAS": "1500000000000"}),
 	)
 
-	if err := Run(clock, net, &scenario, true); err != nil {
+	if err := Run(clock, net, &scenario, nil); err != nil {
 		t.Errorf("failed to run scenario: %v", err)
 	}
 }

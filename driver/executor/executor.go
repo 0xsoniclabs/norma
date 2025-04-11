@@ -32,7 +32,7 @@ import (
 // Run executes the given scenario on the given network using the provided clock
 // as a time source. Execution will fail (fast) if the scenario is not valid (see
 // Scenario's Check() function).
-func Run(clock Clock, network driver.Network, scenario *parser.Scenario, skipConsistencyCheck bool) error {
+func Run(clock Clock, network driver.Network, scenario *parser.Scenario, checks checking.Checks) error {
 	if err := scenario.Check(); err != nil {
 		return err
 	}
@@ -46,10 +46,10 @@ func Run(clock Clock, network driver.Network, scenario *parser.Scenario, skipCon
 	}))
 
 	// schedule network consistency just before the end of simulation
-	if !skipConsistencyCheck {
+	if checks != nil {
 		queue.add(toSingleEvent(endTime-1, "consistency check", func() error {
 			log.Printf("Checking network consistency ...\n")
-			return checking.CheckNetworkConsistency(network)
+			return checks.Check()
 		}))
 	} else {
 		fmt.Printf("Network checks skipped\n")

@@ -7,6 +7,12 @@ name: Network Version Updates
 # The duration of the scenario's runtime, in seconds.
 duration: 180
 
+# Older client versions does not support Allegro, i.e., we must disable it.
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: false
+
 # Initial validator nodes in the network.
 validators:
   - name: validator-v2.0.2

@@ -400,7 +400,7 @@ var maxFreeParents = func(value string, rules *opera.Rules) error {
 }
 
 var maxExtraData = func(value string, rules *opera.Rules) error {
-	number, err := strconv.ParseUint(value, 10, 32)
+	number, err := strconv.ParseUint(value, 10, 64)
 	rules.Dag.MaxExtraData = uint32(number)
 	return err
 }

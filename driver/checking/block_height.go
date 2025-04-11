@@ -18,19 +18,26 @@ package checking
 
 import (
 	"fmt"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"maps"
 	"strconv"
 	"strings"
-
-	"github.com/0xsoniclabs/norma/driver"
 )
 
-// BlockHeightChecker is a Checker checking if all Opera nodes achieved the same block height.
-type BlockHeightChecker struct {
+func init() {
+	RegisterNetworkCheck("block_height", func(net driver.Network, monitor *monitoring.Monitor) Checker {
+		return &blockHeightChecker{net: net}
+	})
 }
 
-func (*BlockHeightChecker) Check(net driver.Network) error {
-	nodes := net.GetActiveNodes()
+// blockHeightChecker is a Checker checking if all Opera nodes achieved the same block height.
+type blockHeightChecker struct {
+	net driver.Network
+}
+
+func (c *blockHeightChecker) Check() error {
+	nodes := c.net.GetActiveNodes()
 	fmt.Printf("checking block heights for %d nodes\n", len(nodes))
 	heights := make([]int64, len(nodes))
 	maxHeight := int64(0)
