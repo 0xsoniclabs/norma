@@ -118,6 +118,7 @@ nodes:
     client:
       imagename: main
       type: validator
+      data_volume: abcd 	
 
 applications:
   - name: lottery
@@ -142,9 +143,19 @@ applications:
 `
 
 func TestParseWithClientTypeWorks(t *testing.T) {
-	_, err := ParseBytes([]byte(withClientType))
+	scenario, err := ParseBytes([]byte(withClientType))
 	if err != nil {
 		t.Fatalf("parsing of input failed: %v", err)
+	}
+
+	if got, want := scenario.Nodes[0].Client.ImageName, "main"; got != want {
+		t.Errorf("unexpected value: got: %v, want: %v", got, want)
+	}
+	if got, want := scenario.Nodes[0].Client.Type, "validator"; got != want {
+		t.Errorf("unexpected value: got: %v, want: %v", got, want)
+	}
+	if got, want := *scenario.Nodes[0].Client.DataVolume, "abcd"; got != want {
+		t.Errorf("unexpected value: got: %v, want: %v", got, want)
 	}
 }
 
