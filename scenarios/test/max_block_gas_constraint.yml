@@ -1,0 +1,41 @@
+# This scenario simulates a network running a node.
+# At certain points, network rules are updated to set
+# max block gas to a value that is out of allowed range.
+# It is tested that this change is ignored, and the network
+# keeps running.
+
+# The name of the scenario
+name: Max Block Gas
+
+# The duration of the scenario's runtime, in seconds.
+duration: 60
+
+# Start with shorted epoch duration to reflect the network rules updates.
+network_rules:
+  genesis:
+    MAX_EPOCH_DURATION: 10s
+  updates:
+    - time: 25
+      rules:
+        MAX_BLOCK_GAS: 100000  # this limit is too low
+
+
+# In the network, there is a few applications producing the load.
+applications:
+  - name: counter
+    type: counter
+    users: 10           # number of users using the app
+    rate:
+      constant: 10    # Tx/s
+
+  - name: erc20
+    type: erc20
+    users: 10           # number of users using the app
+    rate:
+      constant: 10     # Tx/s
+
+  - name: uniswap
+    type: uniswap
+    users: 10           # number of users using the app
+    rate:
+      constant: 10     # Tx/s
