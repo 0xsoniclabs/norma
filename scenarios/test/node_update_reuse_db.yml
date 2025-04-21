@@ -1,0 +1,48 @@
+# This scenario simulates a network with an update of a node.
+# The node is stopped, and an updated version is started with the same database.
+
+# The name of the scenario
+name: Node Update Reuse DB
+
+# The duration of the scenario's runtime, in seconds.
+duration: 180
+
+# Initial validator nodes in the network.
+validators:
+  - name: validator-v2.0.2
+    imagename: "sonic:v2.0.0"
+
+# Append updated nodes in the network.
+nodes:
+  - name: node-legacy
+    start: 30
+    end: 90
+    client:
+      imagename: "sonic:v2.0.0"
+      data_volume: "volume-A"   # the database will be mounted to this persisted volume
+
+  - name: node-latest
+    start: 120
+    client:
+      imagename: "sonic:latest"
+      data_volume: "volume-A"   # the database will be mounted to this persisted volume
+
+# In the network, there is a few applications producing the load.
+applications:
+  - name: counter
+    type: counter
+    users: 100           # number of users using the app
+    rate:
+      constant: 10    # Tx/s
+
+  - name: erc20
+    type: erc20
+    users: 100           # number of users using the app
+    rate:
+      constant: 10    # Tx/s
+
+  - name: uniswap
+    type: uniswap
+    users: 100           # number of users using the app
+    rate:
+      constant: 10     # Tx/s
