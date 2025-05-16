@@ -20,12 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/0xsoniclabs/norma/genesistools/genesis"
-	"github.com/0xsoniclabs/norma/genesistools/network"
 	"log"
 	"math/rand"
 	"sync"
 	"sync/atomic"
+
+	"github.com/0xsoniclabs/norma/genesistools/genesis"
+	"github.com/0xsoniclabs/norma/genesistools/network"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
@@ -280,8 +281,9 @@ func (n *LocalNetwork) SendTransaction(tx *types.Transaction) {
 }
 
 func (n *LocalNetwork) DialRandomRpc() (rpcdriver.Client, error) {
-	nodes := n.GetActiveNodes()
-	return nodes[rand.Intn(len(nodes))].DialRpc()
+	// nodes := n.GetActiveNodes()
+	//return nodes[rand.Intn(len(nodes))].DialRpc()
+	return n.validators[rand.Intn(len(n.validators))].DialRpc()
 }
 
 func (n *LocalNetwork) ApplyNetworkRules(rules driver.NetworkRules) error {
