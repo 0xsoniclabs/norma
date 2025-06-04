@@ -21,15 +21,35 @@ network_rules:
 # Initial validator nodes in the network.
 validators:
   - name: validator-latest
+    instances: 5
     imagename: "sonic"
 
 # Append updated nodes in the network.
 nodes:
+  - name: node-v200
+    start: 60   # will start when the base fee is already updated
+    client:
+      imagename: "sonic:v2.0.0"
+      type: validator
+  - name: node-v201
+    start: 60   # will start when the base fee is already updated
+    client:
+      imagename: "sonic:v2.0.1"
+      type: validator
   - name: node-v202
-    instances: 1
     start: 60   # will start when the base fee is already updated
     client:
       imagename: "sonic:v2.0.2"
+      type: validator
+  - name: node-v203
+    start: 60   # will start when the base fee is already updated
+    client:
+      imagename: "sonic:v2.0.3"
+      type: validator
+  - name: node-v204
+    start: 60   # will start when the base fee is already updated
+    client:
+      imagename: "sonic:v2.0.4"
       type: validator
 
 # In the network, there is a few applications producing the load.

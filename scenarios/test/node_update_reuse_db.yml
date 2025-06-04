@@ -5,7 +5,7 @@
 name: Node Update Reuse DB
 
 # The duration of the scenario's runtime, in seconds.
-duration: 180
+duration: 480
 
 # Initial validator nodes in the network.
 validators:
@@ -21,8 +21,37 @@ nodes:
       imagename: "sonic:v2.0.0"
       data_volume: "volume-A"   # the database will be mounted to this persisted volume
 
-  - name: node-latest
+  - name: node-v201
     start: 120
+    end: 180
+    client:
+      imagename: "sonic:v2.0.1"
+      data_volume: "volume-A"   # the database will be mounted to this persisted volume
+
+  - name: node-v202
+    start: 120
+    end: 180
+    client:
+      imagename: "sonic:v2.0.2"
+      data_volume: "volume-A"   # the database will be mounted to this persisted volume
+
+  - name: node-v203
+    start: 210
+    end: 270
+    client:
+      imagename: "sonic:v2.0.3"
+      data_volume: "volume-A"   # the database will be mounted to this persisted volume
+
+  - name: node-v204
+    start: 300
+    end: 330
+    client:
+      imagename: "sonic:v2.0.4"
+      data_volume: "volume-A"   # the database will be mounted to this persisted volume
+
+  - name: node-latest
+    start: 390
+    end: 420
     client:
       imagename: "sonic:latest"
       data_volume: "volume-A"   # the database will be mounted to this persisted volume

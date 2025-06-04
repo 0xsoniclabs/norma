@@ -16,14 +16,17 @@ network_rules:
 
 # Initial validator nodes in the network.
 validators:
-  - name: validator-dev
+  - name: validator-v2.0.0
+    imagename: "sonic:v2.0.0"
+  - name: validator-v2.0.1
+    imagename: "sonic:v2.0.1"
   - name: validator-v2.0.2
     imagename: "sonic:v2.0.2"
-  - name: validator-v2.0.1
-    instances: 2
-    imagename: "sonic:v2.0.1"
+  - name: validator-v2.0.3
+    imagename: "sonic:v2.0.3"
+  - name: validator-v2.0.4
+    imagename: "sonic:v2.0.4"
   - name: validator-latest
-    instances: 3
     imagename: "sonic"
 
 

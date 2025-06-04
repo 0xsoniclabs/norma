@@ -3,7 +3,7 @@
 # It deploys a few applications and sends a decent number of transactions.
 
 # The name of the scenario
-name: Network Consistency
+name: Various Client Version
 
 # The duration of the scenario's runtime, in seconds.
 duration: 180
@@ -13,6 +13,11 @@ network_rules:
   genesis:
     UPGRADES_SONIC: true
     UPGRADES_ALLEGRO: false
+
+validators:
+- name: validator-latest
+  instances: 3
+  imagename: "sonic"
 
 # The network scenario to exercise.
 nodes:

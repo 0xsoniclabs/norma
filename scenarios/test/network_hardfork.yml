@@ -9,12 +9,24 @@ duration: 180
 
 # Initial validator nodes in the network.
 validators:
-  - name: validators
-    instances: 3
-    imagename: "sonic:latest"
+  - name: validator-latest
+    failing: false              # this node should work after the hardfork
+    imagename: "sonic"
+  - name: validator-v2.0.0
+    failing: true
+    imagename: "sonic:v2.0.0"   # this node should stop working after the hardfork
+  - name: validator-v2.0.1
+    failing: true
+    imagename: "sonic:v2.0.1"   # this node should stop working after the hardfork
   - name: validator-v2.0.2
     failing: true
     imagename: "sonic:v2.0.2"   # this node should stop working after the hardfork
+  - name: validator-v2.0.3
+    failing: true
+    imagename: "sonic:v2.0.3"   # this node should stop working after the hardfork
+  - name: validator-v2.0.4
+    failing: true
+    imagename: "sonic:v2.0.4"   # this node should stop working after the hardfork
 
 # Start with the hardfork disabled
 # while enabling the hardfork later
@@ -29,13 +41,36 @@ network_rules:
         UPGRADES_ALLEGRO: true  # hardfork enabled
 
 nodes:
+  - name: node-latest
+    start: 30
+    failing: false
+    client:
+      imagename: "sonic"          # this node should work after the hardfork
+  - name: node-v200
+    start: 30
+    failing: true
+    client:
+      imagename: "sonic:v2.0.0"   # this node should stop working after the hardfork
+  - name: node-v201
+    start: 30
+    failing: true
+    client:
+      imagename: "sonic:v2.0.1"   # this node should stop working after the hardfork
   - name: node-v202
     start: 30
     failing: true
     client:
       imagename: "sonic:v2.0.2"   # this node should stop working after the hardfork
-  - name: node-latest
+  - name: node-v203
     start: 30
+    failing: true
+    client:
+      imagename: "sonic:v2.0.3"   # this node should stop working after the hardfork
+  - name: node-v204
+    start: 30
+    failing: true
+    client:
+      imagename: "sonic:v2.0.4"   # this node should stop working after the hardfork
 
 # In the network, there is a few applications producing the load.
 applications:
