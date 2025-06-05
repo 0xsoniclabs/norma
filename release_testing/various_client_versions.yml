@@ -1,0 +1,90 @@
+# This scenario simulates a network with the various versions of the client.
+# It stars a few nodes each running a different version of the client.
+# It deploys a few applications and sends a decent number of transactions.
+
+# The name of the scenario
+name: Network Consistency
+
+# The duration of the scenario's runtime, in seconds.
+duration: 180
+
+# Older client versions does not support Allegro, i.e., we must disable it.
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: false
+
+validators:
+  - name: validator-latest
+    instances: 3
+    imagename: "sonic"
+
+# The network scenario to exercise.
+nodes:
+  - name: obs-200
+    start: 10
+    client:
+      imagename: "sonic:v2.0.0"
+  - name: obs-201
+    start: 20
+    client:
+      imagename: "sonic:v2.0.1"
+  - name: obs-202
+    start: 30
+    client:
+      imagename: "sonic:v2.0.2"
+  - name: obs-203
+    start: 40
+    client:
+      imagename: "sonic:v2.0.3"
+  - name: obs-latest
+    start: 50
+    client:
+      imagename: "sonic"
+  - name: val-200
+    start: 10
+    client:
+      imagename: "sonic:v2.0.0"
+      type: validator
+  - name: val-201
+    start: 20
+    client:
+      imagename: "sonic:v2.0.1"
+      type: validator
+  - name: val-202
+    start: 30
+    client:
+      imagename: "sonic:v2.0.2"
+      type: validator
+  - name: val-203
+    start: 40
+    client:
+      imagename: "sonic:v2.0.3"
+      type: validator
+  - name: val-latest
+    start: 50
+    client:
+      imagename: "sonic"
+      type: validator
+
+# In the network, there is a few applications producing the load.
+applications:
+  - name: counter
+    type: counter
+    users: 20           # number of users using the app
+    rate:
+      constant: 10     # Tx/s
+
+  - name: erc20
+    type: erc20
+    start: 60
+    users: 20           # number of users using the app
+    rate:
+      constant: 10     # Tx/s
+
+  - name: uniswap
+    type: uniswap
+    start: 80
+    users: 20           # number of users using the app
+    rate:
+      constant: 10     # Tx/s

@@ -1,0 +1,63 @@
+# This scenario simulates a network with running old client versions from the start.
+# It starts later updated versions of the client to make sure the update succeeds.
+
+# The name of the scenario
+name: Network Updates Base Fee
+
+# The duration of the scenario's runtime, in seconds.
+duration: 180
+
+# There was a min base fee behaviour update between client versions
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: false
+    MIN_BASE_FEE: 1000000000
+  updates:
+    - time: 20
+      rules:
+        MIN_BASE_FEE: 1000000000000
+
+# Initial validator nodes in the network.
+validators:
+  - name: validator-v2.0.0
+    instances: 2
+    imagename: "sonic:v2.0.0"
+  - name: validator-v2.0.1
+    instances: 2
+    imagename: "sonic:v2.0.1"
+  - name: validator-v2.0.2
+    instances: 2
+    imagename: "sonic:v2.0.2"
+  - name: validator-v2.0.3
+    instances: 2
+    imagename: "sonic:v2.0.3"
+
+# Append updated nodes in the network.
+nodes:
+  - name: node-latest
+    instances: 5
+    start: 60   # will start when the base fee is already updated
+    client:
+      imagename: "sonic"
+      type: validator
+
+# In the network, there is a few applications producing the load.
+applications:
+  - name: counter
+    type: counter
+    users: 10           # number of users using the app
+    rate:
+      constant: 10    # Tx/s
+
+  - name: erc20
+    type: erc20
+    users: 10           # number of users using the app
+    rate:
+      constant: 10     # Tx/s
+
+  - name: uniswap
+    type: uniswap
+    users: 10           # number of users using the app
+    rate:
+      constant: 10     # Tx/s

@@ -1,0 +1,56 @@
+# This scenario simulates a network with the various versions of validators.
+# It stars a few startup validator nodes, each running a different version of the client.
+# It deploys a few applications and sends a decent number of transactions.
+
+# The name of the scenario
+name: Various Validator Versions
+
+# The duration of the scenario's runtime, in seconds.
+duration: 120
+
+# Older client versions does not support Allegro, i.e., we must disable it.
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: false
+
+# Initial validator nodes in the network.
+validators:
+  - name: validator-v2.0.0
+    instances: 2
+    imagename: "sonic:v2.0.0"
+  - name: validator-v2.0.1
+    instances: 2
+    imagename: "sonic:v2.0.1"
+  - name: validator-v2.0.2
+    instances: 2
+    imagename: "sonic:v2.0.2"
+  - name: validator-v2.0.3
+    instances: 3
+    imagename: "sonic:v2.0.3"
+  - name: validator-latest
+    instances: 2
+    imagename: "sonic"
+
+
+# In the network, there is a few applications producing the load.
+applications:
+  - name: counter
+    type: counter
+    users: 20           # number of users using the app
+    rate:
+      constant: 10     # Tx/s
+
+  - name: erc20
+    type: erc20
+    start: 60
+    users: 20           # number of users using the app
+    rate:
+      constant: 10     # Tx/s
+
+  - name: uniswap
+    type: uniswap
+    start: 80
+    users: 20           # number of users using the app
+    rate:
+      constant: 10     # Tx/s
