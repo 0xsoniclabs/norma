@@ -32,6 +32,9 @@ validators:
   - name: validator-v2.0.3
     instances: 2
     imagename: "sonic:v2.0.3"
+  - name: validator-v2.0.4
+    instances: 2
+    imagename: "sonic:v2.0.4"
 
 # Append updated nodes in the network.
 nodes:

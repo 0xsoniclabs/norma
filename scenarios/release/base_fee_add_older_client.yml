@@ -46,6 +46,11 @@ nodes:
     client:
       imagename: "sonic:v2.0.3"
       type: validator
+  - name: node-v204
+    start: 60   # will start when the base fee is already updated
+    client:
+      imagename: "sonic:v2.0.4"
+      type: validator
 
 # In the network, there is a few applications producing the load.
 applications:

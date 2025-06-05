@@ -22,6 +22,8 @@ validators:
     imagename: "sonic:v2.0.2"
   - name: validator-v2.0.3
     imagename: "sonic:v2.0.3"
+  - name: validator-v2.0.4
+    imagename: "sonic:v2.0.4"
   - name: validator-allegro
     imagename: "sonic"
 

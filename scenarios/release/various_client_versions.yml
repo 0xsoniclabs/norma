@@ -37,8 +37,12 @@ nodes:
     start: 40
     client:
       imagename: "sonic:v2.0.3"
-  - name: obs-latest
+  - name: obs-204
     start: 50
+    client:
+      imagename: "sonic:v2.0.4"
+  - name: obs-latest
+    start: 60
     client:
       imagename: "sonic"
   - name: val-200
@@ -61,8 +65,13 @@ nodes:
     client:
       imagename: "sonic:v2.0.3"
       type: validator
-  - name: val-latest
+  - name: val-204
     start: 50
+    client:
+      imagename: "sonic:v2.0.4"
+      type: validator
+  - name: val-latest
+    start: 60
     client:
       imagename: "sonic"
       type: validator
