@@ -63,7 +63,7 @@ func TestLoadGeneration_CanRealizeConstantTrafficShape(t *testing.T) {
 				count.Add(1)
 			})
 
-			rpcClient.EXPECT().ChainID(gomock.Any()).Return(big.NewInt(0), nil).AnyTimes()
+			rpcClient.EXPECT().ChainID(gomock.Any()).Return(big.NewInt(0xFA), nil).AnyTimes()
 			rpcClient.EXPECT().NonceAt(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(uint64(0), nil)
 			rpcClient.EXPECT().EstimateGas(gomock.Any(), gomock.Any()).AnyTimes().Return(uint64(100), nil)
 			rpcClient.EXPECT().SendTransaction(gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
