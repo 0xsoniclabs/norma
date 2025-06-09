@@ -32,7 +32,7 @@ func RegisterValidatorNode(backend ContractBackend) (int, error) {
 	newValId = int(lastValId.Int64()) + 1
 
 	privateKeyECDSA := evmcore.FakeKey(uint32(newValId))
-	txOpts, err := bind.NewKeyedTransactorWithChainID(privateKeyECDSA, big.NewInt(int64(opera.FakeNetRules(opera.SonicFeatures).NetworkID)))
+	txOpts, err := bind.NewKeyedTransactorWithChainID(privateKeyECDSA, big.NewInt(int64(opera.FakeNetRules(opera.GetSonicUpgrades()).NetworkID)))
 	if err != nil {
 		return 0, fmt.Errorf("failed to create txOpts; %v", err)
 	}
