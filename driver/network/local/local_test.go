@@ -522,13 +522,13 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images(t *testing.T) {
 		}()
 	}
 
-	gotChecksums := make(map[string]struct{})
+	gotChecksums := make([]string, 0)
 	for len(gotChecksums) < len(images) {
 		select {
 		case val := <-checksum:
-			gotChecksums[val] = struct{}{}
+			gotChecksums = append(gotChecksums, val)
 		case <-time.After(180 * time.Second):
-			t.Fatalf("timeout while waiting for checksums")
+			t.Fatalf("timeout while waiting for checksums; got: %d, want: %d", len(gotChecksums), len(images))
 		}
 	}
 
