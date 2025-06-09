@@ -31,7 +31,7 @@ func TestGenerateJsonGenesis(t *testing.T) {
 	tmpFile := path.Join(t.TempDir(), "genesis.json")
 
 	// Call the GenerateJsonGenesis function
-	rules := opera.FakeNetRules(opera.AllegroFeatures)
+	rules := opera.FakeNetRules(opera.GetAllegroUpgrades())
 	if err := GenerateJsonGenesis(tmpFile, ValidatorsCount, &rules); err != nil {
 		t.Fatalf("failed to generate genesis.json: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestGenerateJsonGenesis(t *testing.T) {
 	}
 
 	// Verify the content
-	expected := opera.FakeNetRules(opera.AllegroFeatures)
+	expected := opera.FakeNetRules(opera.GetAllegroUpgrades())
 
 	if got, want := jsonGenesis.Rules, expected; !reflect.DeepEqual(got, want) {
 		t.Errorf("unexpected rules, wanted %v, got %v", want, got)

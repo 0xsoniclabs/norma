@@ -488,7 +488,9 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images(t *testing.T) {
 	})
 
 	images := []string{"sonic", "sonic:local", "sonic:v2.0.2", "sonic:v2.0.1", "sonic:v2.0.0"}
-	checksum := make(chan string)
+
+	type tuple struct{ key, val string }
+	checksum := make(chan tuple)
 
 	for i, image := range images {
 		node, err := net.CreateNode(&driver.NodeConfig{
@@ -515,24 +517,30 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images(t *testing.T) {
 				if strings.Contains(line, "Sonic binary checksum:") {
 					parts := strings.SplitN(line, ":", 2)
 					if len(parts) == 2 {
-						checksum <- strings.TrimSpace(parts[1])
+						checksum <- tuple{image, strings.TrimSpace(parts[1])}
 					}
 				}
 			}
 		}()
 	}
 
-	gotChecksums := make([]string, 0)
-	for len(gotChecksums) < len(images) {
+	gotSonicChecksums := make(map[string]struct{})
+	gotOtherChecksums := make(map[string]struct{})
+	for len(gotSonicChecksums)+len(gotOtherChecksums) < len(images) {
 		select {
-		case val := <-checksum:
-			gotChecksums = append(gotChecksums, val)
+		case tuple := <-checksum:
+			switch tuple.key {
+			case "sonic":
+				gotSonicChecksums[tuple.val] = struct{}{}
+			default:
+				gotOtherChecksums[tuple.val] = struct{}{}
+			}
 		case <-time.After(180 * time.Second):
-			t.Fatalf("timeout while waiting for checksums; got: %d, want: %d", len(gotChecksums), len(images))
+			t.Fatalf("timeout while waiting for checksums; got: %d, want: %d", len(gotSonicChecksums)+len(gotOtherChecksums), len(images))
 		}
 	}
 
-	if got, want := len(gotChecksums), len(images); got != want {
+	if got, want := len(gotSonicChecksums)+len(gotOtherChecksums), len(images); got != want {
 		t.Errorf("invalid number of checksum, got: %d, want %d", got, want)
 	}
 

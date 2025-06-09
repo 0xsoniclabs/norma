@@ -20,7 +20,7 @@ func ApplyNetworkRules(backend ContractBackend, rules genesis.NetworkRules) erro
 		return fmt.Errorf("failed to get driver auth contract representation; %v", err)
 	}
 
-	originalRules := opera.FakeNetRules(opera.SonicFeatures)
+	originalRules := opera.FakeNetRules(opera.GetSonicUpgrades())
 	diff, err := genesis.GenerateJsonNetworkRulesUpdates(originalRules, rules)
 	if err != nil {
 		return fmt.Errorf("failed to generate network rules updates; %v", err)
