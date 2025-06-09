@@ -17,9 +17,9 @@ require (
 )
 
 require (
-	github.com/0xsoniclabs/carmen/go v0.0.0-20250318153505-712d1a76e929 // indirect
-	github.com/0xsoniclabs/sonic v0.0.0-20250328085816-83895ddcfcb2 // indirect
-	github.com/0xsoniclabs/tosca v0.0.0-20250221124739-3aac4e7427dc // indirect
+	github.com/0xsoniclabs/carmen/go v0.0.0-20250530111616-fabde4233b62 // indirect
+	github.com/0xsoniclabs/sonic v0.0.0-20250606134232-ceb286cb395e // indirect
+	github.com/0xsoniclabs/tosca v0.0.0-20250414093812-91b42e73396f // indirect
 	github.com/DataDog/zstd v1.5.6 // indirect
 	github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e // indirect
 	github.com/FactomProject/btcutilecc v0.0.0-20130527213604-d3a63a5752ec // indirect
@@ -112,6 +112,6 @@ require (
 
 replace github.com/0xsoniclabs/norma/genesistools => ./genesis
 
-replace github.com/ethereum/go-ethereum => github.com/0xsoniclabs/go-ethereum v0.0.0-20250210213022-86eca3554809
+replace github.com/ethereum/go-ethereum => github.com/0xsoniclabs/go-ethereum v0.0.0-20250403075908-a6b1c7063681
 
 replace github.com/Fantom-foundation/lachesis-base => github.com/Fantom-foundation/lachesis-base-sonic v0.0.0-20250212122819-abaef8bb9abb
