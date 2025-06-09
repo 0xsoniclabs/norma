@@ -3,17 +3,17 @@ module github.com/0xsoniclabs/norma/genesistools
 go 1.24.0
 
 require (
-	github.com/0xsoniclabs/sonic v0.0.0-20250328085816-83895ddcfcb2
+	github.com/0xsoniclabs/sonic v0.0.0-20250606134232-ceb286cb395e
 	github.com/Fantom-foundation/lachesis-base v0.0.0-20240116072301-a75735c4ef00
 	github.com/ethereum/go-ethereum v1.15.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli/v2 v2.27.5
 	go.uber.org/mock v0.4.0
 )
 
 require (
-	github.com/0xsoniclabs/carmen/go v0.0.0-20250318153505-712d1a76e929 // indirect
-	github.com/0xsoniclabs/tosca v0.0.0-20250221124739-3aac4e7427dc // indirect
+	github.com/0xsoniclabs/carmen/go v0.0.0-20250530111616-fabde4233b62 // indirect
+	github.com/0xsoniclabs/tosca v0.0.0-20250414093812-91b42e73396f // indirect
 	github.com/DataDog/zstd v1.5.6 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/VictoriaMetrics/fastcache v1.12.2 // indirect
@@ -85,6 +85,6 @@ require (
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
-replace github.com/ethereum/go-ethereum => github.com/0xsoniclabs/go-ethereum v0.0.0-20250210213022-86eca3554809
+replace github.com/ethereum/go-ethereum => github.com/0xsoniclabs/go-ethereum v0.0.0-20250403075908-a6b1c7063681
 
 replace github.com/Fantom-foundation/lachesis-base => github.com/Fantom-foundation/lachesis-base-sonic v0.0.0-20250212122819-abaef8bb9abb
