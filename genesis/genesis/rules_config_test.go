@@ -812,6 +812,7 @@ func TestGenerateJsonNetworkRulesUpdates_Exported_Json_Correct(t *testing.T) {
 			t.Run(test.key, func(t *testing.T) {
 				// Create a new Rules object
 				rules := opera.MainNetRules()
+				rules.Upgrades = opera.Upgrades{}
 
 				updates := make(NetworkRules)
 				updates[test.key] = test.value
