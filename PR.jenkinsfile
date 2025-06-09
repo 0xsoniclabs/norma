@@ -43,8 +43,8 @@ pipeline {
 
 		stage('Test Norma') {
 			steps {
-			    sh 'cd genesis && go test ./...'
-				sh 'go test ./...  -p 2 --parallel 2 --timeout 30m'
+				sh 'cd genesis && go test ./...'
+				sh 'go test ./... -v -p 1 --parallel 1 --timeout 30m'
 			}
 		}
 	}
