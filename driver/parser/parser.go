@@ -36,6 +36,7 @@ type Scenario struct {
 	Applications  []Application  `yaml:",omitempty"`
 	Cheats        []Cheat        `yaml:",omitempty"`
 	NetworkRules  NetworkRules   `yaml:"network_rules,omitempty"`
+	AdvanceEpoch  []AdvanceEpoch `yaml:"advance_epoch,omitempty"`
 }
 
 func (s *Scenario) GetRoundTripTime() time.Duration {
@@ -53,6 +54,12 @@ type networkRules map[string]string
 type NetworkRules struct {
 	Genesis networkRules         `yaml:",omitempty"`
 	Updates []NetworkRulesUpdate `yaml:",omitempty"`
+}
+
+// AdvanceEpoch defines how many epoch to advance at what timing
+type AdvanceEpoch struct {
+	Time   float32
+	Epochs *int `yaml:",omitempty"` // nil is interpreted as 1
 }
 
 // NetworkRulesUpdate defines a network rule update that can be applied at a specific time.

@@ -279,3 +279,32 @@ func (e *is[T]) String() string {
 func newIs[T any](node T) *is[T] {
 	return &is[T]{node}
 }
+
+func TestExecutor_scheduleAdvanceEpochEvents(t *testing.T) {
+	one, three, five, seven := 1, 3, 5, 7
+
+	clock := NewSimClock()
+	scenario := parser.Scenario{
+		Name:     "Test",
+		Duration: 10,
+		AdvanceEpoch: []parser.AdvanceEpoch{
+			parser.AdvanceEpoch{Time: 1, Epochs: &one},
+			parser.AdvanceEpoch{Time: 3, Epochs: &three},
+			parser.AdvanceEpoch{Time: 7, Epochs: &seven},
+			parser.AdvanceEpoch{Time: 5, Epochs: &five},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	gomock.InOrder(
+		net.EXPECT().AdvanceEpoch(1),
+		net.EXPECT().AdvanceEpoch(3),
+		net.EXPECT().AdvanceEpoch(5),
+		net.EXPECT().AdvanceEpoch(7),
+	)
+
+	if err := Run(clock, net, &scenario, nil); err != nil {
+		t.Errorf("failed to run scenario: %v", err)
+	}
+}

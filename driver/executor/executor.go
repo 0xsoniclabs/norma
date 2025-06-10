@@ -70,6 +70,13 @@ func Run(clock Clock, network driver.Network, scenario *parser.Scenario, checks 
 	for _, rule := range scenario.NetworkRules.Updates {
 		scheduleNetworkRulesEvents(rule, queue, network)
 	}
+	for _, adv := range scenario.AdvanceEpoch {
+		epochs := 1
+		if adv.Epochs != nil {
+			epochs = *adv.Epochs
+		}
+		scheduleAdvanceEpochEvents(adv.Time, epochs, queue, network)
+	}
 
 	// Register a handler for Ctrl+C events.
 	abort := make(chan os.Signal, 1)
@@ -321,5 +328,12 @@ func scheduleCheatEvents(cheat *parser.Cheat, queue *eventQueue, net driver.Netw
 func scheduleNetworkRulesEvents(rule parser.NetworkRulesUpdate, queue *eventQueue, network driver.Network) {
 	queue.add(toSingleEvent(Seconds(rule.Time), fmt.Sprintf("Applying network rules: %v", rule.Rules), func() error {
 		return network.ApplyNetworkRules(driver.NetworkRules(rule.Rules))
+	}))
+}
+
+// scheduleAdvanceEpochEvents schedules an event to advance epoch
+func scheduleAdvanceEpochEvents(timing float32, epochIncrement int, queue *eventQueue, network driver.Network) {
+	queue.add(toSingleEvent(Seconds(timing), fmt.Sprintf("Advancing Epoch by %d", epochIncrement), func() error {
+		return network.AdvanceEpoch(epochIncrement)
 	}))
 }
