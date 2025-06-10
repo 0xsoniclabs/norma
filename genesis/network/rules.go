@@ -2,8 +2,6 @@ package network
 
 import (
 	"fmt"
-	"math/big"
-
 	"github.com/0xsoniclabs/norma/genesistools/genesis"
 	"github.com/0xsoniclabs/sonic/evmcore"
 	"github.com/0xsoniclabs/sonic/gossip/contract/driverauth100"
@@ -11,6 +9,7 @@ import (
 	"github.com/0xsoniclabs/sonic/opera/contracts/driverauth"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/core/types"
+	"math/big"
 )
 
 // ApplyNetworkRules updates the network rules on the network.
