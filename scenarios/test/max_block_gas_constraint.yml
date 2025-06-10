@@ -14,6 +14,7 @@ duration: 60
 network_rules:
   genesis:
     MAX_EPOCH_DURATION: 10s
+    UPGRADES_ALLEGRO: true
   updates:
     - time: 25
       rules:
