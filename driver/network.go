@@ -73,6 +73,9 @@ type Network interface {
 
 	// ApplyNetworkRules applies the given network rules to the network.
 	ApplyNetworkRules(rules NetworkRules) error
+
+	// AdvanceEpoch advances an epoch by the given number.
+	AdvanceEpoch(epochIncrement int) error
 }
 
 // NetworkConfig is a collection of network parameters to be used by factories
