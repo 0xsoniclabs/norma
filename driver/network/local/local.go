@@ -294,6 +294,16 @@ func (n *LocalNetwork) ApplyNetworkRules(rules driver.NetworkRules) error {
 	return network.ApplyNetworkRules(client, genesis.NetworkRules(rules))
 }
 
+func (n *LocalNetwork) AdvanceEpoch(epochIncrement int) error {
+	client, err := n.DialRandomRpc()
+	if err != nil {
+		return fmt.Errorf("failed to connect to network: %w", err)
+	}
+	defer client.Close()
+
+	return network.AdvanceEpoch(client, epochIncrement)
+}
+
 // dialRandomGenesisValidatorRpc dials a random genesis validator node.
 // When network starts and still doesn't have any traffic, then first transaction must come from validator node.
 // Caused by: the regular nodes even when connected won't send transactions from their txpool,

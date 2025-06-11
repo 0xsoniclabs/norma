@@ -94,6 +94,16 @@ func (s *Scenario) Check() error {
 		}
 	}
 
+	for _, adv := range s.AdvanceEpoch {
+		if adv.Time < 0 || adv.Time > s.Duration {
+			errs = append(errs, fmt.Errorf("invalid timing for advance epoch: %f", adv.Time))
+		}
+
+		if adv.Epochs != nil && *adv.Epochs < 1 {
+			errs = append(errs, fmt.Errorf("minimum epoch to advance must be 1, got: %d", *adv.Epochs))
+		}
+	}
+
 	return errors.Join(errs...)
 }
 

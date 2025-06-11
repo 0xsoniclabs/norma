@@ -5,6 +5,7 @@
 //
 //	mockgen -source network.go -destination network_mock.go -package driver
 //
+
 // Package driver is a generated GoMock package.
 package driver
 
@@ -20,6 +21,7 @@ import (
 type MockNetwork struct {
 	ctrl     *gomock.Controller
 	recorder *MockNetworkMockRecorder
+	isgomock struct{}
 }
 
 // MockNetworkMockRecorder is the mock recorder for MockNetwork.
@@ -37,6 +39,20 @@ func NewMockNetwork(ctrl *gomock.Controller) *MockNetwork {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockNetwork) EXPECT() *MockNetworkMockRecorder {
 	return m.recorder
+}
+
+// AdvanceEpoch mocks base method.
+func (m *MockNetwork) AdvanceEpoch(epochIncrement int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AdvanceEpoch", epochIncrement)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AdvanceEpoch indicates an expected call of AdvanceEpoch.
+func (mr *MockNetworkMockRecorder) AdvanceEpoch(epochIncrement any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdvanceEpoch", reflect.TypeOf((*MockNetwork)(nil).AdvanceEpoch), epochIncrement)
 }
 
 // ApplyNetworkRules mocks base method.
@@ -194,6 +210,7 @@ func (mr *MockNetworkMockRecorder) UnregisterListener(arg0 any) *gomock.Call {
 type MockNetworkListener struct {
 	ctrl     *gomock.Controller
 	recorder *MockNetworkListenerMockRecorder
+	isgomock struct{}
 }
 
 // MockNetworkListenerMockRecorder is the mock recorder for MockNetworkListener.
