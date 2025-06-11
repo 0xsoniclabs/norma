@@ -50,7 +50,7 @@ func ApplyNetworkRules(backend ContractBackend, rules genesis.NetworkRules) erro
 	return nil
 }
 
-// AdvanceEpoch trigger the sealing of an epoch and advance the epoch by the given number.
+// AdvanceEpoch triggers the sealing of an epoch advancing it by the given number.
 // The function blocks until the final epoch has been reached
 func AdvanceEpoch(backend ContractBackend, epochIncrement int) error {
 	contract, err := driverauth100.NewContract(driverauth.ContractAddress, backend)
