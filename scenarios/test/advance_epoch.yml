@@ -1,0 +1,40 @@
+# This scenario demonstrates "advance epoch".
+# 
+# It is a minimal network including two nodes and a single application 
+# producing constant, low-throughput load.
+# 
+# The network is set so that there's only one epoch and will only advance
+# if the advance epoch signal succeeds.
+name: Advance Epoch
+
+# The duration of the scenario's runtime, in seconds.
+duration: 90
+
+# Initial validator nodes in the network.
+validators:
+  - name: validator-latest
+    instances: 2
+    imagename: "sonic"
+
+# Network rules to be applied to the network.
+# It is an extensible list of key-value pairs.
+# It defines rules for genesis (network bootstrap)
+# and updates of the rules during the network run.
+network_rules:
+  genesis:
+    MAX_EPOCH_DURATION: 1h  # only one epoch in this scenario
+
+# advance epoch by 3 mid-scenario (keep in mind 5-6 seconds / epoch advance)
+advance_epoch:
+  - time: 30
+    epochs: 3
+
+# In the network there is a single application producing constant load.
+applications:
+  - name: load
+    type: counter
+    users: 50
+    start: 10          # start time
+    end: 50            # termination time
+    rate:
+      constant: 20    # Tx/s

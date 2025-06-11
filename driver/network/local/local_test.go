@@ -29,6 +29,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/node"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/mock/gomock"
 )
 
@@ -587,6 +588,57 @@ func TestLocalNetworkApplyNetworkRules_Success(t *testing.T) {
 
 	if got, want := result.Economy.MinBaseFee.Int64(), wantFee; got != want {
 		t.Errorf("invalid base fee, got %d, want %d", got, want)
+	}
+}
+
+func TestLocalNetworkAdvanceEpoch_Success(t *testing.T) {
+	t.Parallel()
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
+	net, err := NewLocalNetwork(&config)
+	if err != nil {
+		t.Fatalf("failed to create new local network: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := net.Shutdown(); err != nil {
+			t.Fatalf("failed to shut down network, %v", err)
+		}
+	})
+
+	client, err := net.DialRandomRpc()
+	if err != nil {
+		t.Fatalf("failed to dial random RPC: %v", err)
+	}
+	defer client.Close()
+
+	// get original epoch
+	var currentEpoch hexutil.Uint64
+	if err := client.Call(&currentEpoch, "eth_currentEpoch"); err != nil {
+		t.Fatalf("failed to get current epoch: %v", err)
+	}
+
+	var epochIncrement int = 3 // takes ~5-6 seconds per increment
+	if err := net.AdvanceEpoch(epochIncrement); err != nil {
+		t.Errorf("failed to advance epoch: %v", err)
+	}
+
+	advanced := make(chan bool)
+
+	go func() {
+		var newEpoch hexutil.Uint64 = 0
+		var targetEpoch = currentEpoch + hexutil.Uint64(epochIncrement)
+		for newEpoch < targetEpoch {
+			if err := client.Call(&newEpoch, "eth_currentEpoch"); err != nil {
+				t.Errorf("failed to get current epoch: %v", err)
+			}
+		}
+		advanced <- true
+	}()
+
+	select {
+	case <-advanced:
+		// epoch advanced sucessfully
+	case <-time.After(60 * time.Second):
+		t.Errorf("epoch did not advanced successfully")
 	}
 }
 
