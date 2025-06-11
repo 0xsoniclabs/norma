@@ -1,0 +1,77 @@
+# This scenario simulates joining of latest client into a sonic network
+# with/without single proposal flag enabled.
+#
+# It is a minimal network including two nodes and a single application 
+# producing constant, low-throughput load.
+#
+# The network starts off with "Sonic" ruleset.
+# Mid-scenario, the single-proposer flag is enabled and new clients should 
+# join successfully. At a later timing the flag is disabled and new clients
+# should also join succesfully.
+name: Sonic Single Proposal
+
+# The duration of the scenario's runtime, in seconds.
+duration: 330
+
+# Initial validator nodes in the network.
+validators:
+  - name: validator-latest
+    instances: 2
+    imagename: "sonic"
+
+# Network rules to be applied to the network.
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: false
+    UPGRADES_SINGLE_PROPOSER: false
+  updates:
+    - time: 90
+      rules:
+        UPGRADES_SINGLE_PROPOSER: true
+    - time: 210
+      rules:
+        UPGRADES_SINGLE_PROPOSER: false
+
+advance_epoch:
+  - time: 120
+  - time: 240
+
+nodes:
+  - name: observer-early
+    start: 30
+    client:
+      imagename: "sonic"
+  - name: validator-early
+    start: 30
+    client:
+      imagename: "sonic"
+      type: validator
+  - name: observer-mid
+    start: 150
+    client:
+      imagename: "sonic"
+  - name: validator-mid
+    start: 150
+    client:
+      imagename: "sonic"
+      type: validator
+  - name: observer-late
+    start: 270
+    client:
+      imagename: "sonic"
+  - name: validator-late
+    start: 270
+    client:
+      imagename: "sonic"
+      type: validator
+
+# In the network there is a single application producing constant load.
+applications:
+  - name: load
+    type: counter
+    users: 50
+    start: 10          # start time
+    end: 50            # termination time
+    rate:
+      constant: 20    # Tx/s
