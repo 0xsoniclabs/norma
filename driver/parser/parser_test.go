@@ -173,6 +173,22 @@ func TestParseExampleWithCheats(t *testing.T) {
 	}
 }
 
+// for advance_epoch, epochs can be omitted and will default to 1
+var withAdvanceEpoch = smallExample + `
+
+advance_epoch:
+  - time: 25
+    epochs: 2
+  - time: 50 
+`
+
+func TestParseExampleWithAdvanceEpoch(t *testing.T) {
+	_, err := ParseBytes([]byte(withAdvanceEpoch))
+	if err != nil {
+		t.Fatalf("parsing of input failed: %v", err)
+	}
+}
+
 func TestNetwork_Rules(t *testing.T) {
 	scenario, err := ParseBytes([]byte(networkRulesPayload))
 	if err != nil {

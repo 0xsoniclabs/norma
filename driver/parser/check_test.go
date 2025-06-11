@@ -518,3 +518,74 @@ func TestScenario_NegativeNetworkRuleUpdateTimeIsDetected(t *testing.T) {
 		t.Errorf("negative network rule update time was not detected")
 	}
 }
+
+func TestScenario_AdvanceEpoch_Success(t *testing.T) {
+	one, two, three, four := 1, 2, 3, 4
+
+	scenario := Scenario{
+		Name:     "Test",
+		Duration: 60,
+		AdvanceEpoch: []AdvanceEpoch{
+			AdvanceEpoch{Time: 30, Epochs: &one},
+		},
+	}
+	err := scenario.Check()
+	if err != nil {
+		t.Errorf("AdvanceEpoch valid but this error occured: %v", err)
+	}
+
+	scenario2 := Scenario{
+		Name:     "Test",
+		Duration: 60,
+		AdvanceEpoch: []AdvanceEpoch{
+			AdvanceEpoch{Time: 10, Epochs: &one},
+			AdvanceEpoch{Time: 20, Epochs: &two},
+			AdvanceEpoch{Time: 30, Epochs: &three},
+			AdvanceEpoch{Time: 40, Epochs: &four},
+		},
+	}
+	err = scenario2.Check()
+	if err != nil {
+		t.Errorf("AdvanceEpoch valid but this error occured: %v", err)
+	}
+}
+
+func TestScenario_AdvanceEpoch_Failure(t *testing.T) {
+	three, minusTen := 3, -10
+
+	scenario := Scenario{
+		Name:     "Test",
+		Duration: 60,
+		AdvanceEpoch: []AdvanceEpoch{
+			AdvanceEpoch{Time: 70, Epochs: &three},
+		},
+	}
+	err := scenario.Check()
+	if err == nil || !strings.Contains(err.Error(), "invalid timing for advance epoch") {
+		t.Errorf("invalid timing for advance epoch was not detected")
+	}
+
+	scenario2 := Scenario{
+		Name:     "Test",
+		Duration: 60,
+		AdvanceEpoch: []AdvanceEpoch{
+			AdvanceEpoch{Time: -10, Epochs: &three},
+		},
+	}
+	err = scenario2.Check()
+	if err == nil || !strings.Contains(err.Error(), "invalid timing for advance epoch") {
+		t.Errorf("invalid timing for advance epoch was not detected")
+	}
+
+	scenario3 := Scenario{
+		Name:     "Test",
+		Duration: 60,
+		AdvanceEpoch: []AdvanceEpoch{
+			AdvanceEpoch{Time: 30, Epochs: &minusTen},
+		},
+	}
+	err = scenario3.Check()
+	if err == nil || !strings.Contains(err.Error(), "minimum epoch to advance must be 1") {
+		t.Errorf("backward epoch advancement was not detected")
+	}
+}
