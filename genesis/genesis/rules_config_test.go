@@ -115,6 +115,13 @@ func TestConfigureNetworkRules_Values_Set(t *testing.T) {
 			},
 		},
 		{
+			key:   "UPGRADES_SINGLE_PROPOSER",
+			value: "true",
+			match: func(rules opera.Rules) (string, bool) {
+				return fmt.Sprintf("%t", rules.Upgrades.Sonic), rules.Upgrades.SingleProposerBlockFormation == true
+			},
+		},
+		{
 			key:   "MIN_GAS_PRICE",
 			value: "1000000001",
 			match: func(rules opera.Rules) (string, bool) {
@@ -572,6 +579,15 @@ func TestGenerateJsonNetworkRulesUpdates_Exported_Json_Correct(t *testing.T) {
 			json: map[string]any{
 				"Upgrades": map[string]any{
 					"Sonic": true,
+				},
+			},
+		},
+		{
+			key:   "UPGRADES_SINGLE_PROPOSER",
+			value: "true",
+			json: map[string]any{
+				"Upgrades": map[string]any{
+					"SingleProposerBlockFormation": true,
 				},
 			},
 		},
