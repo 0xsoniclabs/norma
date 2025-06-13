@@ -476,7 +476,9 @@ func TestLocalNetwork_Num_Validators_Started(t *testing.T) {
 	}
 }
 
-func TestLocalNetwork_Can_Run_Multiple_Client_Images(t *testing.T) {
+// TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions checks if
+// docker can create client through images called "sonic" and "sonic:local"
+func TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions(t *testing.T) {
 	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 
@@ -488,9 +490,72 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images(t *testing.T) {
 		_ = net.Shutdown()
 	})
 
-	images := []string{"sonic", "sonic:local", "sonic:v2.0.2", "sonic:v2.0.1", "sonic:v2.0.0"}
+	images := []string{"sonic", "sonic:local"}
 	checksum := make(chan string)
 
+	fetchAllChecksums(t, net, images, checksum)
+
+	gotChecksums := int(0)
+	for gotChecksums < len(images) {
+		select {
+		case <-checksum:
+			gotChecksums++
+		case <-time.After(180 * time.Second):
+			t.Fatalf("timeout while waiting for checksums; got: %d, want: %d", gotChecksums, len(images))
+		}
+	}
+
+	if got, want := gotChecksums, len(images); got != want {
+		t.Errorf("invalid number of checksum, got: %d, want %d", got, want)
+	}
+
+	if err := net.Shutdown(); err != nil {
+		t.Errorf("failed to shut down network: %v", err)
+	}
+}
+
+// TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions checks if
+// docker can create client through images called "sonic:<versions>"
+// The checksum of each version must be unique.
+func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T) {
+	t.Parallel()
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
+
+	net, err := NewLocalNetwork(&config)
+	if err != nil {
+		t.Fatalf("failed to create new local network: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = net.Shutdown()
+	})
+
+	images := []string{"sonic:v2.0.3", "sonic:v2.0.2", "sonic:v2.0.1", "sonic:v2.0.0"}
+	checksum := make(chan string)
+
+	fetchAllChecksums(t, net, images, checksum)
+
+	gotChecksums := make(map[string]struct{})
+	for len(gotChecksums) < len(images) {
+		select {
+		case val := <-checksum:
+			gotChecksums[val] = struct{}{}
+		case <-time.After(180 * time.Second):
+			t.Fatalf("timeout while waiting for checksums; got: %d, want: %d", len(gotChecksums), len(images))
+		}
+	}
+
+	if got, want := len(gotChecksums), len(images); got != want {
+		t.Errorf("invalid number of checksum, got: %d, want %d", got, want)
+	}
+
+	if err := net.Shutdown(); err != nil {
+		t.Errorf("failed to shut down network: %v", err)
+	}
+}
+
+// fetchAllChecksums starts a go routine to ask for the client checksum for each
+// image version provided and return the checksums to the provided channel.
+func fetchAllChecksums(t *testing.T, net *LocalNetwork, images []string, checksum chan<- string) {
 	for i, image := range images {
 		node, err := net.CreateNode(&driver.NodeConfig{
 			Name:  fmt.Sprintf("T-%d", i),
@@ -521,24 +586,6 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images(t *testing.T) {
 				}
 			}
 		}()
-	}
-
-	gotChecksums := make(map[string]struct{})
-	for len(gotChecksums) < len(images) {
-		select {
-		case val := <-checksum:
-			gotChecksums[val] = struct{}{}
-		case <-time.After(180 * time.Second):
-			t.Fatalf("timeout while waiting for checksums")
-		}
-	}
-
-	if got, want := len(gotChecksums), len(images); got != want {
-		t.Errorf("invalid number of checksum, got: %d, want %d", got, want)
-	}
-
-	if err := net.Shutdown(); err != nil {
-		t.Errorf("failed to shut down network: %v", err)
 	}
 }
 
