@@ -18,22 +18,29 @@ package checking
 
 import (
 	"fmt"
-	"github.com/0xsoniclabs/norma/driver"
-	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"maps"
 	"strconv"
 	"strings"
+
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
 )
+
+// allow block height to fall short by this amount
+// slack of 5 means that block 95-99 is also accepted when max block height = 100
+const defaultSlack = int64(5)
 
 func init() {
 	RegisterNetworkCheck("block_height", func(net driver.Network, monitor *monitoring.Monitor) Checker {
-		return &blockHeightChecker{net: net}
+		var slack = defaultSlack
+		return &blockHeightChecker{net: net, slack: &slack}
 	})
 }
 
 // blockHeightChecker is a Checker checking if all Opera nodes achieved the same block height.
 type blockHeightChecker struct {
-	net driver.Network
+	net   driver.Network
+	slack *int64 // optional slack
 }
 
 func (c *blockHeightChecker) Check() error {
@@ -63,14 +70,19 @@ func (c *blockHeightChecker) Check() error {
 		heights[i] = height
 	}
 
+	slack := int64(0)
+	if c.slack != nil && *c.slack > 0 {
+		slack = *c.slack
+	}
+
 	gotFailures := make(map[string]struct{})
 	for i, n := range nodes {
-		if heights[i] < maxHeight-1 {
+		if heights[i] < maxHeight-slack {
 			if n.IsExpectedFailure() {
 				gotFailures[n.GetLabel()] = struct{}{}
 
 			} else {
-				return fmt.Errorf("node %s reports too old block %d (max block is %d)", n.GetLabel(), heights[i], maxHeight)
+				return fmt.Errorf("node %s reports too old block %d (max block is %d, given slack of %d.)", n.GetLabel(), heights[i], maxHeight, c.slack)
 			}
 		}
 	}

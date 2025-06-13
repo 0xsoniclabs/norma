@@ -48,6 +48,87 @@ func TestBlockHeightCheckerValid(t *testing.T) {
 	}
 }
 
+func TestBlockHeightCheckerValid_WithSlack(t *testing.T) {
+	tests := []struct {
+		name         string
+		blockHeight1 string
+		blockHeight2 string
+		slack        int64
+	}{
+		{name: "within-tolerance-big", blockHeight1: "0x42", blockHeight2: "0x52", slack: 16},
+		{name: "within-tolerance", blockHeight1: "0x42", blockHeight2: "0x43", slack: 1},
+		{name: "constant", blockHeight1: "0x42", blockHeight2: "0x42", slack: 0},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			net := driver.NewMockNetwork(ctrl)
+			node1 := driver.NewMockNode(ctrl)
+			node2 := driver.NewMockNode(ctrl)
+			rpc1 := rpc.NewMockClient(ctrl)
+			rpc2 := rpc.NewMockClient(ctrl)
+			net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
+			node1.EXPECT().DialRpc().MinTimes(1).Return(rpc1, nil)
+			node1.EXPECT().IsExpectedFailure().AnyTimes()
+			node2.EXPECT().DialRpc().MinTimes(1).Return(rpc2, nil)
+			node2.EXPECT().IsExpectedFailure().AnyTimes()
+			node1.EXPECT().GetLabel().AnyTimes().Return("node1")
+			node2.EXPECT().GetLabel().AnyTimes().Return("node2")
+
+			rpc1.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, test.blockHeight1)
+			rpc2.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, test.blockHeight2)
+			rpc1.EXPECT().Close()
+			rpc2.EXPECT().Close()
+
+			c := blockHeightChecker{net: net, slack: &test.slack}
+			err := c.Check()
+			if err != nil {
+				t.Errorf("Block Height check should succeed, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestBlockHeightCheckerValid_WithInvalidSlack(t *testing.T) {
+	tests := []struct {
+		name         string
+		blockHeight1 string
+		blockHeight2 string
+		slack        int64
+	}{
+		// slack to be replaced with 0
+		{name: "constant", blockHeight1: "0x42", blockHeight2: "0x42", slack: -1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			net := driver.NewMockNetwork(ctrl)
+			node1 := driver.NewMockNode(ctrl)
+			node2 := driver.NewMockNode(ctrl)
+			rpc1 := rpc.NewMockClient(ctrl)
+			rpc2 := rpc.NewMockClient(ctrl)
+			net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
+			node1.EXPECT().DialRpc().MinTimes(1).Return(rpc1, nil)
+			node1.EXPECT().IsExpectedFailure().AnyTimes()
+			node2.EXPECT().DialRpc().MinTimes(1).Return(rpc2, nil)
+			node2.EXPECT().IsExpectedFailure().AnyTimes()
+			node1.EXPECT().GetLabel().AnyTimes().Return("node1")
+			node2.EXPECT().GetLabel().AnyTimes().Return("node2")
+
+			rpc1.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, test.blockHeight1)
+			rpc2.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, test.blockHeight2)
+			rpc1.EXPECT().Close()
+			rpc2.EXPECT().Close()
+
+			c := blockHeightChecker{net: net, slack: &test.slack}
+			err := c.Check()
+			if err != nil {
+				t.Errorf("Block Height check should succeed, got: %v", err)
+			}
+		})
+	}
+}
+
 func TestBlockHeightCheckerInvalid(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -82,6 +163,47 @@ func TestBlockHeightCheckerInvalid(t *testing.T) {
 			err := c.Check()
 			if err == nil || !strings.Contains(err.Error(), "reports too old block") {
 				t.Errorf("unexpected error from blockHeightChecker: %v", err)
+			}
+		})
+	}
+}
+
+func TestBlockHeightCheckerInvalid_WithSlack(t *testing.T) {
+	tests := []struct {
+		name         string
+		blockHeight1 string
+		blockHeight2 string
+		slack        int64
+	}{
+		{name: "should-reject", blockHeight1: "0x42", blockHeight2: "0x53", slack: 5},
+		{name: "no-slack", blockHeight1: "0x42", blockHeight2: "0x43", slack: 0},
+		{name: "invalid-slack", blockHeight1: "0x42", blockHeight2: "0x43", slack: -1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			net := driver.NewMockNetwork(ctrl)
+			node1 := driver.NewMockNode(ctrl)
+			node2 := driver.NewMockNode(ctrl)
+			rpc1 := rpc.NewMockClient(ctrl)
+			rpc2 := rpc.NewMockClient(ctrl)
+			net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
+			node1.EXPECT().DialRpc().MinTimes(1).Return(rpc1, nil)
+			node1.EXPECT().IsExpectedFailure().AnyTimes()
+			node2.EXPECT().DialRpc().MinTimes(1).Return(rpc2, nil)
+			node2.EXPECT().IsExpectedFailure().AnyTimes()
+			node1.EXPECT().GetLabel().AnyTimes().Return("node1")
+			node2.EXPECT().GetLabel().AnyTimes().Return("node2")
+
+			rpc1.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, test.blockHeight1)
+			rpc2.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, test.blockHeight2)
+			rpc1.EXPECT().Close()
+			rpc2.EXPECT().Close()
+
+			c := blockHeightChecker{net: net, slack: &test.slack}
+			err := c.Check()
+			if err == nil || !strings.Contains(err.Error(), "reports too old block") {
+				t.Errorf("Block Height check should succeed, got: %v", err)
 			}
 		})
 	}
