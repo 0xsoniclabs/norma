@@ -19,14 +19,13 @@ package local
 import (
 	"bufio"
 	"fmt"
+	"github.com/0xsoniclabs/norma/driver/parser"
 	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/0xsoniclabs/norma/driver/parser"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/node"
@@ -494,42 +493,12 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions(t *testing.T
 	images := []string{"sonic", "sonic:local"}
 	checksum := make(chan string)
 
-	for i, image := range images {
-		node, err := net.CreateNode(&driver.NodeConfig{
-			Name:  fmt.Sprintf("T-%d", i),
-			Image: image,
-		})
-		if err != nil {
-			t.Errorf("failed to create node: %v", err)
-		}
+	fetchAllChecksums(t, net, images, checksum)
 
-		// read logs and check the image name is correct
-		reader, err := node.StreamLog()
-		if err != nil {
-			t.Fatalf("cannot read logs: %e", err)
-		}
-		t.Cleanup(func() {
-			_ = reader.Close()
-		})
-
-		go func() {
-			scanner := bufio.NewScanner(reader)
-			for scanner.Scan() {
-				line := scanner.Text()
-				if strings.Contains(line, "Sonic binary checksum:") {
-					parts := strings.SplitN(line, ":", 2)
-					if len(parts) == 2 {
-						checksum <- strings.TrimSpace(parts[1])
-					}
-				}
-			}
-		}()
-	}
-
-	gotChecksums := uint8(0)
+	gotChecksums := int(0)
 	for gotChecksums < len(images) {
 		select {
-		case tuple := <-checksum:
+		case <-checksum:
 			gotChecksums++
 		case <-time.After(180 * time.Second):
 			t.Fatalf("timeout while waiting for checksums; got: %d, want: %d", gotChecksums, len(images))
@@ -563,6 +532,30 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T
 	images := []string{"sonic:v2.0.3", "sonic:v2.0.2", "sonic:v2.0.1", "sonic:v2.0.0"}
 	checksum := make(chan string)
 
+	fetchAllChecksums(t, net, images, checksum)
+
+	gotChecksums := make(map[string]struct{})
+	for len(gotChecksums) < len(images) {
+		select {
+		case val := <-checksum:
+			gotChecksums[val] = struct{}{}
+		case <-time.After(180 * time.Second):
+			t.Fatalf("timeout while waiting for checksums; got: %d, want: %d", len(gotChecksums), len(images))
+		}
+	}
+
+	if got, want := len(gotChecksums), len(images); got != want {
+		t.Errorf("invalid number of checksum, got: %d, want %d", got, want)
+	}
+
+	if err := net.Shutdown(); err != nil {
+		t.Errorf("failed to shut down network: %v", err)
+	}
+}
+
+// fetchAllChecksums starts a go routine to ask for the client checksum for each
+// image version provided and return the checksums to the provided channel.
+func fetchAllChecksums(t *testing.T, net *LocalNetwork, images []string, checksum chan<- string) {
 	for i, image := range images {
 		node, err := net.CreateNode(&driver.NodeConfig{
 			Name:  fmt.Sprintf("T-%d", i),
@@ -593,24 +586,6 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T
 				}
 			}
 		}()
-	}
-
-	gotChecksums := make(map[string]struct{})
-	for len(gotChecksums) < len(images) {
-		select {
-		case tuple := <-checksum:
-			gotChecksums[tuple.val] = struct{}{}
-		case <-time.After(180 * time.Second):
-			t.Fatalf("timeout while waiting for checksums; got: %d, want: %d", len(gotChecksums), len(images))
-		}
-	}
-
-	if got, want := len(gotChecksums), len(images); got != want {
-		t.Errorf("invalid number of checksum, got: %d, want %d", got, want)
-	}
-
-	if err := net.Shutdown(); err != nil {
-		t.Errorf("failed to shut down network: %v", err)
 	}
 }
 
