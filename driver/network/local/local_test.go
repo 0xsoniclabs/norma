@@ -477,9 +477,9 @@ func TestLocalNetwork_Num_Validators_Started(t *testing.T) {
 	}
 }
 
-// TestLocalNetwork_Can_Run_Multiple_Client_Images_DynamicVersions checks if
+// TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions checks if
 // docker can create client through images called "sonic" and "sonic:local"
-func TestLocalNetwork_Can_Run_Multiple_Client_Images_DynamicVersions(t *testing.T) {
+func TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions(t *testing.T) {
 	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 
@@ -545,10 +545,10 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_DynamicVersions(t *testing.
 	}
 }
 
-// TestLocalNetwork_Can_Run_Multiple_Client_Images_StaticVersions checks if
+// TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions checks if
 // docker can create client through images called "sonic:<versions>"
 // The checksum of each version must be unique.
-func TestLocalNetwork_Can_Run_Multiple_Client_Images_StaticVersions(t *testing.T) {
+func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T) {
 	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 
