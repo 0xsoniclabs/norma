@@ -492,10 +492,17 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions(t *testing.T
 
 	images := []string{"sonic", "sonic:local"}
 	checksum := make(chan string)
+	gotChecksums := 0
+	for _, image := range images {
+		go func(img string) {
+			cs, err := getChecksum(net, img)
+			if err != nil {
+				t.Errorf("failed to get checksum for %s; %v", img, err)
+			}
+			checksum <- cs
+		}(image)
+	}
 
-	fetchAllChecksums(t, net, images, checksum)
-
-	gotChecksums := int(0)
 	for gotChecksums < len(images) {
 		select {
 		case <-checksum:
@@ -531,10 +538,17 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T
 
 	images := []string{"sonic:v2.0.3", "sonic:v2.0.2", "sonic:v2.0.1", "sonic:v2.0.0"}
 	checksum := make(chan string)
-
-	fetchAllChecksums(t, net, images, checksum)
-
 	gotChecksums := make(map[string]struct{})
+	for _, image := range images {
+		go func(img string) {
+			cs, err := getChecksum(net, img)
+			if err != nil {
+				t.Errorf("failed to get checksum for %s; %v", img, err)
+			}
+			checksum <- cs
+		}(image)
+	}
+
 	for len(gotChecksums) < len(images) {
 		select {
 		case val := <-checksum:
@@ -553,40 +567,35 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T
 	}
 }
 
-// fetchAllChecksums starts a go routine to ask for the client checksum for each
-// image version provided and return the checksums to the provided channel.
-func fetchAllChecksums(t *testing.T, net *LocalNetwork, images []string, checksum chan<- string) {
-	for i, image := range images {
-		node, err := net.CreateNode(&driver.NodeConfig{
-			Name:  fmt.Sprintf("T-%d", i),
-			Image: image,
-		})
-		if err != nil {
-			t.Errorf("failed to create node: %v", err)
-		}
-
-		// read logs and check the image name is correct
-		reader, err := node.StreamLog()
-		if err != nil {
-			t.Fatalf("cannot read logs: %e", err)
-		}
-		t.Cleanup(func() {
-			_ = reader.Close()
-		})
-
-		go func() {
-			scanner := bufio.NewScanner(reader)
-			for scanner.Scan() {
-				line := scanner.Text()
-				if strings.Contains(line, "Sonic binary checksum:") {
-					parts := strings.SplitN(line, ":", 2)
-					if len(parts) == 2 {
-						checksum <- strings.TrimSpace(parts[1])
-					}
-				}
-			}
-		}()
+// getChecksum creates a node of the provided image type on the provided network
+// and extract the checksum.
+func getChecksum(net *LocalNetwork, image string) (string, error) {
+	node, err := net.CreateNode(&driver.NodeConfig{
+		Name:  fmt.Sprintf("T-%s", image),
+		Image: image,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create node: %v", err)
 	}
+
+	reader, err := node.StreamLog()
+	if err != nil {
+		return "", fmt.Errorf("cannot read node logs: %e", err)
+	}
+	defer reader.Close()
+
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, "Sonic binary checksum:") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				return strings.TrimSpace(parts[1]), nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("unable to find Sonic binary checksums")
 }
 
 func TestLocalNetworkApplyNetworkRules_Success(t *testing.T) {
