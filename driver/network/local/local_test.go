@@ -515,10 +515,6 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions(t *testing.T
 	if got, want := gotChecksums, len(images); got != want {
 		t.Errorf("invalid number of checksum, got: %d, want %d", got, want)
 	}
-
-	if err := net.Shutdown(); err != nil {
-		t.Errorf("failed to shut down network: %v", err)
-	}
 }
 
 // TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions checks if
@@ -560,10 +556,6 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T
 
 	if got, want := len(gotChecksums), len(images); got != want {
 		t.Errorf("invalid number of checksum, got: %d, want %d", got, want)
-	}
-
-	if err := net.Shutdown(); err != nil {
-		t.Errorf("failed to shut down network: %v", err)
 	}
 }
 
