@@ -7,13 +7,13 @@ import (
 	nodemon "github.com/0xsoniclabs/norma/driver/monitoring/node"
 )
 
-func init() {
-	RegisterNetworkCheck("blocks_rolling", func(net driver.Network, monitor *monitoring.Monitor) Checker {
-		return &blocksRollingChecker{monitor: &monitoringDataAdapter{monitor}, toleranceSamples: 10}
-	})
-}
-
 //go:generate mockgen -source blocks_rolling.go -destination blocks_rolling_mock.go -package checking
+
+func NewBlockRollingChecker(toleranceSampleSize uint8) Factory {
+	return func(net driver.Network, monitor *monitoring.Monitor) Checker {
+		return &blocksRollingChecker{monitor: &monitoringDataAdapter{monitor}, toleranceSamples: 10}
+	}
+}
 
 // MonitoringData is an interface that defines a method to get monitoring data related to this checker.
 type MonitoringData interface {

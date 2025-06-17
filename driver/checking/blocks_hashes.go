@@ -26,10 +26,10 @@ import (
 	"maps"
 )
 
-func init() {
-	RegisterNetworkCheck("blocks_hashes", func(net driver.Network, monitor *monitoring.Monitor) Checker {
+func NewBlockHashesChecker() Factory {
+	return func(net driver.Network, monitor *monitoring.Monitor) Checker {
 		return &blocksHashesChecker{net: net}
-	})
+	}
 }
 
 // blocksHashesChecker is a Checker checking if all Opera nodes provides the same hashes for all blocks/stateRoots.
