@@ -244,9 +244,13 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 
 	var checks []checking.Checker
 	if !skipChecks {
-		checking.RegisterNetworkCheck("block_height", checking.NewBlockHeightChecker(5))
-		checking.RegisterNetworkCheck("block_hashes", checking.NewBlockHashesChecker())
-		checking.RegisterNetworkCheck("block_rolling", checking.NewBlockRollingChecker(10))
+		for _, chk := range scenario.Checkers {
+			err := checking.RegisterNetworkCheck(chk.Name, chk.Type, chk.Config)
+			if err != nil {
+				fmt.Printf("Failed to register check %s of type %s with config %+v; %v\n", chk.Name, chk.Type, chk.Config, err)
+				return err
+			}
+		}
 
 		// Initialize network consistency checks.
 		checks = checking.InitNetworkChecks(net, monitor)

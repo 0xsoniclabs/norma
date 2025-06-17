@@ -25,6 +25,10 @@ import (
 	"strings"
 )
 
+// allow block height to fall short by this amount
+// slack of 5 means that block 95-99 is also accepted when max block height = 100
+const defaultSlack = 5
+
 func NewBlockHeightChecker(slack uint8) Factory {
 	return func(net driver.Network, monitor *monitoring.Monitor) Checker {
 		return &blockHeightChecker{net: net, slack: slack}

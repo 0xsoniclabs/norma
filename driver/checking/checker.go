@@ -18,6 +18,7 @@ package checking
 
 import (
 	"errors"
+	"fmt"
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 )
@@ -29,6 +30,7 @@ type Factory func(driver.Network, *monitoring.Monitor) Checker
 type registry map[string]Factory
 
 var registrations = make(registry)
+var defaultRegistrations = make(registry)
 
 // Checker does the consistency check at the end of the scenario.
 type Checker interface {
@@ -39,14 +41,44 @@ type Checker interface {
 type Checks []Checker
 
 // RegisterNetworkCheck registers a new Checker via its factory.
-func RegisterNetworkCheck(name string, factory Factory) {
+func RegisterNetworkCheck(name, typ string, config map[string]string) error {
+	if !IsSupportedChecker(typ) {
+		return fmt.Errorf("check of type %s not supported", typ)
+	}
+
+	factory, err := supportedChecker[typ](config)
+	if err != nil {
+		return fmt.Errorf("check of type %s could not be configured; %v", typ, err)
+	}
+
 	registrations[name] = factory
+	return nil
+}
+
+// registerDefaultNetworkCheck registers a new Checker as the default set of checkers
+func registerDefaultNetworkCheck(name, typ string, config map[string]string) error {
+	if !IsSupportedChecker(typ) {
+		return fmt.Errorf("check of type %s not supported", typ)
+	}
+
+	factory, err := supportedChecker[typ](config)
+	if err != nil {
+		return fmt.Errorf("check of type %s could not be configured; %v", typ, err)
+	}
+
+	defaultRegistrations[name] = factory
+	return nil
 }
 
 // InitNetworkChecks initializes the Checks with the given network.
 func InitNetworkChecks(network driver.Network, monitor *monitoring.Monitor) Checks {
+	registry := defaultRegistrations
+	if len(registrations) > 0 {
+		registry = registrations
+	}
+
 	var checkers []Checker
-	for _, factory := range registrations {
+	for _, factory := range registry {
 		checker := factory(network, monitor)
 		checkers = append(checkers, checker)
 	}

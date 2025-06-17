@@ -7,6 +7,9 @@ import (
 	nodemon "github.com/0xsoniclabs/norma/driver/monitoring/node"
 )
 
+// the longest amount of sampling before considering stagnation
+const defaultTolerance = 10
+
 //go:generate mockgen -source blocks_rolling.go -destination blocks_rolling_mock.go -package checking
 
 func NewBlockRollingChecker(toleranceSampleSize uint8) Factory {
