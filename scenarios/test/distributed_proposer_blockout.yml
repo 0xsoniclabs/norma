@@ -1,0 +1,75 @@
+# This scenario simulates a mid-run stoppage of 50% of the validators.
+#
+# It is an "Allegro" network, with disabled single proposer flag.
+# Initially it has 4 validators, with gradual increment up to 8.
+#
+# Mid-scenario, 4 validators will stop for 120 seconds. This means
+# the network will lost 50% of the validators. During this 120 seconds,
+# no block height should increase.
+# 
+# Afterwards, 4 validators will be gradually re-added back up to 8.
+# The network should now function and we should see block height increases.
+name: Distributed Proposer Blackout
+
+# The duration of the scenario's runtime, in seconds.
+duration: 360
+
+# Initial validator nodes in the network.
+validators:
+  - name: validator-latest
+    instances: 4
+
+# Network rules to be applied to the network.
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: true
+    UPGRADES_SINGLE_PROPOSER: false
+    MAX_EPOCH_DURATION: 20s # relatively short epoch advancement
+
+checks:
+  - time: 90 # 0-120, check 30s before timeout
+    type: blocks-rolling
+  - time: 150 # 120-240 check 30s after timeout
+    type: blocks-rolling-negative # to be implemented
+  - time: 210 # 120-240 check 30s before recovery
+    type: blocks-rolling-negative # to be implemented
+  - time: 270 # 240-360, check 30s after recpvery
+    type: blocks-rolling
+# there's another blocks-rolling check at 359 by default
+
+nodes:
+  # these guys are added in the beginning and shutdown at 120 to simulate blackout
+  - name: validator-before-1
+    instances: 2
+    start: 10
+    end: 120 
+    client:
+      type: validator
+  - name: validator-before-2
+    instances: 2
+    start: 30
+    end: 120
+    client:
+      type: validator
+  # these guys are added after the blackout to make sure network continues
+  - name: validator-after-1
+    instances: 2
+    start: 240
+    client:
+      type: validator
+  - name: validator-before-2
+    instances: 2
+    start: 270
+    client:
+      type: validator
+
+# In the network there is a single application producing constant load.
+applications:
+  - name: load
+    type: counter
+    users: 50
+    start: 10          # start time
+    end: 50            # termination time
+    rate:
+      constant: 20    # Tx/s
