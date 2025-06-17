@@ -104,6 +104,12 @@ func (s *Scenario) Check() error {
 		}
 	}
 
+	for _, checker := range s.Checkers {
+		if err := checkTimeInterval(checker.Start, checker.End, s.Duration); err != nil {
+			errs = append(errs, fmt.Errorf("invalid timing for checker; %v", err))
+		}
+	}
+
 	return errors.Join(errs...)
 }
 

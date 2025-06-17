@@ -189,6 +189,29 @@ func TestParseExampleWithAdvanceEpoch(t *testing.T) {
 	}
 }
 
+// these describe the default checkers
+var withDefaultCheckers = smallExample + `
+
+checker:
+  - name: block_height
+    type: block_height_checker
+    config:
+      slack: 5
+  - name: block_hashes
+    type: block_hashes_checker
+  - name: block_rolling
+    type: block_rolling_checker
+    config:
+      tolerance: 10
+`
+
+func TestParseExampleWithDefaultCheckers(t *testing.T) {
+	_, err := ParseBytes([]byte(withDefaultCheckers))
+	if err != nil {
+		t.Fatalf("parsing of input failed: %v", err)
+	}
+}
+
 func TestNetwork_Rules(t *testing.T) {
 	scenario, err := ParseBytes([]byte(networkRulesPayload))
 	if err != nil {

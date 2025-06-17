@@ -589,3 +589,107 @@ func TestScenario_AdvanceEpoch_Failure(t *testing.T) {
 		t.Errorf("backward epoch advancement was not detected")
 	}
 }
+
+func TestScenario_Checker_Success(t *testing.T) {
+	var zero, sixty float32 = 0, 60
+
+	scenarios := []Scenario{
+		// blanks
+		Scenario{
+			Name:     "Test",
+			Duration: 60,
+		},
+		Scenario{
+			Name:     "Test",
+			Duration: 60,
+			Checkers: []Checker{},
+		},
+		// default checkers
+		Scenario{
+			Name:     "Test",
+			Duration: 60,
+			Checkers: []Checker{
+				Checker{Name: "block_height", Type: "block_height_checker", Start: &zero, End: &sixty, Config: map[string]string{"slack": "5"}},
+				Checker{Name: "blocks_hashes", Type: "blocks_hashes_checker", Start: &zero, End: &sixty, Config: map[string]string{}},
+				Checker{Name: "blocks_rolling", Type: "blocks_rolling_checker", Start: &zero, End: &sixty, Config: map[string]string{"tolerance": "10"}},
+			},
+		},
+		Scenario{
+			Name:     "Test",
+			Duration: 60,
+			Checkers: []Checker{
+				Checker{Name: "block_height", Type: "block_height_checker", Config: map[string]string{"slack": "5"}},
+				Checker{Name: "blocks_hashes", Type: "blocks_hashes_checker", Config: map[string]string{}},
+				Checker{Name: "blocks_rolling", Type: "blocks_rolling_checker", Config: map[string]string{"tolerance": "10"}},
+			},
+		},
+		Scenario{
+			Name:     "Test",
+			Duration: 60,
+			Checkers: []Checker{
+				Checker{Name: "block_height", Type: "block_height_checker", Config: map[string]string{}},
+				Checker{Name: "blocks_hashes", Type: "blocks_hashes_checker", Config: map[string]string{}},
+				Checker{Name: "blocks_rolling", Type: "blocks_rolling_checker", Config: map[string]string{}},
+			},
+		},
+		Scenario{
+			Name:     "Test",
+			Duration: 60,
+			Checkers: []Checker{
+				Checker{Name: "block_height", Type: "block_height_checker"},
+				Checker{Name: "blocks_hashes", Type: "blocks_hashes_checker"},
+				Checker{Name: "blocks_rolling", Type: "blocks_rolling_checker"},
+			},
+		},
+	}
+
+	for _, scenario := range scenarios {
+		err := scenario.Check()
+		if err != nil {
+			t.Errorf("scenario valid but error occured: %v", err)
+		}
+	}
+}
+
+func TestScenario_Checker_Failure(t *testing.T) {
+	var fm1, f5555, f10, f5 float32 = -1, 5555, 10, 5
+
+	scenarios := []Scenario{
+		// default checkers
+		Scenario{
+			Name:     "Test",
+			Duration: 60,
+			Checkers: []Checker{
+				Checker{Name: "block_height", Type: "block_height_checker", Start: &fm1, Config: map[string]string{"slack": "5"}},
+			},
+		},
+		Scenario{
+			Name:     "Test",
+			Duration: 60,
+			Checkers: []Checker{
+				Checker{Name: "block_height", Type: "block_height_checker", End: &fm1, Config: map[string]string{"slack": "5"}},
+			},
+		},
+		Scenario{
+			Name:     "Test",
+			Duration: 60,
+			Checkers: []Checker{
+				Checker{Name: "block_height", Type: "block_height_checker", End: &f5555, Config: map[string]string{"slack": "5"}},
+			},
+		},
+		Scenario{
+			Name:     "Test",
+			Duration: 60,
+			Checkers: []Checker{
+				Checker{Name: "block_height", Type: "block_height_checker", Start: &f10, End: &f5, Config: map[string]string{"slack": "5"}},
+			},
+		},
+	}
+
+	for _, scenario := range scenarios {
+		err := scenario.Check()
+		if err == nil || !strings.Contains(err.Error(), "invalid timing for checker") {
+			t.Errorf("scenario valid but error occured: %v", err)
+		}
+	}
+}

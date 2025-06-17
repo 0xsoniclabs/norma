@@ -37,6 +37,7 @@ type Scenario struct {
 	Cheats        []Cheat        `yaml:",omitempty"`
 	NetworkRules  NetworkRules   `yaml:"network_rules,omitempty"`
 	AdvanceEpoch  []AdvanceEpoch `yaml:"advance_epoch,omitempty"`
+	Checkers      []Checker      `yaml:"checker,omitempty"`
 }
 
 func (s *Scenario) GetRoundTripTime() time.Duration {
@@ -66,6 +67,18 @@ type AdvanceEpoch struct {
 type NetworkRulesUpdate struct {
 	Time  float32
 	Rules networkRules
+}
+
+// checkerConfig is a way to pass generic config to the respective checker
+type checkerConfig map[string]string
+
+// Checker is a configuration for the checker to apply to this specific scenario.
+type Checker struct {
+	Name   string
+	Type   string
+	Start  *float32      `yaml:"start,omitempty"`  // nil is intepreted as 0
+	End    *float32      `yaml:"end,omitempty"`    // nil is intepreted as scenario duration
+	Config checkerConfig `yaml:"config,omitempty"` // nil is intepreted as empty map
 }
 
 // Validator is a configuration for a group of network start-up validators.
