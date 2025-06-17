@@ -17,7 +17,6 @@ duration: 330
 validators:
   - name: validator-latest
     instances: 2
-    imagename: "sonic"
 
 # Network rules to be applied to the network.
 network_rules:
@@ -40,30 +39,21 @@ advance_epoch:
 nodes:
   - name: observer-early
     start: 30
-    client:
-      imagename: "sonic"
   - name: validator-early
     start: 30
     client:
-      imagename: "sonic"
       type: validator
   - name: observer-mid
     start: 150
-    client:
-      imagename: "sonic"
   - name: validator-mid
     start: 150
     client:
-      imagename: "sonic"
       type: validator
   - name: observer-late
     start: 270
-    client:
-      imagename: "sonic"
   - name: validator-late
     start: 270
     client:
-      imagename: "sonic"
       type: validator
 
 # In the network there is a single application producing constant load.
