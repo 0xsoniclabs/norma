@@ -17,11 +17,8 @@
 package app
 
 import (
-	"context"
-	"fmt"
 	"math/big"
 
-	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -37,23 +34,6 @@ func createTx(from *Account, toAddress common.Address, value *big.Int, data []by
 		Data:      data,
 	})
 	return types.SignTx(tx, types.NewLondonSigner(from.chainID), from.privateKey)
-}
-
-// GetGasPrice obtains optimal gasPrice for regular transactions
-func GetGasPrice(rpcClient rpc.Client) (*big.Int, error) {
-	gasPrice, err := rpcClient.SuggestGasPrice(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to suggest gas price; %v", err)
-	}
-	var regularPrice big.Int
-	regularPrice.Mul(gasPrice, big.NewInt(2)) // lower gas price for regular txs (but more than suggested by Opera)
-	return &regularPrice, nil
-}
-
-func getPriorityGasPrice(regularGasPrice *big.Int) *big.Int {
-	var priorityPrice big.Int
-	priorityPrice.Mul(regularGasPrice, big.NewInt(2)) // greater gas price for init
-	return &priorityPrice
 }
 
 func reverseAddresses(in []common.Address) []common.Address {

@@ -34,7 +34,12 @@ const FakeNetworkID = 0xfa3
 
 func TestGenerators(t *testing.T) {
 	// run local network of one node
-	net, err := local.NewLocalNetwork(&driver.NetworkConfig{Validators: driver.DefaultValidators})
+	net, err := local.NewLocalNetwork(&driver.NetworkConfig{
+		Validators: driver.DefaultValidators,
+		NetworkRules: map[string]string{
+			"UPGRADES_ALLEGRO": "true",
+		},
+	})
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
@@ -77,6 +82,13 @@ func TestGenerators(t *testing.T) {
 			t.Fatal(err)
 		}
 		testGenerator(t, uniswapApp, context)
+	})
+	t.Run("SmartAccount", func(t *testing.T) {
+		smartAccountApp, err := app.NewSmartAccountApplication(context, 0, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testGenerator(t, smartAccountApp, context)
 	})
 }
 
