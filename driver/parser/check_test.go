@@ -589,3 +589,60 @@ func TestScenario_AdvanceEpoch_Failure(t *testing.T) {
 		t.Errorf("backward epoch advancement was not detected")
 	}
 }
+
+func TestScenario_Checks_Success(t *testing.T) {
+	scenario := Scenario{
+		Name:     "Test",
+		Duration: 60,
+		Checks: []Check{
+			{Time: 30, Check: "test"},
+		},
+	}
+	err := scenario.Check()
+	if err != nil {
+		t.Errorf("Check valid but this error occured: %v", err)
+	}
+
+	scenario2 := Scenario{
+		Name:     "Test",
+		Duration: 60,
+		Checks: []Check{
+			{Time: 30, Check: "test"},
+			{Time: 30, Check: "test2"},
+			{Time: 20, Check: "test3"},
+			{Time: 40, Check: "test4"},
+			{Time: 45, Check: "test"},
+		},
+	}
+	err = scenario2.Check()
+	if err != nil {
+		t.Errorf("Check valid but this error occured: %v", err)
+	}
+}
+
+func TestScenario_Checks_Failure(t *testing.T) {
+	scenario := Scenario{
+		Name:     "Test",
+		Duration: 60,
+		Checks: []Check{
+			{Time: -1, Check: "test"},
+		},
+	}
+	err := scenario.Check()
+	if err == nil || !strings.Contains(err.Error(), "invalid timing for check") {
+		t.Errorf("invalid timing for check was not detected")
+	}
+
+	scenario2 := Scenario{
+		Name:     "Test",
+		Duration: 60,
+		Checks: []Check{
+			{Time: 70, Check: "test"},
+		},
+	}
+	err = scenario2.Check()
+	if err == nil || !strings.Contains(err.Error(), "invalid timing for check") {
+		t.Errorf("invalid timing for check was not detected")
+	}
+
+}
