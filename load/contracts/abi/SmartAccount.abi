@@ -98,11 +98,6 @@
         "internalType": "struct SmartAccount.Call[]",
         "name": "calls",
         "type": "tuple[]"
-      },
-      {
-        "internalType": "uint256",
-        "name": "batchNonce",
-        "type": "uint256"
       }
     ],
     "name": "execute",

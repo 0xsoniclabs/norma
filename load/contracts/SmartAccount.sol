@@ -22,9 +22,8 @@ contract SmartAccount {
      * @notice Executes a batch of calls.
      * @param calls An array of Call structs containing destination, ETH value, and calldata.
      */
-    function execute(Call[] calldata calls, uint256 batchNonce) external payable {
+    function execute(Call[] calldata calls) external payable {
         // production code would check signature at this point - there is not signature in this test
-        require(batchNonce == nonce, "Invalid SmartAccount nonce");
         _executeBatch(calls);
     }
 

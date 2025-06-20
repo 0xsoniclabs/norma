@@ -125,6 +125,9 @@ func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
 		if receipt.Status != types.ReceiptStatusSuccessful {
 			t.Fatalf("transaction failed, receipt status: %v", receipt.Status)
 		}
+		if tx.Gas() > 2*receipt.GasUsed {
+			t.Errorf("gas limit unnecessary high: limit %d used %d", tx.Gas(), receipt.GasUsed)
+		}
 	}
 
 	if got, want := user.GetSentTransactions(), numTransactions; got != uint64(want) {

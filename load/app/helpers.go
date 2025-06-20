@@ -17,6 +17,8 @@
 package app
 
 import (
+	"fmt"
+	"github.com/holiman/uint256"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -34,6 +36,34 @@ func createTx(from *Account, toAddress common.Address, value *big.Int, data []by
 		Data:      data,
 	})
 	return types.SignTx(tx, types.NewLondonSigner(from.chainID), from.privateKey)
+}
+
+func createSetCodeTx(from *Account, toAddress common.Address, value *uint256.Int, data []byte, gasLimit uint64, authAccounts []*Account, codeAddr common.Address) (*types.Transaction, error) {
+	authList := make([]types.SetCodeAuthorization, 0, len(authAccounts))
+	for _, authAccount := range authAccounts {
+		auth := types.SetCodeAuthorization{
+			ChainID: *uint256.MustFromBig(authAccount.chainID),
+			Address: codeAddr,
+			Nonce:   authAccount.getNextNonce(),
+		}
+		auth, err := types.SignSetCode(authAccount.privateKey, auth)
+		if err != nil {
+			return nil, fmt.Errorf("failed to sign SetCodeAuthorization; %w", err)
+		}
+		authList = append(authList, auth)
+	}
+
+	tx := types.NewTx(&types.SetCodeTx{
+		Nonce:     from.getNextNonce(),
+		GasFeeCap: new(uint256.Int).Mul(uint256.NewInt(10_000), uint256.NewInt(1e9)),
+		GasTipCap: uint256.NewInt(0),
+		Gas:       gasLimit,
+		To:        toAddress,
+		Value:     value,
+		Data:      data,
+		AuthList:  authList,
+	})
+	return types.SignTx(tx, types.NewPragueSigner(from.chainID), from.privateKey)
 }
 
 func reverseAddresses(in []common.Address) []common.Address {
