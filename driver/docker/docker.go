@@ -86,11 +86,14 @@ type ContainerConfig struct {
 // Containers capable of hosting services. Clients successfully created
 // through this function should be Closed() eventually.
 func NewClient() (*Client, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv)
+	cli, err := client.NewClientWithOpts(
+		client.FromEnv,
+		client.WithVersion("1.45"),
+	)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{cli}, nil
+	return &Client{cli: cli}, nil
 }
 
 // Purge removes all Docker objects created by norma.

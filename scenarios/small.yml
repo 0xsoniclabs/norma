@@ -5,20 +5,20 @@
 name: Small Network
 
 # The duration of the scenario's runtime, in seconds.
-duration: 60
+duration: 16
 
-# The network scenario to exercise.
-nodes:
-  # We include three additional non-validator nodes for the full duration.
-  - name: A
-    instances: 3
+# # The network scenario to exercise.
+# nodes:
+#   # We include three additional non-validator nodes for the full duration.
+#   - name: A
+#     instances: 3
 
 # In the network there is a single application producing constant load.
 applications:
   - name: load
-    type: counter
-    start: 10          # start time
-    end: 50            # termination time
-    users: 20          # number of users using the app
+    type: sponsoring
+    start: 1          # start time
+    end: 15            # termination time
+    users: 10          # number of users using the app
     rate:
       constant: 10     # Tx/s

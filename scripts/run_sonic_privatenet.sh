@@ -3,8 +3,8 @@
 echo "Sonic binary checksum: $(sha256sum   /sonicd | cut -d ' ' -f 1 )"
 
 # Get the local node's IP.
-list=`hostname -I`
-array=($list)
+list=$(hostname -I)
+array=("$list")
 external_ip=${array[0]}
 
 echo "Sonic is going to export its services on ${external_ip}"
@@ -24,8 +24,8 @@ mkdir -p ${datadir}
 ##
 if [[ $VALIDATOR_ID -ne 0 ]]
 then
-	cmd=`./genesistools validator from -id ${VALIDATOR_ID} -d ${datadir}`
-	res=($cmd)
+	cmd=$(genesistools validator from -id "$VALIDATOR_ID" -d "$DATADIR")
+	res=("$cmd")
 	VALIDATOR_PUBKEY=${res[0]}
 	VALIDATOR_ADDRESS=${res[1]}
 fi
@@ -74,7 +74,7 @@ fi
 
 # Start sonic as part of a fake net with RPC service.
 ./sonicd \
-    --datadir=${datadir} \
+    --datadir=${DATADIR} \
     ${val_flag} \
     --http --http.addr 0.0.0.0 --http.port 18545 --http.api admin,eth,ftm \
     --ws --ws.addr 0.0.0.0 --ws.port 18546 --ws.api admin,eth,ftm \

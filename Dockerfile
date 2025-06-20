@@ -39,7 +39,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
 #
 # Stage 1b: Build Norma related tools supporting Client runs.
 #
-# It prepeares an image with dependencies for the norma.
+# It prepares an image with dependencies for the norma.
 # Its caches the dependencies first, so that the build is faster.
 #
 # It checks out the local version of the norma, and builds it.

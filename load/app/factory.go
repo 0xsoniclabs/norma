@@ -44,6 +44,8 @@ func getFactory(appType string) appFactoryFunc {
 		return NewStoreApplication
 	case "uniswap":
 		return NewUniswapApplication
+	case "sponsoring":
+		return NewSponsoring
 	}
 	return nil
 }
