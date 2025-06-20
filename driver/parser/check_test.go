@@ -595,7 +595,7 @@ func TestScenario_Checks_Success(t *testing.T) {
 		Name:     "Test",
 		Duration: 60,
 		Checks: []Check{
-			{Time: 30, Check: "test"},
+			{Time: 30, Check: "blocks_rolling"},
 		},
 	}
 	err := scenario.Check()
@@ -607,11 +607,11 @@ func TestScenario_Checks_Success(t *testing.T) {
 		Name:     "Test",
 		Duration: 60,
 		Checks: []Check{
-			{Time: 30, Check: "test"},
-			{Time: 30, Check: "test2"},
-			{Time: 20, Check: "test3"},
-			{Time: 40, Check: "test4"},
-			{Time: 45, Check: "test"},
+			{Time: 30, Check: "blocks_rolling"},
+			{Time: 30, Check: "blocks_rolling"},
+			{Time: 20, Check: "blocks_rolling"},
+			{Time: 40, Check: "blocks_rolling"},
+			{Time: 45, Check: "blocks_rolling"},
 		},
 	}
 	err = scenario2.Check()
@@ -625,7 +625,7 @@ func TestScenario_Checks_Failure(t *testing.T) {
 		Name:     "Test",
 		Duration: 60,
 		Checks: []Check{
-			{Time: -1, Check: "test"},
+			{Time: -1, Check: "blocks_rolling"},
 		},
 	}
 	err := scenario.Check()
@@ -637,12 +637,24 @@ func TestScenario_Checks_Failure(t *testing.T) {
 		Name:     "Test",
 		Duration: 60,
 		Checks: []Check{
-			{Time: 70, Check: "test"},
+			{Time: 70, Check: "blocks_rolling"},
 		},
 	}
 	err = scenario2.Check()
 	if err == nil || !strings.Contains(err.Error(), "invalid timing for check") {
 		t.Errorf("invalid timing for check was not detected")
+	}
+
+	scenario3 := Scenario{
+		Name:     "Test",
+		Duration: 60,
+		Checks: []Check{
+			{Time: 30, Check: "clearly_not_supported"},
+		},
+	}
+	err = scenario3.Check()
+	if err == nil || !strings.Contains(err.Error(), "check not supported") {
+		t.Errorf("unsupported check added but was not detected")
 	}
 
 }

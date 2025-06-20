@@ -8,7 +8,12 @@ import (
 )
 
 func init() {
+	// mandatory check at the end of sim unless --skip-check
 	RegisterNetworkCheck("blocks_rolling", func(net driver.Network, monitor *monitoring.Monitor) Checker {
+		return &blocksRollingChecker{monitor: &monitoringDataAdapter{monitor}, toleranceSamples: 10}
+	})
+	// can be called optionally from scenario yml through "checks"
+	RegisterSupportedCheck("blocks_rolling", func(net driver.Network, monitor *monitoring.Monitor) Checker {
 		return &blocksRollingChecker{monitor: &monitoringDataAdapter{monitor}, toleranceSamples: 10}
 	})
 }

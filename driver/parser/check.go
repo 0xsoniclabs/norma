@@ -108,6 +108,14 @@ func (s *Scenario) Check() error {
 		if chk.Time < 0 || chk.Time > s.Duration {
 			errs = append(errs, fmt.Errorf("invalid timing for checks: %f", chk.Time))
 		}
+		// TODO: this results in the following cyclical
+		// package github.com/0xsoniclabs/norma/driver/parser
+		// imports github.com/0xsoniclabs/norma/driver/checking from check.go
+		// imports github.com/0xsoniclabs/norma/driver from block_height.go
+		// github.com/0xsoniclabs/norma/driver/parser from network.go
+		//if !checking.IsSupportedCheck(chk.Check) {
+		//	errs = append(errs, fmt.Errorf("check not supported: %s", chk.Check))
+		//}
 	}
 
 	return errors.Join(errs...)
