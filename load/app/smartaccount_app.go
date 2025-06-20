@@ -30,6 +30,15 @@ func NewSmartAccountApplication(context AppContext, feederId, appId uint32) (App
 	}
 	deployments := []*types.Transaction{tx}
 
+	// Deploy EntryPoint
+	txOpts.Nonce = new(big.Int).Add(txOpts.Nonce, big.NewInt(1))
+	entryPointAddress, tx, _, err := contract.DeployEntryPoint(txOpts, rpcClient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deploy EntryPoint; %w", err)
+	}
+	deployments = append(deployments, tx)
+
+	// Deploy Counter (contract called by SmartAccount)
 	txOpts.Nonce = new(big.Int).Add(txOpts.Nonce, big.NewInt(1))
 	counterAddress, tx, _, err := contract.DeployCounter(txOpts, rpcClient)
 	if err != nil {
@@ -58,6 +67,10 @@ func NewSmartAccountApplication(context AppContext, feederId, appId uint32) (App
 	if err != nil {
 		return nil, err
 	}
+	entryPointAbi, err := contract.EntryPointMetaData.GetAbi()
+	if err != nil {
+		return nil, err
+	}
 	counterAbi, err := contract.CounterMetaData.GetAbi()
 	if err != nil {
 		return nil, err
@@ -65,10 +78,12 @@ func NewSmartAccountApplication(context AppContext, feederId, appId uint32) (App
 
 	return &SmartAccountApplication{
 		smartAccountAbi:         smartAccountAbi,
+		entryPointAbi:           entryPointAbi,
 		counterAbi:              counterAbi,
 		smartAccountImplAddress: smartAccountImplAddress,
-		accountFactory:          accountFactory,
+		entryPointAddress:       entryPointAddress,
 		counterAddress:          counterAddress,
+		accountFactory:          accountFactory,
 	}, nil
 }
 
@@ -76,10 +91,12 @@ func NewSmartAccountApplication(context AppContext, feederId, appId uint32) (App
 // Each created app should be used in a single thread only.
 type SmartAccountApplication struct {
 	smartAccountAbi         *abi.ABI
+	entryPointAbi           *abi.ABI
 	counterAbi              *abi.ABI
 	smartAccountImplAddress common.Address
-	accountFactory          *AccountFactory
+	entryPointAddress       common.Address
 	counterAddress          common.Address
+	accountFactory          *AccountFactory
 }
 
 // CreateUsers creates a list of new users for the app.
@@ -100,8 +117,10 @@ func (f *SmartAccountApplication) CreateUsers(appContext AppContext, numUsers in
 		}
 		users[i] = &SmartAccountUser{
 			smartAccountAbi:  f.smartAccountAbi,
+			entryPointAbi:    f.entryPointAbi,
 			counterAbi:       f.counterAbi,
 			sender:           workerAccount,
+			entryPointAddr:   f.entryPointAddress,
 			counterAddr:      f.counterAddress,
 			codeAddr:         f.smartAccountImplAddress,
 			accountsCircular: accountsCircular,
@@ -135,8 +154,10 @@ func (f *SmartAccountApplication) GetReceivedTransactions(rpcClient rpc.Client) 
 // A generator is supposed to be used in a single thread.
 type SmartAccountUser struct {
 	smartAccountAbi  *abi.ABI
+	entryPointAbi    *abi.ABI
 	counterAbi       *abi.ABI
 	sender           *Account
+	entryPointAddr   common.Address
 	counterAddr      common.Address
 	codeAddr         common.Address
 	accountsCircular *AccountsCircular
@@ -152,12 +173,13 @@ func (g *SmartAccountUser) GenerateTx() (*types.Transaction, error) {
 		return nil, err
 	}
 
+	// construct calldata for the target Counter contract
 	dataIncrement, err := g.counterAbi.Pack("incrementCounter")
 	if err != nil || dataIncrement == nil {
-		return nil, fmt.Errorf("failed to prepare increment user op data; %w", err)
+		return nil, fmt.Errorf("failed to prepare increment UserOp data; %w", err)
 	}
 
-	// prepare tx data
+	// construct calldata for the SmartAccount (to call the Counter)
 	calls := []contract.SmartAccountCall{
 		{
 			To:    g.counterAddr,
@@ -165,14 +187,26 @@ func (g *SmartAccountUser) GenerateTx() (*types.Transaction, error) {
 			Data:  dataIncrement,
 		},
 	}
-	data, err := g.smartAccountAbi.Pack("execute", calls)
-	if err != nil || data == nil {
-		return nil, fmt.Errorf("failed to prepare tx data; %w", err)
+	accountData, err := g.smartAccountAbi.Pack("execute", calls)
+	if err != nil || accountData == nil {
+		return nil, fmt.Errorf("failed to prepare SmartAccount calldata; %w", err)
+	}
+
+	// construct calldata for the EntryPoint (to call the SmartAccount)
+	userOperations := []contract.EntryPointPackedUserOperation{
+		{
+			Sender:   authAccounts[0].address,
+			CallData: accountData,
+		},
+	}
+	entryPointData, err := g.entryPointAbi.Pack("handleOps", userOperations)
+	if err != nil || entryPointData == nil {
+		return nil, fmt.Errorf("failed to prepare EntryPoint calldata; %w", err)
 	}
 
 	// prepare tx
 	const gasLimit = 200_000
-	tx, err := createSetCodeTx(g.sender, authAccounts[0].address, new(uint256.Int), data, gasLimit, authAccounts, g.codeAddr)
+	tx, err := createSetCodeTx(g.sender, g.entryPointAddr, new(uint256.Int), entryPointData, gasLimit, authAccounts, g.codeAddr)
 	if err == nil {
 		atomic.AddUint64(&g.sentTxs, 1)
 	}

@@ -50,7 +50,7 @@ build-sonic-docker-image-local:
 $(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)):
 	DOCKER_BUILDKIT=1 docker build --build-context client-src=$(CLIENT_URL)\#$(subst build-sonic-docker-image-,,$@) . -t sonic:$(subst build-sonic-docker-image-,,$@)
 
-generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi load/contracts/abi/SmartAccount.abi # requires installed solc and Ethereum abigen - check README.md
+generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi load/contracts/abi/SmartAccount.abi load/contracts/abi/EntryPoint.abi # requires installed solc and Ethereum abigen - check README.md
 
 load/contracts/abi/Counter.abi: load/contracts/Counter.sol
 	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/Counter.sol
@@ -79,6 +79,10 @@ load/contracts/abi/Helper.abi: load/contracts/Helper.sol
 load/contracts/abi/SmartAccount.abi: load/contracts/SmartAccount.sol
 	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/SmartAccount.sol
 	abigen --type SmartAccount --pkg abi --abi load/contracts/abi/SmartAccount.abi --bin load/contracts/abi/SmartAccount.bin --out load/contracts/abi/SmartAccount.go
+
+load/contracts/abi/EntryPoint.abi: load/contracts/EntryPoint.sol
+	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/EntryPoint.sol
+	abigen --type EntryPoint --pkg abi --abi load/contracts/abi/EntryPoint.abi --bin load/contracts/abi/EntryPoint.bin --out load/contracts/abi/EntryPoint.go
 
 generate-mocks: # requires installed mockgen
 	go generate ./...

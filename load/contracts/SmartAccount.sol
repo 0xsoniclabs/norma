@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.17;
 
+/// @notice Account-Abstraction (EIP-4337) Smart Account simplification
 contract SmartAccount {
 
-    /// @notice A nonce used for replay protection.
+    /// @notice A nonce used for replay protection. (Ignored in this simplified Smart Account)
     uint256 public nonce;
 
     /// @notice Represents a single call.
@@ -52,7 +53,7 @@ contract SmartAccount {
         emit CallExecuted(msg.sender, callItem.to, callItem.value, callItem.data);
     }
 
-    // Allow the contract to receive ETH (e.g. from DEX swaps or other transfers).
+    // Allow the contract to receive native tokens.
     fallback() external payable {}
     receive() external payable {}
 
