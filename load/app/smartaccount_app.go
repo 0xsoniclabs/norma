@@ -10,7 +10,6 @@ import (
 	"github.com/holiman/uint256"
 	"math/big"
 	"sync/atomic"
-	"time"
 )
 
 // NewSmartAccountApplication deploys a new SmartAccount dapp to the chain.
@@ -160,13 +159,11 @@ type SmartAccountUser struct {
 	entryPointAddr   common.Address
 	counterAddr      common.Address
 	codeAddr         common.Address
-	accountsCircular *AccountsCircular
+	accountsCircular *AccountsCircularPool
 	sentTxs          uint64
 }
 
 func (g *SmartAccountUser) GenerateTx() (*types.Transaction, error) {
-	time.Sleep(3 * time.Second)
-
 	// choose random recipients
 	authAccounts, err := g.accountsCircular.GetAccounts(3)
 	if err != nil {
