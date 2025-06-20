@@ -19,7 +19,7 @@ package checking
 import (
 	"fmt"
 	"github.com/0xsoniclabs/norma/driver"
-	"github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/monitoring/adapter"
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -27,7 +27,7 @@ import (
 )
 
 func init() {
-	RegisterNetworkCheck("blocks_hashes", func(net driver.Network, monitor *monitoring.Monitor) Checker {
+	RegisterNetworkCheck("blocks_hashes", func(net driver.Network, monitor adapter.MonitoringData) Checker {
 		return &blocksHashesChecker{net: net}
 	})
 }

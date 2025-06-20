@@ -30,6 +30,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/executor"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/monitoring/adapter"
 	_ "github.com/0xsoniclabs/norma/driver/monitoring/app"
 	prometheusmon "github.com/0xsoniclabs/norma/driver/monitoring/prometheus"
 	_ "github.com/0xsoniclabs/norma/driver/monitoring/user"
@@ -245,7 +246,7 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 	var checks []checking.Checker
 	if !skipChecks {
 		// Initialize network consistency checks.
-		checks = checking.InitNetworkChecks(net, monitor)
+		checks = checking.InitNetworkChecks(net, adapter.NewMonitoringData(monitor))
 	}
 
 	// Run scenario.

@@ -2,6 +2,7 @@ package checking
 
 import (
 	"github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/monitoring/adapter"
 	"go.uber.org/mock/gomock"
 	"testing"
 )
@@ -31,7 +32,7 @@ func TestBlocksRolling_Blocks_Processed(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			series := createBlockSeries(t, test.series)
 			ctrl := gomock.NewController(t)
-			monitor := NewMockMonitoringData(ctrl)
+			monitor := adapter.NewMockMonitoringData(ctrl)
 			monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
 			monitor.EXPECT().GetData(gomock.Any()).Return(series)
 
@@ -74,7 +75,7 @@ func TestBlocksRolling_Blocks_Failure(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			series := createBlockSeries(t, test.series)
 			ctrl := gomock.NewController(t)
-			monitor := NewMockMonitoringData(ctrl)
+			monitor := adapter.NewMockMonitoringData(ctrl)
 			monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
 			monitor.EXPECT().GetData(gomock.Any()).Return(series)
 

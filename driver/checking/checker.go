@@ -19,11 +19,11 @@ package checking
 import (
 	"errors"
 	"github.com/0xsoniclabs/norma/driver"
-	"github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/monitoring/adapter"
 )
 
 // Factory is a function that creates a Checker.
-type Factory func(driver.Network, *monitoring.Monitor) Checker
+type Factory func(driver.Network, adapter.MonitoringData) Checker
 
 // registry is a mapping of Checker registrations.
 type registry map[string]Factory
@@ -61,10 +61,10 @@ func IsSupportedCheck(name string) bool {
 }
 
 // InitNetworkChecks initializes the Checks with the given network.
-func InitNetworkChecks(network driver.Network, monitor *monitoring.Monitor) Checks {
+func InitNetworkChecks(network driver.Network, md adapter.MonitoringData) Checks {
 	var checkers []Checker
 	for _, factory := range registrations {
-		checker := factory(network, monitor)
+		checker := factory(network, md)
 		checkers = append(checkers, checker)
 	}
 

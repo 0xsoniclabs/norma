@@ -19,7 +19,7 @@ package checking
 import (
 	"fmt"
 	"github.com/0xsoniclabs/norma/driver"
-	"github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/monitoring/adapter"
 	"maps"
 	"strconv"
 	"strings"
@@ -30,7 +30,7 @@ import (
 const defaultSlack = 5
 
 func init() {
-	RegisterNetworkCheck("block_height", func(net driver.Network, monitor *monitoring.Monitor) Checker {
+	RegisterNetworkCheck("block_height", func(net driver.Network, monitor adapter.MonitoringData) Checker {
 		return &blockHeightChecker{net: net, slack: defaultSlack}
 	})
 }
