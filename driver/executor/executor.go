@@ -78,6 +78,15 @@ func Run(clock Clock, network driver.Network, scenario *parser.Scenario, checks 
 		scheduleAdvanceEpochEvents(adv.Time, epochs, queue, network)
 	}
 
+	for _, c := range scenario.Checks {
+		checker := checks.GetCheckerByName(c.Check)
+		if checker == nil {
+			return fmt.Errorf("check '%s' not found", c.Check)
+		}
+
+		scheduleCheckEvents(c.Time, c.Check, checker, queue, network)
+	}
+
 	// Register a handler for Ctrl+C events.
 	abort := make(chan os.Signal, 1)
 	signal.Notify(abort, os.Interrupt)
@@ -335,5 +344,12 @@ func scheduleNetworkRulesEvents(rule parser.NetworkRulesUpdate, queue *eventQueu
 func scheduleAdvanceEpochEvents(timing float32, epochIncrement int, queue *eventQueue, network driver.Network) {
 	queue.add(toSingleEvent(Seconds(timing), fmt.Sprintf("Advancing Epoch by %d", epochIncrement), func() error {
 		return network.AdvanceEpoch(epochIncrement)
+	}))
+}
+
+// scheduleCheckEvents schedules an event to send perform corresponding check
+func scheduleCheckEvents(timing float32, name string, check checking.Checker, queue *eventQueue, network driver.Network) {
+	queue.add(toSingleEvent(Seconds(timing), fmt.Sprintf("Check [%s]", name), func() error {
+		return check.Check()
 	}))
 }

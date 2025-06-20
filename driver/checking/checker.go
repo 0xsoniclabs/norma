@@ -36,7 +36,7 @@ type Checker interface {
 }
 
 // Checks is a slice of Checker.
-type Checks []Checker
+type Checks map[string]Checker
 
 // RegisterNetworkCheck registers a new Checker via its factory.
 func RegisterNetworkCheck(name string, factory Factory) {
@@ -45,10 +45,10 @@ func RegisterNetworkCheck(name string, factory Factory) {
 
 // InitNetworkChecks initializes the Checks with the given network.
 func InitNetworkChecks(network driver.Network, monitor *monitoring.Monitor) Checks {
-	var checkers []Checker
-	for _, factory := range registrations {
+	var checkers map[string]Checker
+	for name, factory := range registrations {
 		checker := factory(network, monitor)
-		checkers = append(checkers, checker)
+		checkers[name] = checker
 	}
 
 	return checkers
@@ -57,8 +57,15 @@ func InitNetworkChecks(network driver.Network, monitor *monitoring.Monitor) Chec
 // Check executes all checkers and returns an error if any of them find an issue.
 func (c Checks) Check() error {
 	errs := make([]error, len(c))
-	for i, checker := range c {
-		errs[i] = checker.Check()
+	for _, checker := range c {
+		errs = append(errs, checker.Check())
 	}
+
 	return errors.Join(errs...)
+}
+
+// GetCheckerByName retrieves a Checker by its name.
+// It returns nil if the Checker is not found.
+func (c Checks) GetCheckerByName(name string) Checker {
+	return c[name]
 }
