@@ -19,7 +19,9 @@ package executor
 import (
 	"fmt"
 	"github.com/0xsoniclabs/norma/driver/checking"
+	"github.com/0xsoniclabs/norma/driver/monitoring/adapter"
 	"reflect"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -306,5 +308,79 @@ func TestExecutor_scheduleAdvanceEpochEvents(t *testing.T) {
 
 	if err := Run(clock, net, &scenario, nil); err != nil {
 		t.Errorf("failed to run scenario: %v", err)
+	}
+}
+
+func TestExecutor_scheduleCheckEvents(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	checking.InitNetworkChecks(net, nil)
+
+	checker := checking.NewMockChecker(ctrl)
+	checking.RegisterSupportedCheck("tester", func(net driver.Network, monitor adapter.MonitoringData) checking.Checker {
+		return checker
+	})
+
+	checker2 := checking.NewMockChecker(ctrl)
+	checking.RegisterSupportedCheck("tester2", func(net driver.Network, monitor adapter.MonitoringData) checking.Checker {
+		return checker2
+	})
+
+	checker3 := checking.NewMockChecker(ctrl)
+	checking.RegisterSupportedCheck("tester3", func(net driver.Network, monitor adapter.MonitoringData) checking.Checker {
+		return checker3
+	})
+
+	clock := NewSimClock()
+	scenario := parser.Scenario{
+		Name:     "Test",
+		Duration: 10,
+		Checks: []parser.Check{
+			{Time: 3, Check: "tester"},
+			{Time: 5, Check: "tester2"},
+			{Time: 7, Check: "tester"},
+		},
+	}
+
+	gomock.InOrder(
+		checker.EXPECT().Check(),
+		checker2.EXPECT().Check(),
+		checker.EXPECT().Check(),
+	)
+
+	if err := Run(clock, net, &scenario, nil); err != nil {
+		t.Errorf("failed to run scenario: %v", err)
+	}
+
+	clock2 := NewSimClock()
+	scenario2 := parser.Scenario{
+		Name:     "Test",
+		Duration: 10,
+		Checks: []parser.Check{
+			{Time: 1, Check: "tester"},
+			{Time: 1, Check: "tester2"},
+			{Time: 1, Check: "tester3"},
+		},
+	}
+
+	checker.EXPECT().Check()
+	checker2.EXPECT().Check()
+	checker3.EXPECT().Check()
+
+	if err := Run(clock2, net, &scenario2, nil); err != nil {
+		t.Errorf("failed to run scenario: %v", err)
+	}
+
+	clock3 := NewSimClock()
+	scenario3 := parser.Scenario{
+		Name:     "Test",
+		Duration: 10,
+		Checks: []parser.Check{
+			{Time: 5, Check: "clearly-not-supported"},
+		},
+	}
+	err := Run(clock3, net, &scenario3, nil)
+	if err == nil || !strings.Contains(err.Error(), "check not supported") {
+		t.Errorf("check not supported but was not caught.")
 	}
 }

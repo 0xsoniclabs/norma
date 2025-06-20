@@ -18,6 +18,7 @@ package checking
 
 import (
 	"errors"
+	"fmt"
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 )
@@ -35,6 +36,8 @@ var registrations = make(registry)
 // supportedCustomChecks contains all supported checking types that
 // could be configured into scenario yml config through "checks"
 var supportedCustomChecks = make(registry)
+
+//go:generate mockgen -source checker.go -destination checker_mock.go -package checking
 
 // Checker does the consistency check at the end of the scenario.
 type Checker interface {
@@ -60,8 +63,14 @@ func IsSupportedCheck(name string) bool {
 	return ok
 }
 
+var registeredNetwork driver.Network = nil
+var registeredMonitor adapter.MonitoringData = nil
+
 // InitNetworkChecks initializes the Checks with the given network.
 func InitNetworkChecks(network driver.Network, monitor *monitoring.Monitor) Checks {
+	registeredNetwork = network
+	registeredMonitor = md
+
 	var checkers []Checker
 	for _, factory := range registrations {
 		checker := factory(network, monitor)
@@ -69,6 +78,20 @@ func InitNetworkChecks(network driver.Network, monitor *monitoring.Monitor) Chec
 	}
 
 	return checkers
+}
+
+// NewChecker returns a checker if it is supported
+// This also required that the networks and monitors are registered via InitNetworkChecks
+func NewChecker(name string) (Checker, error) {
+	if registeredNetwork == nil {
+		return nil, fmt.Errorf("Network not registered. Try InitNetworkChecks!")
+	}
+
+	if !IsSupportedCheck(name) {
+		return nil, fmt.Errorf("check not supported: %s", name)
+	}
+
+	return supportedCustomChecks[name](registeredNetwork, registeredMonitor), nil
 }
 
 // Check executes all checkers and returns an error if any of them find an issue.
