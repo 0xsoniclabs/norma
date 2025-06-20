@@ -28,7 +28,13 @@ type Factory func(driver.Network, *monitoring.Monitor) Checker
 // registry is a mapping of Checker registrations.
 type registry map[string]Factory
 
+// registrations are mandatory default checks that will be carry out
+// if --skip-check is not enabled.
 var registrations = make(registry)
+
+// supportedCustomChecks contains all supported checking types that
+// could be configured into scenario yml config through "checks"
+var supportedCustomChecks = make(registry)
 
 // Checker does the consistency check at the end of the scenario.
 type Checker interface {
@@ -41,6 +47,17 @@ type Checks []Checker
 // RegisterNetworkCheck registers a new Checker via its factory.
 func RegisterNetworkCheck(name string, factory Factory) {
 	registrations[name] = factory
+}
+
+// RegisterSupportedCheck registered a support checker type.
+func RegisterSupportedCheck(name string, factory Factory) {
+	supportedCustomChecks[name] = factory
+}
+
+// IsSupportedCheck returns true iff the check of provided name is supported
+func IsSupportedCheck(name string) bool {
+	_, ok := supportedCustomChecks[name]
+	return ok
 }
 
 // InitNetworkChecks initializes the Checks with the given network.
