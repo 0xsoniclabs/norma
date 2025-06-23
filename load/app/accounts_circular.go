@@ -6,7 +6,7 @@ import (
 )
 
 // AccountsCircularPool is a circular pool of accounts.
-// Allows reusing a single set of accounts without reusing the same account too shortly after its last usage.
+// It allows for reusing a single set of accounts without reusing the same account too shortly after its last usage.
 type AccountsCircularPool struct {
 	accounts []*Account
 	current  int
