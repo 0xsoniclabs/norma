@@ -5,14 +5,15 @@ import (
 	"github.com/0xsoniclabs/norma/driver/rpc"
 )
 
-// AccountsCircularPool is a circular registry of accounts.
+// AccountsCircularPool is a circular pool of accounts.
 // Allows reusing a single set of accounts without reusing the same account too shortly after its last usage.
 type AccountsCircularPool struct {
 	accounts []*Account
 	current  int
 }
 
-func NewAccountsCircular(accountFactory *AccountFactory, rpcClient rpc.Client, size int) (*AccountsCircularPool, error) {
+// NewAccountsCircularPool constructs a new circular pool of accounts.
+func NewAccountsCircularPool(accountFactory *AccountFactory, rpcClient rpc.Client, size int) (*AccountsCircularPool, error) {
 	accounts := make([]*Account, 0, size)
 	for i := 0; i < size; i++ {
 		acc, err := accountFactory.CreateAccount(rpcClient)
@@ -27,6 +28,7 @@ func NewAccountsCircular(accountFactory *AccountFactory, rpcClient rpc.Client, s
 	}, nil
 }
 
+// GetAccounts obtains X accounts from the circular pool.
 func (c *AccountsCircularPool) GetAccounts(count int) ([]*Account, error) {
 	if count > len(c.accounts) {
 		return nil, fmt.Errorf("requested more accounts (%d) than available in the circular registry (%d)", count, len(c.accounts))

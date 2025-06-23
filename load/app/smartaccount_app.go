@@ -110,7 +110,7 @@ func (f *SmartAccountApplication) CreateUsers(appContext AppContext, numUsers in
 		if err != nil {
 			return nil, err
 		}
-		accountsCircular, err := NewAccountsCircular(f.accountFactory, appContext.GetClient(), 1000)
+		accountsCircular, err := NewAccountsCircularPool(f.accountFactory, appContext.GetClient(), 1000)
 		if err != nil {
 			return nil, err
 		}
