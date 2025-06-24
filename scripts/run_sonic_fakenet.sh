@@ -1,4 +1,8 @@
 #!/bin/bash
+
+export CGO_CFLAGS="-O2 -D__BLST_PORTABLE__"
+export CGO_CFLAGS_ALLOW="-O2 -D__BLST_PORTABLE__"
+
 # Get the local node's IP.
 list=`hostname -I`
 array=($list)
