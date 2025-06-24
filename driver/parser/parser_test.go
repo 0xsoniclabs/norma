@@ -183,8 +183,7 @@ advance_epoch:
 `
 
 func TestParseExampleWithAdvanceEpoch(t *testing.T) {
-	_, err := ParseBytes([]byte(withAdvanceEpoch))
-	if err != nil {
+	if _, err := ParseBytes([]byte(withAdvanceEpoch)); err != nil {
 		t.Fatalf("parsing of input failed: %v", err)
 	}
 }
