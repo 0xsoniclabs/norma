@@ -166,7 +166,7 @@ func NewUniswapApplication(context AppContext, feederId, appId uint32) (Applicat
 	}, nil
 }
 
-// UniswapApplication represents one application deployed to the network - an ERC-20 contract.
+// UniswapApplication represents one application deployed to the network - a set of ERC-20 tokens, Uniswap pairs and the Uniswap router.
 // Each created app should be used in a single thread only.
 type UniswapApplication struct {
 	routerAbi       *abi.ABI

@@ -34,7 +34,12 @@ const FakeNetworkID = 0xfa3
 
 func TestGenerators(t *testing.T) {
 	// run local network of one node
-	net, err := local.NewLocalNetwork(&driver.NetworkConfig{Validators: driver.DefaultValidators})
+	net, err := local.NewLocalNetwork(&driver.NetworkConfig{
+		Validators: driver.DefaultValidators,
+		NetworkRules: map[string]string{
+			"UPGRADES_ALLEGRO": "true",
+		},
+	})
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
@@ -78,6 +83,13 @@ func TestGenerators(t *testing.T) {
 		}
 		testGenerator(t, uniswapApp, context)
 	})
+	t.Run("SmartAccount", func(t *testing.T) {
+		smartAccountApp, err := app.NewSmartAccountApplication(context, 0, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testGenerator(t, smartAccountApp, context)
+	})
 }
 
 func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
@@ -112,6 +124,9 @@ func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
 		}
 		if receipt.Status != types.ReceiptStatusSuccessful {
 			t.Fatalf("transaction failed, receipt status: %v", receipt.Status)
+		}
+		if tx.Gas() > 2*receipt.GasUsed {
+			t.Errorf("gas limit unnecessary high: limit %d used %d", tx.Gas(), receipt.GasUsed)
 		}
 	}
 

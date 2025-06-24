@@ -29,8 +29,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// AccountFactory use one mnemonic phrase to generate any amount accounts, by BIP-39 standard.
-// Any factory using the same mnemonic, feederId and appId produce the same sequence of accounts,
+// AccountFactory generates any amount of accounts.
+// Any factory using the same feederId and appId produces the same sequence of accounts,
 // which can be used to reuse existing accounts from previous runs.
 type AccountFactory struct {
 	chainID         *big.Int
