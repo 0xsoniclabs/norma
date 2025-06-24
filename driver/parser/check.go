@@ -104,6 +104,12 @@ func (s *Scenario) Check() error {
 		}
 	}
 
+	for _, chk := range s.Checks {
+		if chk.Time < 0 || chk.Time > s.Duration {
+			errs = append(errs, fmt.Errorf("invalid timing for checks: %f", chk.Time))
+		}
+	}
+
 	return errors.Join(errs...)
 }
 
