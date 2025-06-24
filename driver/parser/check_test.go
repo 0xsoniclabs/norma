@@ -600,7 +600,7 @@ func TestScenario_Checks_Success(t *testing.T) {
 	}
 	err := scenario.Check()
 	if err != nil {
-		t.Errorf("Check valid but this error occured: %v", err)
+		t.Errorf("unexpected error: %v", err)
 	}
 
 	scenario2 := Scenario{
