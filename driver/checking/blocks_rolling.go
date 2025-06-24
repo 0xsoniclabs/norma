@@ -7,9 +7,22 @@ import (
 	nodemon "github.com/0xsoniclabs/norma/driver/monitoring/node"
 )
 
+const defaultRecent monitoring.Time = 30
+
 func init() {
+	// at least one node has increasing block height throughout the simulation
 	RegisterNetworkCheck("blocks_rolling", func(net driver.Network, monitor *monitoring.Monitor) Checker {
-		return &blocksRollingChecker{monitor: &monitoringDataAdapter{monitor}, toleranceSamples: 10}
+		return &blocksRollingChecker{monitor: &monitoringDataAdapter{monitor}, toleranceSamples: 10, expectNetworkFunctional: true}
+	})
+
+	var recent = defaultRecent
+	// at least one node has increasing block heights throughout recent data points
+	RegisterNetworkCheck("recent_blocks_rolling", func(net driver.Network, monitor *monitoring.Monitor) Checker {
+		return &blocksRollingChecker{monitor: &monitoringDataAdapter{monitor}, toleranceSamples: 10, expectNetworkFunctional: true, recent: &recent}
+	})
+	// none of the nodes has increasing block heights throughout recent data points
+	RegisterNetworkCheck("recent_blocks_not_rolling", func(net driver.Network, monitor *monitoring.Monitor) Checker {
+		return &blocksRollingChecker{monitor: &monitoringDataAdapter{monitor}, toleranceSamples: 10, expectNetworkFunctional: false, recent: &recent}
 	})
 }
 
@@ -38,8 +51,13 @@ func (m *monitoringDataAdapter) GetData(node monitoring.Node) monitoring.Series[
 
 // blocksRollingChecker is a Checker checking if all nodes keeps producing blocks.
 type blocksRollingChecker struct {
-	monitor          MonitoringData
-	toleranceSamples int
+	monitor                 MonitoringData
+	toleranceSamples        int
+	expectNetworkFunctional bool
+
+	// if nil, get entire data from monitor.
+	// Otherwise only get this many recent data points.
+	recent *monitoring.Time
 }
 
 func (c *blocksRollingChecker) Check() error {
@@ -58,12 +76,18 @@ func (c *blocksRollingChecker) Check() error {
 	for _, node := range nodes {
 		nodeFunctional := true
 		series := c.monitor.GetData(node)
+
 		last := series.GetLatest()
 		if last == nil {
 			nodeFunctional = false //node produced no blocks
 			continue
 		}
-		items := series.GetRange(0, last.Position)
+		var first monitoring.Time = 0
+		if c.recent != nil {
+			first = last.Position - *c.recent
+		}
+
+		items := series.GetRange(first, last.Position)
 		window := make([]monitoring.BlockStatus, c.toleranceSamples)
 		for i, point := range append(items, *last) {
 			window[i%c.toleranceSamples] = point.Value
@@ -80,8 +104,13 @@ func (c *blocksRollingChecker) Check() error {
 	}
 
 	var err error
-	if !networkFunctional {
-		err = fmt.Errorf("network is down, nodes stopped producing blocks")
+	// network should fail but it works (at least 1 node has its block height increase)
+	if !c.expectNetworkFunctional && networkFunctional {
+		err = fmt.Errorf("network is working, nodes still producing blocks even when it shouldn't")
+	}
+	// network should work but it fails (none of the nodes has its block height increase)
+	if c.expectNetworkFunctional && !networkFunctional {
+		err = fmt.Errorf("network is down, nodes stopped producing blocks even when it should")
 	}
 
 	return err
