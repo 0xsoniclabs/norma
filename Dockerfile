@@ -34,6 +34,8 @@ RUN go mod download
 COPY --from=client-src . .
 
 # Build the client
+ENV CGO_CFLAGS="-O2 -D__BLST_PORTABLE__"
+ENV CGO_CFLAGS_ALLOW="-O2 -D__BLST_PORTABLE__"
 RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
 
 #
@@ -54,6 +56,8 @@ RUN go mod download
 # Build norma itself
 WORKDIR /genesistools
 COPY /genesis/ ./
+ENV CGO_CFLAGS="-O2 -D__BLST_PORTABLE__"
+ENV CGO_CFLAGS_ALLOW="-O2 -D__BLST_PORTABLE__"
 RUN --mount=type=cache,target=/root/.cache/go-build make genesistools
 
 #
@@ -72,6 +76,9 @@ ENV STATE_DB_IMPL="geth"
 ENV VM_IMPL="geth"
 ENV LD_LIBRARY_PATH=./
 ENV TINI_KILL_PROCESS_GROUP=1
+
+ENV CGO_CFLAGS="-O2 -D__BLST_PORTABLE__"
+ENV CGO_CFLAGS_ALLOW="-O2 -D__BLST_PORTABLE__"
 
 EXPOSE 5050
 EXPOSE 6060
