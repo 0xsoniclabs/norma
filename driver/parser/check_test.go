@@ -589,3 +589,63 @@ func TestScenario_AdvanceEpoch_Failure(t *testing.T) {
 		t.Errorf("backward epoch advancement was not detected")
 	}
 }
+
+func TestScenario_Checks_Success(t *testing.T) {
+	scenarios := []Scenario{
+		{
+			Name:     "Test_Check_Success1",
+			Duration: 60,
+			Checks: []Check{
+				{Time: 30, Check: "test"},
+			},
+		},
+		{
+			Name:     "Test_Check_Succuss2",
+			Duration: 60,
+			Checks: []Check{
+				{Time: 30, Check: "test"},
+				{Time: 30, Check: "test2"},
+				{Time: 20, Check: "test3"},
+				{Time: 40, Check: "test4"},
+				{Time: 45, Check: "test"},
+			},
+		},
+	}
+
+	for _, scenario := range scenarios {
+		t.Run(scenario.Name, func(t *testing.T) {
+			t.Parallel()
+			if err := scenario.Check(); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestScenario_Checks_Failure(t *testing.T) {
+	scenarios := []Scenario{
+		{
+			Name:     "Test_Check_Failure1_BeforeSim",
+			Duration: 60,
+			Checks: []Check{
+				{Time: -1, Check: "test"},
+			},
+		},
+		{
+			Name:     "Test_Check_Failure_AfterSim",
+			Duration: 60,
+			Checks: []Check{
+				{Time: 70, Check: "test"},
+			},
+		},
+	}
+
+	for _, scenario := range scenarios {
+		t.Run(scenario.Name, func(t *testing.T) {
+			t.Parallel()
+			if err := scenario.Check(); err == nil || !strings.Contains(err.Error(), "invalid timing for check") {
+				t.Errorf("invalid timing for check was not detected")
+			}
+		})
+	}
+}

@@ -189,6 +189,21 @@ func TestParseExampleWithAdvanceEpoch(t *testing.T) {
 	}
 }
 
+var withChecks = smallExample + `
+
+checks:
+  - time: 25
+    check: block_rolling
+  - time: 50 
+    check: block_rolling
+`
+
+func TestParseExampleWithChecks(t *testing.T) {
+	if _, err := ParseBytes([]byte(withChecks)); err != nil {
+		t.Fatalf("parsing of input failed: %v", err)
+	}
+}
+
 func TestNetwork_Rules(t *testing.T) {
 	scenario, err := ParseBytes([]byte(networkRulesPayload))
 	if err != nil {
