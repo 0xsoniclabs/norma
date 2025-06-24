@@ -199,8 +199,7 @@ checks:
 `
 
 func TestParseExampleWithChecks(t *testing.T) {
-	_, err := ParseBytes([]byte(withChecks))
-	if err != nil {
+	if _, err := ParseBytes([]byte(withChecks)); err != nil {
 		t.Fatalf("parsing of input failed: %v", err)
 	}
 }
