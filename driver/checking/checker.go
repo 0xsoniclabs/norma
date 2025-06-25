@@ -30,6 +30,8 @@ type registry map[string]Factory
 
 var registrations = make(registry)
 
+//go:generate mockgen -source checker.go -destination checker_mock.go -package checking
+
 // Checker does the consistency check at the end of the scenario.
 type Checker interface {
 	Check() error
@@ -45,7 +47,7 @@ func RegisterNetworkCheck(name string, factory Factory) {
 
 // InitNetworkChecks initializes the Checks with the given network.
 func InitNetworkChecks(network driver.Network, monitor *monitoring.Monitor) Checks {
-	var checkers map[string]Checker
+	var checkers map[string]Checker = make(map[string]Checker, len(registrations))
 	for name, factory := range registrations {
 		checker := factory(network, monitor)
 		checkers[name] = checker
