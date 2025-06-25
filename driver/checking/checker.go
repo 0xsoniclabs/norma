@@ -47,7 +47,7 @@ func RegisterNetworkCheck(name string, factory Factory) {
 
 // InitNetworkChecks initializes the Checks with the given network.
 func InitNetworkChecks(network driver.Network, monitor *monitoring.Monitor) Checks {
-	var checkers map[string]Checker = make(map[string]Checker, len(registrations))
+	checkers := make(map[string]Checker, len(registrations))
 	for name, factory := range registrations {
 		checker := factory(network, monitor)
 		checkers[name] = checker

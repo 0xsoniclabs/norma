@@ -256,9 +256,9 @@ func TestExecutor_RunScenarioWithDefaultChecks(t *testing.T) {
 		return checkBlocksRolling
 	})
 
-	checkBlockHeight.EXPECT().Check().Return(nil).Times(1)
-	checkBlocksHashes.EXPECT().Check().Return(nil).Times(1)
-	checkBlocksRolling.EXPECT().Check().Return(nil).Times(1)
+	checkBlockHeight.EXPECT().Check().Return(nil)
+	checkBlocksHashes.EXPECT().Check().Return(nil)
+	checkBlocksRolling.EXPECT().Check().Return(nil)
 
 	checks := checking.InitNetworkChecks(net, nil)
 	if err := Run(clock, net, &scenario, checks); err != nil {
