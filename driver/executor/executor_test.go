@@ -19,6 +19,7 @@ package executor
 import (
 	"fmt"
 	"github.com/0xsoniclabs/norma/driver/checking"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"reflect"
 	"syscall"
 	"testing"
@@ -222,13 +223,50 @@ func TestExecutor_TestUserAbort(t *testing.T) {
 		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	}).Return(node, nil)
 
-	checks := checking.InitNetworkChecks(net, nil)
-	if err := Run(clock, net, &scenario, checks); err == nil {
+	if err := Run(clock, net, &scenario, nil); err == nil {
 		t.Errorf("a user interrupt error should be reported")
 	}
 	want := Seconds(1)
 	if got := clock.Now(); got < want || got > want+Seconds(1) {
 		t.Errorf("scenario execution did not complete on user interrupt, expected end time %v, got %v", want, got)
+	}
+}
+
+func TestExecutor_RunScenarioWithDefaultChecks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	clock := NewSimClock()
+	net := driver.NewMockNetwork(ctrl)
+	scenario := parser.Scenario{
+		Name:       "Test",
+		Duration:   10,
+		Validators: []parser.Validator{{Name: "validator"}},
+	}
+
+	// Mock Default Checks
+	checkBlockHeight := checking.NewMockChecker(ctrl)
+	checking.RegisterNetworkCheck("block_height", func(driver.Network, *monitoring.Monitor) checking.Checker {
+		return checkBlockHeight
+	})
+	checkBlocksHashes := checking.NewMockChecker(ctrl)
+	checking.RegisterNetworkCheck("blocks_hashes", func(driver.Network, *monitoring.Monitor) checking.Checker {
+		return checkBlocksHashes
+	})
+	checkBlocksRolling := checking.NewMockChecker(ctrl)
+	checking.RegisterNetworkCheck("blocks_rolling", func(driver.Network, *monitoring.Monitor) checking.Checker {
+		return checkBlocksRolling
+	})
+
+	checkBlockHeight.EXPECT().Check().Return(nil)
+	checkBlocksHashes.EXPECT().Check().Return(nil)
+	checkBlocksRolling.EXPECT().Check().Return(nil)
+
+	checks := checking.InitNetworkChecks(net, nil)
+	if err := Run(clock, net, &scenario, checks); err != nil {
+		t.Errorf("failed to run scenario with default checks: %v", err)
+	}
+	want := Seconds(10)
+	if got := clock.Now(); got < want {
+		t.Errorf("scenario execution did not complete all steps, expected end time %v, got %v", want, got)
 	}
 }
 
