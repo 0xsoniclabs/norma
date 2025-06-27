@@ -76,6 +76,9 @@ fi
 
 
 # Start sonic as part of a fake net with RPC service.
+echo "Staring sonic with extra verbosity"
+export GOMEMLIMIT="1GiB"
+export SONIC_VERBOSITY=5
 ./sonicd \
     --datadir=${datadir} \
     ${val_flag} \

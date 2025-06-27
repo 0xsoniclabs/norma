@@ -2,16 +2,18 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
+	"sort"
+	"sync"
+	"time"
+
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/executor"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	netmon "github.com/0xsoniclabs/norma/driver/monitoring/network"
 	nodemon "github.com/0xsoniclabs/norma/driver/monitoring/node"
 	"github.com/0xsoniclabs/norma/driver/network/local"
 	"golang.org/x/exp/constraints"
-	"log"
-	"sort"
-	"sync"
-	"time"
 )
 
 // progressLogger is a helper struct that logs the progress of the network.
@@ -23,7 +25,11 @@ type progressLogger struct {
 }
 
 // startProgressLogger starts a progress logger that logs the progress of the network.
-func startProgressLogger(monitor *monitoring.Monitor, net *local.LocalNetwork) *progressLogger {
+func startProgressLogger(
+	clock executor.Clock,
+	monitor *monitoring.Monitor,
+	net *local.LocalNetwork,
+) *progressLogger {
 	stop := make(chan bool)
 	done := make(chan bool)
 
@@ -43,7 +49,7 @@ func startProgressLogger(monitor *monitoring.Monitor, net *local.LocalNetwork) *
 			case <-stop:
 				return
 			case <-ticker.C:
-				logState(monitor, activeNodes)
+				logState(clock, monitor, activeNodes)
 			}
 		}
 	}()
@@ -66,7 +72,7 @@ func (l *activeNodes) AfterNodeCreation(node driver.Node) {
 	l.data[driver.NodeID(node.GetLabel())] = struct{}{}
 }
 
-func (l *activeNodes) AfterNodeRemoval(node driver.Node) {
+func (l *activeNodes) BeforeNodeRemoval(node driver.Node) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	delete(l.data, driver.NodeID(node.GetLabel()))
@@ -89,15 +95,28 @@ func (l *progressLogger) shutdown() {
 	<-l.done
 }
 
-func logState(monitor *monitoring.Monitor, nodes *activeNodes) {
+func logState(
+	clock executor.Clock,
+	monitor *monitoring.Monitor,
+	nodes *activeNodes,
+) {
+	now := clock.Now()
 	numNodes := getNumNodes(monitor)
 	blockStatuses := getBlockStatuses(monitor, nodes)
 	txPers := getTxPerSec(monitor, nodes)
 	txs := getNumTxs(monitor)
 	gas := getGasUsed(monitor)
-	processingTimes := getBlockProcessingTimes(monitor, nodes)
 
-	log.Printf("Nodes: %s, epc/blk heights: %v, tx/s: %v, txs: %v, gas: %s, blk processing: %v", numNodes, blockStatuses, txPers, txs, gas, processingTimes)
+	slog.Info(
+		"periodic state update",
+		"time", now,
+		"nodes", numNodes,
+		"epoch_and_block_statuses", blockStatuses,
+		"tx_per_sec", txPers,
+		"num_txs", txs,
+		"gas_used", gas,
+	)
+	//log.Printf("t=%v, nodes: %s, epc/blk heights: %v, tx/s: %v, txs: %v, gas: %s", now, numNodes, blockStatuses, txPers, txs, gas)
 }
 
 func getNumNodes(monitor *monitoring.Monitor) string {
@@ -129,15 +148,6 @@ func getBlockStatuses(monitor *monitoring.Monitor, nodes *activeNodes) []string 
 		monitor, metric, nodes)
 }
 
-func getBlockProcessingTimes(monitor *monitoring.Monitor, nodes *activeNodes) []string {
-	metric := nodemon.BlockEventAndTxsProcessingTime
-	return getLastValAllSubjects[
-		monitoring.BlockNumber,
-		time.Duration,
-		monitoring.Series[monitoring.BlockNumber, time.Duration]](
-		monitor, metric, nodes)
-}
-
 func getLastValAllSubjects[K constraints.Ordered, T any, X monitoring.Series[K, T]](
 	monitor *monitoring.Monitor,
 	metric monitoring.Metric[monitoring.Node, X],
@@ -164,6 +174,12 @@ func getLastValAsString[K constraints.Ordered, T any](exists bool, series monito
 	point := series.GetLatest()
 	if point == nil {
 		return "N/A"
+	}
+	if val, ok := any(point.Value).(float32); ok {
+		return fmt.Sprintf("%.2f", val)
+	}
+	if val, ok := any(point.Value).(float64); ok {
+		return fmt.Sprintf("%.2f", val)
 	}
 	return fmt.Sprintf("%v", point.Value)
 }

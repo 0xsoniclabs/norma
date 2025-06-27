@@ -5,6 +5,7 @@
 //
 //	mockgen -source rpc.go -destination rpc_mock.go -package rpc
 //
+
 // Package rpc is a generated GoMock package.
 package rpc
 
@@ -16,6 +17,7 @@ import (
 	ethereum "github.com/ethereum/go-ethereum"
 	common "github.com/ethereum/go-ethereum/common"
 	types "github.com/ethereum/go-ethereum/core/types"
+	rpc "github.com/ethereum/go-ethereum/rpc"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -23,6 +25,7 @@ import (
 type MockClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockClientMockRecorder
+	isgomock struct{}
 }
 
 // MockClientMockRecorder is the mock recorder for MockClient.
@@ -104,6 +107,20 @@ func (m *MockClient) ChainID(ctx context.Context) (*big.Int, error) {
 func (mr *MockClientMockRecorder) ChainID(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChainID", reflect.TypeOf((*MockClient)(nil).ChainID), ctx)
+}
+
+// Client mocks base method.
+func (m *MockClient) Client() *rpc.Client {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Client")
+	ret0, _ := ret[0].(*rpc.Client)
+	return ret0
+}
+
+// Client indicates an expected call of Client.
+func (mr *MockClientMockRecorder) Client() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Client", reflect.TypeOf((*MockClient)(nil).Client))
 }
 
 // Close mocks base method.
@@ -316,6 +333,7 @@ func (mr *MockClientMockRecorder) WaitTransactionReceipt(txHash any) *gomock.Cal
 type MockethRpcClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockethRpcClientMockRecorder
+	isgomock struct{}
 }
 
 // MockethRpcClientMockRecorder is the mock recorder for MockethRpcClient.
@@ -575,6 +593,7 @@ func (mr *MockethRpcClientMockRecorder) TransactionReceipt(ctx, txHash any) *gom
 type MockrpcClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockrpcClientMockRecorder
+	isgomock struct{}
 }
 
 // MockrpcClientMockRecorder is the mock recorder for MockrpcClient.

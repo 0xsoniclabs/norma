@@ -18,13 +18,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/0xsoniclabs/norma/driver/checking"
-	"golang.org/x/exp/maps"
 	"io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/0xsoniclabs/norma/driver/checking"
+	"golang.org/x/exp/maps"
 
 	"github.com/0xsoniclabs/norma/analysis/report"
 	"github.com/0xsoniclabs/norma/driver"
@@ -250,7 +251,7 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 
 	// Run scenario.
 	fmt.Printf("Running '%s' ...\n", path)
-	logger := startProgressLogger(monitor, net)
+	logger := startProgressLogger(clock, monitor, net)
 	defer logger.shutdown()
 	err = executor.Run(clock, net, &scenario, checks)
 	if err != nil {

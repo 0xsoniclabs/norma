@@ -20,12 +20,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/0xsoniclabs/norma/genesistools/genesis"
-	"github.com/0xsoniclabs/norma/genesistools/network"
 	"log"
+	"log/slog"
 	"math/rand"
 	"sync"
 	"sync/atomic"
+
+	"github.com/0xsoniclabs/norma/genesistools/genesis"
+	"github.com/0xsoniclabs/norma/genesistools/network"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
@@ -202,19 +204,19 @@ func (n *LocalNetwork) createNode(nodeConfig *node.OperaNodeConfig) (*node.Opera
 
 // CreateNode creates nodes in the network during run.
 func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error) {
-	newValId := 0
+	var newValId *int
 	if config.Validator {
-		var err error
 		rpcClient, err := n.DialRandomRpc()
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to RPC; %v", err)
 		}
 		defer rpcClient.Close()
 
-		newValId, err = network.RegisterValidatorNode(rpcClient)
+		id, err := network.RegisterValidatorNode(rpcClient)
 		if err != nil {
 			return nil, err
 		}
+		newValId = &id
 	}
 
 	if config.Cheater {
@@ -223,7 +225,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 			Failing:       config.Failing,
 			Image:         config.Image,
 			NetworkConfig: &n.config,
-			ValidatorId:   &newValId,
+			ValidatorId:   newValId,
 		})
 		if err != nil {
 			return nil, err
@@ -241,13 +243,38 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 		Failing:       config.Failing,
 		Image:         config.Image,
 		NetworkConfig: &n.config,
-		ValidatorId:   &newValId,
+		ValidatorId:   newValId,
 		MountDataDir:  datadir,
 	})
 }
 
-func (n *LocalNetwork) RemoveNode(node driver.Node) error {
+func (n *LocalNetwork) RemoveNode(trg driver.Node) error {
+	node, ok := trg.(*node.OperaNode)
+	if !ok {
+		return fmt.Errorf("trying to remove non-sonic node")
+	}
+
+	if validatorId := node.GetValidatorId(); validatorId != nil {
+		rpcClient, err := n.DialRandomRpc()
+		if err != nil {
+			return fmt.Errorf("failed to connect to RPC; %v", err)
+		}
+		defer rpcClient.Close()
+		err = network.UnregisterValidatorNode(rpcClient, *validatorId)
+		if err != nil {
+			return fmt.Errorf("failed to unregister validator node; %v", err)
+		}
+	}
+
 	n.nodesMutex.Lock()
+	defer n.nodesMutex.Unlock()
+
+	n.listenerMutex.Lock()
+	for listener := range n.listeners {
+		listener.BeforeNodeRemoval(node)
+	}
+	n.listenerMutex.Unlock()
+
 	id, err := node.GetNodeID()
 	if err != nil {
 		return fmt.Errorf("failed to get node id; %v", err)
@@ -256,17 +283,9 @@ func (n *LocalNetwork) RemoveNode(node driver.Node) error {
 	delete(n.nodes, id)
 	for _, other := range n.nodes {
 		if err = other.RemovePeer(id); err != nil {
-			n.nodesMutex.Unlock()
 			return fmt.Errorf("failed to remove peer; %v", err)
 		}
 	}
-	n.nodesMutex.Unlock()
-
-	n.listenerMutex.Lock()
-	for listener := range n.listeners {
-		listener.AfterNodeRemoval(node)
-	}
-	n.listenerMutex.Unlock()
 
 	return nil
 }
@@ -281,7 +300,10 @@ func (n *LocalNetwork) SendTransaction(tx *types.Transaction) {
 
 func (n *LocalNetwork) DialRandomRpc() (rpcdriver.Client, error) {
 	nodes := n.GetActiveNodes()
-	return nodes[rand.Intn(len(nodes))].DialRpc()
+	//node := nodes[rand.Intn(len(nodes))]
+	node := nodes[len(nodes)-1]
+	slog.Info("Dialing random RPC node", "node", node.GetLabel())
+	return node.DialRpc()
 }
 
 func (n *LocalNetwork) ApplyNetworkRules(rules driver.NetworkRules) error {

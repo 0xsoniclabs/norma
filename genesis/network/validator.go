@@ -2,6 +2,11 @@ package network
 
 import (
 	"fmt"
+	"log/slog"
+	"math/big"
+	"time"
+
+	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/sonic/evmcore"
 	"github.com/0xsoniclabs/sonic/gossip/contract/sfc100"
 	"github.com/0xsoniclabs/sonic/inter/validatorpk"
@@ -10,11 +15,11 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"math/big"
 )
 
 // RegisterValidatorNode registers a validator in the SFC contract.
-func RegisterValidatorNode(backend ContractBackend) (int, error) {
+func RegisterValidatorNode(backend rpc.Client) (int, error) {
+	slog.Info("Start registering new validator node")
 	newValId := 0
 
 	// get a representation of the deployed contract
@@ -58,5 +63,46 @@ func RegisterValidatorNode(backend ContractBackend) (int, error) {
 		return 0, fmt.Errorf("failed to deploy helper contract: transaction reverted")
 	}
 
+	slog.Info("Completed registration of new validator node",
+		"validator_id", newValId)
+
 	return newValId, nil
+}
+
+func UnregisterValidatorNode(client rpc.Client, validatorId int) error {
+	slog.Info("Start unregistering validator node", "validator_id", validatorId)
+
+	// get a representation of the deployed contract
+	SFCContract, err := sfc100.NewContract(sfc.ContractAddress, client)
+	if err != nil {
+		return fmt.Errorf("failed to get SFC contract representation; %v", err)
+	}
+
+	privateKeyECDSA := evmcore.FakeKey(uint32(validatorId))
+	txOpts, err := bind.NewKeyedTransactorWithChainID(privateKeyECDSA, big.NewInt(int64(opera.FakeNetRules(opera.GetSonicUpgrades()).NetworkID)))
+	if err != nil {
+		return fmt.Errorf("failed to create txOpts; %v", err)
+	}
+
+	stake := big.NewInt(5_000_000).Mul(big.NewInt(5_000_000), big.NewInt(1_000_000_000_000_000_000)) // 5_000_000 FTM
+	withdrawId := big.NewInt(time.Now().UnixNano())                                                  // use current time as withdraw ID
+	tx, err := SFCContract.Undelegate(txOpts, big.NewInt(int64(validatorId)), withdrawId, stake)
+	if err != nil {
+		return fmt.Errorf("failed to undelegate validator stake; %v", err)
+	}
+
+	receipt, err := client.WaitTransactionReceipt(tx.Hash())
+	if err != nil {
+		return fmt.Errorf("failed to unregister validator, receipt error: %v", err)
+	}
+
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return fmt.Errorf("failed to unregister validator: transaction reverted")
+	}
+
+	// TODO: check that the validator is actually unregistered
+
+	slog.Info("Completed unregistering validator node",
+		"validator_id", validatorId)
+	return nil
 }

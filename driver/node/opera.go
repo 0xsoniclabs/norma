@@ -20,12 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"golang.org/x/exp/maps"
 	"io"
 	"os"
 	"regexp"
 	"slices"
 	"time"
+
+	"golang.org/x/exp/maps"
 
 	rpcdriver "github.com/0xsoniclabs/norma/driver/rpc"
 
@@ -71,9 +72,8 @@ func init() {
 // client on a generic host.
 type OperaNode struct {
 	host      network.Host
-	failing   bool
 	container *docker.Container
-	label     string
+	config    OperaNodeConfig
 }
 
 type OperaNodeConfig struct {
@@ -159,9 +159,8 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 	}
 	node := &OperaNode{
 		host:      host,
-		failing:   config.Failing,
 		container: host,
-		label:     config.Label,
+		config:    *config,
 	}
 
 	// Wait until the OperaNode inside the Container is ready.
@@ -177,11 +176,15 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 }
 
 func (n *OperaNode) GetLabel() string {
-	return n.label
+	return n.config.Label
 }
 
 func (n *OperaNode) IsExpectedFailure() bool {
-	return n.failing
+	return n.config.Failing
+}
+
+func (n *OperaNode) GetValidatorId() *int {
+	return n.config.ValidatorId
 }
 
 // Hostname returns the hostname of the node.
@@ -243,14 +246,14 @@ func (n *OperaNode) Cleanup() error {
 func (n *OperaNode) DialRpc() (rpcdriver.Client, error) {
 	url := n.GetServiceUrl(&OperaRpcService)
 	if url == nil {
-		return nil, fmt.Errorf("node %s does not export an RPC server", n.label)
+		return nil, fmt.Errorf("node %s does not export an RPC server", n.GetLabel())
 	}
 
 	rpcClient, err := network.RetryReturn(network.DefaultRetryAttempts, 1*time.Second, func() (*rpc.Client, error) {
 		return rpc.DialContext(context.Background(), string(*url))
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to dial RPC for node %s; %v", n.label, err)
+		return nil, fmt.Errorf("failed to dial RPC for node %s; %v", n.GetLabel(), err)
 	}
 	return rpcdriver.WrapRpcClient(rpcClient), nil
 }

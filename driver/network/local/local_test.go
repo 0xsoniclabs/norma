@@ -19,13 +19,14 @@ package local
 import (
 	"bufio"
 	"fmt"
-	"github.com/0xsoniclabs/norma/driver/parser"
 	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/0xsoniclabs/norma/driver/parser"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/node"
@@ -400,7 +401,7 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			listener := driver.NewMockNetworkListener(ctrl)
 			listener.EXPECT().AfterNodeCreation(gomock.Any()).Times(N)
-			listener.EXPECT().AfterNodeRemoval(gomock.Any()).Times(N)
+			listener.EXPECT().BeforeNodeRemoval(gomock.Any()).Times(N)
 			net.RegisterListener(listener)
 
 			if err != nil {

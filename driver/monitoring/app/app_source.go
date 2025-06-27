@@ -73,7 +73,7 @@ func (s *periodicAppDataSource[T]) AfterNodeCreation(driver.Node) {
 	// ignored
 }
 
-func (s *periodicAppDataSource[T]) AfterNodeRemoval(driver.Node) {
+func (s *periodicAppDataSource[T]) BeforeNodeRemoval(driver.Node) {
 	// ignored
 }
 

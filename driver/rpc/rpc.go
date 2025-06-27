@@ -20,9 +20,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum"
 	"math/big"
 	"time"
+
+	"github.com/ethereum/go-ethereum"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -43,13 +44,17 @@ type Client interface {
 	// This method retries with exponential backoff to fetch the transaction receipt,
 	//  until a certain timeout is reached.
 	WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
+
+	// Client returns the underlying RPC client.
+	Client() *rpc.Client
 }
 
 func WrapRpcClient(rpcClient *rpc.Client) *Impl {
 	return &Impl{
 		ethRpcClient:     ethclient.NewClient(rpcClient),
 		rpcClient:        rpcClient,
-		txReceiptTimeout: 600 * time.Second,
+		client:           rpcClient,
+		txReceiptTimeout: 10 * time.Second,
 	}
 }
 
@@ -73,6 +78,7 @@ type Impl struct {
 	ethRpcClient
 	rpcClient
 	txReceiptTimeout time.Duration
+	client           *rpc.Client
 }
 
 func (r Impl) Call(result interface{}, method string, args ...interface{}) error {
@@ -100,4 +106,8 @@ func (r Impl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
 		return receipt, nil
 	}
 	return nil, fmt.Errorf("failed to get transaction receipt: timeout")
+}
+
+func (r Impl) Client() *rpc.Client {
+	return r.client
 }

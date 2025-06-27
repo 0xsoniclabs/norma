@@ -21,7 +21,6 @@ import (
 type MockNetwork struct {
 	ctrl     *gomock.Controller
 	recorder *MockNetworkMockRecorder
-	isgomock struct{}
 }
 
 // MockNetworkMockRecorder is the mock recorder for MockNetwork.
@@ -210,7 +209,6 @@ func (mr *MockNetworkMockRecorder) UnregisterListener(arg0 any) *gomock.Call {
 type MockNetworkListener struct {
 	ctrl     *gomock.Controller
 	recorder *MockNetworkListenerMockRecorder
-	isgomock struct{}
 }
 
 // MockNetworkListenerMockRecorder is the mock recorder for MockNetworkListener.
@@ -254,14 +252,14 @@ func (mr *MockNetworkListenerMockRecorder) AfterNodeCreation(arg0 any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AfterNodeCreation", reflect.TypeOf((*MockNetworkListener)(nil).AfterNodeCreation), arg0)
 }
 
-// AfterNodeRemoval mocks base method.
-func (m *MockNetworkListener) AfterNodeRemoval(arg0 Node) {
+// BeforeNodeRemoval mocks base method.
+func (m *MockNetworkListener) BeforeNodeRemoval(arg0 Node) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AfterNodeRemoval", arg0)
+	m.ctrl.Call(m, "BeforeNodeRemoval", arg0)
 }
 
-// AfterNodeRemoval indicates an expected call of AfterNodeRemoval.
-func (mr *MockNetworkListenerMockRecorder) AfterNodeRemoval(arg0 any) *gomock.Call {
+// BeforeNodeRemoval indicates an expected call of BeforeNodeRemoval.
+func (mr *MockNetworkListenerMockRecorder) BeforeNodeRemoval(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AfterNodeRemoval", reflect.TypeOf((*MockNetworkListener)(nil).AfterNodeRemoval), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeforeNodeRemoval", reflect.TypeOf((*MockNetworkListener)(nil).BeforeNodeRemoval), arg0)
 }

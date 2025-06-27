@@ -17,12 +17,15 @@
 package executor
 
 import (
+	"context"
 	"fmt"
-	"github.com/0xsoniclabs/norma/driver/checking"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"time"
+
+	"github.com/0xsoniclabs/norma/driver/checking"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/parser"
@@ -92,29 +95,62 @@ func Run(clock Clock, network driver.Network, scenario *parser.Scenario, checks 
 			break
 		}
 
-		// Wait until the event is going to occure ...
+		// Wait until the event is going to occur ...
 		select {
 		case <-clock.NotifyAt(event.time()):
 			// continue processing
 		case <-abort:
 			// abort processing
-			log.Printf("Received user abort, ending execution ...")
+			slog.Warn("received user abort, ending execution")
 			return fmt.Errorf("aborted by user")
 		}
 
 		delay := clock.Delay(event.time())
 		// display delay if it exceeds over 1 second
 		if delay > time.Second {
-			log.Printf("processing '%s' at time %v (delay: %v)...\n", event.name(), event.time(), delay.Round(time.Second/10).Seconds())
+			slog.Warn("starting processing event with delay",
+				"time", clock.Now(),
+				"name", event.name(),
+				"event_time", event.time(),
+				"delay", delay.Round(time.Second/10).Seconds(),
+			)
 		} else {
-			log.Printf("processing '%s' at time %v...\n", event.name(), event.time())
+			slog.Info("starting processing event",
+				"time", clock.Now(),
+				"name", event.name(),
+				"event_time", event.time(),
+			)
 		}
 
 		// Execute the event and schedule successors.
+		start := time.Now()
 		successors, err := event.run()
 		if err != nil {
+			slog.Error("event execution failed",
+				"time", clock.Now(),
+				"name", event.name(),
+				"event_time", event.time(),
+				"error", err,
+				"duration", time.Since(start).Round(time.Millisecond),
+			)
 			return err
 		}
+
+		duration := time.Since(start)
+
+		level := slog.LevelInfo
+		msg := "processing of event completed"
+		if duration > 5*time.Second {
+			level = slog.LevelWarn
+			msg += " (slow execution)"
+		}
+		slog.Log(context.Background(), level, msg,
+			"time", clock.Now(),
+			"name", event.name(),
+			"event_time", event.time(),
+			"duration", duration,
+		)
+
 		queue.addAll(successors)
 	}
 

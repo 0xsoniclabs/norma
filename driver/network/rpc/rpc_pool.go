@@ -19,6 +19,7 @@ package rpc
 import (
 	"context"
 	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -60,6 +61,12 @@ func (p *RpcWorkerPool) AfterNodeCreation(newNode driver.Node) {
 	if rpcUrl == nil {
 		return
 	}
+
+	slog.Info("adding workers for node",
+		"node", newNode.GetLabel(),
+		"rpc_url", *rpcUrl,
+	)
+
 	wg := workerGroup{}
 	p.workers[newNode] = &wg
 	for i := 0; i < 150; i++ {
@@ -67,7 +74,10 @@ func (p *RpcWorkerPool) AfterNodeCreation(newNode driver.Node) {
 	}
 }
 
-func (p *RpcWorkerPool) AfterNodeRemoval(node driver.Node) {
+func (p *RpcWorkerPool) BeforeNodeRemoval(node driver.Node) {
+	slog.Info("removing workers for node",
+		"node", node.GetLabel(),
+	)
 	p.workers[node].close()
 }
 
@@ -174,6 +184,13 @@ func (p *worker) runRpcSenderLoop() error {
 		select {
 		case tx := <-p.txs:
 			err := rpcClient.SendTransaction(context.Background(), tx)
+			/*
+				slog.Info("sent transaction",
+					"server", p.rpcUrl,
+					"hash", tx.Hash().Hex(),
+					"nonce", tx.Nonce(),
+				)
+			*/
 			if err != nil {
 				log.Printf("failed to send tx; %v", err)
 			}

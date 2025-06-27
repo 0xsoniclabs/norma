@@ -17,11 +17,10 @@
 package network
 
 import (
-	"encoding/hex"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"strings"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 //go:generate mockgen -source backend.go -destination backend_mock.go -package network
@@ -32,17 +31,6 @@ type ContractBackend interface {
 	// WaitTransactionReceipt waits for the receipt of the given transaction hash to be available.
 	// The function times out after 10 seconds.
 	WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
-}
-
-// convertContractBytecode converts a contract hex string to bytecode.
-func convertContractBytecode(contractHex string) ([]byte, error) {
-	if strings.HasPrefix(contractHex, "0x") {
-		contractHex = strings.TrimPrefix(contractHex, "0x")
-	}
-
-	bytecode, err := hex.DecodeString(contractHex)
-	if err != nil {
-		return nil, err
-	}
-	return bytecode, nil
+	// Client returns the underlying RPC client.
+	Client() *rpc.Client
 }
