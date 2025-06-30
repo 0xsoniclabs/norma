@@ -2,16 +2,17 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"sort"
+	"sync"
+	"time"
+
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	netmon "github.com/0xsoniclabs/norma/driver/monitoring/network"
 	nodemon "github.com/0xsoniclabs/norma/driver/monitoring/node"
 	"github.com/0xsoniclabs/norma/driver/network/local"
 	"golang.org/x/exp/constraints"
-	"log"
-	"sort"
-	"sync"
-	"time"
 )
 
 // progressLogger is a helper struct that logs the progress of the network.
@@ -66,7 +67,7 @@ func (l *activeNodes) AfterNodeCreation(node driver.Node) {
 	l.data[driver.NodeID(node.GetLabel())] = struct{}{}
 }
 
-func (l *activeNodes) AfterNodeRemoval(node driver.Node) {
+func (l *activeNodes) BeforeNodeRemoval(node driver.Node) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	delete(l.data, driver.NodeID(node.GetLabel()))

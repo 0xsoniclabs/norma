@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/0xsoniclabs/norma/driver"
-	"go.uber.org/mock/gomock"
 	"math/rand"
 	"testing"
+
+	"github.com/0xsoniclabs/norma/driver"
+	"go.uber.org/mock/gomock"
 )
 
 func TestActiveNodes_TrackActiveNodes(t *testing.T) {
@@ -32,7 +33,7 @@ func TestActiveNodes_TrackActiveNodes(t *testing.T) {
 			node := driver.NewMockNode(ctrl)
 			node.EXPECT().GetLabel().Return(id)
 			delete(shadow, driver.NodeID(id))
-			nodes.AfterNodeRemoval(node)
+			nodes.BeforeNodeRemoval(node)
 		}
 	}
 
