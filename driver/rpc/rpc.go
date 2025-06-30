@@ -20,9 +20,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum"
 	"math/big"
 	"time"
+
+	"github.com/ethereum/go-ethereum"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -49,7 +50,7 @@ func WrapRpcClient(rpcClient *rpc.Client) *Impl {
 	return &Impl{
 		ethRpcClient:     ethclient.NewClient(rpcClient),
 		rpcClient:        rpcClient,
-		txReceiptTimeout: 600 * time.Second,
+		txReceiptTimeout: 10 * time.Second,
 	}
 }
 
