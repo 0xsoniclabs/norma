@@ -26,7 +26,7 @@ func AdvanceEpoch(client rpc.Client, epochIncrement int) error {
 		return fmt.Errorf("failed to get driver auth contract representation; %v", err)
 	}
 
-	currentEpoch, err := getCurrentEpoch(client)
+	currentEpoch, err := GetCurrentEpoch(client)
 	if err != nil {
 		return fmt.Errorf("failed to get current epoch: %w", err)
 	}
@@ -56,8 +56,8 @@ func AdvanceEpoch(client rpc.Client, epochIncrement int) error {
 
 	// wait until the new epoch has actually started
 	start := time.Now()
-	for time.Since(start) < 10*time.Second {
-		newEpoch, err := getCurrentEpoch(client)
+	for time.Since(start) < 60*time.Second {
+		newEpoch, err := GetCurrentEpoch(client)
 		if err != nil {
 			return fmt.Errorf("failed to get current epoch after advancing: %w", err)
 		}
@@ -71,7 +71,7 @@ func AdvanceEpoch(client rpc.Client, epochIncrement int) error {
 	return fmt.Errorf("failed to advance epoch: waited too long for the epoch to be advanced")
 }
 
-func getCurrentEpoch(client rpc.Client) (hexutil.Uint64, error) {
+func GetCurrentEpoch(client rpc.Client) (hexutil.Uint64, error) {
 	var currentEpoch hexutil.Uint64
 	if err := client.Call(&currentEpoch, "eth_currentEpoch"); err != nil {
 		return 0, fmt.Errorf("failed to get current epoch: %w", err)
