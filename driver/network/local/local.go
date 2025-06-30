@@ -20,12 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/0xsoniclabs/norma/genesistools/genesis"
-	"github.com/0xsoniclabs/norma/genesistools/network"
 	"log"
 	"math/rand"
 	"sync"
 	"sync/atomic"
+
+	"github.com/0xsoniclabs/norma/driver/network"
+	"github.com/0xsoniclabs/norma/genesistools/genesis"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
