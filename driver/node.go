@@ -29,7 +29,7 @@ import (
 // control of a node, allowing it to be started (through an Environment),
 // interact with the node, and shut it down.
 type Node interface {
-	// GetLabel returns a human-readable identifer for this node. Is is intended
+	// GetLabel returns a human-readable identifier for this node. Is is intended
 	// to label data and should be unique within a single scenario run.
 	GetLabel() string
 
@@ -48,6 +48,10 @@ type Node interface {
 	// GetNodeID returns an enode identifying this node within the Norma network.
 	// An error shall be produced if no valid node ID could be obtained.
 	GetNodeID() (NodeID, error)
+
+	// GetValidatorId returns the validator ID used by this node, if it is a
+	// validator node. If the node is not a validator, it returns nil.
+	GetValidatorId() *int
 
 	// GetServiceUrl returns the URL of a service running on the
 	// represented node. May be nil if no such service is offered.

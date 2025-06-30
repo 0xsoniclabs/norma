@@ -5,6 +5,7 @@
 //
 //	mockgen -source node.go -destination node_mock.go -package driver
 //
+
 // Package driver is a generated GoMock package.
 package driver
 
@@ -21,6 +22,7 @@ import (
 type MockNode struct {
 	ctrl     *gomock.Controller
 	recorder *MockNodeMockRecorder
+	isgomock struct{}
 }
 
 // MockNodeMockRecorder is the mock recorder for MockNode.
@@ -110,6 +112,20 @@ func (m *MockNode) GetServiceUrl(arg0 *network.ServiceDescription) *URL {
 func (mr *MockNodeMockRecorder) GetServiceUrl(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServiceUrl", reflect.TypeOf((*MockNode)(nil).GetServiceUrl), arg0)
+}
+
+// GetValidatorId mocks base method.
+func (m *MockNode) GetValidatorId() *int {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetValidatorId")
+	ret0, _ := ret[0].(*int)
+	return ret0
+}
+
+// GetValidatorId indicates an expected call of GetValidatorId.
+func (mr *MockNodeMockRecorder) GetValidatorId() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValidatorId", reflect.TypeOf((*MockNode)(nil).GetValidatorId))
 }
 
 // Hostname mocks base method.
