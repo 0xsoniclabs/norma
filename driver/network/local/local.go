@@ -249,7 +249,14 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 }
 
 func (n *LocalNetwork) RemoveNode(node driver.Node) error {
+	n.listenerMutex.Lock()
+	for listener := range n.listeners {
+		listener.BeforeNodeRemoval(node)
+	}
+	n.listenerMutex.Unlock()
+
 	n.nodesMutex.Lock()
+	defer n.nodesMutex.Unlock()
 	id, err := node.GetNodeID()
 	if err != nil {
 		return fmt.Errorf("failed to get node id; %v", err)
@@ -262,13 +269,6 @@ func (n *LocalNetwork) RemoveNode(node driver.Node) error {
 			return fmt.Errorf("failed to remove peer; %v", err)
 		}
 	}
-	n.nodesMutex.Unlock()
-
-	n.listenerMutex.Lock()
-	for listener := range n.listeners {
-		listener.AfterNodeRemoval(node)
-	}
-	n.listenerMutex.Unlock()
 
 	return nil
 }
