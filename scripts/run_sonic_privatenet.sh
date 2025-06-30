@@ -73,6 +73,7 @@ fi
 
 
 # Start sonic as part of a fake net with RPC service.
+export GOMEMLIMIT="1GiB"
 ./sonicd \
     --datadir=${datadir} \
     ${val_flag} \
