@@ -1,0 +1,40 @@
+# This scenario covers the joining and leaving of a validator.
+name: Joining and Leaving Validator
+
+# The duration of the scenario's runtime, in seconds.
+duration: 110
+
+# Initial validator nodes in the network. We need 3 validators, such that when
+# the 4th validator is departing, the voting power is not dropping below 2/3
+# of the total voting power.
+validators:
+  - name: validator-init
+    instances: 3
+
+
+# Make sure epochs are only transitioned on demand.
+network_rules:
+  genesis:
+    MAX_EPOCH_DURATION: 600s
+
+
+advance_epoch:
+  - time: 50   # val-extra has joined
+  - time: 90   # val-extra has left
+
+nodes:
+  # the validator joining and leaving the network
+  - name: val-extra
+    start: 30
+    end: 70
+    client:
+      type: validator
+
+
+# Some constant background load to keep the network busy.
+applications:
+  - name: load
+    type: counter
+    users: 50
+    rate:
+      constant: 20    # Tx/s

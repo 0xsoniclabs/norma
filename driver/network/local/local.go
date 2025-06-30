@@ -203,7 +203,7 @@ func (n *LocalNetwork) createNode(nodeConfig *node.OperaNodeConfig) (*node.Opera
 
 // CreateNode creates nodes in the network during run.
 func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error) {
-	newValId := 0
+	var newValId *int
 	if config.Validator {
 		var err error
 		rpcClient, err := n.DialRandomRpc()
@@ -212,10 +212,11 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 		}
 		defer rpcClient.Close()
 
-		newValId, err = network.RegisterValidatorNode(rpcClient)
+		id, err := network.RegisterValidatorNode(rpcClient)
 		if err != nil {
 			return nil, err
 		}
+		newValId = &id
 	}
 
 	if config.Cheater {
@@ -224,7 +225,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 			Failing:       config.Failing,
 			Image:         config.Image,
 			NetworkConfig: &n.config,
-			ValidatorId:   &newValId,
+			ValidatorId:   newValId,
 		})
 		if err != nil {
 			return nil, err
@@ -242,7 +243,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 		Failing:       config.Failing,
 		Image:         config.Image,
 		NetworkConfig: &n.config,
-		ValidatorId:   &newValId,
+		ValidatorId:   newValId,
 		MountDataDir:  datadir,
 	})
 }
