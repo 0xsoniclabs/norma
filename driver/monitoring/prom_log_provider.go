@@ -219,7 +219,7 @@ func (n *PrometheusLogDispatcher) AfterNodeCreation(driverNode driver.Node) {
 	}
 }
 
-func (n *PrometheusLogDispatcher) AfterNodeRemoval(node driver.Node) {
+func (n *PrometheusLogDispatcher) BeforeNodeRemoval(node driver.Node) {
 	n.nodesLock.Lock()
 	defer n.nodesLock.Unlock()
 

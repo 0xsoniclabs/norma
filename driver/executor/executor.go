@@ -18,11 +18,13 @@ package executor
 
 import (
 	"fmt"
-	"github.com/0xsoniclabs/norma/driver/checking"
 	"log"
 	"os"
 	"os/signal"
 	"time"
+
+	"github.com/0xsoniclabs/norma/driver/checking"
+	"github.com/0xsoniclabs/norma/driver/network"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/parser"
@@ -262,6 +264,14 @@ func scheduleNodeEvents(node *parser.Node, queue *eventQueue, net driver.Network
 					return nil
 				}
 
+				// Validators only need to be unregistered if they are stopped
+				// before the end of the scenario. At the end of the scenario,
+				// validators can no longer be unregistered since the network
+				// is being shut down, losing the ability to run transactions.
+				if endTime != end && nodeIsValidator {
+					unregisterValidator(net, *instance)
+				}
+
 				if err := net.RemoveNode(*instance); err != nil {
 					return err
 				}
@@ -275,6 +285,23 @@ func scheduleNodeEvents(node *parser.Node, queue *eventQueue, net driver.Network
 			},
 		))
 	}
+}
+
+func unregisterValidator(net driver.Network, node driver.Node) error {
+	validatorId := node.GetValidatorId()
+	if validatorId == nil {
+		return nil
+	}
+	rpcClient, err := net.DialRandomRpc()
+	if err != nil {
+		return fmt.Errorf("failed to connect to RPC; %v", err)
+	}
+	defer rpcClient.Close()
+	err = network.UnregisterValidatorNode(rpcClient, *validatorId)
+	if err != nil {
+		return fmt.Errorf("failed to unregister validator node; %v", err)
+	}
+	return nil
 }
 
 // scheduleApplicationEvents schedules a number of events covering the life-cycle of a class of

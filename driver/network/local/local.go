@@ -20,12 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/0xsoniclabs/norma/genesistools/genesis"
-	"github.com/0xsoniclabs/norma/genesistools/network"
 	"log"
 	"math/rand"
 	"sync"
 	"sync/atomic"
+
+	"github.com/0xsoniclabs/norma/driver/network"
+	"github.com/0xsoniclabs/norma/genesistools/genesis"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
@@ -202,7 +203,7 @@ func (n *LocalNetwork) createNode(nodeConfig *node.OperaNodeConfig) (*node.Opera
 
 // CreateNode creates nodes in the network during run.
 func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error) {
-	newValId := 0
+	var newValId *int
 	if config.Validator {
 		var err error
 		rpcClient, err := n.DialRandomRpc()
@@ -211,10 +212,11 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 		}
 		defer rpcClient.Close()
 
-		newValId, err = network.RegisterValidatorNode(rpcClient)
+		id, err := network.RegisterValidatorNode(rpcClient)
 		if err != nil {
 			return nil, err
 		}
+		newValId = &id
 	}
 
 	if config.Cheater {
@@ -223,7 +225,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 			Failing:       config.Failing,
 			Image:         config.Image,
 			NetworkConfig: &n.config,
-			ValidatorId:   &newValId,
+			ValidatorId:   newValId,
 		})
 		if err != nil {
 			return nil, err
@@ -241,13 +243,20 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 		Failing:       config.Failing,
 		Image:         config.Image,
 		NetworkConfig: &n.config,
-		ValidatorId:   &newValId,
+		ValidatorId:   newValId,
 		MountDataDir:  datadir,
 	})
 }
 
 func (n *LocalNetwork) RemoveNode(node driver.Node) error {
+	n.listenerMutex.Lock()
+	for listener := range n.listeners {
+		listener.BeforeNodeRemoval(node)
+	}
+	n.listenerMutex.Unlock()
+
 	n.nodesMutex.Lock()
+	defer n.nodesMutex.Unlock()
 	id, err := node.GetNodeID()
 	if err != nil {
 		return fmt.Errorf("failed to get node id; %v", err)
@@ -260,13 +269,6 @@ func (n *LocalNetwork) RemoveNode(node driver.Node) error {
 			return fmt.Errorf("failed to remove peer; %v", err)
 		}
 	}
-	n.nodesMutex.Unlock()
-
-	n.listenerMutex.Lock()
-	for listener := range n.listeners {
-		listener.AfterNodeRemoval(node)
-	}
-	n.listenerMutex.Unlock()
 
 	return nil
 }

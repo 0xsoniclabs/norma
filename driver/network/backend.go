@@ -18,10 +18,11 @@ package network
 
 import (
 	"encoding/hex"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"strings"
 )
 
 //go:generate mockgen -source backend.go -destination backend_mock.go -package network
@@ -36,9 +37,7 @@ type ContractBackend interface {
 
 // convertContractBytecode converts a contract hex string to bytecode.
 func convertContractBytecode(contractHex string) ([]byte, error) {
-	if strings.HasPrefix(contractHex, "0x") {
-		contractHex = strings.TrimPrefix(contractHex, "0x")
-	}
+	contractHex = strings.TrimPrefix(contractHex, "0x")
 
 	bytecode, err := hex.DecodeString(contractHex)
 	if err != nil {

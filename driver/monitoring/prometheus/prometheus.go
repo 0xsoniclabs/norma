@@ -139,7 +139,7 @@ func (p *Prometheus) AfterNodeCreation(node driver.Node) {
 	}
 }
 
-func (p *Prometheus) AfterNodeRemoval(driver.Node) {
+func (p *Prometheus) BeforeNodeRemoval(driver.Node) {
 	// ignored
 }
 

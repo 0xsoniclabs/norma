@@ -19,13 +19,15 @@ package local
 import (
 	"bufio"
 	"fmt"
-	"github.com/0xsoniclabs/norma/driver/parser"
 	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/0xsoniclabs/norma/driver/network"
+	"github.com/0xsoniclabs/norma/driver/parser"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/node"
@@ -400,7 +402,7 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			listener := driver.NewMockNetworkListener(ctrl)
 			listener.EXPECT().AfterNodeCreation(gomock.Any()).Times(N)
-			listener.EXPECT().AfterNodeRemoval(gomock.Any()).Times(N)
+			listener.EXPECT().BeforeNodeRemoval(gomock.Any()).Times(N)
 			net.RegisterListener(listener)
 
 			if err != nil {
@@ -659,8 +661,8 @@ func TestLocalNetworkAdvanceEpoch_Success(t *testing.T) {
 	defer client.Close()
 
 	// get original epoch
-	var currentEpoch hexutil.Uint64
-	if err := client.Call(&currentEpoch, "eth_currentEpoch"); err != nil {
+	originalEpoch, err := network.GetCurrentEpoch(client)
+	if err != nil {
 		t.Fatalf("failed to get current epoch: %v", err)
 	}
 
@@ -669,24 +671,13 @@ func TestLocalNetworkAdvanceEpoch_Success(t *testing.T) {
 		t.Errorf("failed to advance epoch: %v", err)
 	}
 
-	advanced := make(chan bool)
+	newEpoch, err := network.GetCurrentEpoch(client)
+	if err != nil {
+		t.Fatalf("failed to get new epoch: %v", err)
+	}
 
-	go func() {
-		var newEpoch hexutil.Uint64 = 0
-		var targetEpoch = currentEpoch + hexutil.Uint64(epochIncrement)
-		for newEpoch < targetEpoch {
-			if err := client.Call(&newEpoch, "eth_currentEpoch"); err != nil {
-				t.Errorf("failed to get current epoch: %v", err)
-			}
-		}
-		advanced <- true
-	}()
-
-	select {
-	case <-advanced:
-		// epoch advanced sucessfully
-	case <-time.After(60 * time.Second):
-		t.Errorf("epoch did not advanced successfully")
+	if got, want := newEpoch, originalEpoch+hexutil.Uint64(epochIncrement); got < want {
+		t.Errorf("epoch did not advance correctly, got %d, want %d", got, want)
 	}
 }
 

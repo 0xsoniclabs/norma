@@ -4,9 +4,11 @@ go 1.24.0
 
 require (
 	github.com/0xsoniclabs/norma/genesistools v0.0.0-20250218144827-28263a9a85f9
+	github.com/0xsoniclabs/sonic v0.0.0-20250606134232-ceb286cb395e
 	github.com/docker/docker v27.3.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/ethereum/go-ethereum v1.15.0
+	github.com/holiman/uint256 v1.3.2
 	github.com/jupp0r/go-priority-queue v0.0.0-20160601094913-ab1073853bde
 	github.com/tyler-smith/go-bip32 v1.0.0
 	github.com/tyler-smith/go-bip39 v1.1.0
@@ -18,7 +20,6 @@ require (
 
 require (
 	github.com/0xsoniclabs/carmen/go v0.0.0-20250530111616-fabde4233b62 // indirect
-	github.com/0xsoniclabs/sonic v0.0.0-20250606134232-ceb286cb395e // indirect
 	github.com/0xsoniclabs/tosca v0.0.0-20250414093812-91b42e73396f // indirect
 	github.com/DataDog/zstd v1.5.6 // indirect
 	github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e // indirect
@@ -61,7 +62,6 @@ require (
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
-	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/klauspost/compress v1.17.10 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
