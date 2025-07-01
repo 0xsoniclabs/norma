@@ -99,8 +99,8 @@ type NetworkRules map[string]string
 type NetworkListener interface {
 	// AfterNodeCreation is called whenever a new node has joined the network.
 	AfterNodeCreation(Node)
-	// AfterNodeRemoval is called whenever a node is removed from the network.
-	AfterNodeRemoval(Node)
+	// BeforeNodeRemoval is called whenever a node is removed from the network.
+	BeforeNodeRemoval(Node)
 	// AfterApplicationCreation is called after a new application has started.
 	AfterApplicationCreation(Application)
 }

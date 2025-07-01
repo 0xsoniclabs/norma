@@ -242,7 +242,7 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 		}
 	}()
 
-	var checks []checking.Checker
+	var checks map[string]checking.Checker
 	if !skipChecks {
 		// Initialize network consistency checks.
 		checks = checking.InitNetworkChecks(net, monitor)

@@ -124,7 +124,7 @@ func (n *NodeLogDispatcher) AfterNodeCreation(node driver.Node) {
 	n.startDispatcher(Node(nodeId), logStream)
 }
 
-func (n *NodeLogDispatcher) AfterNodeRemoval(_ driver.Node) {
+func (n *NodeLogDispatcher) BeforeNodeRemoval(_ driver.Node) {
 }
 
 func (n *NodeLogDispatcher) AfterApplicationCreation(driver.Application) {

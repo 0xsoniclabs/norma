@@ -67,7 +67,7 @@ func (p *RpcWorkerPool) AfterNodeCreation(newNode driver.Node) {
 	}
 }
 
-func (p *RpcWorkerPool) AfterNodeRemoval(node driver.Node) {
+func (p *RpcWorkerPool) BeforeNodeRemoval(node driver.Node) {
 	p.workers[node].close()
 }
 
