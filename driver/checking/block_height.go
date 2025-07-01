@@ -41,6 +41,31 @@ type blockHeightChecker struct {
 	slack uint8
 }
 
+// Configure returns a deep copy of the original checker.
+// If the config doesn't provide any replacement value, copy from the value of the original.
+// If the config is invalid, return error instead.
+// If the config is nil, return original checker.
+func (c *blockHeightChecker) Configure(config map[string]string) (Checker, error) {
+	if config == nil {
+		return c, nil
+	}
+
+	slack := c.slack
+	sString, exist := config["slack"]
+	if exist {
+		s, err := strconv.Atoi(sString)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert slack; %v", err)
+		}
+		if s < 0 || s > 255 {
+			return nil, fmt.Errorf("invalid slack; 0 < %d < 255", s)
+		}
+		slack = uint8(s)
+	}
+
+	return &blockHeightChecker{net: c.net, slack: slack}, nil
+}
+
 func (c *blockHeightChecker) Check() error {
 	nodes := c.net.GetActiveNodes()
 	fmt.Printf("checking block heights for %d nodes\n", len(nodes))

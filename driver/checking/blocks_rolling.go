@@ -2,14 +2,18 @@ package checking
 
 import (
 	"fmt"
+	"strconv"
+
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	nodemon "github.com/0xsoniclabs/norma/driver/monitoring/node"
 )
 
+const defaultToleranceSamples int = 10
+
 func init() {
 	RegisterNetworkCheck("blocks_rolling", func(net driver.Network, monitor *monitoring.Monitor) Checker {
-		return &blocksRollingChecker{monitor: &monitoringDataAdapter{monitor}, toleranceSamples: 10}
+		return &blocksRollingChecker{monitor: &monitoringDataAdapter{monitor}, toleranceSamples: defaultToleranceSamples}
 	})
 }
 
@@ -40,6 +44,31 @@ func (m *monitoringDataAdapter) GetData(node monitoring.Node) monitoring.Series[
 type blocksRollingChecker struct {
 	monitor          MonitoringData
 	toleranceSamples int
+}
+
+// Configure returns a deep copy of the original checker.
+// If the config doesn't provide any replacement value, copy from the value of the original.
+// If the config is invalid, return error instead.
+// If the config is nil, return original checker.
+func (c *blocksRollingChecker) Configure(config map[string]string) (Checker, error) {
+	if config == nil {
+		return c, nil
+	}
+
+	tolerance := c.toleranceSamples
+	tString, exist := config["tolerance"]
+	if exist {
+		t, err := strconv.Atoi(tString)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert tolerance; %v", err)
+		}
+		tolerance = t
+	}
+
+	return &blocksRollingChecker{
+		monitor:          c.monitor,
+		toleranceSamples: tolerance,
+	}, nil
 }
 
 func (c *blocksRollingChecker) Check() error {

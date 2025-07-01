@@ -195,6 +195,10 @@ checks:
     check: block_rolling
   - time: 50 
     check: block_rolling
+    config:
+      this: could
+      be: anything
+      even: 123
 `
 
 func TestParseExampleWithChecks(t *testing.T) {

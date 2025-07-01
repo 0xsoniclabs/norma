@@ -3,6 +3,7 @@ package checking
 import (
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"go.uber.org/mock/gomock"
+	"strings"
 	"testing"
 )
 
@@ -83,6 +84,52 @@ func TestBlocksRolling_Blocks_Failure(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestBlocksRolling_Configure(t *testing.T) {
+	series := createBlockSeries(t, []uint64{1, 1, 1, 1, 1, 2, 3, 4, 5, 6})
+	ctrl := gomock.NewController(t)
+	monitor := NewMockMonitoringData(ctrl)
+	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"}).Times(4)
+	monitor.EXPECT().GetData(gomock.Any()).Return(series).Times(4)
+
+	// original returns error because it sees 1, 1, 1, 1, 1
+	original := blocksRollingChecker{monitor: monitor, toleranceSamples: 5}
+	// success will pass because it sees the entire series 1->6
+	success, err := original.Configure(map[string]string{"tolerance": "10"})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	// emptyOriginal has the same behavior as original
+	emptyOriginal, err := original.Configure(map[string]string{})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	// emptySuccess has the same behavior as success
+	emptySuccess, err := success.Configure(map[string]string{})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	// misconfigured will throw an error
+	if _, err := original.Configure(map[string]string{"tolerance": "abc"}); err == nil || !strings.Contains(err.Error(), "failed to convert tolerance") {
+		t.Errorf("not caught: failed to convert tolerance; %v", err)
+	}
+
+	if err := original.Check(); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
+		t.Errorf("not caught: network is down; %v", err)
+	}
+
+	if err := emptyOriginal.Check(); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
+		t.Errorf("not caught: network is down; %v", err)
+	}
+
+	if err := success.Check(); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if err := emptySuccess.Check(); err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 

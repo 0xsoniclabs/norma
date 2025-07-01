@@ -619,6 +619,15 @@ func TestScenario_Checks_Success(t *testing.T) {
 				{Time: 45, Check: "test"},
 			},
 		},
+		{
+			Name:     "Test_Check_Succuss3_TestConfig",
+			Duration: 60,
+			Checks: []Check{
+				{Time: 30, Check: "test", Config: map[string]string{
+					"hello": "world",
+				}},
+			},
+		},
 	}
 
 	for _, scenario := range scenarios {
