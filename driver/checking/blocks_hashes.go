@@ -38,7 +38,7 @@ type blocksHashesChecker struct {
 }
 
 // Configure returns itself since there is nothing to configure
-func (c *blocksHashesChecker) Configure(map[string]string) (Checker, error) {
+func (c *blocksHashesChecker) Configure(config CheckerConfig) (Checker, error) {
 	return c, nil
 }
 

@@ -97,22 +97,22 @@ func TestBlocksRolling_Configure(t *testing.T) {
 	// original returns error because it sees 1, 1, 1, 1, 1
 	original := blocksRollingChecker{monitor: monitor, toleranceSamples: 5}
 	// success will pass because it sees the entire series 1->6
-	success, err := original.Configure(map[string]string{"tolerance": "10"})
+	success, err := original.Configure(CheckerConfig{"tolerance": 10})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	// emptyOriginal has the same behavior as original
-	emptyOriginal, err := original.Configure(map[string]string{})
+	emptyOriginal, err := original.Configure(CheckerConfig{})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	// emptySuccess has the same behavior as success
-	emptySuccess, err := success.Configure(map[string]string{})
+	emptySuccess, err := success.Configure(CheckerConfig{})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	// misconfigured will throw an error
-	if _, err := original.Configure(map[string]string{"tolerance": "abc"}); err == nil || !strings.Contains(err.Error(), "failed to convert tolerance") {
+	if _, err := original.Configure(CheckerConfig{"tolerance": "abc"}); err == nil || !strings.Contains(err.Error(), "failed to convert tolerance") {
 		t.Errorf("not caught: failed to convert tolerance; %v", err)
 	}
 

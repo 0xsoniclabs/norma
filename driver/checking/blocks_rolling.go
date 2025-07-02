@@ -2,7 +2,6 @@ package checking
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
@@ -50,17 +49,17 @@ type blocksRollingChecker struct {
 // If the config doesn't provide any replacement value, copy from the value of the original.
 // If the config is invalid, return error instead.
 // If the config is nil, return original checker.
-func (c *blocksRollingChecker) Configure(config map[string]string) (Checker, error) {
+func (c *blocksRollingChecker) Configure(config CheckerConfig) (Checker, error) {
 	if config == nil {
 		return c, nil
 	}
 
 	tolerance := c.toleranceSamples
-	tString, exist := config["tolerance"]
+	val, exist := config["tolerance"]
 	if exist {
-		t, err := strconv.Atoi(tString)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert tolerance; %v", err)
+		t, ok := val.(int)
+		if !ok {
+			return nil, fmt.Errorf("failed to convert tolerance; %v", val)
 		}
 		tolerance = t
 	}
