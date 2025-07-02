@@ -86,7 +86,12 @@ func Run(clock Clock, network driver.Network, scenario *parser.Scenario, checks 
 			return fmt.Errorf("check '%s' not found", c.Check)
 		}
 
-		scheduleCheckEvents(c.Time, c.Check, checker, queue, network)
+		configured, err := checker.Configure(c.Config)
+		if err != nil {
+			return fmt.Errorf("error configuring checks; %v", err)
+		}
+
+		scheduleCheckEvents(c.Time, c.Check, configured, queue, network)
 	}
 
 	// Register a handler for Ctrl+C events.

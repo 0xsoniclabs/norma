@@ -35,6 +35,7 @@ var registrations = make(registry)
 // Checker does the consistency check at the end of the scenario.
 type Checker interface {
 	Check() error
+	Configure(map[string]string) (Checker, error)
 }
 
 // Checks is a slice of Checker.
