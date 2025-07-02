@@ -255,10 +255,15 @@ func TestExecutor_RunScenarioWithDefaultChecks(t *testing.T) {
 	checking.RegisterNetworkCheck("blocks_rolling", func(driver.Network, *monitoring.Monitor) checking.Checker {
 		return checkBlocksRolling
 	})
+	checkBlockGasRate := checking.NewMockChecker(ctrl)
+	checking.RegisterNetworkCheck("block_gas_rate", func(driver.Network, *monitoring.Monitor) checking.Checker {
+		return checkBlockGasRate
+	})
 
 	checkBlockHeight.EXPECT().Check().Return(nil)
 	checkBlocksHashes.EXPECT().Check().Return(nil)
 	checkBlocksRolling.EXPECT().Check().Return(nil)
+	checkBlockGasRate.EXPECT().Check().Return(nil)
 
 	checks := checking.InitNetworkChecks(net, nil)
 	if err := Run(clock, net, &scenario, checks); err != nil {
