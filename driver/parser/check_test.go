@@ -623,7 +623,7 @@ func TestScenario_Checks_Success(t *testing.T) {
 			Name:     "Test_Check_Succuss3_TestConfig",
 			Duration: 60,
 			Checks: []Check{
-				{Time: 30, Check: "test", Config: map[string]string{
+				{Time: 30, Check: "test", Config: map[string]any{
 					"hello": "world",
 				}},
 			},
