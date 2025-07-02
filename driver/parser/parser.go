@@ -67,7 +67,7 @@ type AdvanceEpoch struct {
 type Check struct {
 	Time   float32
 	Check  string
-	Config map[string]string
+	Config map[string]any
 }
 
 // NetworkRulesUpdate defines a network rule update that can be applied at a specific time.

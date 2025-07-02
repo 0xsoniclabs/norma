@@ -31,15 +31,15 @@ func TestBlockHeightCheckerValid(t *testing.T) {
 		blockHeight1 string
 		blockHeight2 string
 		slack        uint8
-		config       map[string]string
+		config       CheckerConfig
 	}{
 		{name: "within-tolerance-big-asc", blockHeight1: "0x42", blockHeight2: "0x52", slack: 16},
 		{name: "within-tolerance-big-desc", blockHeight1: "0x52", blockHeight2: "0x42", slack: 16},
 		{name: "within-tolerance", blockHeight1: "0x42", blockHeight2: "0x43", slack: 1},
 		{name: "constant", blockHeight1: "0x42", blockHeight2: "0x42", slack: 0},
-		{name: "within-tolerance-big-asc-configured", blockHeight1: "0x42", blockHeight2: "0x52", slack: 1, config: map[string]string{"slack": "16"}},
-		{name: "within-tolerance-big-desc-configured", blockHeight1: "0x52", blockHeight2: "0x42", slack: 1, config: map[string]string{"slack": "16"}},
-		{name: "empty-config", blockHeight1: "0x52", blockHeight2: "0x42", slack: 16, config: map[string]string{}},
+		{name: "within-tolerance-big-asc-configured", blockHeight1: "0x42", blockHeight2: "0x52", slack: 1, config: CheckerConfig{"slack": 16}},
+		{name: "within-tolerance-big-desc-configured", blockHeight1: "0x52", blockHeight2: "0x42", slack: 1, config: CheckerConfig{"slack": 16}},
+		{name: "empty-config", blockHeight1: "0x52", blockHeight2: "0x42", slack: 16, config: CheckerConfig{}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -80,15 +80,15 @@ func TestBlockHeightCheckerInvalid_WithSlack(t *testing.T) {
 		blockHeight1 string
 		blockHeight2 string
 		slack        uint8
-		config       map[string]string
+		config       CheckerConfig
 	}{
 		{name: "should-reject-asc", blockHeight1: "0x42", blockHeight2: "0x1234", slack: 5},
 		{name: "should-reject-desc", blockHeight1: "0x1234", blockHeight2: "0x42", slack: 5},
 		{name: "no-slack", blockHeight1: "0x42", blockHeight2: "0x43", slack: 0},
-		{name: "should-reject-asc", blockHeight1: "0x42", blockHeight2: "0x52", slack: 255, config: map[string]string{"slack": "5"}},
-		{name: "should-reject-desc", blockHeight1: "0x52", blockHeight2: "0x42", slack: 255, config: map[string]string{"slack": "5"}},
-		{name: "no-slack", blockHeight1: "0x42", blockHeight2: "0x43", slack: 255, config: map[string]string{"slack": "0"}},
-		{name: "empty-config", blockHeight1: "0x42", blockHeight2: "0x1234", slack: 5, config: map[string]string{}},
+		{name: "should-reject-asc-configured", blockHeight1: "0x42", blockHeight2: "0x52", slack: 255, config: CheckerConfig{"slack": 5}},
+		{name: "should-reject-desc-configured", blockHeight1: "0x52", blockHeight2: "0x42", slack: 255, config: CheckerConfig{"slack": 5}},
+		{name: "no-slack-configured", blockHeight1: "0x42", blockHeight2: "0x43", slack: 255, config: CheckerConfig{"slack": 0}},
+		{name: "empty-config", blockHeight1: "0x42", blockHeight2: "0x1234", slack: 5, config: CheckerConfig{}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -127,12 +127,12 @@ func TestBlockHeightCheckerInvalid_WithSlack(t *testing.T) {
 func TestBlockHeightChecker_ConfigureInvalid(t *testing.T) {
 	tests := []struct {
 		name   string
-		config map[string]string
+		config CheckerConfig
 		err    string
 	}{
-		{name: "test1", config: map[string]string{"slack": "abc"}, err: "failed to convert slack"},
-		{name: "test2", config: map[string]string{"slack": "-1"}, err: "invalid slack"},
-		{name: "test3", config: map[string]string{"slack": "256"}, err: "invalid slack"},
+		{name: "test1", config: CheckerConfig{"slack": "abc"}, err: "failed to convert slack"},
+		{name: "test2", config: CheckerConfig{"slack": -1}, err: "invalid slack"},
+		{name: "test3", config: CheckerConfig{"slack": 256}, err: "invalid slack"},
 	}
 
 	for _, test := range tests {

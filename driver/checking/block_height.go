@@ -45,17 +45,17 @@ type blockHeightChecker struct {
 // If the config doesn't provide any replacement value, copy from the value of the original.
 // If the config is invalid, return error instead.
 // If the config is nil, return original checker.
-func (c *blockHeightChecker) Configure(config map[string]string) (Checker, error) {
+func (c *blockHeightChecker) Configure(config CheckerConfig) (Checker, error) {
 	if config == nil {
 		return c, nil
 	}
 
 	slack := c.slack
-	sString, exist := config["slack"]
+	val, exist := config["slack"]
 	if exist {
-		s, err := strconv.Atoi(sString)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert slack; %v", err)
+		s, ok := val.(int)
+		if !ok {
+			return nil, fmt.Errorf("failed to convert slack; %v", val)
 		}
 		if s < 0 || s > 255 {
 			return nil, fmt.Errorf("invalid slack; 0 < %d < 255", s)
