@@ -5,7 +5,6 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
-	nodemon "github.com/0xsoniclabs/norma/driver/monitoring/node"
 )
 
 const defaultToleranceSamples int = 10
@@ -14,29 +13,6 @@ func init() {
 	RegisterNetworkCheck("blocks_rolling", func(net driver.Network, monitor *monitoring.Monitor) Checker {
 		return &blocksRollingChecker{monitor: &monitoringDataAdapter{monitor}, toleranceSamples: defaultToleranceSamples}
 	})
-}
-
-//go:generate mockgen -source blocks_rolling.go -destination blocks_rolling_mock.go -package checking
-
-// MonitoringData is an interface that defines a method to get monitoring data related to this checker.
-type MonitoringData interface {
-	// GetNodes returns the nodes that are being monitored.
-	GetNodes() []monitoring.Node
-	// GetData returns the monitoring data for a specific node.
-	GetData(monitoring.Node) monitoring.Series[monitoring.Time, monitoring.BlockStatus]
-}
-
-// MonitoringDataAdapter is an adapter that implements the MonitoringData interface
-type monitoringDataAdapter struct {
-	monitor *monitoring.Monitor
-}
-
-func (m *monitoringDataAdapter) GetNodes() []monitoring.Node {
-	return monitoring.GetSubjects(m.monitor, nodemon.NodeBlockStatus)
-}
-func (m *monitoringDataAdapter) GetData(node monitoring.Node) monitoring.Series[monitoring.Time, monitoring.BlockStatus] {
-	data, _ := monitoring.GetData(m.monitor, node, nodemon.NodeBlockStatus)
-	return data
 }
 
 // blocksRollingChecker is a Checker checking if all nodes keeps producing blocks.
