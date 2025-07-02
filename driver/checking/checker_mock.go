@@ -52,3 +52,18 @@ func (mr *MockCheckerMockRecorder) Check() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockChecker)(nil).Check))
 }
+
+// Configure mocks base method.
+func (m *MockChecker) Configure(arg0 map[string]string) (Checker, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Configure", arg0)
+	ret0, _ := ret[0].(Checker)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Configure indicates an expected call of Configure.
+func (mr *MockCheckerMockRecorder) Configure(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Configure", reflect.TypeOf((*MockChecker)(nil).Configure), arg0)
+}

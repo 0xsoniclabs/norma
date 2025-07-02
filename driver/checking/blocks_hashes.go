@@ -37,6 +37,11 @@ type blocksHashesChecker struct {
 	net driver.Network
 }
 
+// Configure returns itself since there is nothing to configure
+func (c *blocksHashesChecker) Configure(map[string]string) (Checker, error) {
+	return c, nil
+}
+
 func (c *blocksHashesChecker) Check() (err error) {
 	nodes := c.net.GetActiveNodes()
 	fmt.Printf("checking hashes for %d nodes\n", len(nodes))

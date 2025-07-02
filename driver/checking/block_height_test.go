@@ -31,11 +31,15 @@ func TestBlockHeightCheckerValid(t *testing.T) {
 		blockHeight1 string
 		blockHeight2 string
 		slack        uint8
+		config       map[string]string
 	}{
 		{name: "within-tolerance-big-asc", blockHeight1: "0x42", blockHeight2: "0x52", slack: 16},
 		{name: "within-tolerance-big-desc", blockHeight1: "0x52", blockHeight2: "0x42", slack: 16},
 		{name: "within-tolerance", blockHeight1: "0x42", blockHeight2: "0x43", slack: 1},
 		{name: "constant", blockHeight1: "0x42", blockHeight2: "0x42", slack: 0},
+		{name: "within-tolerance-big-asc-configured", blockHeight1: "0x42", blockHeight2: "0x52", slack: 1, config: map[string]string{"slack": "16"}},
+		{name: "within-tolerance-big-desc-configured", blockHeight1: "0x52", blockHeight2: "0x42", slack: 1, config: map[string]string{"slack": "16"}},
+		{name: "empty-config", blockHeight1: "0x52", blockHeight2: "0x42", slack: 16, config: map[string]string{}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -59,9 +63,12 @@ func TestBlockHeightCheckerValid(t *testing.T) {
 			rpc2.EXPECT().Close()
 
 			c := blockHeightChecker{net: net, slack: test.slack}
-			err := c.Check()
+			configured, err := c.Configure(test.config)
 			if err != nil {
-				t.Errorf("Block Height check should succeed, got: %v", err)
+				t.Errorf("unexpected error: %v", err)
+			}
+			if err := configured.Check(); err != nil {
+				t.Errorf("unexpected error: %v", err)
 			}
 		})
 	}
@@ -73,10 +80,15 @@ func TestBlockHeightCheckerInvalid_WithSlack(t *testing.T) {
 		blockHeight1 string
 		blockHeight2 string
 		slack        uint8
+		config       map[string]string
 	}{
 		{name: "should-reject-asc", blockHeight1: "0x42", blockHeight2: "0x1234", slack: 5},
 		{name: "should-reject-desc", blockHeight1: "0x1234", blockHeight2: "0x42", slack: 5},
 		{name: "no-slack", blockHeight1: "0x42", blockHeight2: "0x43", slack: 0},
+		{name: "should-reject-asc", blockHeight1: "0x42", blockHeight2: "0x52", slack: 255, config: map[string]string{"slack": "5"}},
+		{name: "should-reject-desc", blockHeight1: "0x52", blockHeight2: "0x42", slack: 255, config: map[string]string{"slack": "5"}},
+		{name: "no-slack", blockHeight1: "0x42", blockHeight2: "0x43", slack: 255, config: map[string]string{"slack": "0"}},
+		{name: "empty-config", blockHeight1: "0x42", blockHeight2: "0x1234", slack: 5, config: map[string]string{}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -100,9 +112,37 @@ func TestBlockHeightCheckerInvalid_WithSlack(t *testing.T) {
 			rpc2.EXPECT().Close()
 
 			c := blockHeightChecker{net: net, slack: test.slack}
-			err := c.Check()
-			if err == nil || !strings.Contains(err.Error(), "reports too old block") {
+			configured, err := c.Configure(test.config)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if err := configured.Check(); err == nil || !strings.Contains(err.Error(), "reports too old block") {
 				t.Errorf("Block Height check should failed, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestBlockHeightChecker_ConfigureInvalid(t *testing.T) {
+	tests := []struct {
+		name   string
+		config map[string]string
+		err    string
+	}{
+		{name: "test1", config: map[string]string{"slack": "abc"}, err: "failed to convert slack"},
+		{name: "test2", config: map[string]string{"slack": "-1"}, err: "invalid slack"},
+		{name: "test3", config: map[string]string{"slack": "256"}, err: "invalid slack"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			net := driver.NewMockNetwork(ctrl)
+
+			c := blockHeightChecker{net: net, slack: 123}
+			if _, err := c.Configure(test.config); err == nil || !strings.Contains(err.Error(), test.err) {
+				t.Errorf("not caught: %s; %v", test.err, err)
 			}
 		})
 	}
