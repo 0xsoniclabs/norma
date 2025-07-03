@@ -25,10 +25,10 @@ import (
 	"github.com/0xsoniclabs/norma/driver/parser"
 )
 
-// TestCheckScenarious iterates through all scenarios in this directory
+// TestCheckScenarios iterates through all scenarios in this directory
 // and its sub-directories and checks whether the contained YAML files
 // define valid scenarios.
-func TestCheckScenarious(t *testing.T) {
+func TestCheckScenarios(t *testing.T) {
 	files, err := listAll()
 	if err != nil {
 		t.Fatalf("failed to get list of all scenario files: %v", err)
@@ -38,12 +38,12 @@ func TestCheckScenarious(t *testing.T) {
 	}
 	for _, file := range files {
 		t.Run(file, func(t *testing.T) {
-			scenaro, err := parser.ParseFile(file)
+			scenario, err := parser.ParseFile(file)
 			if err != nil {
 				t.Fatalf("failed to parse file: %v", err)
 			}
-			if err = scenaro.Check(); err != nil {
-				t.Fatalf("scenaro check failed for: %s: %v", file, err)
+			if err = scenario.Check(); err != nil {
+				t.Fatalf("scenario check failed for: %s: %v", file, err)
 			}
 		})
 	}

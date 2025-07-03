@@ -27,7 +27,7 @@ import (
 	"github.com/0xsoniclabs/norma/load/app"
 )
 
-const namePatternStr = "^[A-Za-z0-9-]+$"
+const namePatternStr = `^[A-Za-z0-9-.]+$`
 
 var namePattern = regexp.MustCompile(namePatternStr)
 
@@ -128,7 +128,7 @@ func (s *Scenario) Check() error {
 func (v *Validator) Check(scenario *Scenario) error {
 	errs := []error{}
 
-	if !namePattern.Match([]byte(v.Name)) {
+	if len(v.Name) != 0 && !namePattern.Match([]byte(v.Name)) {
 		errs = append(errs, fmt.Errorf("validator name must match %v, got %v", namePatternStr, v.Name))
 	}
 

@@ -324,9 +324,6 @@ func TestApplication_DetectsShapeIssue(t *testing.T) {
 func TestValidator_InvalidNameIsDetected(t *testing.T) {
 	scenario := Scenario{}
 	validator := Validator{}
-	if err := validator.Check(&scenario); err == nil || !strings.Contains(err.Error(), "validator name must match") {
-		t.Errorf("missing name was not detected")
-	}
 	validator.Name = "   "
 	if err := validator.Check(&scenario); err == nil || !strings.Contains(err.Error(), "validator name must match") {
 		t.Errorf("missing name was not detected")
