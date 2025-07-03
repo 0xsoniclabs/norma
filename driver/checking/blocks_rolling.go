@@ -5,6 +5,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
+	netmon "github.com/0xsoniclabs/norma/driver/monitoring/network"
 	nodemon "github.com/0xsoniclabs/norma/driver/monitoring/node"
 )
 
@@ -24,6 +25,8 @@ type MonitoringData interface {
 	GetNodes() []monitoring.Node
 	// GetData returns the monitoring data for a specific node.
 	GetData(monitoring.Node) monitoring.Series[monitoring.Time, monitoring.BlockStatus]
+	// GetBlockGasRate returns the block gas rate for the network.
+	GetBlockGasRate() monitoring.Series[monitoring.BlockNumber, float64]
 }
 
 // MonitoringDataAdapter is an adapter that implements the MonitoringData interface
@@ -36,6 +39,10 @@ func (m *monitoringDataAdapter) GetNodes() []monitoring.Node {
 }
 func (m *monitoringDataAdapter) GetData(node monitoring.Node) monitoring.Series[monitoring.Time, monitoring.BlockStatus] {
 	data, _ := monitoring.GetData(m.monitor, node, nodemon.NodeBlockStatus)
+	return data
+}
+func (m *monitoringDataAdapter) GetBlockGasRate() monitoring.Series[monitoring.BlockNumber, float64] {
+	data, _ := monitoring.GetData(m.monitor, monitoring.Network{}, netmon.BlockGasRate)
 	return data
 }
 

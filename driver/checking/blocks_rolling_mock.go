@@ -5,6 +5,7 @@
 //
 //	mockgen -source blocks_rolling.go -destination blocks_rolling_mock.go -package checking
 //
+
 // Package checking is a generated GoMock package.
 package checking
 
@@ -19,6 +20,7 @@ import (
 type MockMonitoringData struct {
 	ctrl     *gomock.Controller
 	recorder *MockMonitoringDataMockRecorder
+	isgomock struct{}
 }
 
 // MockMonitoringDataMockRecorder is the mock recorder for MockMonitoringData.
@@ -36,6 +38,20 @@ func NewMockMonitoringData(ctrl *gomock.Controller) *MockMonitoringData {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockMonitoringData) EXPECT() *MockMonitoringDataMockRecorder {
 	return m.recorder
+}
+
+// GetBlockGasRate mocks base method.
+func (m *MockMonitoringData) GetBlockGasRate() monitoring.Series[monitoring.BlockNumber, float64] {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBlockGasRate")
+	ret0, _ := ret[0].(monitoring.Series[monitoring.BlockNumber, float64])
+	return ret0
+}
+
+// GetBlockGasRate indicates an expected call of GetBlockGasRate.
+func (mr *MockMonitoringDataMockRecorder) GetBlockGasRate() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlockGasRate", reflect.TypeOf((*MockMonitoringData)(nil).GetBlockGasRate))
 }
 
 // GetData mocks base method.
