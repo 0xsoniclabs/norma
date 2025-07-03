@@ -19,9 +19,10 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"github.com/0xsoniclabs/norma/genesistools/genesis"
 	"regexp"
 	"strings"
+
+	"github.com/0xsoniclabs/norma/genesistools/genesis"
 
 	"github.com/0xsoniclabs/norma/load/app"
 )
@@ -44,6 +45,16 @@ func (s *Scenario) Check() error {
 	}
 
 	names := map[string]bool{}
+	for _, validator := range s.Validators {
+		if err := validator.Check(s); err != nil {
+			errs = append(errs, err)
+		}
+		if _, exists := names[validator.Name]; exists {
+			errs = append(errs, fmt.Errorf("validator names must be unique, %s encountered multiple times", validator.Name))
+		} else {
+			names[validator.Name] = true
+		}
+	}
 	for _, node := range s.Nodes {
 		if err := node.Check(s); err != nil {
 			errs = append(errs, err)
@@ -108,6 +119,25 @@ func (s *Scenario) Check() error {
 		if chk.Time < 0 || chk.Time > s.Duration {
 			errs = append(errs, fmt.Errorf("invalid timing for checks: %f", chk.Time))
 		}
+	}
+
+	return errors.Join(errs...)
+}
+
+// Check tests semantic constraints on the validator configuration of a scenario.
+func (v *Validator) Check(scenario *Scenario) error {
+	errs := []error{}
+
+	if !namePattern.Match([]byte(v.Name)) {
+		errs = append(errs, fmt.Errorf("validator name must match %v, got %v", namePatternStr, v.Name))
+	}
+
+	if v.Instances != nil && *v.Instances < 0 {
+		errs = append(errs, fmt.Errorf("number of instances must be >= 0, is %d", *v.Instances))
+	}
+
+	if err := checkTimeInterval(nil, v.End, scenario.Duration); err != nil {
+		errs = append(errs, err)
 	}
 
 	return errors.Join(errs...)

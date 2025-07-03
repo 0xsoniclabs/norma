@@ -1,0 +1,43 @@
+# This scenario simulates a minimal scenario demonstrating the ability to
+# shut down a validator used during the network boot-up.
+name: Shutdown Initial Validator
+
+# The duration of the scenario's runtime, in seconds.
+duration: 150
+
+# Initial validator nodes in the network.
+validators:
+  - name: validator-initial
+    instances: 1
+    end: 100
+    imagename: "sonic:local"
+
+# Pace epoch changes to match the validator operations.
+advance_epoch:
+  - time: 80   # replacements got online
+  - time: 120   # initial validator is shut down
+
+# We need to start 3 additional validators to ensure that after the shutdown
+# of the initial validator more than 2/3 of the voting power remains.
+nodes:
+  - name: validator-replacement-1
+    start: 20
+    client:
+      type: validator
+  - name: validator-replacement-2
+    start: 40
+    client:
+      type: validator
+  - name: validator-replacement-3
+    start: 60
+    client:
+      type: validator
+
+
+# In the network there is a single application producing constant load.
+applications:
+  - name: load
+    type: counter
+    users: 50
+    rate:
+      constant: 20    # Tx/s

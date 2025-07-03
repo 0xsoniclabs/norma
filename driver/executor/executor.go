@@ -60,6 +60,7 @@ func Run(clock Clock, network driver.Network, scenario *parser.Scenario, checks 
 	}
 
 	// Schedule all operations listed in the scenario.
+	scheduleValidatorEvents(scenario.Validators, queue, network)
 	for _, node := range scenario.Nodes {
 		scheduleNodeEvents(&node, queue, network, endTime)
 	}
@@ -243,6 +244,58 @@ func toSingleEvent(time Time, name string, action func() error) event {
 	return toEvent(time, name, func() ([]event, error) {
 		return nil, action()
 	})
+}
+
+// scheduleValidatorEvents schedules activities to be performed on the set
+// of validators established during network startup.
+func scheduleValidatorEvents(validators []parser.Validator, queue *eventQueue, net driver.Network) {
+	getNodeByName := func(name string) (driver.Node, error) {
+		for _, node := range net.GetActiveNodes() {
+			if node.GetLabel() == name {
+				return node, nil
+			}
+		}
+		return nil, fmt.Errorf("validator node %s not found", name)
+	}
+
+	for _, group := range validators {
+		// The only event to be scheduled is a potential shutdown event.
+		if group.End == nil {
+			continue
+		}
+		instances := 1
+		if group.Instances != nil {
+			instances = *group.Instances
+		}
+		for i := range instances {
+			name := fmt.Sprintf("%s-%d", group.Name, i)
+			queue.add(toSingleEvent(
+				Seconds(*group.End),
+				fmt.Sprintf("[%s] Stop Validator", name),
+				func() error {
+					// Find the validator node by name.
+					node, err := getNodeByName(name)
+					if err != nil {
+						return err
+					}
+
+					if err := unregisterValidator(net, node); err != nil {
+						return fmt.Errorf("failed to unregister validator %s; %v", name, err)
+					}
+					if err := net.RemoveNode(node); err != nil {
+						return fmt.Errorf("failed to remove validator %s; %v", name, err)
+					}
+					if err := node.Stop(); err != nil {
+						return fmt.Errorf("failed to stop validator %s; %v", name, err)
+					}
+					if err := node.Cleanup(); err != nil {
+						return fmt.Errorf("failed to cleanup validator %s; %v", name, err)
+					}
+					return nil
+				},
+			))
+		}
+	}
 }
 
 // scheduleNodeEvents schedules a number of events covering the life-cycle of a class of

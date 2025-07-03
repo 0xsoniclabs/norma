@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-func TestTimeRange_UnconstraintInputIsAccepted(t *testing.T) {
+func TestTimeRange_UnconstrainedInputIsAccepted(t *testing.T) {
 	if err := checkTimeInterval(nil, nil, 10); err != nil {
 		t.Errorf("nil-time range should be accepted")
 	}
@@ -321,6 +321,48 @@ func TestApplication_DetectsShapeIssue(t *testing.T) {
 	}
 }
 
+func TestValidator_InvalidNameIsDetected(t *testing.T) {
+	scenario := Scenario{}
+	validator := Validator{}
+	if err := validator.Check(&scenario); err == nil || !strings.Contains(err.Error(), "validator name must match") {
+		t.Errorf("missing name was not detected")
+	}
+	validator.Name = "   "
+	if err := validator.Check(&scenario); err == nil || !strings.Contains(err.Error(), "validator name must match") {
+		t.Errorf("missing name was not detected")
+	}
+	validator.Name = "_something_with_underscores_"
+	if err := validator.Check(&scenario); err == nil || !strings.Contains(err.Error(), "validator name must match") {
+		t.Errorf("missing name was not detected")
+	}
+}
+
+func TestValidator_NegativeInstanceCounterIsNotAllowed(t *testing.T) {
+	scenario := Scenario{}
+	validator := Validator{Name: "test", Instances: new(int)}
+	if err := validator.Check(&scenario); err != nil {
+		t.Errorf("default instance value should be valid, but got error: %v", err)
+	}
+	*validator.Instances = -1
+	if err := validator.Check(&scenario); err == nil || !strings.Contains(err.Error(), "number of instances must be >= 0") {
+		t.Errorf("negative instance counter was not detected")
+	}
+}
+
+func TestValidator_DetectsTimingIssue(t *testing.T) {
+	scenario := Scenario{}
+	validator := Validator{
+		Name: "test",
+		End:  new(float32),
+	}
+	if err := validator.Check(&scenario); err != nil {
+		t.Errorf("default end value should be valid, but got error: %v", err)
+	}
+	*validator.End = -10
+	if err := validator.Check(&scenario); err == nil || !strings.Contains(err.Error(), "end time must be >= start time") {
+		t.Errorf("invalid end time was not detected")
+	}
+}
 func TestNode_InvalidNameIsDetected(t *testing.T) {
 	scenario := Scenario{}
 	node := Node{}
