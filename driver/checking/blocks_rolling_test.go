@@ -1,10 +1,11 @@
 package checking
 
 import (
-	"github.com/0xsoniclabs/norma/driver/monitoring"
-	"go.uber.org/mock/gomock"
 	"strings"
 	"testing"
+
+	"github.com/0xsoniclabs/norma/driver/monitoring"
+	"go.uber.org/mock/gomock"
 )
 
 func TestBlocksRolling_Blocks_Processed(t *testing.T) {
@@ -34,7 +35,7 @@ func TestBlocksRolling_Blocks_Processed(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			monitor := NewMockMonitoringData(ctrl)
 			monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
-			monitor.EXPECT().GetData(gomock.Any()).Return(series)
+			monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
 
 			c := blocksRollingChecker{monitor: monitor, toleranceSamples: 5}
 			if err := c.Check(); err != nil {
@@ -77,7 +78,7 @@ func TestBlocksRolling_Blocks_Failure(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			monitor := NewMockMonitoringData(ctrl)
 			monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
-			monitor.EXPECT().GetData(gomock.Any()).Return(series)
+			monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
 
 			c := blocksRollingChecker{monitor: monitor, toleranceSamples: 5}
 			if err := c.Check(); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
@@ -92,7 +93,7 @@ func TestBlocksRolling_Configure(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	monitor := NewMockMonitoringData(ctrl)
 	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"}).Times(4)
-	monitor.EXPECT().GetData(gomock.Any()).Return(series).Times(4)
+	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series).Times(4)
 
 	// original returns error because it sees 1, 1, 1, 1, 1
 	original := blocksRollingChecker{monitor: monitor, toleranceSamples: 5}
