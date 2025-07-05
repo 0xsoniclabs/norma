@@ -47,12 +47,6 @@ type LocalNetwork struct {
 	config         driver.NetworkConfig
 	primaryAccount *app.Account
 
-	// validators lists the validator nodes in the network. Validators
-	// are created during network startup and run for the full duration
-	// of the network.
-	// TODO dynamically created validators are not added to this list. Can't be added without old epoch is sealed, because method randomValidatorRPC could return a non validator node.
-	validators []*node.OperaNode
-
 	// nodes provide a register for all nodes in the network, including
 	// validator nodes created during startup.
 	nodes map[driver.NodeID]*node.OperaNode
@@ -114,7 +108,6 @@ func NewLocalNetwork(config *driver.NetworkConfig) (*LocalNetwork, error) {
 	net.RegisterListener(net.rpcWorkerPool)
 
 	// Start all validators.
-	net.validators = make([]*node.OperaNode, config.Validators.GetNumValidators())
 	errs := make([]error, config.Validators.GetNumValidators())
 	var wg sync.WaitGroup
 	var idx int
@@ -133,7 +126,7 @@ func NewLocalNetwork(config *driver.NetworkConfig) (*LocalNetwork, error) {
 					NetworkConfig: config,
 					Label:         label,
 				}
-				net.validators[idx], errs[idx] = net.createNode(&nodeConfig)
+				_, errs[idx] = net.createNode(&nodeConfig)
 			}(idx)
 			idx++
 		}
@@ -282,6 +275,9 @@ func (n *LocalNetwork) SendTransaction(tx *types.Transaction) {
 }
 
 func (n *LocalNetwork) DialRandomRpc() (rpcdriver.Client, error) {
+	if len(n.nodes) == 0 {
+		return nil, fmt.Errorf("no nodes in the network")
+	}
 	nodes := n.GetActiveNodes()
 	return nodes[rand.Intn(len(nodes))].DialRpc()
 }
@@ -304,14 +300,6 @@ func (n *LocalNetwork) AdvanceEpoch(epochIncrement int) error {
 	defer client.Close()
 
 	return network.AdvanceEpoch(client, epochIncrement)
-}
-
-// dialRandomGenesisValidatorRpc dials a random genesis validator node.
-// When network starts and still doesn't have any traffic, then first transaction must come from validator node.
-// Caused by: the regular nodes even when connected won't send transactions from their txpool,
-// because they don't know whether they are on head or not if blockchain is empty.
-func (n *LocalNetwork) dialRandomGenesisValidatorRpc() (rpcdriver.Client, error) {
-	return n.validators[rand.Intn(len(n.validators))].DialRpc()
 }
 
 // treasureAccountPrivateKey is an account with tokens that can be used to
@@ -350,7 +338,7 @@ func (a *localApplication) Stop() error {
 	a.cancel = nil
 	log.Printf("waiting for application to stop: %s", a.name)
 	a.done.Wait()
-	log.Printf("application has stoped: %s", a.name)
+	log.Printf("application has stopped: %s", a.name)
 	return nil
 }
 
@@ -371,7 +359,7 @@ func (a *localApplication) GetReceivedTransactions() (uint64, error) {
 }
 
 func (n *LocalNetwork) CreateApplication(config *driver.ApplicationConfig) (driver.Application, error) {
-	rpcClient, err := n.dialRandomGenesisValidatorRpc()
+	rpcClient, err := n.DialRandomRpc()
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to RPC to initialize the application; %v", err)
 	}

@@ -80,8 +80,9 @@ type NetworkRulesUpdate struct {
 type Validator struct {
 	Name      string
 	Failing   bool
-	Instances *int   `yaml:",omitempty"` // nil is interpreted as 1
-	ImageName string `yaml:",omitempty"` // empty is interpreted as DefaultClientDockerImageName
+	Instances *int     `yaml:",omitempty"` // nil is interpreted as 1
+	ImageName string   `yaml:",omitempty"` // empty is interpreted as DefaultClientDockerImageName
+	End       *float32 `yaml:",omitempty"` // nil is interpreted as end-of-scenario
 }
 
 // Node is a configuration for a group of nodes with similar properties.
