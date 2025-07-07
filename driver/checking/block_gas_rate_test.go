@@ -68,7 +68,7 @@ func TestBlocksGasRate_Configure(t *testing.T) {
 	// original will fail because gas rates exceed 30
 	original := blockGasRateChecker{monitor: monitor, ceiling: 30}
 	// success will pass because ceiling is now 50
-	success, err := original.Configure(CheckerConfig{"ceiling": 50.0})
+	success, err := original.Configure(CheckerConfig{"ceiling": 50})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -111,4 +111,25 @@ func createGasRateSeries(t *testing.T, gasRates []float64) monitoring.Series[mon
 		}
 	}
 	return &series
+}
+
+// TestBlocksGasRate_ParsingCeiling checks parsing any to float64
+func TestBlocksGasRate_ParsingCeiling(t *testing.T) {
+	tests := []any{
+		123,        // int
+		456.7,      // float
+		uint64(89), // uint64
+		^uint64(0), // max uint64
+	}
+
+	for _, test := range tests {
+		ctrl := gomock.NewController(t)
+		monitor := NewMockMonitoringData(ctrl)
+
+		original := blockGasRateChecker{monitor: monitor, ceiling: 30}
+		_, err := original.Configure(CheckerConfig{"ceiling": test})
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}
 }
