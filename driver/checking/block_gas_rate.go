@@ -50,12 +50,25 @@ func (c *blockGasRateChecker) Configure(config CheckerConfig) (Checker, error) {
 		return c, nil
 	}
 
+	toFloat64 := func(val any) (float64, error) {
+		switch v := val.(type) {
+		case float64:
+			return v, nil
+		case int:
+			return float64(v), nil
+		case uint64:
+			return float64(v), nil
+		default:
+			return 0, fmt.Errorf("invalid type; %T", val)
+		}
+	}
+
 	ceiling := c.ceiling
 	val, exist := config["ceiling"]
 	if exist {
-		cl, ok := val.(float64)
-		if !ok {
-			return nil, fmt.Errorf("failed to convert ceiling; %v", val)
+		cl, err := toFloat64(val)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert ceiling; %v", err)
 		}
 		ceiling = cl
 	}
