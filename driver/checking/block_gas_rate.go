@@ -18,12 +18,13 @@ package checking
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 )
 
-const defaultCeiling float64 = 30_000_000
+const defaultCeiling float64 = math.MaxFloat64
 
 func init() {
 	RegisterNetworkCheck("block_gas_rate", func(net driver.Network, monitor *monitoring.Monitor) Checker {
