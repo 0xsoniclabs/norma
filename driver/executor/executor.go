@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
-	"github.com/0xsoniclabs/norma/driver/network"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/parser"
@@ -320,6 +319,10 @@ func scheduleNodeEvents(node *parser.Node, queue *eventQueue, net driver.Network
 	if node.Client.Type == "validator" {
 		nodeIsValidator = true
 	}
+	nodeEndsAbruptly := false
+	if node.EndsAbruptly != nil {
+		nodeEndsAbruptly = *node.EndsAbruptly
+	}
 	nodeIsCheater := false
 
 	image := driver.DefaultClientDockerImageName
@@ -361,7 +364,8 @@ func scheduleNodeEvents(node *parser.Node, queue *eventQueue, net driver.Network
 				// before the end of the scenario. At the end of the scenario,
 				// validators can no longer be unregistered since the network
 				// is being shut down, losing the ability to run transactions.
-				if endTime != end && nodeIsValidator {
+				// If node is configured to end abruptly, it will not unregister itself
+				if endTime != end && nodeIsValidator && !nodeEndsAbruptly {
 					unregisterValidator(net, *instance)
 				}
 
@@ -390,7 +394,7 @@ func unregisterValidator(net driver.Network, node driver.Node) error {
 		return fmt.Errorf("failed to connect to RPC; %v", err)
 	}
 	defer rpcClient.Close()
-	err = network.UnregisterValidatorNode(rpcClient, *validatorId)
+	err = net.UnregisterValidatorNode(rpcClient, *validatorId)
 	if err != nil {
 		return fmt.Errorf("failed to unregister validator node; %v", err)
 	}

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"github.com/0xsoniclabs/norma/driver/checking"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/rpc"
 	"reflect"
 	"syscall"
 	"testing"
@@ -113,6 +114,77 @@ func TestExecutor_RunMultipleNodeScenario(t *testing.T) {
 	gomock.InOrder(
 		net.EXPECT().CreateNode(gomock.Any()).Return(node2, nil),
 		net.EXPECT().RemoveNode(newIs(node2)),
+		node2.EXPECT().Stop(),
+		node2.EXPECT().Cleanup(),
+	)
+
+	if err := Run(clock, net, &scenario, nil); err != nil {
+		t.Errorf("failed to run scenario: %v", err)
+	}
+	want := Seconds(10)
+	if got := clock.Now(); got < want {
+		t.Errorf("scenario execution did not complete all steps, expected end time %v, got %v", want, got)
+	}
+}
+
+func TestExecutor_RunNodeEndsAbruptlyScenario(t *testing.T) {
+	var tru bool = true
+	clock := NewSimClock()
+	scenario := parser.Scenario{
+		Name:       "Test",
+		Duration:   10,
+		Validators: []parser.Validator{{Name: "validator"}},
+		Nodes: []parser.Node{
+			{
+				Name:         "ends-abruptly",
+				Start:        New[float32](2),
+				End:          New[float32](3),
+				Client:       parser.ClientType{Type: "validator"},
+				EndsAbruptly: &tru,
+			},
+			{
+				Name:   "ends-normally",
+				Start:  New[float32](6),
+				End:    New[float32](7),
+				Client: parser.ClientType{Type: "validator"},
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+
+	// node1 ends abruptly = no unrgister
+	node1 := driver.NewMockNode(ctrl)
+	gomock.InOrder(
+		// start
+		net.EXPECT().CreateNode(gomock.Any()).Return(node1, nil),
+
+		// no unregister
+
+		// end
+		net.EXPECT().RemoveNode(node1),
+		node1.EXPECT().Stop(),
+		node1.EXPECT().Cleanup(),
+	)
+
+	// node 2 ends normally = unregister
+	var two int = 2
+	node2 := driver.NewMockNode(ctrl)
+	rpc2 := rpc.NewMockClient(ctrl)
+
+	gomock.InOrder(
+		// start
+		net.EXPECT().CreateNode(gomock.Any()).Return(node2, nil),
+
+		// unregister
+		node2.EXPECT().GetValidatorId().Return(&two),
+		net.EXPECT().DialRandomRpc().Return(rpc2, nil),
+		net.EXPECT().UnregisterValidatorNode(rpc2, two).Return(nil),
+		rpc2.EXPECT().Close(),
+
+		// end
+		net.EXPECT().RemoveNode(node2),
 		node2.EXPECT().Stop(),
 		node2.EXPECT().Cleanup(),
 	)
