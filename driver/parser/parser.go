@@ -95,6 +95,7 @@ type Node struct {
 	Instances *int       `yaml:",omitempty"` // nil is interpreted as 1
 	Start     *float32   `yaml:",omitempty"` // nil is interpreted as 0
 	End       *float32   `yaml:",omitempty"` // nil is interpreted as end-of-scenario
+	Kill      *float32   `yaml:",omitempty"` // nil is interpreted as not kill
 	Client    ClientType `yaml:",omitempty"`
 }
 
