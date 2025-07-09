@@ -123,6 +123,7 @@ nodes:
     client:
       imagename: main
       type: validator
+      id: 100
       data_volume: abcd 	
 
 applications:
