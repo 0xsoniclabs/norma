@@ -90,12 +90,13 @@ type Validator struct {
 // and a start and end time. Furthermore, nodes may be instantiated multiple
 // times to create larger, homogenious groups easier.
 type Node struct {
-	Name      string
-	Failing   bool
-	Instances *int       `yaml:",omitempty"` // nil is interpreted as 1
-	Start     *float32   `yaml:",omitempty"` // nil is interpreted as 0
-	End       *float32   `yaml:",omitempty"` // nil is interpreted as end-of-scenario
-	Client    ClientType `yaml:",omitempty"`
+	Name         string
+	Failing      bool
+	Instances    *int       `yaml:",omitempty"` // nil is interpreted as 1
+	Start        *float32   `yaml:",omitempty"` // nil is interpreted as 0
+	End          *float32   `yaml:",omitempty"` // nil is interpreted as end-of-scenario
+	Client       ClientType `yaml:",omitempty"`
+	EndsAbruptly *bool      `yaml:"ends_abruptly,omitempty"`
 }
 
 // IsValidator returns true if the node is defined as validator in Features
