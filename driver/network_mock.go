@@ -12,6 +12,7 @@ package driver
 import (
 	reflect "reflect"
 
+	network "github.com/0xsoniclabs/norma/driver/network"
 	rpc "github.com/0xsoniclabs/norma/driver/rpc"
 	types "github.com/ethereum/go-ethereum/core/types"
 	gomock "go.uber.org/mock/gomock"
@@ -154,6 +155,21 @@ func (mr *MockNetworkMockRecorder) RegisterListener(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterListener", reflect.TypeOf((*MockNetwork)(nil).RegisterListener), arg0)
 }
 
+// RegisterValidatorNode mocks base method.
+func (m *MockNetwork) RegisterValidatorNode(arg0 network.ContractBackend) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RegisterValidatorNode", arg0)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RegisterValidatorNode indicates an expected call of RegisterValidatorNode.
+func (mr *MockNetworkMockRecorder) RegisterValidatorNode(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterValidatorNode", reflect.TypeOf((*MockNetwork)(nil).RegisterValidatorNode), arg0)
+}
+
 // RemoveNode mocks base method.
 func (m *MockNetwork) RemoveNode(arg0 Node) error {
 	m.ctrl.T.Helper()
@@ -204,6 +220,20 @@ func (m *MockNetwork) UnregisterListener(arg0 NetworkListener) {
 func (mr *MockNetworkMockRecorder) UnregisterListener(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnregisterListener", reflect.TypeOf((*MockNetwork)(nil).UnregisterListener), arg0)
+}
+
+// UnregisterValidatorNode mocks base method.
+func (m *MockNetwork) UnregisterValidatorNode(arg0 rpc.Client, arg1 int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnregisterValidatorNode", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UnregisterValidatorNode indicates an expected call of UnregisterValidatorNode.
+func (mr *MockNetworkMockRecorder) UnregisterValidatorNode(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnregisterValidatorNode", reflect.TypeOf((*MockNetwork)(nil).UnregisterValidatorNode), arg0, arg1)
 }
 
 // MockNetworkListener is a mock of NetworkListener interface.

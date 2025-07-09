@@ -19,6 +19,7 @@ package driver
 import (
 	"time"
 
+	"github.com/0xsoniclabs/norma/driver/network"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -76,6 +77,14 @@ type Network interface {
 
 	// AdvanceEpoch advances an epoch by the given number.
 	AdvanceEpoch(epochIncrement int) error
+
+	// RegisterValidatorNode is called after a validator node is created.
+	// For testing purpose
+	RegisterValidatorNode(network.ContractBackend) (int, error)
+
+	// UnregisterValidatorNode is called before a validator node is removed.
+	// For testing purpose
+	UnregisterValidatorNode(rpc.Client, int) error
 }
 
 // NetworkConfig is a collection of network parameters to be used by factories

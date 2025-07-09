@@ -30,6 +30,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
+	"github.com/0xsoniclabs/norma/driver/network"
 	"github.com/0xsoniclabs/norma/driver/network/rpc"
 	"github.com/0xsoniclabs/norma/driver/node"
 	rpcdriver "github.com/0xsoniclabs/norma/driver/rpc"
@@ -300,6 +301,14 @@ func (n *LocalNetwork) AdvanceEpoch(epochIncrement int) error {
 	defer client.Close()
 
 	return network.AdvanceEpoch(client, epochIncrement)
+}
+
+func (n *LocalNetwork) RegisterValidatorNode(backend network.ContractBackend) (int, error) {
+	return network.RegisterValidatorNode(backend)
+}
+
+func (n *LocalNetwork) UnregisterValidatorNode(client rpc.Client, validatorId int) error {
+	return network.UnregisterValidatorNode(client, validatorId)
 }
 
 // treasureAccountPrivateKey is an account with tokens that can be used to
