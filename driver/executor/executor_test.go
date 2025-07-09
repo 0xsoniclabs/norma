@@ -18,11 +18,12 @@ package executor
 
 import (
 	"fmt"
-	"github.com/0xsoniclabs/norma/driver/checking"
-	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"reflect"
 	"syscall"
 	"testing"
+
+	"github.com/0xsoniclabs/norma/driver/checking"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/parser"
@@ -123,6 +124,53 @@ func TestExecutor_RunMultipleNodeScenario(t *testing.T) {
 	want := Seconds(10)
 	if got := clock.Now(); got < want {
 		t.Errorf("scenario execution did not complete all steps, expected end time %v, got %v", want, got)
+	}
+}
+
+func TestExecutor_KillNode(t *testing.T) {
+	clock := NewSimClock()
+	scenario := parser.Scenario{
+		Name:       "Test",
+		Duration:   10,
+		Validators: []parser.Validator{{Name: "validator"}},
+		Nodes: []parser.Node{
+			{
+				Name:  "ended-normally",
+				Start: New[float32](1),
+				End:   New[float32](2),
+			},
+			{
+				Name:  "killed-normally",
+				Start: New[float32](3),
+				Kill:  New[float32](4),
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+
+	// node1 ended normally
+	node1 := driver.NewMockNode(ctrl)
+	gomock.InOrder(
+		// start
+		net.EXPECT().CreateNode(gomock.Any()).Return(node1, nil),
+		// end
+		net.EXPECT().RemoveNode(node1),
+		node1.EXPECT().Stop(),
+		node1.EXPECT().Cleanup(),
+	)
+	// node2 killed normally
+	node2 := driver.NewMockNode(ctrl)
+	gomock.InOrder(
+		// start
+		net.EXPECT().CreateNode(gomock.Any()).Return(node2, nil),
+		// kill
+		net.EXPECT().KillNode(node2),
+	)
+
+	if err := Run(clock, net, &scenario, nil); err != nil {
+		t.Errorf("failed to run scenario: %v", err)
 	}
 }
 
