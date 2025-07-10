@@ -51,7 +51,7 @@ type Node interface {
 
 	// GetValidatorId returns the validator ID used by this node, if it is a
 	// validator node. If the node is not a validator, it returns nil.
-	GetValidatorId() *int
+	GetValidatorId() *network.ValidatorId
 
 	// GetServiceUrl returns the URL of a service running on the
 	// represented node. May be nil if no such service is offered.

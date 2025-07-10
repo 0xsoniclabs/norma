@@ -115,10 +115,10 @@ func (mr *MockNodeMockRecorder) GetServiceUrl(arg0 any) *gomock.Call {
 }
 
 // GetValidatorId mocks base method.
-func (m *MockNode) GetValidatorId() *int {
+func (m *MockNode) GetValidatorId() *network.ValidatorId {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetValidatorId")
-	ret0, _ := ret[0].(*int)
+	ret0, _ := ret[0].(*network.ValidatorId)
 	return ret0
 }
 

@@ -73,6 +73,9 @@ type LocalNetwork struct {
 
 	// a context for app management operations on the network
 	appContext app.AppContext
+
+	// implementation of the id tracker
+	idTracker network.ValidatorIdTracker
 }
 
 func NewLocalNetwork(config *driver.NetworkConfig) (*LocalNetwork, error) {
@@ -102,6 +105,7 @@ func NewLocalNetwork(config *driver.NetworkConfig) (*LocalNetwork, error) {
 		apps:           []driver.Application{},
 		listeners:      map[driver.NetworkListener]bool{},
 		rpcWorkerPool:  rpc.NewRpcWorkerPool(),
+		idTracker:      network.NewDefaultValidatorIdTracker(),
 	}
 
 	// Let the RPC pool to start RPC workers when a node start.
@@ -110,13 +114,13 @@ func NewLocalNetwork(config *driver.NetworkConfig) (*LocalNetwork, error) {
 	// Start all validators.
 	errs := make([]error, config.Validators.GetNumValidators())
 	var wg sync.WaitGroup
-	var idx int
+	var idx network.ValidatorId
 	for _, validator := range config.Validators {
 		for j := 0; j < validator.Instances; j++ {
 			wg.Add(1)
 			image := validator.ImageName
 			label := fmt.Sprintf("%s-%d", validator.Name, j)
-			go func(idx int) {
+			go func(idx network.ValidatorId) {
 				defer wg.Done()
 				validatorId := idx + 1
 				nodeConfig := node.OperaNodeConfig{
@@ -196,7 +200,7 @@ func (n *LocalNetwork) createNode(nodeConfig *node.OperaNodeConfig) (*node.Opera
 
 // CreateNode creates nodes in the network during run.
 func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error) {
-	var newValId *int
+	var newValId *network.ValidatorId
 	if config.Validator {
 		var err error
 		rpcClient, err := n.DialRandomRpc()
@@ -205,10 +209,17 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 		}
 		defer rpcClient.Close()
 
-		id, err := network.RegisterValidatorNode(rpcClient)
+		// get id as tracked by own network
+		id, err := n.idTracker.GetNextAvailableId()
 		if err != nil {
 			return nil, err
 		}
+
+		if err := network.RegisterValidatorNode(rpcClient, id); err != nil {
+			return nil, err
+		}
+
+		n.idTracker.NotifyRegisteredId(id)
 		newValId = &id
 	}
 
