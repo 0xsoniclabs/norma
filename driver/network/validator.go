@@ -18,27 +18,17 @@ import (
 )
 
 // RegisterValidatorNode registers a validator in the SFC contract.
-func RegisterValidatorNode(backend ContractBackend) (int, error) {
-	newValId := 0
-
+func RegisterValidatorNode(backend ContractBackend, vid ValidatorId) error {
 	// get a representation of the deployed contract
 	SFCContract, err := sfc100.NewContract(sfc.ContractAddress, backend)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get SFC contract representation; %v", err)
+		return fmt.Errorf("failed to get SFC contract representation; %v", err)
 	}
 
-	var lastValId *big.Int
-	lastValId, err = SFCContract.LastValidatorID(nil)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get validator count; %v", err)
-	}
-
-	newValId = int(lastValId.Int64()) + 1
-
-	privateKeyECDSA := evmcore.FakeKey(uint32(newValId))
+	privateKeyECDSA := evmcore.FakeKey(uint32(vid))
 	txOpts, err := bind.NewKeyedTransactorWithChainID(privateKeyECDSA, big.NewInt(int64(opera.FakeNetRules(opera.GetSonicUpgrades()).NetworkID)))
 	if err != nil {
-		return 0, fmt.Errorf("failed to create txOpts; %v", err)
+		return fmt.Errorf("failed to create txOpts; %v", err)
 	}
 
 	txOpts.Value = getStakePerValidator()
@@ -50,28 +40,28 @@ func RegisterValidatorNode(backend ContractBackend) (int, error) {
 
 	tx, err := SFCContract.CreateValidator(txOpts, validatorPubKey.Bytes())
 	if err != nil {
-		return 0, fmt.Errorf("failed to create validator; %v", err)
+		return fmt.Errorf("failed to create validator; %v", err)
 	}
 
 	receipt, err := backend.WaitTransactionReceipt(tx.Hash())
 	if err != nil {
-		return 0, fmt.Errorf("failed to create validator, receipt error: %v", err)
+		return fmt.Errorf("failed to create validator, receipt error: %v", err)
 	}
 
 	if receipt.Status != types.ReceiptStatusSuccessful {
-		return 0, fmt.Errorf("failed to deploy helper contract: transaction reverted")
+		return fmt.Errorf("failed to deploy helper contract: transaction reverted")
 	}
 
 	slog.Info(
 		"Completed registration of new validator node",
-		"validator_id", newValId,
+		"validator_id", vid,
 	)
 
-	return newValId, nil
+	return nil
 }
 
-func UnregisterValidatorNode(client rpc.Client, validatorId int) error {
-	slog.Info("Start unregistering validator node", "validator_id", validatorId)
+func UnregisterValidatorNode(client rpc.Client, vid ValidatorId) error {
+	slog.Info("Start unregistering validator node", "validator_id", vid)
 
 	// get a representation of the deployed contract
 	sfc, err := sfc100.NewContract(sfc.ContractAddress, client)
@@ -79,7 +69,7 @@ func UnregisterValidatorNode(client rpc.Client, validatorId int) error {
 		return fmt.Errorf("failed to get SFC contract representation; %v", err)
 	}
 
-	key := evmcore.FakeKey(uint32(validatorId))
+	key := evmcore.FakeKey(uint32(vid))
 	txOpts, err := bind.NewKeyedTransactorWithChainID(key, big.NewInt(int64(opera.FakeNetRules(opera.GetSonicUpgrades()).NetworkID)))
 	if err != nil {
 		return fmt.Errorf("failed to create txOpts; %v", err)
@@ -89,7 +79,7 @@ func UnregisterValidatorNode(client rpc.Client, validatorId int) error {
 
 	// withdraw ID must be unique, so we use the current time in nanoseconds
 	withdrawId := big.NewInt(time.Now().UnixNano())
-	tx, err := sfc.Undelegate(txOpts, big.NewInt(int64(validatorId)), withdrawId, stake)
+	tx, err := sfc.Undelegate(txOpts, big.NewInt(int64(vid)), withdrawId, stake)
 	if err != nil {
 		return fmt.Errorf("failed to undelegate validator stake; %v", err)
 	}
@@ -105,7 +95,7 @@ func UnregisterValidatorNode(client rpc.Client, validatorId int) error {
 
 	slog.Info(
 		"Completed unregistering validator node",
-		"validator_id", validatorId,
+		"validator_id", vid,
 	)
 
 	return nil

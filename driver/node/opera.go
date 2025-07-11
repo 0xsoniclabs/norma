@@ -84,7 +84,7 @@ type OperaNodeConfig struct {
 	// The Docker image to use for the node.
 	Image string
 	// The ID of the validator, nil if the node should not be a validator.
-	ValidatorId *int
+	ValidatorId *network.ValidatorId
 	// The configuration of the network the configured node should be part of.
 	NetworkConfig *driver.NetworkConfig
 	// ValidatorPubkey is nil if not a validator, else used as pubkey for the validator.
@@ -161,7 +161,7 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 	// Use a private copy of the config to avoid modifying the original.
 	nodeConfig := *config
 	if config.ValidatorId != nil {
-		nodeConfig.ValidatorId = new(int)
+		nodeConfig.ValidatorId = new(network.ValidatorId)
 		*nodeConfig.ValidatorId = *config.ValidatorId
 	}
 	node := &OperaNode{
@@ -234,7 +234,7 @@ func (n *OperaNode) GetNodeID() (driver.NodeID, error) {
 	return driver.NodeID(result.Enode), nil
 }
 
-func (n *OperaNode) GetValidatorId() *int {
+func (n *OperaNode) GetValidatorId() *network.ValidatorId {
 	return n.config.ValidatorId
 }
 
