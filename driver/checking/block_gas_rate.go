@@ -85,6 +85,13 @@ func (c *blockGasRateChecker) Check() error {
 	}
 
 	items := series.GetRange(0, last.Position+1)
+
+	rate := float64(0)
+	for _, point := range items {
+		rate += point.Value
+	}
+	fmt.Println("average gas rate is ", rate/len(items))
+
 	for _, point := range items {
 		if point.Value > c.ceiling {
 			return fmt.Errorf("Exceeded gas ceiling; Block %d has gas rate of %f > %f", point.Position, point.Value, c.ceiling)
