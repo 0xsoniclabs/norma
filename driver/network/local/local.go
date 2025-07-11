@@ -244,6 +244,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 func (n *LocalNetwork) RemoveNode(node driver.Node) error {
 	n.listenerMutex.Lock()
 	for listener := range n.listeners {
+		fmt.Println("======== RemoveNode:", node.GetLabel())
 		listener.BeforeNodeRemoval(node)
 	}
 	n.listenerMutex.Unlock()
