@@ -706,3 +706,32 @@ func TestScenario_Checks_Failure(t *testing.T) {
 		})
 	}
 }
+
+func TestScenario_CatchEndAndKill(t *testing.T) {
+	var twenty, sixty float32 = 20, 60
+	scenarios := []Scenario{
+		{
+			Name:     "Test_EndAndKill",
+			Duration: 60,
+			Nodes: []Node{
+				{Name: "A", End: &twenty, Kill: &twenty},
+			},
+		},
+		{
+			Name:     "Test_EndAndKill2",
+			Duration: 60,
+			Nodes: []Node{
+				{Name: "A", Kill: &sixty},
+			},
+		},
+	}
+
+	for _, scenario := range scenarios {
+		t.Run(scenario.Name, func(t *testing.T) {
+			t.Parallel()
+			if err := scenario.Check(); err == nil || !strings.Contains(err.Error(), "node cannot both have end and kill") {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
