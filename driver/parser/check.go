@@ -156,7 +156,15 @@ func (n *Node) Check(scenario *Scenario) error {
 		n.Client.Type = "observer"
 	}
 
+	if n.End != nil && n.Kill != nil {
+		errs = append(errs, fmt.Errorf("node cannot have both end and kill; end=%f, kill=%f", *n.End, *n.Kill))
+	}
+
 	if err := checkTimeInterval(n.Start, n.End, scenario.Duration); err != nil {
+		errs = append(errs, err)
+	}
+
+	if err := checkTimeInterval(n.Start, n.Kill, scenario.Duration); err != nil {
 		errs = append(errs, err)
 	}
 
