@@ -157,7 +157,7 @@ func (n *Node) Check(scenario *Scenario) error {
 	}
 
 	if n.End != nil && n.Kill != nil {
-		errs = append(errs, fmt.Errorf("node cannot both have end and kill; end=%f, kill=%f", *n.End, *n.Kill))
+		errs = append(errs, fmt.Errorf("node cannot have both end and kill; end=%f, kill=%f", *n.End, *n.Kill))
 	}
 
 	if err := checkTimeInterval(n.Start, n.End, scenario.Duration); err != nil {
