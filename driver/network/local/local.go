@@ -196,29 +196,13 @@ func (n *LocalNetwork) createNode(nodeConfig *node.OperaNodeConfig) (*node.Opera
 
 // CreateNode creates nodes in the network during run.
 func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error) {
-	var newValId *int = config.ValidatorID
-	if config.Validator && newValId == nil {
-		var err error
-		rpcClient, err := n.DialRandomRpc()
-		if err != nil {
-			return nil, fmt.Errorf("failed to connect to RPC; %v", err)
-		}
-		defer rpcClient.Close()
-
-		id, err := network.RegisterValidatorNode(rpcClient)
-		if err != nil {
-			return nil, err
-		}
-		newValId = &id
-	}
-
 	if config.Cheater {
 		_, err := n.createNode(&node.OperaNodeConfig{
 			Label:         "cheater-" + config.Name,
 			Failing:       config.Failing,
 			Image:         config.Image,
 			NetworkConfig: &n.config,
-			ValidatorId:   newValId,
+			ValidatorId:   config.ValidatorId,
 		})
 		if err != nil {
 			return nil, err
@@ -236,7 +220,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 		Failing:       config.Failing,
 		Image:         config.Image,
 		NetworkConfig: &n.config,
-		ValidatorId:   newValId,
+		ValidatorId:   config.ValidatorId,
 		MountDataDir:  datadir,
 	})
 }
@@ -300,6 +284,14 @@ func (n *LocalNetwork) AdvanceEpoch(epochIncrement int) error {
 	defer client.Close()
 
 	return network.AdvanceEpoch(client, epochIncrement)
+}
+
+func (_ *LocalNetwork) RegisterValidatorNode(backend network.ContractBackend, validatorId *int) (int, error) {
+	return network.RegisterValidatorNode(backend, validatorId)
+}
+
+func (_ *LocalNetwork) UnregisterValidatorNode(client rpcdriver.Client, validatorId int) error {
+	return network.UnregisterValidatorNode(client, validatorId)
 }
 
 // treasureAccountPrivateKey is an account with tokens that can be used to

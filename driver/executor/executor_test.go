@@ -18,11 +18,13 @@ package executor
 
 import (
 	"fmt"
-	"github.com/0xsoniclabs/norma/driver/checking"
-	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"reflect"
 	"syscall"
 	"testing"
+
+	"github.com/0xsoniclabs/norma/driver/checking"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/rpc"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/parser"
@@ -123,6 +125,120 @@ func TestExecutor_RunMultipleNodeScenario(t *testing.T) {
 	want := Seconds(10)
 	if got := clock.Now(); got < want {
 		t.Errorf("scenario execution did not complete all steps, expected end time %v, got %v", want, got)
+	}
+}
+
+func TestExecutor_NodeRejoin(t *testing.T) {
+	var id, ten int = 2, 10
+	clock := NewSimClock()
+	scenario := parser.Scenario{
+		Name:       "Test",
+		Duration:   10,
+		Validators: []parser.Validator{{Name: "validator"}},
+		Nodes: []parser.Node{
+			{
+				Name:   "start",
+				Start:  New[float32](1),
+				Kill:   New[float32](2),
+				Client: parser.ClientType{Type: "validator"},
+			},
+			{
+				Name:   "rejoin",
+				Rejoin: New[float32](3),
+				End:    New[float32](4),
+				Client: parser.ClientType{
+					Type:        "validator",
+					ValidatorId: &id,
+				},
+			},
+			{
+				Name:  "start-10",
+				Start: New[float32](5),
+				Kill:  New[float32](6),
+				Client: parser.ClientType{
+					Type:        "validator",
+					ValidatorId: &ten,
+				},
+			},
+			{
+				Name:   "rejoin-10",
+				Rejoin: New[float32](7),
+				End:    New[float32](8),
+				Client: parser.ClientType{
+					Type:        "validator",
+					ValidatorId: &ten,
+				},
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+
+	// node1 starts with no assigned id, gets 2
+	node1 := driver.NewMockNode(ctrl)
+	rpc1 := rpc.NewMockClient(ctrl)
+	gomock.InOrder(
+		// start = expect register with nil
+		net.EXPECT().DialRandomRpc().Return(rpc1, nil),
+		net.EXPECT().RegisterValidatorNode(rpc1, nil).Return(id, nil),
+		rpc1.EXPECT().Close(),
+		net.EXPECT().CreateNode(gomock.Any()).Return(node1, nil),
+		// kill = no unregister
+		net.EXPECT().KillNode(node1),
+		net.EXPECT().RemoveNode(node1),
+		node1.EXPECT().Stop(),
+		node1.EXPECT().Cleanup(),
+	)
+	// node2 rejoins with previous id 2
+	node2 := driver.NewMockNode(ctrl)
+	rpc2 := rpc.NewMockClient(ctrl)
+	gomock.InOrder(
+		// rejoin = no register
+		net.EXPECT().CreateNode(gomock.Any()).Return(node2, nil),
+		// end = expect unregister
+		node2.EXPECT().GetValidatorId().Return(&id),
+		net.EXPECT().DialRandomRpc().Return(rpc2, nil),
+		net.EXPECT().UnregisterValidatorNode(rpc2, id).Return(nil),
+		rpc2.EXPECT().Close(),
+		net.EXPECT().RemoveNode(node2),
+		node2.EXPECT().Stop(),
+		node2.EXPECT().Cleanup(),
+	)
+
+	// node3 starts with assigned id 10
+	node3 := driver.NewMockNode(ctrl)
+	rpc3 := rpc.NewMockClient(ctrl)
+	gomock.InOrder(
+		// start = expect register
+		net.EXPECT().DialRandomRpc().Return(rpc3, nil),
+		net.EXPECT().RegisterValidatorNode(rpc3, &ten).Return(ten, nil),
+		rpc3.EXPECT().Close(),
+		net.EXPECT().CreateNode(gomock.Any()).Return(node3, nil),
+		// kill = no unregister
+		net.EXPECT().KillNode(node3),
+		net.EXPECT().RemoveNode(node3),
+		node3.EXPECT().Stop(),
+		node3.EXPECT().Cleanup(),
+	)
+	// node4 rejoins with assigned id 10
+	node4 := driver.NewMockNode(ctrl)
+	rpc4 := rpc.NewMockClient(ctrl)
+	gomock.InOrder(
+		// rejoin = no register
+		net.EXPECT().CreateNode(gomock.Any()).Return(node4, nil),
+		// end = expect unregister
+		node4.EXPECT().GetValidatorId().Return(&ten),
+		net.EXPECT().DialRandomRpc().Return(rpc4, nil),
+		net.EXPECT().UnregisterValidatorNode(rpc4, ten).Return(nil),
+		rpc4.EXPECT().Close(),
+		net.EXPECT().RemoveNode(node4),
+		node4.EXPECT().Stop(),
+		node4.EXPECT().Cleanup(),
+	)
+
+	if err := Run(clock, net, &scenario, nil); err != nil {
+		t.Errorf("failed to run scenario: %v", err)
 	}
 }
 

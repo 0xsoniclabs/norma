@@ -17,23 +17,31 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// RegisterValidatorNode registers a validator in the SFC contract.
-func RegisterValidatorNode(backend ContractBackend) (int, error) {
-	newValId := 0
+// ValidatorRegistrar wraps RegisterValidatorNode, UnregisterValidatorNode for testing purpose
+type ValidatorRegistrar interface {
+	RegisterValidatorNode(backend ContractBackend, validatorId *int) (int, error)
+	UnregisterValidatorNode(client rpc.Client, validatorId int) error
+}
 
+// RegisterValidatorNode registers a validator in the SFC contract.
+func RegisterValidatorNode(backend ContractBackend, validatorId *int) (int, error) {
 	// get a representation of the deployed contract
 	SFCContract, err := sfc100.NewContract(sfc.ContractAddress, backend)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get SFC contract representation; %v", err)
 	}
 
-	var lastValId *big.Int
-	lastValId, err = SFCContract.LastValidatorID(nil)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get validator count; %v", err)
+	var newValId int
+	if validatorId != nil {
+		newValId = *validatorId
+	} else {
+		var lastValId *big.Int
+		lastValId, err = SFCContract.LastValidatorID(nil)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get validator count; %v", err)
+		}
+		newValId = int(lastValId.Int64()) + 1
 	}
-
-	newValId = int(lastValId.Int64()) + 1
 
 	privateKeyECDSA := evmcore.FakeKey(uint32(newValId))
 	txOpts, err := bind.NewKeyedTransactorWithChainID(privateKeyECDSA, big.NewInt(int64(opera.FakeNetRules(opera.GetSonicUpgrades()).NetworkID)))
