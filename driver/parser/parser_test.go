@@ -126,7 +126,8 @@ nodes:
     client:
       imagename: main
       type: validator
-      data_volume: abcd 	
+      data_volume: abcd
+      val_id: 42
 
 applications:
   - name: lottery
