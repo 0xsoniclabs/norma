@@ -728,3 +728,25 @@ func TestScenario_CatchEndAndKill(t *testing.T) {
 		})
 	}
 }
+
+func TestScenario_CatchStartAndRejoin(t *testing.T) {
+	var twenty float32 = 20
+	scenarios := []Scenario{
+		{
+			Name:     "Test_StartAndRejoin",
+			Duration: 60,
+			Nodes: []Node{
+				{Name: "A", Start: &twenty, Rejoin: &twenty},
+			},
+		},
+	}
+
+	for _, scenario := range scenarios {
+		t.Run(scenario.Name, func(t *testing.T) {
+			t.Parallel()
+			if err := scenario.Check(); err == nil || !strings.Contains(err.Error(), "node cannot have both start and rejoin") {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
