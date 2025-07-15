@@ -140,6 +140,12 @@ func (ac *AppController) GetReceivedTransactions() (uint64, error) {
 
 		// attempt a re-connect
 		ac.rpcClient.Close()
+
+		nodes := ac.network.GetActiveNodes()
+		if len(nodes) == 0 {
+			return 0, fmt.Errorf("no node in network")
+		}
+
 		ac.rpcClient, err = ac.network.DialRandomRpc()
 		if err != nil {
 			return 0, fmt.Errorf("failed to dial random RPC; %v", err)
