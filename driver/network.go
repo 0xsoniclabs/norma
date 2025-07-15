@@ -117,12 +117,13 @@ type NetworkListener interface {
 }
 
 type NodeConfig struct {
-	Name       string
-	Failing    bool
-	Validator  bool
-	Cheater    bool
-	Image      string
-	DataVolume *string
+	Name        string
+	Failing     bool
+	Validator   bool
+	ValidatorId *int
+	Cheater     bool
+	Image       string
+	DataVolume  *string
 }
 
 type ApplicationConfig struct {

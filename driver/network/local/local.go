@@ -196,8 +196,8 @@ func (n *LocalNetwork) createNode(nodeConfig *node.OperaNodeConfig) (*node.Opera
 
 // CreateNode creates nodes in the network during run.
 func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error) {
-	var newValId *int
-	if config.Validator {
+	var newValId *int = config.ValidatorID
+	if config.Validator && newValId == nil {
 		var err error
 		rpcClient, err := n.DialRandomRpc()
 		if err != nil {
