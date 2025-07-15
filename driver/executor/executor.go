@@ -36,7 +36,7 @@ import (
 // Run executes the given scenario on the given network using the provided clock
 // as a time source. Execution will fail (fast) if the scenario is not valid (see
 // Scenario's Check() function).
-func Run(clock Clock, network driver.Network, scenario *parser.Scenario, checks checking.Checks) error {
+func Run(clock Clock, network driver.Network, scenario *parser.Scenario, checks checking.Checks, monitorShutdown func()) error {
 	if err := scenario.Check(); err != nil {
 		return err
 	}
@@ -58,6 +58,12 @@ func Run(clock Clock, network driver.Network, scenario *parser.Scenario, checks 
 	} else {
 		fmt.Printf("Network checks skipped\n")
 	}
+
+	// monitor shutdown timing = after checks, before last node shutdown
+	queue.add(toSingleEvent(endTime-1, "monitor shutdown", func() error {
+		monitorShutdown()
+		return nil
+	}))
 
 	// Schedule all operations listed in the scenario.
 	scheduleValidatorEvents(scenario.Validators, queue, network)

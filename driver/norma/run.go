@@ -18,13 +18,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/0xsoniclabs/norma/driver/checking"
-	"golang.org/x/exp/maps"
 	"io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/0xsoniclabs/norma/driver/checking"
+	"golang.org/x/exp/maps"
 
 	"github.com/0xsoniclabs/norma/analysis/report"
 	"github.com/0xsoniclabs/norma/driver"
@@ -201,7 +202,7 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 	if err != nil {
 		return err
 	}
-	defer func() {
+	monitorShutdown := func() {
 		fmt.Printf("Shutting down data monitor ...\n")
 		if err := monitor.Shutdown(); err != nil {
 			fmt.Printf("error during monitor shutdown:\n%v\n", err)
@@ -220,7 +221,7 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 			fmt.Printf("Report rendering skipped\n")
 			fmt.Printf("To render report run `norma render %s`\n", monitor.GetMeasurementFileName())
 		}
-	}()
+	}
 
 	// Install monitoring sensory.
 	if err := monitoring.InstallAllRegisteredSources(monitor); err != nil {
@@ -233,14 +234,14 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 	if err != nil {
 		fmt.Printf("error starting Prometheus:\n%v", err)
 	}
-	defer func() {
+	promShutdown := func() {
 		if !keepPrometheusRunning && prom != nil {
 			fmt.Printf("Shutting down Prometheus ...\n")
 			if err := prom.Shutdown(); err != nil {
 				fmt.Printf("error during Prometheus shutdown:\n%v", err)
 			}
 		}
-	}()
+	}
 
 	var checks map[string]checking.Checker
 	if !skipChecks {
@@ -252,7 +253,10 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 	fmt.Printf("Running '%s' ...\n", path)
 	logger := startProgressLogger(monitor, net)
 	defer logger.shutdown()
-	err = executor.Run(clock, net, &scenario, checks)
+	err = executor.Run(clock, net, &scenario, checks, func() {
+		promShutdown()
+		monitorShutdown()
+	})
 	if err != nil {
 		return err
 	}
