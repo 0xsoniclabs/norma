@@ -349,34 +349,59 @@ func scheduleNodeEvents(node *parser.Node, queue *eventQueue, net driver.Network
 			},
 		))
 
-		queue.add(toSingleEvent(
-			endTime,
-			fmt.Sprintf("[%s] Stop Node", name),
-			func() error {
-				if instance == nil {
+		if node.Kill != nil {
+			queue.add(toSingleEvent(
+				Seconds(*node.Kill),
+				fmt.Sprintf("[%s] Kill Node", name),
+				func() error {
+					if instance == nil {
+						return nil
+					}
+					if err := net.KillNode(*instance); err != nil {
+						return err
+					}
+					if err := net.RemoveNode(*instance); err != nil {
+						return err
+					}
+					if err := (*instance).Stop(); err != nil {
+						return err
+					}
+					if err := (*instance).Cleanup(); err != nil {
+						return err
+					}
 					return nil
-				}
+				},
+			))
+		}
 
-				// Validators only need to be unregistered if they are stopped
-				// before the end of the scenario. At the end of the scenario,
-				// validators can no longer be unregistered since the network
-				// is being shut down, losing the ability to run transactions.
-				if endTime != end && nodeIsValidator {
-					unregisterValidator(net, *instance)
-				}
-
-				if err := net.RemoveNode(*instance); err != nil {
-					return err
-				}
-				if err := (*instance).Stop(); err != nil {
-					return err
-				}
-				if err := (*instance).Cleanup(); err != nil {
-					return err
-				}
-				return nil
-			},
-		))
+		if node.End != nil {
+			queue.add(toSingleEvent(
+				endTime,
+				fmt.Sprintf("[%s] Stop Node", name),
+				func() error {
+					if instance == nil {
+						return nil
+					}
+					// Validators only need to be unregistered if they are stopped
+					// before the end of the scenario. At the end of the scenario,
+					// validators can no longer be unregistered since the network
+					// is being shut down, losing the ability to run transactions.
+					if endTime != end && nodeIsValidator {
+						unregisterValidator(net, *instance)
+					}
+					if err := net.RemoveNode(*instance); err != nil {
+						return err
+					}
+					if err := (*instance).Stop(); err != nil {
+						return err
+					}
+					if err := (*instance).Cleanup(); err != nil {
+						return err
+					}
+					return nil
+				},
+			))
+		}
 	}
 }
 

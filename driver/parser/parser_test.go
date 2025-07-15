@@ -72,9 +72,13 @@ validators:
 
 nodes:
   - name: A
-    instances: 10
+    instances: 5
     start: 5
     end: 7.5
+  - name: B
+    instances: 5
+    start: 6
+    kill: 8
 
 applications:
   - name: lottery
