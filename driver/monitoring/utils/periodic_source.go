@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 )
 
@@ -125,7 +126,7 @@ func (s *PeriodicDataSource[S, T]) AddSubject(subject S, sensor Sensor[T]) error
 			select {
 			case now := <-ticker.C:
 				value, err := sensor.ReadValue()
-				if err != nil && !strings.Contains(err.Error(), "no node in network") {
+				if err != nil && !errors.Is(err, driver.ErrEmptyNetwork) {
 					errs = append(errs, err)
 				} else if err == nil {
 					if err := data.Append(monitoring.NewTime(now), value); err != nil {
