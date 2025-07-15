@@ -19,6 +19,7 @@ package utils
 import (
 	"errors"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
