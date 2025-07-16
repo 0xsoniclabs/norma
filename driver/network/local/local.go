@@ -286,14 +286,6 @@ func (n *LocalNetwork) AdvanceEpoch(epochIncrement int) error {
 	return network.AdvanceEpoch(client, epochIncrement)
 }
 
-func (_ *LocalNetwork) RegisterValidatorNode(backend network.ContractBackend, validatorId *int) (int, error) {
-	return network.RegisterValidatorNode(backend, validatorId)
-}
-
-func (_ *LocalNetwork) UnregisterValidatorNode(client rpcdriver.Client, validatorId int) error {
-	return network.UnregisterValidatorNode(client, validatorId)
-}
-
 // treasureAccountPrivateKey is an account with tokens that can be used to
 // initiate test applications and accounts.
 const treasureAccountPrivateKey = "163f5f0f9a621d72fedd85ffca3d08d131ab4e812181e0d30ffd1c885d20aac7" // Fakenet validator 1

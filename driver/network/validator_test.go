@@ -2,19 +2,20 @@ package network
 
 import (
 	"fmt"
+	"math/big"
+	"testing"
+
 	"github.com/0xsoniclabs/sonic/gossip/contract/sfc100"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/mock/gomock"
-	"math/big"
-	"testing"
 )
 
 func TestRegisterValidatorNode_Success(t *testing.T) {
 	mockBackendForCreateValidator(t, func(backend *MockContractBackend) {
 		backend.EXPECT().WaitTransactionReceipt(gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil)
 
-		valId, err := RegisterValidatorNode(backend, nil)
+		valId, err := RegisterValidatorNode(backend)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
@@ -28,7 +29,7 @@ func TestRegisterValidatorNode_Failure(t *testing.T) {
 	mockBackendForCreateValidator(t, func(backend *MockContractBackend) {
 		backend.EXPECT().WaitTransactionReceipt(gomock.Any()).Return(nil, fmt.Errorf("failed to get receipt")).AnyTimes()
 
-		if _, err := RegisterValidatorNode(backend, nil); err == nil {
+		if _, err := RegisterValidatorNode(backend); err == nil {
 			t.Errorf("expected error, got %v", err)
 		}
 	})
@@ -38,7 +39,7 @@ func TestRegisterValidatorNode_Failure_TransactionReverted(t *testing.T) {
 	mockBackendForCreateValidator(t, func(backend *MockContractBackend) {
 		backend.EXPECT().WaitTransactionReceipt(gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusFailed}, nil).AnyTimes()
 
-		if _, err := RegisterValidatorNode(backend, nil); err == nil {
+		if _, err := RegisterValidatorNode(backend); err == nil {
 			t.Errorf("expected error, got %v", err)
 		}
 	})
