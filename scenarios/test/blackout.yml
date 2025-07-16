@@ -1,0 +1,46 @@
+# This scenario simulates a minimal network with a failing validator that is
+# rejoining the network after a blackout period. The aim of the test is to
+# ensure that the network can recover from such events.
+name: Blackout Check
+
+# The duration of the scenario's runtime, in seconds.
+duration: 150
+
+# Initial validator nodes in the network.
+validators:
+  - name: val-base
+    instances: 1
+    imagename: "sonic"
+
+
+advance_epoch:
+  - time: 60   # val-1 and val-2 have joined
+
+nodes:
+  # the validator joining and leaving the network
+  - name: val-1
+    start: 20
+    kill: 80
+    client:
+      type: validator
+      val_id: 2
+  - name: val-2
+    start: 30
+    client:
+      type: validator
+  - name: val-1-recover
+    rejoin: 100
+    client:
+      type: validator
+      val_id: 2
+
+
+# Some background load to keep the network busy.
+applications:
+  - name: load
+    type: counter
+    users: 50
+    start: 10          # start time
+    end: 140           # termination time
+    rate:
+      constant: 20    # Tx/s
