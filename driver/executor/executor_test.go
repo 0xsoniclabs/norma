@@ -127,45 +127,47 @@ func TestExecutor_RunMultipleNodeScenario(t *testing.T) {
 	}
 }
 
-func TestExecutor_NodeRejoin(t *testing.T) {
-	var id, ten int = 2, 10
+func TestExecutor_Validator_StartEndRejoinKill(t *testing.T) {
+	var two, three int = 2, 3
 	clock := NewSimClock()
 	scenario := parser.Scenario{
 		Name:       "Test",
 		Duration:   10,
-		Validators: []parser.Validator{{Name: "validator"}},
+		Validators: []parser.Validator{{Name: "validator"}}, //id=1
 		Nodes: []parser.Node{
 			{
-				Name:   "start",
-				Start:  New[float32](1),
-				Kill:   New[float32](2),
-				Client: parser.ClientType{Type: "validator"},
-			},
-			{
-				Name:   "rejoin",
-				Rejoin: New[float32](3),
-				End:    New[float32](4),
+				Name:  "start-kill",
+				Start: New[float32](1),
+				Kill:  New[float32](2),
 				Client: parser.ClientType{
 					Type:        "validator",
-					ValidatorId: &id,
+					ValidatorId: &two, // ensure that this is 2
 				},
 			},
 			{
-				Name:  "start-10",
-				Start: New[float32](5),
-				Kill:  New[float32](6),
+				Name:  "start-end",
+				Start: New[float32](3),
+				End:   New[float32](4),
 				Client: parser.ClientType{
-					Type:        "validator",
-					ValidatorId: &ten,
+					Type: "validator", // auto-assigned 3
 				},
 			},
 			{
-				Name:   "rejoin-10",
+				Name:   "rejoin-kill",
+				Rejoin: New[float32](5),
+				Kill:   New[float32](6),
+				Client: parser.ClientType{
+					Type:        "validator",
+					ValidatorId: &two, // start as 2
+				},
+			},
+			{
+				Name:   "rejoin-end",
 				Rejoin: New[float32](7),
 				End:    New[float32](8),
 				Client: parser.ClientType{
 					Type:        "validator",
-					ValidatorId: &ten,
+					ValidatorId: &two, // start as 2
 				},
 			},
 		},
@@ -175,107 +177,57 @@ func TestExecutor_NodeRejoin(t *testing.T) {
 	net := driver.NewMockNetwork(ctrl)
 	registry := NewMockvalidatorRegistry(ctrl)
 
-	// node1 starts with no assigned id, gets 2
+	// node1 starts with assertion that id=2
 	node1 := driver.NewMockNode(ctrl)
 	gomock.InOrder(
-		// start = expect register with nil
-		registry.EXPECT().registerNewValidator().Return(id, nil),
+		// start = expect register
+		registry.EXPECT().registerNewValidator().Return(two, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node1, nil),
 		// kill = no unregister
-		net.EXPECT().KillNode(node1),
 		net.EXPECT().RemoveNode(node1),
 		node1.EXPECT().Stop(),
 		node1.EXPECT().Cleanup(),
 	)
-	// node2 rejoins with previous id 2
+
+	// node2 starts with no id, get assigned 3
 	node2 := driver.NewMockNode(ctrl)
 	gomock.InOrder(
-		// rejoin = no register
+		// start = expect register
+		registry.EXPECT().registerNewValidator().Return(three, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node2, nil),
 		// end = expect unregister
-		node2.EXPECT().GetValidatorId().Return(&id),
-		registry.EXPECT().unregisterValidator(id).Return(nil),
+		node2.EXPECT().GetValidatorId().Return(&three),
+		registry.EXPECT().unregisterValidator(three).Return(nil),
 		net.EXPECT().RemoveNode(node2),
 		node2.EXPECT().Stop(),
 		node2.EXPECT().Cleanup(),
 	)
 
-	// node3 starts with assigned id 10
+	// node3 rejoins with id=2
 	node3 := driver.NewMockNode(ctrl)
 	gomock.InOrder(
-		// start = expect register
-		registry.EXPECT().registerNewValidator().Return(ten, nil),
+		// rejoin = no register
 		net.EXPECT().CreateNode(gomock.Any()).Return(node3, nil),
 		// kill = no unregister
-		net.EXPECT().KillNode(node3),
 		net.EXPECT().RemoveNode(node3),
 		node3.EXPECT().Stop(),
 		node3.EXPECT().Cleanup(),
 	)
-	// node4 rejoins with assigned id 10
+
+	// node4 rejoins with id=2
 	node4 := driver.NewMockNode(ctrl)
 	gomock.InOrder(
 		// rejoin = no register
 		net.EXPECT().CreateNode(gomock.Any()).Return(node4, nil),
 		// end = expect unregister
-		node4.EXPECT().GetValidatorId().Return(&ten),
-		registry.EXPECT().unregisterValidator(ten).Return(nil),
+		node4.EXPECT().GetValidatorId().Return(&two),
+		registry.EXPECT().unregisterValidator(two).Return(nil),
 		net.EXPECT().RemoveNode(node4),
 		node4.EXPECT().Stop(),
 		node4.EXPECT().Cleanup(),
 	)
 
 	if err := run(clock, net, &scenario, nil, registry); err != nil {
-		t.Errorf("failed to run scenario: %v", err)
-	}
-}
-
-func TestExecutor_KillNode(t *testing.T) {
-	clock := NewSimClock()
-	scenario := parser.Scenario{
-		Name:       "Test",
-		Duration:   10,
-		Validators: []parser.Validator{{Name: "validator"}},
-		Nodes: []parser.Node{
-			{
-				Name:  "ended-normally",
-				Start: New[float32](1),
-				End:   New[float32](2),
-			},
-			{
-				Name:  "killed-normally",
-				Start: New[float32](3),
-				Kill:  New[float32](4),
-			},
-		},
-	}
-
-	ctrl := gomock.NewController(t)
-	net := driver.NewMockNetwork(ctrl)
-
-	// node1 ended normally
-	node1 := driver.NewMockNode(ctrl)
-	gomock.InOrder(
-		// start
-		net.EXPECT().CreateNode(gomock.Any()).Return(node1, nil),
-		// end
-		net.EXPECT().RemoveNode(node1),
-		node1.EXPECT().Stop(),
-		node1.EXPECT().Cleanup(),
-	)
-	// node2 killed normally
-	node2 := driver.NewMockNode(ctrl)
-	gomock.InOrder(
-		// start
-		net.EXPECT().CreateNode(gomock.Any()).Return(node2, nil),
-		// kill
-		net.EXPECT().KillNode(node2),
-		net.EXPECT().RemoveNode(node2),
-		node2.EXPECT().Stop(),
-		node2.EXPECT().Cleanup(),
-	)
-
-	if err := Run(clock, net, &scenario, nil); err != nil {
 		t.Errorf("failed to run scenario: %v", err)
 	}
 }

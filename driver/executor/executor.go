@@ -443,9 +443,6 @@ func scheduleNodeEvents(
 					if instance == nil {
 						return nil
 					}
-					if err := net.KillNode(*instance); err != nil {
-						return err
-					}
 					if err := net.RemoveNode(*instance); err != nil {
 						return err
 					}
