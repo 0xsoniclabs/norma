@@ -19,6 +19,7 @@ package driver
 import (
 	"time"
 
+	"github.com/0xsoniclabs/carmen/go/common"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -31,6 +32,11 @@ const DefaultClientDockerImageName = "sonic"
 
 // DefaultValidators is a default configuration for a single validator.
 var DefaultValidators = NewDefaultValidators(1)
+
+const (
+	// ErrEmptyNetwork is returned when trying to connect to an empty network.
+	ErrEmptyNetwork = common.ConstError("network is empty")
+)
 
 // Network abstracts an execution environment for running scenarios.
 // Implementations may run nodes and applications locally, in docker images, or
@@ -72,6 +78,8 @@ type Network interface {
 
 	SendTransaction(tx *types.Transaction)
 
+	// Create a connection to a random node on the network. May fail if there
+	// is no node on the network with a ErrorEmptyNetwork error.
 	DialRandomRpc() (rpc.Client, error)
 
 	// ApplyNetworkRules applies the given network rules to the network.

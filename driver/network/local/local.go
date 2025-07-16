@@ -276,7 +276,7 @@ func (n *LocalNetwork) SendTransaction(tx *types.Transaction) {
 
 func (n *LocalNetwork) DialRandomRpc() (rpcdriver.Client, error) {
 	if len(n.nodes) == 0 {
-		return nil, fmt.Errorf("no nodes in the network")
+		return nil, driver.ErrEmptyNetwork
 	}
 	nodes := n.GetActiveNodes()
 	return nodes[rand.Intn(len(nodes))].DialRpc()
