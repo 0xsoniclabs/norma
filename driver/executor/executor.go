@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
+	"github.com/0xsoniclabs/norma/driver/network"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/parser"
@@ -338,19 +339,27 @@ func scheduleNodeEvents(node *parser.Node, queue *eventQueue, net driver.Network
 					// Validators only need to be registered if they are started
 					// and not rejoining.
 					//
-					// If specifically assigned an id, the id will be used to
-					// register. Otherwise, LastValidatorID will be used to
-					// generate the next ID on the fly.
+					// If specifically assigned an id, then it is checked that
+					// the ID that was determined by the network matches the
+					// one that was explicitly provided.
 					//
 					// When generating ID for multiple instances, assume the
 					// sequence starting at the assigned id, e.g. node with
 					// instances = 3, client.validatorId = 10 will get 10, 11, 12.
 					if nodeIsValidator {
-						if node.Client.ValidatorId == nil {
-							registerValidator(net, nil)
+						id, err := registerValidator(net)
+						if err != nil {
+							return fmt.Errorf("failed to register validator node; %v", err)
+						}
+						// If an explicit validator ID is provided, make sure it
+						// matches the one that was obtained from the network.
+						if node.Client.ValidatorId != nil {
+							if want, got := *node.Client.ValidatorId+i, id; want != got {
+								return fmt.Errorf("validator ID mismatch: expected %d, got %d", want, got)
+							}
 						} else {
-							id := *node.Client.ValidatorId + i
-							registerValidator(net, &id)
+							node.Client.ValidatorId = new(int)
+							*node.Client.ValidatorId = id
 						}
 					}
 
@@ -447,13 +456,13 @@ func scheduleNodeEvents(node *parser.Node, queue *eventQueue, net driver.Network
 	}
 }
 
-func registerValidator(net driver.Network, validatorId *int) (int, error) {
+func registerValidator(net driver.Network) (int, error) {
 	rpcClient, err := net.DialRandomRpc()
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect to RPC; %v", err)
 	}
 	defer rpcClient.Close()
-	id, err := net.RegisterValidatorNode(rpcClient, validatorId)
+	id, err := network.RegisterValidatorNode(rpcClient)
 	if err != nil {
 		return 0, fmt.Errorf("failed to register validator node; %v", err)
 	}
@@ -471,7 +480,7 @@ func unregisterValidator(net driver.Network, node driver.Node) error {
 		return fmt.Errorf("failed to connect to RPC; %v", err)
 	}
 	defer rpcClient.Close()
-	err = net.UnregisterValidatorNode(rpcClient, *validatorId)
+	err = network.UnregisterValidatorNode(rpcClient, *validatorId)
 	if err != nil {
 		return fmt.Errorf("failed to unregister validator node; %v", err)
 	}

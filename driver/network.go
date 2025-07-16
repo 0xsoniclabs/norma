@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/carmen/go/common"
-	"github.com/0xsoniclabs/norma/driver/network"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -88,10 +87,6 @@ type Network interface {
 
 	// AdvanceEpoch advances an epoch by the given number.
 	AdvanceEpoch(epochIncrement int) error
-
-	// Network can RegisterValidatorNode, UnregisterValidatorNode
-	// for testing purpose
-	network.ValidatorRegistrar
 }
 
 // NetworkConfig is a collection of network parameters to be used by factories
