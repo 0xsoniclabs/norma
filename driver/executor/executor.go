@@ -76,7 +76,7 @@ func run(
 	}
 
 	// Schedule all operations listed in the scenario.
-	scheduleValidatorEvents(scenario.Validators, queue, network)
+	scheduleValidatorEvents(scenario.Validators, queue, network, registry)
 	for _, node := range scenario.Nodes {
 		scheduleNodeEvents(&node, queue, network, endTime, registry)
 	}
@@ -264,7 +264,12 @@ func toSingleEvent(time Time, name string, action func() error) event {
 
 // scheduleValidatorEvents schedules activities to be performed on the set
 // of validators established during network startup.
-func scheduleValidatorEvents(validators []parser.Validator, queue *eventQueue, net driver.Network) {
+func scheduleValidatorEvents(
+	validators []parser.Validator,
+	queue *eventQueue,
+	net driver.Network,
+	registry validatorRegistry,
+) {
 	getNodeByName := func(name string) (driver.Node, error) {
 		for _, node := range net.GetActiveNodes() {
 			if node.GetLabel() == name {
@@ -272,10 +277,6 @@ func scheduleValidatorEvents(validators []parser.Validator, queue *eventQueue, n
 			}
 		}
 		return nil, fmt.Errorf("validator node %s not found", name)
-	}
-
-	registry := &netBasedValidatorRegistry{
-		net: net,
 	}
 
 	for _, group := range validators {
