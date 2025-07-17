@@ -18,12 +18,11 @@ package executor
 
 import (
 	"fmt"
+	"github.com/0xsoniclabs/norma/driver/checking"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"reflect"
 	"syscall"
 	"testing"
-
-	"github.com/0xsoniclabs/norma/driver/checking"
-	"github.com/0xsoniclabs/norma/driver/monitoring"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/parser"
