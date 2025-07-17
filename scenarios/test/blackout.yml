@@ -23,6 +23,10 @@ nodes:
     kill: 80
     client:
       type: validator
+      # given that this node is "start"ed the following sequence happens:
+      # - the validator is registered using LastValidatorId
+      # - sfc assigned id=2 because only val-base was registered before it
+      # - this val_id asserts that this validator id must be 2
       val_id: 2
   - name: val-2
     start: 30
@@ -32,6 +36,8 @@ nodes:
     rejoin: 100
     client:
       type: validator
+      # given that this node is "rejoin"ed, it will not register itself
+      # but it will use id=2 when joining the network
       val_id: 2
 
 
