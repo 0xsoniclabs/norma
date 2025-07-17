@@ -250,10 +250,6 @@ func (n *LocalNetwork) RemoveNode(node driver.Node) error {
 	return nil
 }
 
-func (n *LocalNetwork) KillNode(node driver.Node) error {
-	return node.Kill()
-}
-
 func (n *LocalNetwork) SendTransaction(tx *types.Transaction) {
 	n.rpcWorkerPool.SendTransaction(tx)
 }
