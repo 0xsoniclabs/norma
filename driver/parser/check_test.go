@@ -707,45 +707,39 @@ func TestScenario_Checks_Failure(t *testing.T) {
 	}
 }
 
-func TestScenario_CatchEndAndKill(t *testing.T) {
+func TestScenario_CatchConflictingConfig(t *testing.T) {
 	var twenty float32 = 20
-	scenarios := []Scenario{
+	tests := []struct {
+		scenario Scenario
+		err      string
+	}{
 		{
-			Name:     "Test_EndAndKill",
-			Duration: 60,
-			Nodes: []Node{
-				{Name: "A", End: &twenty, Kill: &twenty},
+			Scenario{
+				Name:     "Test_EndAndKill",
+				Duration: 60,
+				Nodes: []Node{
+					{Name: "A", End: &twenty, Kill: &twenty},
+				},
 			},
+			"node cannot have both end and kill",
+		},
+		{
+			Scenario{
+				Name:     "Test_StartAndRejoin",
+				Duration: 60,
+				Nodes: []Node{
+					{Name: "A", Start: &twenty, Rejoin: &twenty},
+				},
+			},
+			"node cannot have both start and rejoin",
 		},
 	}
 
-	for _, scenario := range scenarios {
-		t.Run(scenario.Name, func(t *testing.T) {
+	for _, test := range tests {
+		t.Run(test.scenario.Name, func(t *testing.T) {
 			t.Parallel()
-			if err := scenario.Check(); err == nil || !strings.Contains(err.Error(), "node cannot have both end and kill") {
-				t.Errorf("unexpected error: %v", err)
-			}
-		})
-	}
-}
-
-func TestScenario_CatchStartAndRejoin(t *testing.T) {
-	var twenty float32 = 20
-	scenarios := []Scenario{
-		{
-			Name:     "Test_StartAndRejoin",
-			Duration: 60,
-			Nodes: []Node{
-				{Name: "A", Start: &twenty, Rejoin: &twenty},
-			},
-		},
-	}
-
-	for _, scenario := range scenarios {
-		t.Run(scenario.Name, func(t *testing.T) {
-			t.Parallel()
-			if err := scenario.Check(); err == nil || !strings.Contains(err.Error(), "node cannot have both start and rejoin") {
-				t.Errorf("unexpected error: %v", err)
+			if err := test.scenario.Check(); err == nil || !strings.Contains(err.Error(), test.err) {
+				t.Errorf("Not detected: %s", test.err)
 			}
 		})
 	}
