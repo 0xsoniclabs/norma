@@ -126,7 +126,7 @@ func TestExecutor_RunMultipleNodeScenario(t *testing.T) {
 	}
 }
 
-func TestExecutor_Validator_StartEndRejoinKill(t *testing.T) {
+func TestExecutor_Validator_StartEndRejoinLeave(t *testing.T) {
 	var two, three int = 2, 3
 	clock := NewSimClock()
 	scenario := parser.Scenario{
@@ -135,9 +135,9 @@ func TestExecutor_Validator_StartEndRejoinKill(t *testing.T) {
 		Validators: []parser.Validator{{Name: "validator"}}, //id=1
 		Nodes: []parser.Node{
 			{
-				Name:  "start-kill",
+				Name:  "start-leave",
 				Start: New[float32](1),
-				Kill:  New[float32](2),
+				Leave: New[float32](2),
 				Client: parser.ClientType{
 					Type:        "validator",
 					ValidatorId: &two, // ensure that this is 2
@@ -152,9 +152,9 @@ func TestExecutor_Validator_StartEndRejoinKill(t *testing.T) {
 				},
 			},
 			{
-				Name:   "rejoin-kill",
+				Name:   "rejoin-leave",
 				Rejoin: New[float32](5),
-				Kill:   New[float32](6),
+				Leave:  New[float32](6),
 				Client: parser.ClientType{
 					Type:        "validator",
 					ValidatorId: &two, // start as 2
@@ -182,7 +182,7 @@ func TestExecutor_Validator_StartEndRejoinKill(t *testing.T) {
 		// start = expect register
 		registry.EXPECT().registerNewValidator().Return(two, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node1, nil),
-		// kill = no unregister
+		// leave = no unregister
 		net.EXPECT().RemoveNode(node1),
 		node1.EXPECT().Stop(),
 		node1.EXPECT().Cleanup(),
@@ -207,7 +207,7 @@ func TestExecutor_Validator_StartEndRejoinKill(t *testing.T) {
 	gomock.InOrder(
 		// rejoin = no register
 		net.EXPECT().CreateNode(gomock.Any()).Return(node3, nil),
-		// kill = no unregister
+		// leave = no unregister
 		net.EXPECT().RemoveNode(node3),
 		node3.EXPECT().Stop(),
 		node3.EXPECT().Cleanup(),

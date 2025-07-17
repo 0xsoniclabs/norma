@@ -20,7 +20,7 @@ nodes:
   # the validator joining and leaving the network
   - name: val-1
     start: 20
-    kill: 80
+    leave: 80
     client:
       type: validator
       # given that this node is "start"ed the following sequence happens:

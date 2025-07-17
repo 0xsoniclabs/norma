@@ -715,13 +715,13 @@ func TestScenario_CatchConflictingConfig(t *testing.T) {
 	}{
 		{
 			Scenario{
-				Name:     "Test_EndAndKill",
+				Name:     "Test_EndAndLeave",
 				Duration: 60,
 				Nodes: []Node{
-					{Name: "A", End: &twenty, Kill: &twenty},
+					{Name: "A", End: &twenty, Leave: &twenty},
 				},
 			},
-			"node cannot have both end and kill",
+			"node cannot have both end and leave",
 		},
 		{
 			Scenario{

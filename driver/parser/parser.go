@@ -96,7 +96,7 @@ type Node struct {
 	Start     *float32   `yaml:",omitempty"` // nil is interpreted as 0
 	Rejoin    *float32   `yaml:",omitempty"` // nil is interpreted as not rejoin
 	End       *float32   `yaml:",omitempty"` // nil is interpreted as end-of-scenario
-	Kill      *float32   `yaml:",omitempty"` // nil is interpreted as not kill
+	Leave     *float32   `yaml:",omitempty"` // nil is interpreted as not leave
 	Client    ClientType `yaml:",omitempty"`
 }
 

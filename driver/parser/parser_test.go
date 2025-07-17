@@ -78,7 +78,7 @@ nodes:
   - name: B
     instances: 5
     start: 6
-    kill: 8
+    leave: 8
   - name: C
     instances: 5
     rejoin: 9

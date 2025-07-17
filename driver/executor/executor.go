@@ -331,7 +331,7 @@ type validatorRegistry interface {
 // scheduleNodeEvents schedules a number of events covering the life-cycle of a class of
 // nodes during the scenario execution. The nature of the scheduled nodes is taken from the
 // given node description, and actions are applied to the given network.
-// Node Lifecycle: create -> timer sim events {start, end, kill, restart} -> remove
+// Node Lifecycle: create -> timer sim events {start, rejoin, end, leave} -> remove
 func scheduleNodeEvents(
 	node *parser.Node,
 	queue *eventQueue,
@@ -436,10 +436,10 @@ func scheduleNodeEvents(
 			))
 		}
 
-		if node.Kill != nil {
+		if node.Leave != nil {
 			queue.add(toSingleEvent(
-				Seconds(*node.Kill),
-				fmt.Sprintf("[%s] Kill Node", name),
+				Seconds(*node.Leave),
+				fmt.Sprintf("[%s] Node Leaving", name),
 				func() error {
 					if instance == nil {
 						return nil
