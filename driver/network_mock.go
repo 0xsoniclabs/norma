@@ -142,20 +142,6 @@ func (mr *MockNetworkMockRecorder) GetActiveNodes() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveNodes", reflect.TypeOf((*MockNetwork)(nil).GetActiveNodes))
 }
 
-// KillNode mocks base method.
-func (m *MockNetwork) KillNode(arg0 Node) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "KillNode", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// KillNode indicates an expected call of KillNode.
-func (mr *MockNetworkMockRecorder) KillNode(arg0 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KillNode", reflect.TypeOf((*MockNetwork)(nil).KillNode), arg0)
-}
-
 // RegisterListener mocks base method.
 func (m *MockNetwork) RegisterListener(arg0 NetworkListener) {
 	m.ctrl.T.Helper()

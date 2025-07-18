@@ -33,10 +33,26 @@ import (
 	pq "github.com/jupp0r/go-priority-queue"
 )
 
+//go:generate mockgen -source executor.go -destination executor_mock.go -package executor
+
 // Run executes the given scenario on the given network using the provided clock
 // as a time source. Execution will fail (fast) if the scenario is not valid (see
 // Scenario's Check() function).
 func Run(clock Clock, network driver.Network, scenario *parser.Scenario, checks checking.Checks) error {
+	return run(clock, network, scenario, checks, &netBasedValidatorRegistry{
+		net: network,
+	})
+}
+
+// run is the internal implementation of the Run function, allowing to
+// inject a validatorRegistry for testing purposes.
+func run(
+	clock Clock,
+	network driver.Network,
+	scenario *parser.Scenario,
+	checks checking.Checks,
+	registry validatorRegistry,
+) error {
 	if err := scenario.Check(); err != nil {
 		return err
 	}
@@ -60,9 +76,9 @@ func Run(clock Clock, network driver.Network, scenario *parser.Scenario, checks 
 	}
 
 	// Schedule all operations listed in the scenario.
-	scheduleValidatorEvents(scenario.Validators, queue, network)
+	scheduleValidatorEvents(scenario.Validators, queue, network, registry)
 	for _, node := range scenario.Nodes {
-		scheduleNodeEvents(&node, queue, network, endTime)
+		scheduleNodeEvents(&node, queue, network, endTime, registry)
 	}
 	for _, app := range scenario.Applications {
 		if err := scheduleApplicationEvents(&app, queue, network, endTime); err != nil {
@@ -248,7 +264,12 @@ func toSingleEvent(time Time, name string, action func() error) event {
 
 // scheduleValidatorEvents schedules activities to be performed on the set
 // of validators established during network startup.
-func scheduleValidatorEvents(validators []parser.Validator, queue *eventQueue, net driver.Network) {
+func scheduleValidatorEvents(
+	validators []parser.Validator,
+	queue *eventQueue,
+	net driver.Network,
+	registry validatorRegistry,
+) {
 	getNodeByName := func(name string) (driver.Node, error) {
 		for _, node := range net.GetActiveNodes() {
 			if node.GetLabel() == name {
@@ -279,8 +300,10 @@ func scheduleValidatorEvents(validators []parser.Validator, queue *eventQueue, n
 						return err
 					}
 
-					if err := unregisterValidator(net, node); err != nil {
-						return fmt.Errorf("failed to unregister validator %s; %v", name, err)
+					if id := node.GetValidatorId(); id != nil {
+						if err := registry.unregisterValidator(*id); err != nil {
+							return fmt.Errorf("failed to unregister validator %s; %v", name, err)
+						}
 					}
 					if err := net.RemoveNode(node); err != nil {
 						return fmt.Errorf("failed to remove validator %s; %v", name, err)
@@ -298,11 +321,24 @@ func scheduleValidatorEvents(validators []parser.Validator, queue *eventQueue, n
 	}
 }
 
+// validatorRegistry abstracts how an executor registers and unregisters
+// validator nodes with the network.
+type validatorRegistry interface {
+	registerNewValidator() (int, error)
+	unregisterValidator(validatorId int) error
+}
+
 // scheduleNodeEvents schedules a number of events covering the life-cycle of a class of
 // nodes during the scenario execution. The nature of the scheduled nodes is taken from the
 // given node description, and actions are applied to the given network.
-// Node Lifecycle: create -> timer sim events {start, end, kill, restart} -> remove
-func scheduleNodeEvents(node *parser.Node, queue *eventQueue, net driver.Network, end Time) {
+// Node Lifecycle: create -> timer sim events {start, rejoin, end, leave} -> remove
+func scheduleNodeEvents(
+	node *parser.Node,
+	queue *eventQueue,
+	net driver.Network,
+	end Time,
+	registry validatorRegistry,
+) {
 	instances := 1
 	if node.Instances != nil {
 		instances = *node.Instances
@@ -331,34 +367,82 @@ func scheduleNodeEvents(node *parser.Node, queue *eventQueue, net driver.Network
 		name := fmt.Sprintf("%s-%d", node.Name, i)
 		var instance = new(driver.Node)
 
-		queue.add(toSingleEvent(
-			startTime,
-			fmt.Sprintf("[%s] Creating node", name),
-			func() error {
-				newNode, err := net.CreateNode(&driver.NodeConfig{
-					Name:       name,
-					Failing:    node.Failing,
-					Image:      image,
-					Validator:  nodeIsValidator,
-					Cheater:    nodeIsCheater,
-					DataVolume: node.Client.DataVolume,
-				})
-
-				*instance = newNode
-				return err
-			},
-		))
-
-		if node.Kill != nil {
+		if node.Start != nil {
 			queue.add(toSingleEvent(
-				Seconds(*node.Kill),
-				fmt.Sprintf("[%s] Kill Node", name),
+				startTime,
+				fmt.Sprintf("[%s] Creating node", name),
+				func() error {
+					// Validators only need to be registered if they are started
+					// and not rejoining.
+					//
+					// If specifically assigned an id, then it is checked that
+					// the ID that was determined by the network matches the
+					// one that was explicitly provided.
+					//
+					// When generating ID for multiple instances, assume the
+					// sequence starting at the assigned id, e.g. node with
+					// instances = 3, client.validatorId = 10 will get 10, 11, 12.
+					if nodeIsValidator {
+						id, err := registry.registerNewValidator()
+						if err != nil {
+							return fmt.Errorf("failed to register validator node; %v", err)
+						}
+						// If an explicit validator ID is provided, make sure it
+						// matches the one that was obtained from the network.
+						if node.Client.ValidatorId != nil {
+							if want, got := *node.Client.ValidatorId+i, id; want != got {
+								return fmt.Errorf("validator ID mismatch: expected %d, got %d", want, got)
+							}
+						} else {
+							node.Client.ValidatorId = new(int)
+							*node.Client.ValidatorId = id
+						}
+					}
+
+					newNode, err := net.CreateNode(&driver.NodeConfig{
+						Name:        name,
+						Failing:     node.Failing,
+						Image:       image,
+						Validator:   nodeIsValidator,
+						ValidatorId: node.Client.ValidatorId,
+						Cheater:     nodeIsCheater,
+						DataVolume:  node.Client.DataVolume,
+					})
+
+					*instance = newNode
+					return err
+				},
+			))
+		}
+
+		if node.Rejoin != nil {
+			queue.add(toSingleEvent(
+				Seconds(*node.Rejoin),
+				fmt.Sprintf("[%s] Creating rejoining node", name),
+				func() error {
+					newNode, err := net.CreateNode(&driver.NodeConfig{
+						Name:        name,
+						Failing:     node.Failing,
+						Image:       image,
+						Validator:   nodeIsValidator,
+						ValidatorId: node.Client.ValidatorId,
+						Cheater:     nodeIsCheater,
+						DataVolume:  node.Client.DataVolume,
+					})
+
+					*instance = newNode
+					return err
+				},
+			))
+		}
+
+		if node.Leave != nil {
+			queue.add(toSingleEvent(
+				Seconds(*node.Leave),
+				fmt.Sprintf("[%s] Node Leaving", name),
 				func() error {
 					if instance == nil {
 						return nil
-					}
-					if err := net.KillNode(*instance); err != nil {
-						return err
 					}
 					if err := net.RemoveNode(*instance); err != nil {
 						return err
@@ -387,7 +471,9 @@ func scheduleNodeEvents(node *parser.Node, queue *eventQueue, net driver.Network
 					// validators can no longer be unregistered since the network
 					// is being shut down, losing the ability to run transactions.
 					if endTime != end && nodeIsValidator {
-						unregisterValidator(net, *instance)
+						if id := (*instance).GetValidatorId(); id != nil {
+							registry.unregisterValidator(*id)
+						}
 					}
 					if err := net.RemoveNode(*instance); err != nil {
 						return err
@@ -405,17 +491,31 @@ func scheduleNodeEvents(node *parser.Node, queue *eventQueue, net driver.Network
 	}
 }
 
-func unregisterValidator(net driver.Network, node driver.Node) error {
-	validatorId := node.GetValidatorId()
-	if validatorId == nil {
-		return nil
+type netBasedValidatorRegistry struct {
+	net driver.Network
+}
+
+func (a netBasedValidatorRegistry) registerNewValidator() (int, error) {
+	rpcClient, err := a.net.DialRandomRpc()
+	if err != nil {
+		return 0, fmt.Errorf("failed to connect to RPC; %v", err)
 	}
-	rpcClient, err := net.DialRandomRpc()
+	defer rpcClient.Close()
+	id, err := network.RegisterValidatorNode(rpcClient)
+	if err != nil {
+		return 0, fmt.Errorf("failed to register validator node; %v", err)
+	}
+
+	return id, nil
+}
+
+func (a netBasedValidatorRegistry) unregisterValidator(validatorId int) error {
+	rpcClient, err := a.net.DialRandomRpc()
 	if err != nil {
 		return fmt.Errorf("failed to connect to RPC; %v", err)
 	}
 	defer rpcClient.Close()
-	err = network.UnregisterValidatorNode(rpcClient, *validatorId)
+	err = network.UnregisterValidatorNode(rpcClient, validatorId)
 	if err != nil {
 		return fmt.Errorf("failed to unregister validator node; %v", err)
 	}

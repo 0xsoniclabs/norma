@@ -156,15 +156,24 @@ func (n *Node) Check(scenario *Scenario) error {
 		n.Client.Type = "observer"
 	}
 
-	if n.End != nil && n.Kill != nil {
-		errs = append(errs, fmt.Errorf("node cannot have both end and kill; end=%f, kill=%f", *n.End, *n.Kill))
+	if n.Start != nil && n.Rejoin != nil {
+		errs = append(errs, fmt.Errorf("node cannot have both start and rejoin; start=%f, rejoin=%f", *n.Start, *n.Rejoin))
+	}
+
+	if n.End != nil && n.Leave != nil {
+		errs = append(errs, fmt.Errorf("node cannot have both end and leave; end=%f, leave=%f", *n.End, *n.Leave))
 	}
 
 	if err := checkTimeInterval(n.Start, n.End, scenario.Duration); err != nil {
 		errs = append(errs, err)
 	}
-
-	if err := checkTimeInterval(n.Start, n.Kill, scenario.Duration); err != nil {
+	if err := checkTimeInterval(n.Start, n.Leave, scenario.Duration); err != nil {
+		errs = append(errs, err)
+	}
+	if err := checkTimeInterval(n.Rejoin, n.End, scenario.Duration); err != nil {
+		errs = append(errs, err)
+	}
+	if err := checkTimeInterval(n.Rejoin, n.Leave, scenario.Duration); err != nil {
 		errs = append(errs, err)
 	}
 

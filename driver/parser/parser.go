@@ -94,8 +94,9 @@ type Node struct {
 	Failing   bool
 	Instances *int       `yaml:",omitempty"` // nil is interpreted as 1
 	Start     *float32   `yaml:",omitempty"` // nil is interpreted as 0
+	Rejoin    *float32   `yaml:",omitempty"` // nil is interpreted as not rejoin
 	End       *float32   `yaml:",omitempty"` // nil is interpreted as end-of-scenario
-	Kill      *float32   `yaml:",omitempty"` // nil is interpreted as not kill
+	Leave     *float32   `yaml:",omitempty"` // nil is interpreted as not leave
 	Client    ClientType `yaml:",omitempty"`
 }
 
@@ -123,9 +124,10 @@ func (n *Node) IsStaticValidator(s *Scenario) bool {
 // ImageName can be used to specify the exact client version for the defined Node.
 // Type can be used to configure the launching command of the client
 type ClientType struct {
-	ImageName  string  `yaml:",omitempty"`            // nil is interpreted as main
-	Type       string  `yaml:",omitempty"`            // nil is interpreted as observer
-	DataVolume *string `yaml:"data_volume,omitempty"` // nil is interpreted as empty
+	ImageName   string  `yaml:",omitempty"`            // nil is interpreted as main
+	Type        string  `yaml:",omitempty"`            // nil is interpreted as observer
+	ValidatorId *int    `yaml:"val_id,omitempty"`      // nil is interpreted as empty
+	DataVolume  *string `yaml:"data_volume,omitempty"` // nil is interpreted as empty
 }
 
 // Application is a load generator in the simulated network. Each application defines

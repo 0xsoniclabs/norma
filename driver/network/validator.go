@@ -19,8 +19,6 @@ import (
 
 // RegisterValidatorNode registers a validator in the SFC contract.
 func RegisterValidatorNode(backend ContractBackend) (int, error) {
-	newValId := 0
-
 	// get a representation of the deployed contract
 	SFCContract, err := sfc100.NewContract(sfc.ContractAddress, backend)
 	if err != nil {
@@ -32,8 +30,7 @@ func RegisterValidatorNode(backend ContractBackend) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to get validator count; %v", err)
 	}
-
-	newValId = int(lastValId.Int64()) + 1
+	newValId := int(lastValId.Int64()) + 1
 
 	privateKeyECDSA := evmcore.FakeKey(uint32(newValId))
 	txOpts, err := bind.NewKeyedTransactorWithChainID(privateKeyECDSA, big.NewInt(int64(opera.FakeNetRules(opera.GetSonicUpgrades()).NetworkID)))

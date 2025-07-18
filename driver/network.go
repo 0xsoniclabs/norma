@@ -51,9 +51,6 @@ type Network interface {
 	// RemoveNode ends the client gracefully and removes node from the network
 	RemoveNode(Node) error
 
-	// KillNode kills the client disgracefully
-	KillNode(Node) error
-
 	// CreateApplication creates a new application in this network, ready to
 	// produce load as defined by its configuration.
 	CreateApplication(config *ApplicationConfig) (Application, error)
@@ -117,12 +114,13 @@ type NetworkListener interface {
 }
 
 type NodeConfig struct {
-	Name       string
-	Failing    bool
-	Validator  bool
-	Cheater    bool
-	Image      string
-	DataVolume *string
+	Name        string
+	Failing     bool
+	Validator   bool
+	ValidatorId *int
+	Cheater     bool
+	Image       string
+	DataVolume  *string
 }
 
 type ApplicationConfig struct {
