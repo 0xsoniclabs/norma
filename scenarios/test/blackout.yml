@@ -23,10 +23,11 @@ nodes:
     leave: 80
     client:
       type: validator
-      # given that this node is "start"ed the following sequence happens:
-      # - the validator is registered using LastValidatorId
-      # - sfc assigned id=2 because only val-base was registered before it
-      # - this val_id asserts that this validator id must be 2
+      # given that this node is "start"ed, it will register itself
+      # Validator ids are assigned sequentially based on order of registration.
+      # Since one validator (val-base) was already registered with val_id=1, 
+      # this validator must be assigned val_id=2. Using a different id would break the 
+      # expected sequence and cause an error.
       val_id: 2
   - name: val-2
     start: 30

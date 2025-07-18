@@ -321,8 +321,8 @@ func scheduleValidatorEvents(
 	}
 }
 
-// validatorRegistry intercepts RegisterValidatorNode, UnregisterValidatorNode
-// calls in the scheduleNodeEvents function for testing purpose.
+// validatorRegistry abstracts how an executor registers and unregisters
+// validator nodes with the network.
 type validatorRegistry interface {
 	registerNewValidator() (int, error)
 	unregisterValidator(validatorId int) error
