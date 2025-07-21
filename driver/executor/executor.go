@@ -99,7 +99,7 @@ func run(
 		scheduleAdvanceEpochEvents(adv.Time, epochs, queue, network)
 	}
 
-	for _, c := range scenario.Checks {
+	for _, c := range scenario.Checks.CustomChecks {
 		checker := checks.GetCheckerByName(c.Check)
 		if checker == nil {
 			return fmt.Errorf("check '%s' not found", c.Check)

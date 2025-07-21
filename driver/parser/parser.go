@@ -37,7 +37,7 @@ type Scenario struct {
 	Cheats        []Cheat        `yaml:",omitempty"`
 	NetworkRules  NetworkRules   `yaml:"network_rules,omitempty"`
 	AdvanceEpoch  []AdvanceEpoch `yaml:"advance_epoch,omitempty"`
-	Checks        []Check        `yaml:"checks,omitempty"`
+	Checks        Check          `yaml:"checks,omitempty"`
 }
 
 func (s *Scenario) GetRoundTripTime() time.Duration {
@@ -63,8 +63,14 @@ type AdvanceEpoch struct {
 	Epochs *int `yaml:",omitempty"` // nil is interpreted as 1
 }
 
-// Check defines what timing to perform what check
+// Check defines the checks that are carried out during the simulation
 type Check struct {
+	DefaultChecks map[string]bool `yaml:"default,omitempty"` // this allow disabling of default checks by nameing the check and setting it to false
+	CustomChecks  []CustomCheck   `yaml:"custom,omitempty"`  // this allows custom checks
+}
+
+// Check defines what timing to perform what check
+type CustomCheck struct {
 	Time   float32
 	Check  string
 	Config map[string]any

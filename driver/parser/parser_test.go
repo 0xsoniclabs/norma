@@ -200,14 +200,18 @@ func TestParseExampleWithAdvanceEpoch(t *testing.T) {
 var withChecks = smallExample + `
 
 checks:
-  - time: 25
-    check: block_rolling
-  - time: 50 
-    check: block_rolling
-    config:
-      this: could
-      be: anything
-      even: 123
+  default:
+    blocks_rolling: true
+    block_gas_rate: false
+  custom:
+    - time: 25
+      check: block_rolling
+    - time: 50 
+      check: block_rolling
+      config:
+        this: could
+        be: anything
+        even: 123
 `
 
 func TestParseExampleWithChecks(t *testing.T) {

@@ -643,29 +643,29 @@ func TestScenario_Checks_Success(t *testing.T) {
 		{
 			Name:     "Test_Check_Success1",
 			Duration: 60,
-			Checks: []Check{
+			Checks: Check{CustomChecks: []CustomCheck{
 				{Time: 30, Check: "test"},
-			},
+			}},
 		},
 		{
 			Name:     "Test_Check_Succuss2",
 			Duration: 60,
-			Checks: []Check{
+			Checks: Check{CustomChecks: []CustomCheck{
 				{Time: 30, Check: "test"},
 				{Time: 30, Check: "test2"},
 				{Time: 20, Check: "test3"},
 				{Time: 40, Check: "test4"},
 				{Time: 45, Check: "test"},
-			},
+			}},
 		},
 		{
 			Name:     "Test_Check_Succuss3_TestConfig",
 			Duration: 60,
-			Checks: []Check{
+			Checks: Check{CustomChecks: []CustomCheck{
 				{Time: 30, Check: "test", Config: map[string]any{
 					"hello": "world",
 				}},
-			},
+			}},
 		},
 	}
 
@@ -684,16 +684,16 @@ func TestScenario_Checks_Failure(t *testing.T) {
 		{
 			Name:     "Test_Check_Failure1_BeforeSim",
 			Duration: 60,
-			Checks: []Check{
+			Checks: Check{CustomChecks: []CustomCheck{
 				{Time: -1, Check: "test"},
-			},
+			}},
 		},
 		{
 			Name:     "Test_Check_Failure_AfterSim",
 			Duration: 60,
-			Checks: []Check{
+			Checks: Check{CustomChecks: []CustomCheck{
 				{Time: 70, Check: "test"},
-			},
+			}},
 		},
 	}
 
