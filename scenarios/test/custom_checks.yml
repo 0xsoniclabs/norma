@@ -1,0 +1,55 @@
+# This scenario is baselink check with custom checks to demonstrate how
+# one could specify custom checks in a scenario.
+name: Baseline Check With Custom Checks
+
+# The duration of the scenario's runtime, in seconds.
+duration: 60
+round_trip_time: "200ms"
+
+# Initial validator nodes in the network.
+validators:
+  - name: validator-latest
+    instances: 2
+    imagename: "sonic"
+
+network_rules:
+  genesis:
+    MAX_BLOCK_GAS: 20500000000
+    MAX_EPOCH_GAS: 1500000000000
+
+#
+# checks are specified in a scenario like this:
+# if custom checks are specified, the 4 default checks are disabled.
+#
+checks:
+
+  # the following 4 checks are what happens by default if no custom check is specified
+  - time: 59              # defaults timing is (duration - 1)
+    check: block_height   # check that block height of each nodes differs by at most 5
+    config:
+      slack: 5            # default slack is 5
+
+  - time: 59              # defaults timing is (duration - 1)
+    check: blocks_hashes  # check that all node provides same hashes for all blocks
+
+  - time: 59              # defaults timing is (duration - 1)
+    check: blocks_rolling # check that at least one node has its block height increase
+    config:               # for any 10-sample window of the run.
+      tolerance: 10       # default tolerance is 10
+
+  - time: 59              # defaults timing is (duration - 1)
+    check: block_gas_rate # check that block gas usage never exceed ceiling
+    config:
+      ceiling: 1.79e+308  # defaults to math.MaxFloat64
+
+  
+
+# In the network there is a single application producing constant load.
+applications:
+  - name: load
+    type: counter
+    users: 50
+    start: 10          # start time
+    end: 50            # termination time
+    rate:
+      constant: 20    # Tx/s

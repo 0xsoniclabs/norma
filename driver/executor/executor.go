@@ -67,10 +67,27 @@ func run(
 
 	// schedule network consistency just before the end of simulation
 	if checks != nil {
-		queue.add(toSingleEvent(endTime-1, "consistency check", func() error {
-			log.Printf("Checking network consistency ...\n")
-			return checks.Check()
-		}))
+		// apply default check unless custom checks are provided
+		if len(scenario.Checks) == 0 {
+			queue.add(toSingleEvent(endTime-1, "consistency check", func() error {
+				log.Printf("Checking network consistency ...\n")
+				return checks.Check()
+			}))
+		} else {
+			for _, c := range scenario.Checks {
+				checker := checks.GetCheckerByName(c.Check)
+				if checker == nil {
+					return fmt.Errorf("check '%s' not found", c.Check)
+				}
+
+				configured, err := checker.Configure(c.Config)
+				if err != nil {
+					return fmt.Errorf("error configuring checks; %v", err)
+				}
+
+				scheduleCheckEvents(c.Time, c.Check, configured, queue, network)
+			}
+		}
 	} else {
 		fmt.Printf("Network checks skipped\n")
 	}
@@ -97,20 +114,6 @@ func run(
 			epochs = *adv.Epochs
 		}
 		scheduleAdvanceEpochEvents(adv.Time, epochs, queue, network)
-	}
-
-	for _, c := range scenario.Checks {
-		checker := checks.GetCheckerByName(c.Check)
-		if checker == nil {
-			return fmt.Errorf("check '%s' not found", c.Check)
-		}
-
-		configured, err := checker.Configure(c.Config)
-		if err != nil {
-			return fmt.Errorf("error configuring checks; %v", err)
-		}
-
-		scheduleCheckEvents(c.Time, c.Check, configured, queue, network)
 	}
 
 	// Register a handler for Ctrl+C events.
