@@ -36,16 +36,8 @@ func (c *blocksRollingChecker) Configure(config CheckerConfig) (Checker, error) 
 		return c, nil
 	}
 
-	if val, exist := config["error"]; exist {
-		emsg, ok := val.(string)
-		if !ok {
-			return nil, fmt.Errorf("failed to convert error; %v", val)
-		}
-		checker, err := &errorChecker{c, emsg}.Configure(config)
-		if err != nil {
-			return nil, err
-		}
-		return &errorChecker{checker, emsg}, nil
+	if _, exist := config["error"]; exist {
+		return NewErrorChecker(c, config)
 	}
 
 	tolerance := c.toleranceSamples
