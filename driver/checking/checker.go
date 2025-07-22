@@ -104,5 +104,12 @@ func (c *errorChecker) Check() error {
 }
 
 func (c *errorChecker) Configure(config CheckerConfig) (Checker, error) {
-	return c.Configure(config)
+	checker, err := c.checker.Configure(config.copyExceptError())
+	if err != nil {
+		return nil, err
+	}
+	return &errorChecker{
+		checker: checker,
+		err:     c.err,
+	}, nil
 }
