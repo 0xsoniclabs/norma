@@ -85,6 +85,22 @@ func run(
 					return fmt.Errorf("error configuring checks; %v", err)
 				}
 
+				if startTime, exist := c.Config["start"]; exist {
+					posChecker := checks.GetCheckerByName("blocks_rolling_position")
+					if posChecker == nil {
+						return fmt.Errorf("check blocks_rolling_position not found")
+					}
+					configuredPosChecker, err := checker.Configure(map[string]any{"target": checker})
+					if err != nil {
+						return fmt.Errorf("error configuring position checker; %v", err)
+					}
+					time, err := toFloat32(startTime)
+					if err != nil {
+						return err
+					}
+					scheduleCheckEvents(time, "blocks_rolling_position", configuredPosChecker, queue, network)
+				}
+
 				scheduleCheckEvents(c.Time, c.Check, configured, queue, network)
 			}
 		}
@@ -600,4 +616,19 @@ func scheduleCheckEvents(timing float32, name string, check checking.Checker, qu
 	queue.add(toSingleEvent(Seconds(timing), fmt.Sprintf("Check [%s]", name), func() error {
 		return check.Check()
 	}))
+}
+
+func toFloat32(val any) (float32, error) {
+	switch v := val.(type) {
+	case float64:
+		return float32(v), nil
+	case float32:
+		return v, nil
+	case int:
+		return float32(v), nil
+	case uint64:
+		return float32(v), nil
+	default:
+		return 0, fmt.Errorf("invalid type; %T", val)
+	}
 }

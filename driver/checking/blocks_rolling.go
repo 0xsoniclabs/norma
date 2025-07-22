@@ -13,12 +13,18 @@ func init() {
 	RegisterNetworkCheck("blocks_rolling", func(net driver.Network, monitor *monitoring.Monitor) Checker {
 		return &blocksRollingChecker{monitor: &monitoringDataAdapter{monitor}, toleranceSamples: defaultToleranceSamples}
 	})
+	RegisterNetworkCheck("blocks_rolling_position", func(_ driver.Network, monitor *monitoring.Monitor) Checker {
+		return &blocksRollingPositionChecker{monitor: &monitoringDataAdapter{monitor}}
+	})
 }
 
 // blocksRollingChecker is a Checker checking if all nodes keeps producing blocks.
 type blocksRollingChecker struct {
 	monitor          MonitoringData
 	toleranceSamples int
+
+	// blocksRollingPositionChecker: on Check(), populate the current position of each node
+	nodeStartPositions map[monitoring.Node]monitoring.Time
 }
 
 // Configure returns a deep copy of the original checker.
@@ -70,12 +76,19 @@ func (c *blocksRollingChecker) Check() error {
 	for _, node := range nodes {
 		nodeFunctional := true
 		series := c.monitor.GetBlockStatus(node)
+
+		var first monitoring.Time = 0
+		if c.nodeStartPositions != nil {
+			if pos, exist := c.nodeStartPositions[node]; exist {
+				first = pos
+			}
+		}
 		last := series.GetLatest()
 		if last == nil {
 			nodeFunctional = false //node produced no blocks
 			continue
 		}
-		items := series.GetRange(0, last.Position)
+		items := series.GetRange(first, last.Position)
 		window := make([]monitoring.BlockStatus, c.toleranceSamples)
 		for i, point := range append(items, *last) {
 			window[i%c.toleranceSamples] = point.Value
@@ -97,4 +110,43 @@ func (c *blocksRollingChecker) Check() error {
 	}
 
 	return err
+}
+
+// blocksRollingPositionChecker is a helper Checker that gets the current position for blocks_rolling
+type blocksRollingPositionChecker struct {
+	monitor MonitoringData
+	checker *blocksRollingChecker
+}
+
+// Check embeds position into the configured blocksRollingChecker
+func (c *blocksRollingPositionChecker) Check() error {
+	if c.checker == nil {
+		return nil
+	}
+
+	nodeStartPositions := make(map[monitoring.Node]monitoring.Time)
+	for _, node := range c.monitor.GetNodes() {
+		nodeStartPositions[node] = c.monitor.GetBlockStatus(node).GetLatest().Position
+	}
+	c.checker.nodeStartPositions = nodeStartPositions
+	return nil
+}
+
+// Configure sets the target blocksRollingChecker
+func (c *blocksRollingPositionChecker) Configure(config CheckerConfig) (Checker, error) {
+	if config == nil {
+		return c, nil
+	}
+
+	val, exist := config["target"]
+	if !exist {
+		return c, nil
+	}
+
+	brc, ok := val.(*blocksRollingChecker)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert blocksRollingChecker; %v", val)
+	}
+
+	return &blocksRollingPositionChecker{monitor: c.monitor, checker: brc}, nil
 }

@@ -37,7 +37,7 @@ func TestBlocksRolling_Blocks_Processed(t *testing.T) {
 			series: []uint64{10, 9, 8, 7, 6, 5, 4, 3, 2, 1},
 			config: CheckerConfig{"error": "network is down"},
 		},
-		"constant": {
+		"constant-catch-error": {
 			series: []uint64{5, 5, 5, 5, 5, 5, 5, 5, 5, 5},
 			config: CheckerConfig{"error": "network is down"},
 		},
@@ -103,6 +103,35 @@ func TestBlocksRolling_Blocks_Failure(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestBlocksRolling_Blocks_Processed_WithPositions(t *testing.T) {
+	series := createBlockSeries(t, []uint64{1, 1, 1, 1, 1, 2, 3, 4, 5, 6})
+	halfwayThroughSeries := createBlockSeries(t, []uint64{1, 1, 1, 1, 1, 2})
+
+	ctrl := gomock.NewController(t)
+	monitor := NewMockMonitoringData(ctrl)
+
+	// this fails because of 1, 1, 1, 1, 1
+	checker := blocksRollingChecker{monitor: monitor, toleranceSamples: 5}
+	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
+	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
+	if err := checker.Check(); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	pc := &blocksRollingPositionChecker{monitor: monitor, checker: &checker}
+	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
+	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(halfwayThroughSeries)
+	if err := pc.Check(); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
+	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
+	if err := checker.Check(); err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 
