@@ -50,6 +50,10 @@ func (c *blockHeightChecker) Configure(config CheckerConfig) (Checker, error) {
 		return c, nil
 	}
 
+	if _, exist := config["error"]; exist {
+		return NewErrorChecker(c, config)
+	}
+
 	slack := c.slack
 	val, exist := config["slack"]
 	if exist {
