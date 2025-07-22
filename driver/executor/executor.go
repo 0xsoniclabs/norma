@@ -85,20 +85,22 @@ func run(
 					return fmt.Errorf("error configuring checks; %v", err)
 				}
 
-				if startTime, exist := c.Config["start"]; exist {
-					posChecker := checks.GetCheckerByName("blocks_rolling_position")
-					if posChecker == nil {
-						return fmt.Errorf("check blocks_rolling_position not found")
+				if c.Check == "blocks_rolling" {
+					if startTime, exist := c.Config["start"]; exist {
+						posChecker := checks.GetCheckerByName("blocks_rolling_position")
+						if posChecker == nil {
+							return fmt.Errorf("check blocks_rolling_position not found")
+						}
+						configuredPosChecker, err := posChecker.Configure(map[string]any{"target": checker})
+						if err != nil {
+							return fmt.Errorf("error configuring position checker; %v", err)
+						}
+						time, err := toFloat32(startTime)
+						if err != nil {
+							return err
+						}
+						scheduleCheckEvents(time, "blocks_rolling_position", configuredPosChecker, queue, network)
 					}
-					configuredPosChecker, err := checker.Configure(map[string]any{"target": checker})
-					if err != nil {
-						return fmt.Errorf("error configuring position checker; %v", err)
-					}
-					time, err := toFloat32(startTime)
-					if err != nil {
-						return err
-					}
-					scheduleCheckEvents(time, "blocks_rolling_position", configuredPosChecker, queue, network)
 				}
 
 				scheduleCheckEvents(c.Time, c.Check, configured, queue, network)
