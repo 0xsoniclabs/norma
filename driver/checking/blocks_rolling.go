@@ -30,6 +30,14 @@ func (c *blocksRollingChecker) Configure(config CheckerConfig) (Checker, error) 
 		return c, nil
 	}
 
+	if emsg, exist := config["error"]; exist {
+		checker, err := c.Configure(config.copyExceptError())
+		if err != nil {
+			return nil, err
+		}
+		return &errorChecker{checker, emsg.(string)}, nil
+	}
+
 	tolerance := c.toleranceSamples
 	val, exist := config["tolerance"]
 	if exist {

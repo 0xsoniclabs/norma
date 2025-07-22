@@ -18,6 +18,9 @@ package checking
 
 import (
 	"errors"
+	"fmt"
+	"strings"
+
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 )
@@ -40,6 +43,17 @@ type Checker interface {
 
 // CheckerConfig is used to configure Checker
 type CheckerConfig map[string]any
+
+// copyExceptError makes a copy of the CheckerConfig except without the key "error"
+func (cfg *CheckerConfig) copyExceptError() CheckerConfig {
+	newConfig := make(CheckerConfig)
+	for k, v := range *cfg {
+		if k != "error" {
+			newConfig[k] = v
+		}
+	}
+	return newConfig
+}
 
 // Checks is a slice of Checker.
 type Checks map[string]Checker
@@ -74,4 +88,21 @@ func (c Checks) Check() error {
 // It returns nil if the Checker is not found.
 func (c Checks) GetCheckerByName(name string) Checker {
 	return c[name]
+}
+
+// errorChecker is used to create a checker that expects an error
+type errorChecker struct {
+	checker Checker
+	err     string
+}
+
+func (c *errorChecker) Check() error {
+	if err := c.checker.Check(); err == nil && !strings.Contains(err.Error(), c.err) {
+		return fmt.Errorf("expected error %s", c.err)
+	}
+	return nil
+}
+
+func (c *errorChecker) Configure(config CheckerConfig) (Checker, error) {
+	return c.Configure(config)
 }

@@ -11,21 +11,35 @@ import (
 func TestBlocksRolling_Blocks_Processed(t *testing.T) {
 	tests := map[string]struct {
 		series []uint64
+		config CheckerConfig
 	}{
 		"one": {
 			series: []uint64{1},
+			config: CheckerConfig{},
 		},
 		"monotonic-increasing": {
 			series: []uint64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+			config: CheckerConfig{},
 		},
 		"monotonic-non-decreasing": {
 			series: []uint64{1, 2, 3, 4, 5, 5, 5, 5, 6, 7, 8, 9},
+			config: CheckerConfig{},
 		},
 		"monotonic-non-decreasing-towards-beginning": {
 			series: []uint64{5, 5, 5, 5, 6, 7, 8, 9, 10, 11, 12, 13},
+			config: CheckerConfig{},
 		},
 		"monotonic-non-decreasing-towards-end": {
 			series: []uint64{1, 2, 3, 4, 5, 6, 7, 8, 8, 8, 8},
+			config: CheckerConfig{},
+		},
+		"monotonic-decreasing-catch-error": {
+			series: []uint64{10, 9, 8, 7, 6, 5, 4, 3, 2, 1},
+			config: CheckerConfig{"error": "network is down"},
+		},
+		"constant": {
+			series: []uint64{5, 5, 5, 5, 5, 5, 5, 5, 5, 5},
+			config: CheckerConfig{"error": "network is down"},
 		},
 	}
 
@@ -38,7 +52,11 @@ func TestBlocksRolling_Blocks_Processed(t *testing.T) {
 			monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
 
 			c := blocksRollingChecker{monitor: monitor, toleranceSamples: 5}
-			if err := c.Check(); err != nil {
+			configured, err := c.Configure(test.config)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if err := configured.Check(); err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
