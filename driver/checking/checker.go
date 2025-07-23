@@ -95,13 +95,8 @@ type failingChecker struct {
 }
 
 // NewFailingChecker returns checks if an input Checker returns an error
-func NewFailingChecker(checker Checker, config CheckerConfig) (Checker, error) {
-	fc := &failingChecker{checker}
-	configuredFailingChecker, err := fc.Configure(config)
-	if err != nil {
-		return nil, err
-	}
-	return configuredFailingChecker, nil
+func NewFailingChecker(checker Checker) Checker {
+	return &failingChecker{checker}
 }
 
 func (c *failingChecker) Check() error {
@@ -112,12 +107,25 @@ func (c *failingChecker) Check() error {
 }
 
 func (c *failingChecker) Configure(config CheckerConfig) (Checker, error) {
-	checker, err := c.checker.Configure(config.copyExceptError())
+	configured, err := c.checker.Configure(config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to configure checker; %v", err)
 	}
 
-	return &failingChecker{checker: checker}, nil
+	val, exist := config["failing"]
+	if !exist {
+		return configured, nil
+	}
+
+	failing, ok := val.(bool)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert failing; %v", val)
+	}
+	if !failing {
+		return configured, nil
+	}
+
+	return &failingChecker{configured}, nil
 }
 
 // NewMonitorChecker returns a checker that extract informations from monitor

@@ -80,17 +80,7 @@ func run(
 					return fmt.Errorf("check '%s' not found", c.Check)
 				}
 
-				if val, exist := c.Config["failing"]; exist {
-					failing, ok := val.(bool)
-					if !ok {
-						return fmt.Errorf("failed to convert failing; %v", val)
-					}
-					if failing {
-						return checking.NewErrorChecker(checker, c.Config)
-					}
-				}
-
-				configured, err := checker.Configure(c.Config)
+				configured, err := checking.NewFailingChecker(checker).Configure(c.Config)
 				if err != nil {
 					return fmt.Errorf("error configuring checks; %v", err)
 				}
