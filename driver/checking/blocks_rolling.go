@@ -19,9 +19,7 @@ func init() {
 type blocksRollingChecker struct {
 	monitor          MonitoringData
 	toleranceSamples int
-
-	// blocksRollingPositionChecker: on Check(), populate the current position of each node
-	nodeStartPositions map[monitoring.Node]monitoring.Time
+	start            *monitoring.Time // default to 0 if nil
 }
 
 // Configure returns a deep copy of the original checker.
@@ -42,9 +40,20 @@ func (c *blocksRollingChecker) Configure(config CheckerConfig) (Checker, error) 
 		tolerance = t
 	}
 
+	start := c.start
+	if val, exist := config["start"]; exist {
+		s, ok := val.(int)
+		if !ok {
+			return nil, fmt.Errorf("failed to convert start; %v", val)
+		}
+		time := monitoring.Time(s)
+		start = &time
+	}
+
 	return &blocksRollingChecker{
 		monitor:          c.monitor,
 		toleranceSamples: tolerance,
+		start:            start,
 	}, nil
 }
 
@@ -65,17 +74,16 @@ func (c *blocksRollingChecker) Check() error {
 		nodeFunctional := true
 		series := c.monitor.GetBlockStatus(node)
 
-		var first monitoring.Time = 0
-		if c.nodeStartPositions != nil {
-			if pos, exist := c.nodeStartPositions[node]; exist {
-				first = pos
-			}
-		}
 		last := series.GetLatest()
 		if last == nil {
 			nodeFunctional = false //node produced no blocks
 			continue
 		}
+		var first monitoring.Time = 0
+		if c.start != nil {
+			first = *c.start
+		}
+
 		items := series.GetRange(first, last.Position)
 		window := make([]monitoring.BlockStatus, c.toleranceSamples)
 		for i, point := range append(items, *last) {
@@ -98,47 +106,4 @@ func (c *blocksRollingChecker) Check() error {
 	}
 
 	return err
-}
-
-// blocksRollingPositionChecker is a helper Checker that gets the current position for blocksRollingChecker
-type blocksRollingPositionChecker struct {
-	monitor MonitoringData
-	checker *blocksRollingChecker
-}
-
-func NewBlocksRollingPositionChecker(checker *blocksRollingChecker) Checker {
-	return &blocksRollingPositionChecker{checker.monitor, checker}
-}
-
-// Check embeds position into the configured blocksRollingChecker
-func (c *blocksRollingPositionChecker) Check() error {
-	if c.checker == nil {
-		return nil
-	}
-
-	nodeStartPositions := make(map[monitoring.Node]monitoring.Time)
-	for _, node := range c.monitor.GetNodes() {
-		nodeStartPositions[node] = c.monitor.GetBlockStatus(node).GetLatest().Position
-	}
-	c.checker.nodeStartPositions = nodeStartPositions
-	return nil
-}
-
-// Configure sets the target blocksRollingChecker
-func (c *blocksRollingPositionChecker) Configure(config CheckerConfig) (Checker, error) {
-	if config == nil {
-		return c, nil
-	}
-
-	val, exist := config["target"]
-	if !exist {
-		return c, nil
-	}
-
-	brc, ok := val.(*blocksRollingChecker)
-	if !ok {
-		return nil, fmt.Errorf("failed to convert blocksRollingChecker; %v", val)
-	}
-
-	return &blocksRollingPositionChecker{monitor: c.monitor, checker: brc}, nil
 }

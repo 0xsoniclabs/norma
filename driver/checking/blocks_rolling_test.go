@@ -88,9 +88,8 @@ func TestBlocksRolling_Blocks_Failure(t *testing.T) {
 	}
 }
 
-func TestBlocksRolling_Blocks_Processed_WithPositions(t *testing.T) {
+func TestBlocksRolling_Blocks_WithStarts(t *testing.T) {
 	series := createBlockSeries(t, []uint64{1, 1, 1, 1, 1, 2, 3, 4, 5, 6})
-	halfwayThroughSeries := createBlockSeries(t, []uint64{1, 1, 1, 1, 1, 2})
 
 	ctrl := gomock.NewController(t)
 	monitor := NewMockMonitoringData(ctrl)
@@ -103,16 +102,13 @@ func TestBlocksRolling_Blocks_Processed_WithPositions(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	pc := &blocksRollingPositionChecker{monitor: monitor, checker: &checker}
-	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
-	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(halfwayThroughSeries)
-	if err := pc.Check(); err != nil {
+	configured, err := checker.Configure(CheckerConfig{"start": 5})
+	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-
 	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
 	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
-	if err := checker.Check(); err != nil {
+	if err := configured.Check(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

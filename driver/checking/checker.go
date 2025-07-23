@@ -116,14 +116,3 @@ func (c *failingChecker) Configure(config CheckerConfig) (Checker, error) {
 
 	return &failingChecker{configured}, nil
 }
-
-// NewMonitorChecker returns a checker that extract informations from monitor
-// Implementation of what to check/how to update is up to each individual checker
-func NewMonitorChecker(checker Checker) (Checker, error) {
-	switch c := checker.(type) {
-	case *blocksRollingChecker:
-		return NewBlocksRollingPositionChecker(c), nil
-	default:
-		return nil, fmt.Errorf("%T not supported", c)
-	}
-}

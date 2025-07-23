@@ -85,18 +85,6 @@ func run(
 					return fmt.Errorf("error configuring checks; %v", err)
 				}
 
-				if val, exist := c.Config["start"]; exist {
-					start, err := toFloat32(val)
-					if err != nil {
-						return err
-					}
-					monChecker, err := checking.NewMonitorChecker(checker)
-					if err != nil {
-						return err
-					}
-					scheduleCheckEvents(start, "Checking monitor value", monChecker, queue, network)
-				}
-
 				scheduleCheckEvents(c.Time, c.Check, configured, queue, network)
 			}
 		}
@@ -611,19 +599,4 @@ func scheduleCheckEvents(timing float32, name string, check checking.Checker, qu
 	queue.add(toSingleEvent(Seconds(timing), fmt.Sprintf("Check [%s]", name), func() error {
 		return check.Check()
 	}))
-}
-
-func toFloat32(val any) (float32, error) {
-	switch v := val.(type) {
-	case float64:
-		return float32(v), nil
-	case float32:
-		return v, nil
-	case int:
-		return float32(v), nil
-	case uint64:
-		return float32(v), nil
-	default:
-		return 0, fmt.Errorf("invalid type; %T", val)
-	}
 }
