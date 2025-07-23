@@ -114,7 +114,11 @@ func NewErrorChecker(checker Checker, config CheckerConfig) (Checker, error) {
 }
 
 func (c *errorChecker) Check() error {
-	if err := c.checker.Check(); err == nil && !strings.Contains(err.Error(), c.err) {
+	if c.checker == nil {
+		return fmt.Errorf("checker is nil")
+	}
+
+	if err := c.checker.Check(); err == nil || !strings.Contains(err.Error(), c.err) {
 		return fmt.Errorf("expected error %s", c.err)
 	}
 	return nil
