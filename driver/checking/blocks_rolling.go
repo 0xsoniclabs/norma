@@ -13,9 +13,6 @@ func init() {
 	RegisterNetworkCheck("blocks_rolling", func(net driver.Network, monitor *monitoring.Monitor) Checker {
 		return &blocksRollingChecker{monitor: &monitoringDataAdapter{monitor}, toleranceSamples: defaultToleranceSamples}
 	})
-	RegisterNetworkCheck("blocks_rolling_position", func(_ driver.Network, monitor *monitoring.Monitor) Checker {
-		return &blocksRollingPositionChecker{monitor: &monitoringDataAdapter{monitor}}
-	})
 }
 
 // blocksRollingChecker is a Checker checking if all nodes keeps producing blocks.
