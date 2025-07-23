@@ -43,17 +43,6 @@ type Checker interface {
 // CheckerConfig is used to configure Checker
 type CheckerConfig map[string]any
 
-// copyExceptError makes a copy of the CheckerConfig except without the key "error"
-func (cfg *CheckerConfig) copyExceptError() CheckerConfig {
-	newConfig := make(CheckerConfig)
-	for k, v := range *cfg {
-		if k != "error" {
-			newConfig[k] = v
-		}
-	}
-	return newConfig
-}
-
 // Checks is a slice of Checker.
 type Checks map[string]Checker
 
