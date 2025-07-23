@@ -11,19 +11,12 @@ import (
 func TestBlocksGasRate_Success(t *testing.T) {
 	tests := map[string]struct {
 		series []float64
-		config CheckerConfig
 	}{
 		"empty": {
 			series: []float64{},
-			config: CheckerConfig{},
 		},
 		"exact": {
 			series: []float64{1, 30},
-			config: CheckerConfig{},
-		},
-		"exceed-catch-error": {
-			series: []float64{30, 31, 32},
-			config: CheckerConfig{"error": "Exceeded gas ceiling"},
 		},
 	}
 
@@ -35,11 +28,7 @@ func TestBlocksGasRate_Success(t *testing.T) {
 			monitor.EXPECT().GetBlockGasRate().Return(series)
 
 			c := blockGasRateChecker{monitor: monitor, ceiling: 30}
-			configured, err := c.Configure(test.config)
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-			if err := configured.Check(); err != nil {
+			if err := c.Check(); err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})

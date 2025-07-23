@@ -39,10 +39,6 @@ type blocksHashesChecker struct {
 
 // Configure returns itself since there is nothing to configure
 func (c *blocksHashesChecker) Configure(config CheckerConfig) (Checker, error) {
-	if _, exist := config["error"]; exist {
-		return NewErrorChecker(c, config)
-	}
-
 	return c, nil
 }
 

@@ -19,7 +19,6 @@ package checking
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
@@ -90,44 +89,33 @@ func (c Checks) GetCheckerByName(name string) Checker {
 	return c[name]
 }
 
-// errorChecker is used to create a checker that expects an error
-type errorChecker struct {
+// failingChecker is used to create a checker that expects an error
+type failingChecker struct {
 	checker Checker
-	err     string
 }
 
-func NewErrorChecker(checker Checker, config CheckerConfig) (Checker, error) {
-	if val, exist := config["error"]; exist {
-		emsg, ok := val.(string)
-		if !ok {
-			return nil, fmt.Errorf("failed to convert error; %v", val)
-		}
-
-		ec := &errorChecker{checker, emsg}
-		configuredErrorChecker, err := ec.Configure(config)
-		if err != nil {
-			return nil, err
-		}
-		return configuredErrorChecker, nil
+// NewFailingChecker returns checks if an input Checker returns an error
+func NewFailingChecker(checker Checker, config CheckerConfig) (Checker, error) {
+	fc := &failingChecker{checker}
+	configuredFailingChecker, err := fc.Configure(config)
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("no configured error")
+	return configuredFailingChecker, nil
 }
 
-func (c *errorChecker) Check() error {
-	if err := c.checker.Check(); err == nil || !strings.Contains(err.Error(), c.err) {
-		return fmt.Errorf("expected error %s", c.err)
+func (c *failingChecker) Check() error {
+	if err := c.checker.Check(); err == nil {
+		return fmt.Errorf("failing expected")
 	}
 	return nil
 }
 
-func (c *errorChecker) Configure(config CheckerConfig) (Checker, error) {
+func (c *failingChecker) Configure(config CheckerConfig) (Checker, error) {
 	checker, err := c.checker.Configure(config.copyExceptError())
 	if err != nil {
 		return nil, err
 	}
 
-	return &errorChecker{
-		checker: checker,
-		err:     c.err,
-	}, nil
+	return &failingChecker{checker: checker}, nil
 }

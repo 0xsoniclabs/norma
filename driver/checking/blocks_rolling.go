@@ -36,10 +36,6 @@ func (c *blocksRollingChecker) Configure(config CheckerConfig) (Checker, error) 
 		return c, nil
 	}
 
-	if _, exist := config["error"]; exist {
-		return NewErrorChecker(c, config)
-	}
-
 	tolerance := c.toleranceSamples
 	if val, exist := config["tolerance"]; exist {
 		t, ok := val.(int)

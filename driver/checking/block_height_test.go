@@ -40,8 +40,6 @@ func TestBlockHeightCheckerValid(t *testing.T) {
 		{name: "within-tolerance-big-asc-configured", blockHeight1: "0x42", blockHeight2: "0x52", slack: 1, config: CheckerConfig{"slack": 16}},
 		{name: "within-tolerance-big-desc-configured", blockHeight1: "0x52", blockHeight2: "0x42", slack: 1, config: CheckerConfig{"slack": 16}},
 		{name: "empty-config", blockHeight1: "0x52", blockHeight2: "0x42", slack: 16, config: CheckerConfig{}},
-		{name: "should-reject-asc-catch-error", blockHeight1: "0x42", blockHeight2: "0x1234", slack: 5, config: CheckerConfig{"error": "reports too old block"}},
-		{name: "should-reject-desc-configured-err", blockHeight1: "0x52", blockHeight2: "0x42", slack: 255, config: CheckerConfig{"slack": 5, "error": "reports too old block"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

@@ -50,10 +50,6 @@ func (c *blockGasRateChecker) Configure(config CheckerConfig) (Checker, error) {
 		return c, nil
 	}
 
-	if _, exist := config["error"]; exist {
-		return NewErrorChecker(c, config)
-	}
-
 	toFloat64 := func(val any) (float64, error) {
 		switch v := val.(type) {
 		case float64:

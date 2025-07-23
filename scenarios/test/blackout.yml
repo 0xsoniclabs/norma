@@ -51,7 +51,7 @@ checks:
   - time: 140
     check: blocks_rolling
     config:
-      error: network is down
+      failing: true
       start: 81
   - time: 199
     check: blocks_rolling
