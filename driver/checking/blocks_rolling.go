@@ -103,10 +103,14 @@ func (c *blocksRollingChecker) Check() error {
 	return err
 }
 
-// blocksRollingPositionChecker is a helper Checker that gets the current position for blocks_rolling
+// blocksRollingPositionChecker is a helper Checker that gets the current position for blocksRollingChecker
 type blocksRollingPositionChecker struct {
 	monitor MonitoringData
 	checker *blocksRollingChecker
+}
+
+func NewBlocksRollingPositionChecker(checker *blocksRollingChecker) Checker {
+	return &blocksRollingPositionChecker{checker.monitor, checker}
 }
 
 // Check embeds position into the configured blocksRollingChecker
