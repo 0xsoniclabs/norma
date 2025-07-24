@@ -4,13 +4,11 @@
 name: Blackout Check
 
 # The duration of the scenario's runtime, in seconds.
-duration: 150
+duration: 200
 
 # Initial validator nodes in the network.
 validators:
   - name: val-base
-    instances: 1
-    imagename: "sonic"
 
 
 advance_epoch:
@@ -34,12 +32,32 @@ nodes:
     client:
       type: validator
   - name: val-1-recover
-    rejoin: 100
+    rejoin: 140
     client:
       type: validator
       # given that this node is "rejoin"ed, it will not register itself
       # but it will use id=2 when joining the network
       val_id: 2
+
+checks:
+  # since we're enabling custom checks, these must be specified manually
+  - time: 199
+    check: block_height
+  - time: 199
+    check: blocks_hashes
+  # custom checks for blackout
+  - time: 80
+    check: blocks_rolling
+  - time: 140
+    check: blocks_rolling
+    config:
+      failing: true
+      start: 81
+  - time: 199
+    check: blocks_rolling
+    config:
+      start: 141
+
 
 
 # Some background load to keep the network busy.
@@ -48,6 +66,6 @@ applications:
     type: counter
     users: 50
     start: 10          # start time
-    end: 140           # termination time
+    end: 190           # termination time
     rate:
       constant: 20    # Tx/s

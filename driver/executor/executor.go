@@ -80,10 +80,11 @@ func run(
 					return fmt.Errorf("check '%s' not found", c.Check)
 				}
 
-				configured, err := checker.Configure(c.Config)
-				if err != nil {
-					return fmt.Errorf("error configuring checks; %v", err)
+				config := checking.CheckerConfig(c.Config)
+				if err := config.Check(); err != nil {
+					return err
 				}
+				configured := checking.NewFailingChecker(checker).Configure(config)
 
 				scheduleCheckEvents(c.Time, c.Check, configured, queue, network)
 			}
