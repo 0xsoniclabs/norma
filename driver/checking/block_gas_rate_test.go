@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring"
-	"github.com/0xsoniclabs/norma/driver/parser"
 	"go.uber.org/mock/gomock"
 )
 
@@ -73,19 +72,19 @@ func TestBlocksGasRate_Configure(t *testing.T) {
 	}
 
 	// emptyOriginal has the same behavior as original
-	emptyOriginal := original.Configure(parser.CheckerConfig{})
+	emptyOriginal := original.Configure(CheckerConfig{})
 	if err := emptyOriginal.Check(); err == nil || !strings.Contains(err.Error(), "Exceeded gas ceiling") {
 		t.Errorf("not caught: Exceeded gas ceiling; %v", err)
 	}
 
 	// success will pass because ceiling is now 50
-	success := original.Configure(parser.CheckerConfig{"ceiling": 50})
+	success := original.Configure(CheckerConfig{"ceiling": 50})
 	if err := success.Check(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
 	// emptySuccess has the same behavior as success
-	emptySuccess := success.Configure(parser.CheckerConfig{})
+	emptySuccess := success.Configure(CheckerConfig{})
 	if err := emptySuccess.Check(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

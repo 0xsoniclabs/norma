@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver"
-	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"go.uber.org/mock/gomock"
 )
@@ -32,15 +31,15 @@ func TestBlockHeightCheckerValid(t *testing.T) {
 		blockHeight1 string
 		blockHeight2 string
 		slack        uint8
-		config       parser.CheckerConfig
+		config       CheckerConfig
 	}{
 		{name: "within-tolerance-big-asc", blockHeight1: "0x42", blockHeight2: "0x52", slack: 16},
 		{name: "within-tolerance-big-desc", blockHeight1: "0x52", blockHeight2: "0x42", slack: 16},
 		{name: "within-tolerance", blockHeight1: "0x42", blockHeight2: "0x43", slack: 1},
 		{name: "constant", blockHeight1: "0x42", blockHeight2: "0x42", slack: 0},
-		{name: "within-tolerance-big-asc-configured", blockHeight1: "0x42", blockHeight2: "0x52", slack: 1, config: parser.CheckerConfig{"slack": 16}},
-		{name: "within-tolerance-big-desc-configured", blockHeight1: "0x52", blockHeight2: "0x42", slack: 1, config: parser.CheckerConfig{"slack": 16}},
-		{name: "empty-config", blockHeight1: "0x52", blockHeight2: "0x42", slack: 16, config: parser.CheckerConfig{}},
+		{name: "within-tolerance-big-asc-configured", blockHeight1: "0x42", blockHeight2: "0x52", slack: 1, config: CheckerConfig{"slack": 16}},
+		{name: "within-tolerance-big-desc-configured", blockHeight1: "0x52", blockHeight2: "0x42", slack: 1, config: CheckerConfig{"slack": 16}},
+		{name: "empty-config", blockHeight1: "0x52", blockHeight2: "0x42", slack: 16, config: CheckerConfig{}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -77,15 +76,15 @@ func TestBlockHeightCheckerInvalid_WithSlack(t *testing.T) {
 		blockHeight1 string
 		blockHeight2 string
 		slack        uint8
-		config       parser.CheckerConfig
+		config       CheckerConfig
 	}{
 		{name: "should-reject-asc", blockHeight1: "0x42", blockHeight2: "0x1234", slack: 5},
 		{name: "should-reject-desc", blockHeight1: "0x1234", blockHeight2: "0x42", slack: 5},
 		{name: "no-slack", blockHeight1: "0x42", blockHeight2: "0x43", slack: 0},
-		{name: "should-reject-asc-configured", blockHeight1: "0x42", blockHeight2: "0x52", slack: 255, config: parser.CheckerConfig{"slack": 5}},
-		{name: "should-reject-desc-configured", blockHeight1: "0x52", blockHeight2: "0x42", slack: 255, config: parser.CheckerConfig{"slack": 5}},
-		{name: "no-slack-configured", blockHeight1: "0x42", blockHeight2: "0x43", slack: 255, config: parser.CheckerConfig{"slack": 0}},
-		{name: "empty-config", blockHeight1: "0x42", blockHeight2: "0x1234", slack: 5, config: parser.CheckerConfig{}},
+		{name: "should-reject-asc-configured", blockHeight1: "0x42", blockHeight2: "0x52", slack: 255, config: CheckerConfig{"slack": 5}},
+		{name: "should-reject-desc-configured", blockHeight1: "0x52", blockHeight2: "0x42", slack: 255, config: CheckerConfig{"slack": 5}},
+		{name: "no-slack-configured", blockHeight1: "0x42", blockHeight2: "0x43", slack: 255, config: CheckerConfig{"slack": 0}},
+		{name: "empty-config", blockHeight1: "0x42", blockHeight2: "0x1234", slack: 5, config: CheckerConfig{}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

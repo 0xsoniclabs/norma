@@ -342,32 +342,6 @@ func (a *Auto) Check() error {
 	return errors.Join(errs...)
 }
 
-// Check tests parsing of each configuration
-func (config *CheckerConfig) Check() error {
-	errs := []error{}
-
-	isBool := func(v any) bool { _, ok := v.(bool); return ok }
-	isPositiveInt := func(v any) bool { i, ok := v.(int); return ok && i >= 0 }
-	isUint8 := func(v any) bool { i, ok := v.(int); return ok && i >= 0 && i < 256 }
-	isPositiveFloat64 := func(v any) bool { f, ok := v.(float64); return isPositiveInt(v) || (ok && f >= 0) }
-
-	checks := map[string]func(any) bool{
-		"failing":   isBool,
-		"tolerance": isPositiveInt,
-		"start":     isPositiveInt,
-		"ceiling":   isPositiveFloat64,
-		"slack":     isUint8,
-	}
-
-	for key, check := range checks {
-		if val, exist := (*config)[key]; exist && !check(val) {
-			errs = append(errs, fmt.Errorf("error parsing %s", key))
-		}
-	}
-
-	return errors.Join(errs...)
-}
-
 // checkTimeInterval is a utility function checking the validity of a start/end time pair.
 func checkTimeInterval(start, end *float32, duration float32) error {
 	realStart := float32(0.0)

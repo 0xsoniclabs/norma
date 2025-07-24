@@ -22,7 +22,6 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
-	"github.com/0xsoniclabs/norma/driver/parser"
 )
 
 // Factory is a function that creates a Checker.
@@ -38,7 +37,7 @@ var registrations = make(registry)
 // Checker does the consistency check at the end of the scenario.
 type Checker interface {
 	Check() error
-	Configure(parser.CheckerConfig) Checker
+	Configure(CheckerConfig) Checker
 }
 
 // Checks is a slice of Checker.
@@ -93,10 +92,37 @@ func (c *failingChecker) Check() error {
 	return nil
 }
 
-func (c *failingChecker) Configure(config parser.CheckerConfig) Checker {
+func (c *failingChecker) Configure(config CheckerConfig) Checker {
 	configured := c.checker.Configure(config)
 	if failing, exist := config["failing"]; !exist || !failing.(bool) {
 		return configured
 	}
 	return &failingChecker{configured}
+}
+
+type CheckerConfig map[string]any
+
+func (config *CheckerConfig) Check() error {
+	errs := []error{}
+
+	isBool := func(v any) bool { _, ok := v.(bool); return ok }
+	isPositiveInt := func(v any) bool { i, ok := v.(int); return ok && i >= 0 }
+	isUint8 := func(v any) bool { i, ok := v.(int); return ok && i >= 0 && i < 256 }
+	isPositiveFloat64 := func(v any) bool { f, ok := v.(float64); return isPositiveInt(v) || (ok && f >= 0) }
+
+	checks := map[string]func(any) bool{
+		"failing":   isBool,
+		"tolerance": isPositiveInt,
+		"start":     isPositiveInt,
+		"ceiling":   isPositiveFloat64,
+		"slack":     isUint8,
+	}
+
+	for key, check := range checks {
+		if val, exist := (*config)[key]; exist && !check(val) {
+			errs = append(errs, fmt.Errorf("error parsing %s", key))
+		}
+	}
+
+	return errors.Join(errs...)
 }

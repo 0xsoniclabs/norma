@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring"
-	"github.com/0xsoniclabs/norma/driver/parser"
 	"go.uber.org/mock/gomock"
 )
 
@@ -102,7 +101,7 @@ func TestBlocksRolling_Blocks_WithStarts(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	configured := checker.Configure(parser.CheckerConfig{"start": 5})
+	configured := checker.Configure(CheckerConfig{"start": 5})
 	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
 	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
 	if err := configured.Check(); err != nil {
@@ -124,19 +123,19 @@ func TestBlocksRolling_Configure(t *testing.T) {
 	}
 
 	// emptyOriginal has the same behavior as original
-	emptyOriginal := original.Configure(parser.CheckerConfig{})
+	emptyOriginal := original.Configure(CheckerConfig{})
 	if err := emptyOriginal.Check(); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
 		t.Errorf("not caught: network is down; %v", err)
 	}
 
 	// success will pass because it sees the entire series 1->6
-	success := original.Configure(parser.CheckerConfig{"tolerance": 10})
+	success := original.Configure(CheckerConfig{"tolerance": 10})
 	if err := success.Check(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
 	// emptySuccess has the same behavior as success
-	emptySuccess := success.Configure(parser.CheckerConfig{})
+	emptySuccess := success.Configure(CheckerConfig{})
 	if err := emptySuccess.Check(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

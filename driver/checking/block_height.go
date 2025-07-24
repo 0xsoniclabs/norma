@@ -24,7 +24,6 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
-	"github.com/0xsoniclabs/norma/driver/parser"
 )
 
 // allow block height to fall short by this amount
@@ -47,7 +46,7 @@ type blockHeightChecker struct {
 // If the config doesn't provide any replacement value, copy from the value of the original.
 // If the config is invalid, return error instead.
 // If the config is nil, return original checker.
-func (c *blockHeightChecker) Configure(config parser.CheckerConfig) Checker {
+func (c *blockHeightChecker) Configure(config CheckerConfig) Checker {
 	if config == nil {
 		return c
 	}

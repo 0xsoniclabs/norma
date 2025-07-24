@@ -22,7 +22,6 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
-	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -40,7 +39,7 @@ type blocksHashesChecker struct {
 }
 
 // Configure returns itself since there is nothing to configure
-func (c *blocksHashesChecker) Configure(config parser.CheckerConfig) Checker {
+func (c *blocksHashesChecker) Configure(config CheckerConfig) Checker {
 	return c
 }
 
