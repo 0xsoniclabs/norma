@@ -12,6 +12,7 @@ package checking
 import (
 	reflect "reflect"
 
+	parser "github.com/0xsoniclabs/norma/driver/parser"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -54,7 +55,7 @@ func (mr *MockCheckerMockRecorder) Check() *gomock.Call {
 }
 
 // Configure mocks base method.
-func (m *MockChecker) Configure(arg0 CheckerConfig) (Checker, error) {
+func (m *MockChecker) Configure(arg0 parser.CheckerConfig) (Checker, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Configure", arg0)
 	ret0, _ := ret[0].(Checker)

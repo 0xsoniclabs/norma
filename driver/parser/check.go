@@ -119,6 +119,10 @@ func (s *Scenario) Check() error {
 		if chk.Time < 0 || chk.Time > s.Duration {
 			errs = append(errs, fmt.Errorf("invalid timing for checks: %f", chk.Time))
 		}
+		err := chk.Config.Check()
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 
 	return errors.Join(errs...)
@@ -332,6 +336,32 @@ func (a *Auto) Check() error {
 	if a.Decrease != nil {
 		if *a.Decrease < 0 || *a.Decrease > 1 {
 			errs = append(errs, fmt.Errorf("traffic decrease rate must be between 0 and 1, got %f", *a.Decrease))
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+// Check tests parsing of each configuration
+func (config *CheckerConfig) Check() error {
+	errs := []error{}
+
+	isBool := func(v any) bool { _, ok := v.(bool); return ok }
+	isPositiveInt := func(v any) bool { i, ok := v.(int); return ok && i >= 0 }
+	isUint8 := func(v any) bool { i, ok := v.(int); return ok && i >= 0 && i < 256 }
+	isPositiveFloat64 := func(v any) bool { f, ok := v.(float64); return isPositiveInt(v) || (ok && f >= 0) }
+
+	checks := map[string]func(any) bool{
+		"failing":   isBool,
+		"tolerance": isPositiveInt,
+		"start":     isPositiveInt,
+		"ceiling":   isPositiveFloat64,
+		"slack":     isUint8,
+	}
+
+	for key, check := range checks {
+		if val, exist := (*config)[key]; exist && !check(val) {
+			errs = append(errs, fmt.Errorf("error parsing %s", key))
 		}
 	}
 

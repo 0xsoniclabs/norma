@@ -5,6 +5,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/parser"
 )
 
 const defaultToleranceSamples int = 10
@@ -26,7 +27,7 @@ type blocksRollingChecker struct {
 // If the config doesn't provide any replacement value, copy from the value of the original.
 // If the config is invalid, return error instead.
 // If the config is nil, return original checker.
-func (c *blocksRollingChecker) Configure(config CheckerConfig) (Checker, error) {
+func (c *blocksRollingChecker) Configure(config parser.CheckerConfig) (Checker, error) {
 	if config == nil {
 		return c, nil
 	}

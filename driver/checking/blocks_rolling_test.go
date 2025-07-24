@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/parser"
 	"go.uber.org/mock/gomock"
 )
 
@@ -102,7 +103,7 @@ func TestBlocksRolling_Blocks_WithStarts(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	configured, err := checker.Configure(CheckerConfig{"start": 5})
+	configured, err := checker.Configure(parser.CheckerConfig{"start": 5})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -123,22 +124,22 @@ func TestBlocksRolling_Configure(t *testing.T) {
 	// original returns error because it sees 1, 1, 1, 1, 1
 	original := blocksRollingChecker{monitor: monitor, toleranceSamples: 5}
 	// success will pass because it sees the entire series 1->6
-	success, err := original.Configure(CheckerConfig{"tolerance": 10})
+	success, err := original.Configure(parser.CheckerConfig{"tolerance": 10})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	// emptyOriginal has the same behavior as original
-	emptyOriginal, err := original.Configure(CheckerConfig{})
+	emptyOriginal, err := original.Configure(parser.CheckerConfig{})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	// emptySuccess has the same behavior as success
-	emptySuccess, err := success.Configure(CheckerConfig{})
+	emptySuccess, err := success.Configure(parser.CheckerConfig{})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	// misconfigured will throw an error
-	if _, err := original.Configure(CheckerConfig{"tolerance": "abc"}); err == nil || !strings.Contains(err.Error(), "failed to convert tolerance") {
+	if _, err := original.Configure(parser.CheckerConfig{"tolerance": "abc"}); err == nil || !strings.Contains(err.Error(), "failed to convert tolerance") {
 		t.Errorf("not caught: failed to convert tolerance; %v", err)
 	}
 

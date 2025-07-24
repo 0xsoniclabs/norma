@@ -22,6 +22,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/parser"
 )
 
 // Factory is a function that creates a Checker.
@@ -37,11 +38,8 @@ var registrations = make(registry)
 // Checker does the consistency check at the end of the scenario.
 type Checker interface {
 	Check() error
-	Configure(CheckerConfig) (Checker, error)
+	Configure(parser.CheckerConfig) (Checker, error)
 }
-
-// CheckerConfig is used to configure Checker
-type CheckerConfig map[string]any
 
 // Checks is a slice of Checker.
 type Checks map[string]Checker
@@ -95,7 +93,7 @@ func (c *failingChecker) Check() error {
 	return nil
 }
 
-func (c *failingChecker) Configure(config CheckerConfig) (Checker, error) {
+func (c *failingChecker) Configure(config parser.CheckerConfig) (Checker, error) {
 	configured, err := c.checker.Configure(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to configure checker; %v", err)
