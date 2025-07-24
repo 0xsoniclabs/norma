@@ -87,6 +87,10 @@ func (c *blocksRollingChecker) Check() error {
 		}
 
 		items := series.GetRange(first, last.Position) // skip last item
+		for ix, item := range items {
+			fmt.Println(ix, item)
+		}
+
 		window := make([]monitoring.BlockStatus, c.toleranceSamples)
 		for i, point := range append(items, *last) {
 			window[i%c.toleranceSamples] = point.Value
