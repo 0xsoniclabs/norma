@@ -40,8 +40,8 @@ type blocksHashesChecker struct {
 }
 
 // Configure returns itself since there is nothing to configure
-func (c *blocksHashesChecker) Configure(config parser.CheckerConfig) (Checker, error) {
-	return c, nil
+func (c *blocksHashesChecker) Configure(config parser.CheckerConfig) Checker {
+	return c
 }
 
 func (c *blocksHashesChecker) Check() (err error) {

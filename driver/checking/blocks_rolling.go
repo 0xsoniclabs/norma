@@ -27,27 +27,19 @@ type blocksRollingChecker struct {
 // If the config doesn't provide any replacement value, copy from the value of the original.
 // If the config is invalid, return error instead.
 // If the config is nil, return original checker.
-func (c *blocksRollingChecker) Configure(config parser.CheckerConfig) (Checker, error) {
+func (c *blocksRollingChecker) Configure(config parser.CheckerConfig) Checker {
 	if config == nil {
-		return c, nil
+		return c
 	}
 
 	tolerance := c.toleranceSamples
-	if val, exist := config["tolerance"]; exist {
-		t, ok := val.(int)
-		if !ok {
-			return nil, fmt.Errorf("failed to convert tolerance; %v", val)
-		}
-		tolerance = t
+	if t, exist := config["tolerance"]; exist {
+		tolerance = t.(int)
 	}
 
 	start := c.start
-	if val, exist := config["start"]; exist {
-		s, ok := val.(int)
-		if !ok {
-			return nil, fmt.Errorf("failed to convert start; %v", val)
-		}
-		time := monitoring.Time(s)
+	if s, exist := config["start"]; exist {
+		time := monitoring.Time(s.(int))
 		start = &time
 	}
 
@@ -55,7 +47,7 @@ func (c *blocksRollingChecker) Configure(config parser.CheckerConfig) (Checker, 
 		monitor:          c.monitor,
 		toleranceSamples: tolerance,
 		start:            start,
-	}, nil
+	}
 }
 
 func (c *blocksRollingChecker) Check() error {

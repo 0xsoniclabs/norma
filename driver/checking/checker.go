@@ -38,7 +38,7 @@ var registrations = make(registry)
 // Checker does the consistency check at the end of the scenario.
 type Checker interface {
 	Check() error
-	Configure(parser.CheckerConfig) (Checker, error)
+	Configure(parser.CheckerConfig) Checker
 }
 
 // Checks is a slice of Checker.
@@ -93,24 +93,10 @@ func (c *failingChecker) Check() error {
 	return nil
 }
 
-func (c *failingChecker) Configure(config parser.CheckerConfig) (Checker, error) {
-	configured, err := c.checker.Configure(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to configure checker; %v", err)
+func (c *failingChecker) Configure(config parser.CheckerConfig) Checker {
+	configured := c.checker.Configure(config)
+	if failing, exist := config["failing"]; !exist || !failing.(bool) {
+		return configured
 	}
-
-	val, exist := config["failing"]
-	if !exist {
-		return configured, nil
-	}
-
-	failing, ok := val.(bool)
-	if !ok {
-		return nil, fmt.Errorf("failed to convert failing; %v", val)
-	}
-	if !failing {
-		return configured, nil
-	}
-
-	return &failingChecker{configured}, nil
+	return &failingChecker{configured}
 }

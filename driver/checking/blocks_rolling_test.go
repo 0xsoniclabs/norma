@@ -1,7 +1,6 @@
 package checking
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring"
@@ -103,10 +102,7 @@ func TestBlocksRolling_Blocks_WithStarts(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	configured, err := checker.Configure(parser.CheckerConfig{"start": 5})
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	configured := checker.Configure(parser.CheckerConfig{"start": 5})
 	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
 	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
 	if err := configured.Check(); err != nil {
@@ -123,38 +119,24 @@ func TestBlocksRolling_Configure(t *testing.T) {
 
 	// original returns error because it sees 1, 1, 1, 1, 1
 	original := blocksRollingChecker{monitor: monitor, toleranceSamples: 5}
-	// success will pass because it sees the entire series 1->6
-	success, err := original.Configure(parser.CheckerConfig{"tolerance": 10})
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	// emptyOriginal has the same behavior as original
-	emptyOriginal, err := original.Configure(parser.CheckerConfig{})
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	// emptySuccess has the same behavior as success
-	emptySuccess, err := success.Configure(parser.CheckerConfig{})
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	// misconfigured will throw an error
-	if _, err := original.Configure(parser.CheckerConfig{"tolerance": "abc"}); err == nil || !strings.Contains(err.Error(), "failed to convert tolerance") {
-		t.Errorf("not caught: failed to convert tolerance; %v", err)
-	}
-
 	if err := original.Check(); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
 		t.Errorf("not caught: network is down; %v", err)
 	}
 
+	// emptyOriginal has the same behavior as original
+	emptyOriginal := original.Configure(parser.CheckerConfig{})
 	if err := emptyOriginal.Check(); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
 		t.Errorf("not caught: network is down; %v", err)
 	}
 
+	// success will pass because it sees the entire series 1->6
+	success := original.Configure(parser.CheckerConfig{"tolerance": 10})
 	if err := success.Check(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
+	// emptySuccess has the same behavior as success
+	emptySuccess := success.Configure(parser.CheckerConfig{})
 	if err := emptySuccess.Check(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

@@ -63,12 +63,8 @@ func TestBlockHeightCheckerValid(t *testing.T) {
 			rpc1.EXPECT().Close()
 			rpc2.EXPECT().Close()
 
-			c := blockHeightChecker{net: net, slack: test.slack}
-			configured, err := c.Configure(test.config)
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-			if err := configured.Check(); err != nil {
+			checker := blockHeightChecker{net: net, slack: test.slack}
+			if err := checker.Configure(test.config).Check(); err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
@@ -112,38 +108,9 @@ func TestBlockHeightCheckerInvalid_WithSlack(t *testing.T) {
 			rpc1.EXPECT().Close()
 			rpc2.EXPECT().Close()
 
-			c := blockHeightChecker{net: net, slack: test.slack}
-			configured, err := c.Configure(test.config)
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-
-			if err := configured.Check(); err == nil || !strings.Contains(err.Error(), "reports too old block") {
+			checker := blockHeightChecker{net: net, slack: test.slack}
+			if err := checker.Configure(test.config).Check(); err == nil || !strings.Contains(err.Error(), "reports too old block") {
 				t.Errorf("Block Height check should failed, got: %v", err)
-			}
-		})
-	}
-}
-
-func TestBlockHeightChecker_ConfigureInvalid(t *testing.T) {
-	tests := []struct {
-		name   string
-		config parser.CheckerConfig
-		err    string
-	}{
-		{name: "test1", config: parser.CheckerConfig{"slack": "abc"}, err: "failed to convert slack"},
-		{name: "test2", config: parser.CheckerConfig{"slack": -1}, err: "invalid slack"},
-		{name: "test3", config: parser.CheckerConfig{"slack": 256}, err: "invalid slack"},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			net := driver.NewMockNetwork(ctrl)
-
-			c := blockHeightChecker{net: net, slack: 123}
-			if _, err := c.Configure(test.config); err == nil || !strings.Contains(err.Error(), test.err) {
-				t.Errorf("not caught: %s; %v", test.err, err)
 			}
 		})
 	}
