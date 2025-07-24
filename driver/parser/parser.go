@@ -22,7 +22,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/0xsoniclabs/norma/driver/checking"
 	"gopkg.in/yaml.v3"
 )
 
@@ -68,7 +67,7 @@ type AdvanceEpoch struct {
 type Check struct {
 	Time   float32
 	Check  string
-	Config checking.CheckerConfig
+	Config map[string]any
 }
 
 // NetworkRulesUpdate defines a network rule update that can be applied at a specific time.
