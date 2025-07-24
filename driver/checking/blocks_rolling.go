@@ -72,7 +72,21 @@ func (c *blocksRollingChecker) Check() error {
 			continue
 		}
 
-		items := series.GetRange(c.start, last.Position)
+		var first monitoring.Time = 0
+		found := false
+		dataPoints := series.GetRange(0, last.Position+1)
+		for _, dp := range dataPoints {
+			if dp.Position == monitoring.Time(c.start) {
+				first = dp.Position
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("start %d not found", c.start)
+		}
+
+		items := series.GetRange(first, last.Position) // skip last item
 		window := make([]monitoring.BlockStatus, c.toleranceSamples)
 		for i, point := range append(items, *last) {
 			window[i%c.toleranceSamples] = point.Value
