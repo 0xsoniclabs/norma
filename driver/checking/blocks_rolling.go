@@ -20,7 +20,7 @@ func init() {
 type blocksRollingChecker struct {
 	monitor          MonitoringData
 	toleranceSamples int
-	start            *monitoring.Time // default to 0 if nil
+	start            monitoring.Time
 }
 
 // Configure returns a deep copy of the original checker.
@@ -39,8 +39,7 @@ func (c *blocksRollingChecker) Configure(config parser.CheckerConfig) Checker {
 
 	start := c.start
 	if s, exist := config["start"]; exist {
-		time := monitoring.Time(s.(int))
-		start = &time
+		start = monitoring.Time(s.(int))
 	}
 
 	return &blocksRollingChecker{
@@ -72,12 +71,8 @@ func (c *blocksRollingChecker) Check() error {
 			nodeFunctional = false //node produced no blocks
 			continue
 		}
-		var first monitoring.Time = 0
-		if c.start != nil {
-			first = *c.start
-		}
 
-		items := series.GetRange(first, last.Position)
+		items := series.GetRange(c.start, last.Position)
 		window := make([]monitoring.BlockStatus, c.toleranceSamples)
 		for i, point := range append(items, *last) {
 			window[i%c.toleranceSamples] = point.Value
