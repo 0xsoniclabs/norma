@@ -85,7 +85,7 @@ func (c *blocksRollingChecker) Check() error {
 			}
 		}
 		if !found {
-			return nil
+			return fmt.Errorf("start %d not found", c.start)
 		}
 
 		items := series.GetRange(first, last.Position) // skip last item
