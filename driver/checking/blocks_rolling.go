@@ -75,14 +75,17 @@ func (c *blocksRollingChecker) Check() error {
 		found := false
 		dataPoints := series.GetRange(0, last.Position+1)
 		for _, dp := range dataPoints {
-			if dp.Position == monitoring.Time(c.start) {
+			// >= to account for various tick configuration
+			// example: if ticked at 0, 5, 10, ... and c.start = 8,
+			// the first tick that is bigger, 10, is selected instead.
+			if dp.Position >= monitoring.Time(c.start) {
 				first = dp.Position
 				found = true
 				break
 			}
 		}
 		if !found {
-			return fmt.Errorf("start %d not found", c.start)
+			return nil
 		}
 
 		items := series.GetRange(first, last.Position) // skip last item
