@@ -87,7 +87,7 @@ func NewFailingChecker(checker Checker) Checker {
 
 func (c *failingChecker) Check() error {
 	if err := c.checker.Check(); err == nil {
-		return fmt.Errorf("failing expected")
+		return fmt.Errorf("failure expected")
 	}
 	return nil
 }
