@@ -30,7 +30,7 @@ func TestBlockHeightCheckerValid(t *testing.T) {
 		name         string
 		blockHeight1 string
 		blockHeight2 string
-		slack        uint8
+		slack        int
 		config       CheckerConfig
 	}{
 		{name: "within-tolerance-big-asc", blockHeight1: "0x42", blockHeight2: "0x52", slack: 16},
@@ -75,7 +75,7 @@ func TestBlockHeightCheckerInvalid_WithSlack(t *testing.T) {
 		name         string
 		blockHeight1 string
 		blockHeight2 string
-		slack        uint8
+		slack        int
 		config       CheckerConfig
 	}{
 		{name: "should-reject-asc", blockHeight1: "0x42", blockHeight2: "0x1234", slack: 5},

@@ -11,7 +11,6 @@ func TestCheckerConfig_Success(t *testing.T) {
 		{"tolerance": 1},
 		{"start": 1},
 		{"ceiling": 1},
-		{"ceiling": 1.0},
 		{"slack": 1},
 	}
 
@@ -31,7 +30,6 @@ func TestCheckerConfig_Failure(t *testing.T) {
 		{"tolerance": 1.0},
 		{"start": -1},
 		{"ceiling": nil},
-		{"slack": 333}, // not uint8
 	}
 
 	for i, config := range configs {

@@ -107,15 +107,13 @@ func (config *CheckerConfig) Check() error {
 
 	isBool := func(v any) bool { _, ok := v.(bool); return ok }
 	isPositiveInt := func(v any) bool { i, ok := v.(int); return ok && i >= 0 }
-	isUint8 := func(v any) bool { i, ok := v.(int); return ok && i >= 0 && i < 256 }
-	isPositiveFloat64 := func(v any) bool { f, ok := v.(float64); return isPositiveInt(v) || (ok && f >= 0) }
 
 	checks := map[string]func(any) bool{
 		"failing":   isBool,
 		"tolerance": isPositiveInt,
 		"start":     isPositiveInt,
-		"ceiling":   isPositiveFloat64,
-		"slack":     isUint8,
+		"ceiling":   isPositiveInt,
+		"slack":     isPositiveInt,
 	}
 
 	for key, check := range checks {

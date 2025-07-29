@@ -52,12 +52,7 @@ func (c *blockGasRateChecker) Configure(config CheckerConfig) Checker {
 
 	ceiling := c.ceiling
 	if val, exist := config["ceiling"]; exist {
-		cl, ok := val.(float64)
-		if ok {
-			ceiling = cl
-		} else {
-			ceiling = float64(val.(int))
-		}
+		ceiling = float64(val.(int))
 	}
 
 	return &blockGasRateChecker{monitor: c.monitor, ceiling: ceiling}
