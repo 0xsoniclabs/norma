@@ -18,13 +18,12 @@ package checking
 
 import (
 	"fmt"
-	"maps"
-
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"maps"
 )
 
 func init() {

@@ -18,12 +18,11 @@ package checking
 
 import (
 	"fmt"
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"maps"
 	"strconv"
 	"strings"
-
-	"github.com/0xsoniclabs/norma/driver"
-	"github.com/0xsoniclabs/norma/driver/monitoring"
 )
 
 // allow block height to fall short by this amount
