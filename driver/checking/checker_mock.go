@@ -54,12 +54,11 @@ func (mr *MockCheckerMockRecorder) Check() *gomock.Call {
 }
 
 // Configure mocks base method.
-func (m *MockChecker) Configure(arg0 CheckerConfig) (Checker, error) {
+func (m *MockChecker) Configure(arg0 CheckerConfig) Checker {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Configure", arg0)
 	ret0, _ := ret[0].(Checker)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // Configure indicates an expected call of Configure.

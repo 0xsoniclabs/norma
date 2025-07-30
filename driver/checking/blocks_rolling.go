@@ -19,31 +19,33 @@ func init() {
 type blocksRollingChecker struct {
 	monitor          MonitoringData
 	toleranceSamples int
+	start            monitoring.Time
 }
 
 // Configure returns a deep copy of the original checker.
 // If the config doesn't provide any replacement value, copy from the value of the original.
 // If the config is invalid, return error instead.
 // If the config is nil, return original checker.
-func (c *blocksRollingChecker) Configure(config CheckerConfig) (Checker, error) {
+func (c *blocksRollingChecker) Configure(config CheckerConfig) Checker {
 	if config == nil {
-		return c, nil
+		return c
 	}
 
 	tolerance := c.toleranceSamples
-	val, exist := config["tolerance"]
-	if exist {
-		t, ok := val.(int)
-		if !ok {
-			return nil, fmt.Errorf("failed to convert tolerance; %v", val)
-		}
-		tolerance = t
+	if t, exist := config["tolerance"]; exist {
+		tolerance = t.(int)
+	}
+
+	start := c.start
+	if s, exist := config["start"]; exist {
+		start = monitoring.Time(s.(int))
 	}
 
 	return &blocksRollingChecker{
 		monitor:          c.monitor,
 		toleranceSamples: tolerance,
-	}, nil
+		start:            start,
+	}
 }
 
 func (c *blocksRollingChecker) Check() error {
@@ -62,12 +64,31 @@ func (c *blocksRollingChecker) Check() error {
 	for _, node := range nodes {
 		nodeFunctional := true
 		series := c.monitor.GetBlockStatus(node)
+
 		last := series.GetLatest()
 		if last == nil {
 			nodeFunctional = false //node produced no blocks
 			continue
 		}
-		items := series.GetRange(0, last.Position)
+
+		var first monitoring.Time = 0
+		found := false
+		dataPoints := series.GetRange(0, last.Position+1)
+		for _, dp := range dataPoints {
+			// >= to account for various tick configuration
+			// example: if ticked at 0, 5, 10, ... and c.start = 8,
+			// the first tick that is bigger, 10, is selected instead.
+			if dp.Position >= monitoring.Time(c.start) {
+				first = dp.Position
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("start %d not found", c.start)
+		}
+
+		items := series.GetRange(first, last.Position) // skip last item
 		window := make([]monitoring.BlockStatus, c.toleranceSamples)
 		for i, point := range append(items, *last) {
 			window[i%c.toleranceSamples] = point.Value

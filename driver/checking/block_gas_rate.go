@@ -45,35 +45,17 @@ type blockGasRateChecker struct {
 // If the config doesn't provide any replacement value, copy from the value of the original.
 // If the config is invalid, return error instead.
 // If the config is nil, return original checker.
-func (c *blockGasRateChecker) Configure(config CheckerConfig) (Checker, error) {
+func (c *blockGasRateChecker) Configure(config CheckerConfig) Checker {
 	if config == nil {
-		return c, nil
-	}
-
-	toFloat64 := func(val any) (float64, error) {
-		switch v := val.(type) {
-		case float64:
-			return v, nil
-		case int:
-			return float64(v), nil
-		case uint64:
-			return float64(v), nil
-		default:
-			return 0, fmt.Errorf("invalid type; %T", val)
-		}
+		return c
 	}
 
 	ceiling := c.ceiling
-	val, exist := config["ceiling"]
-	if exist {
-		cl, err := toFloat64(val)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert ceiling; %v", err)
-		}
-		ceiling = cl
+	if val, exist := config["ceiling"]; exist {
+		ceiling = float64(val.(int))
 	}
 
-	return &blockGasRateChecker{monitor: c.monitor, ceiling: ceiling}, nil
+	return &blockGasRateChecker{monitor: c.monitor, ceiling: ceiling}
 }
 
 // Check retreive current BlockGasRate and see that each block has gas rate below ceiling.

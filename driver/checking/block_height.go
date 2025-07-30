@@ -38,32 +38,24 @@ func init() {
 // blockHeightChecker is a Checker checking if all Opera nodes achieved the same block height.
 type blockHeightChecker struct {
 	net   driver.Network
-	slack uint8
+	slack int
 }
 
 // Configure returns a deep copy of the original checker.
 // If the config doesn't provide any replacement value, copy from the value of the original.
 // If the config is invalid, return error instead.
 // If the config is nil, return original checker.
-func (c *blockHeightChecker) Configure(config CheckerConfig) (Checker, error) {
+func (c *blockHeightChecker) Configure(config CheckerConfig) Checker {
 	if config == nil {
-		return c, nil
+		return c
 	}
 
 	slack := c.slack
-	val, exist := config["slack"]
-	if exist {
-		s, ok := val.(int)
-		if !ok {
-			return nil, fmt.Errorf("failed to convert slack; %v", val)
-		}
-		if s < 0 || s > 255 {
-			return nil, fmt.Errorf("invalid slack; 0 < %d < 255", s)
-		}
-		slack = uint8(s)
+	if val, exist := config["slack"]; exist {
+		slack = val.(int)
 	}
 
-	return &blockHeightChecker{net: c.net, slack: slack}, nil
+	return &blockHeightChecker{net: c.net, slack: slack}
 }
 
 func (c *blockHeightChecker) Check() error {
