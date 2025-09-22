@@ -41,14 +41,14 @@ pull-prometheus-image:
 	DOCKER_BUILDKIT=1 docker image pull prom/prometheus:v2.44.0
 
 build-sonic-docker-image-main:
-	DOCKER_BUILDKIT=1 docker build --build-context client-src=$(CLIENT_URL) . -t sonic
+	DOCKER_BUILDKIT=1 docker build --rm --build-context client-src=$(CLIENT_URL) . -t sonic
 
 build-sonic-docker-image-local:
-	DOCKER_BUILDKIT=1 docker build --build-context client-src=sonic . -t sonic:local
+	DOCKER_BUILDKIT=1 docker build --rm --build-context client-src=sonic . -t sonic:local
 
 # Build various client versions
 $(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)):
-	DOCKER_BUILDKIT=1 docker build --build-context client-src=$(CLIENT_URL)\#$(subst build-sonic-docker-image-,,$@) . -t sonic:$(subst build-sonic-docker-image-,,$@)
+	DOCKER_BUILDKIT=1 docker build --rm --build-context client-src=$(CLIENT_URL)\#$(subst build-sonic-docker-image-,,$@) . -t sonic:$(subst build-sonic-docker-image-,,$@)
 
 generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi load/contracts/abi/SmartAccount.abi load/contracts/abi/EntryPoint.abi # requires installed solc and Ethereum abigen - check README.md
 

@@ -176,6 +176,7 @@ func (c *Client) Start(config *ContainerConfig) (*Container, error) {
 		Init:         &init,
 		CapAdd:       []string{"NET_ADMIN"},
 		Binds:        binds,
+		AutoRemove:   true, // remove containers after stop
 	}, nil, nil, "")
 	if err != nil {
 		return nil, err
