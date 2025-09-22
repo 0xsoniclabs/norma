@@ -26,15 +26,17 @@ WORKDIR /client
 # Download expected Client version from the outside defined location.
 # The 'client-src' parameter is passed as '--build-context' to the docker build command.
 
-# Copy the client source from a tagged remote location
-COPY --from=client-src . .
-
-# Download Sonic dependencies first
+# Download Sonic dependencies first to cache them.
+COPY --from=client-src go.mod .
 RUN go mod download
+
+# Copy the rest of the client source code to build it.
+COPY --from=client-src . .
 
 # Build the client
 RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
 
+#
 # Stage 1b: Build Norma related tools supporting Client runs.
 #
 # It prepeares an image with dependencies for the norma.
