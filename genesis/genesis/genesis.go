@@ -3,6 +3,11 @@ package genesis
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
+	"os"
+	"time"
+
+	gas_subsidies_registry "github.com/0xsoniclabs/sonic/gossip/blockproc/subsidies/registry"
 	"github.com/0xsoniclabs/sonic/integration/makefakegenesis"
 	"github.com/0xsoniclabs/sonic/opera"
 	"github.com/0xsoniclabs/sonic/opera/contracts/driver"
@@ -15,9 +20,6 @@ import (
 	"github.com/0xsoniclabs/sonic/scc/bls"
 	futils "github.com/0xsoniclabs/sonic/utils"
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
-	"math/big"
-	"os"
-	"time"
 )
 
 // GenerateJsonGenesis generates a genesis json file with the given number of validators
@@ -61,6 +63,15 @@ func GenerateJsonGenesis(jsonFile string, validatorsCount int, rules *opera.Rule
 			Code:    []byte{0},
 			Nonce:   1,
 		},
+	}
+
+	if rules.Upgrades.GasSubsidies {
+		jsonGenesis.Accounts = append(jsonGenesis.Accounts, makefakegenesis.Account{
+			Name:    "SubsidiesRegistry",
+			Address: gas_subsidies_registry.GetAddress(),
+			Code:    gas_subsidies_registry.GetCode(),
+			Nonce:   1,
+		})
 	}
 
 	// Create the validator account and provide tokens, pre-init a maximal limit of validators.
