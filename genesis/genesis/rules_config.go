@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/0xsoniclabs/sonic/inter"
-	"github.com/0xsoniclabs/sonic/opera"
-	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 	"math/big"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/0xsoniclabs/sonic/inter"
+	"github.com/0xsoniclabs/sonic/opera"
+	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 )
 
 // NetworkRules defines a set of network rules as a key value mapping.
@@ -47,6 +48,7 @@ func init() {
 	register("UPGRADES_SONIC", upgradesSonic)
 	register("UPGRADES_ALLEGRO", upgradesAllegro)
 	register("UPGRADES_SINGLE_PROPOSER", upgradesSingleProposer)
+	register("UPGRADES_GAS_SUBSIDIES", upgradesGasSubsidies)
 
 	// Economy
 	register("MIN_GAS_PRICE", minGasPrice)
@@ -258,6 +260,11 @@ var upgradesAllegro = func(value string, rules *opera.Rules) error {
 
 var upgradesSingleProposer = func(value string, rules *opera.Rules) error {
 	rules.Upgrades.SingleProposerBlockFormation = value == "true"
+	return nil
+}
+
+var upgradesGasSubsidies = func(value string, rules *opera.Rules) error {
+	rules.Upgrades.GasSubsidies = value == "true"
 	return nil
 }
 

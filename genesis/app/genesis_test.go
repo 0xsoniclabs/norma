@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/0xsoniclabs/sonic/integration/makefakegenesis"
-	"github.com/urfave/cli/v2"
 	"os"
 	"path"
 	"strings"
 	"testing"
+
+	"github.com/0xsoniclabs/sonic/integration/makefakegenesis"
+	"github.com/urfave/cli/v2"
 )
 
 func TestExportGenesis(t *testing.T) {
@@ -77,5 +78,59 @@ func TestExportGenesis(t *testing.T) {
 
 	if got, want := validators, MaxValidatorsCount; got != want {
 		t.Errorf("unexpected number of validators, wanted %v, got %v", want, got)
+	}
+}
+
+func TestExportGenesis_ContainsGasSubsidiesFlag(t *testing.T) {
+	// create a local network with the gas subsidies upgrade enabled
+	const ValidatorCount = 9
+
+	// Create a temporary file
+	tmpFile := path.Join(t.TempDir(), "genesis.json")
+
+	if err := os.Setenv("VALIDATORS_COUNT", fmt.Sprintf("%d", ValidatorCount)); err != nil {
+		t.Fatalf("failed to set VALIDATORS_COUNT: %v", err)
+	}
+	if err := os.Setenv("UPGRADES_GAS_SUBSIDIES", "true"); err != nil {
+		t.Fatalf("failed to set UPGRADES_GAS_SUBSIDIES: %v", err)
+	}
+
+	defer func() {
+		if err := os.Unsetenv("VALIDATORS_COUNT"); err != nil {
+			t.Errorf("failed to unset VALIDATORS_COUNT: %v", err)
+		}
+
+		if err := os.Unsetenv("UPGRADES_GAS_SUBSIDIES"); err != nil {
+			t.Errorf("failed to unset UPGRADES_GAS_SUBSIDIES: %v", err)
+		}
+	}()
+
+	// Create a new CLI context with the file path argument
+	app := cli.NewApp()
+	set := flag.NewFlagSet("test", 0)
+	if err := set.Parse([]string{tmpFile}); err != nil {
+		t.Fatalf("failed to parse flags: %v", err)
+	}
+	ctx := cli.NewContext(app, set, nil)
+
+	// Call the exportGenesis function
+	if err := exportGenesis(ctx); err != nil {
+		t.Fatalf("failed to export genesis: %v", err)
+	}
+	// Read the generated file
+	data, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("failed to read genesis.json: %v", err)
+	}
+
+	// Unmarshal the JSON content
+	var jsonGenesis makefakegenesis.GenesisJson
+	if err := json.Unmarshal(data, &jsonGenesis); err != nil {
+		t.Fatalf("failed to unmarshal genesis.json: %v", err)
+	}
+
+	// Verify network rules were updated
+	if got, want := jsonGenesis.Rules.Upgrades.GasSubsidies, true; got != want {
+		t.Errorf("unexpected gas subsidies upgrade flag, wanted %v, got %v", want, got)
 	}
 }
