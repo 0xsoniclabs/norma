@@ -108,6 +108,9 @@ func NewSubsidiesApplication(appContext AppContext, feederId, appId uint32) (App
 }
 
 func (f *SubsidiesApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
+	// Creates a series of accounts to submit transactions
+	// none of these accounts have any balance, all gas is paid by the subsidy
+
 	users := make([]User, numUsers)
 	addresses := make([]common.Address, numUsers)
 	for i := range users {
@@ -121,13 +124,6 @@ func (f *SubsidiesApplication) CreateUsers(appContext AppContext, numUsers int) 
 			Sender:          workerAccount,
 		}
 		addresses[i] = workerAccount.address
-	}
-
-	// Fund all accounts with 1 FTM so they can pay for the balance transfer
-	// gas costs shall be covered by the subsidy
-	err := appContext.FundAccounts(addresses, big.NewInt(1e18))
-	if err != nil {
-		return nil, fmt.Errorf("failed to fund accounts; %w", err)
 	}
 
 	return users, nil
