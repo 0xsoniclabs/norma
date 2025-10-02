@@ -43,7 +43,11 @@ func TestGenerators(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
-	t.Cleanup(func() { _ = net.Shutdown() })
+	t.Cleanup(func() {
+		if err := net.Shutdown(); err != nil {
+			t.Fatalf("failed to shutdown network: %v", err)
+		}
+	})
 
 	primaryAccount, err := app.NewAccount(0, PrivateKey, nil, FakeNetworkID)
 	if err != nil {
@@ -102,7 +106,11 @@ func TestGenerators_Subsidies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
-	t.Cleanup(func() { _ = net.Shutdown() })
+	t.Cleanup(func() {
+		if err := net.Shutdown(); err != nil {
+			t.Fatalf("failed to shutdown network: %v", err)
+		}
+	})
 
 	primaryAccount, err := app.NewAccount(0, PrivateKey, nil, FakeNetworkID)
 	if err != nil {
