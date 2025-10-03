@@ -106,6 +106,9 @@ func (r Impl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
 func (r Impl) transactionReceipt(txHash common.Hash) (*types.Receipt, error) {
 	var result map[string]any
 	err := r.Call(&result, "eth_getTransactionReceipt", txHash)
+	if err != nil {
+		return nil, err
+	}
 	if err == nil && result == nil {
 		return nil, ethereum.NotFound
 	}
