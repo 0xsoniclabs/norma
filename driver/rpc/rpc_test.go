@@ -24,17 +24,17 @@ func TestRpcClientImpl_WaitTransactionReceipt_Success(t *testing.T) {
 
 	injectedResult := map[string]any{
 		"cumulativeGasUsed": "0x0",
-		"logsBloom": "0x" + strings.Repeat("00", 256),
-		"logs": []map[string]any{},
-		"transactionHash": "0x" + strings.Repeat("00", 32),
-		"gasUsed": "0x0",
+		"logsBloom":         "0x" + strings.Repeat("00", 256),
+		"logs":              []map[string]any{},
+		"transactionHash":   "0x" + strings.Repeat("00", 32),
+		"gasUsed":           "0x0",
 	}
 	expectedReceipt := &types.Receipt{
 		CumulativeGasUsed: 0,
-		Bloom: types.BytesToBloom(make([]byte, 256)),
-		Logs: nil,
-		TxHash: common.BytesToHash(make([]byte, 32)),
-		GasUsed: 0,
+		Bloom:             types.BytesToBloom(make([]byte, 256)),
+		Logs:              nil,
+		TxHash:            common.BytesToHash(make([]byte, 32)),
+		GasUsed:           0,
 	}
 
 	mock.EXPECT().
