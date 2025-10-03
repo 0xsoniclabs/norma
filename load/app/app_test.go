@@ -25,6 +25,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/network"
 	"github.com/0xsoniclabs/norma/driver/network/local"
+	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/load/app"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -97,8 +98,11 @@ func TestGenerators(t *testing.T) {
 }
 
 func TestGenerators_Subsidies(t *testing.T) {
+	one := 1
 	net, err := local.NewLocalNetwork(&driver.NetworkConfig{
-		Validators: driver.DefaultValidators,
+		Validators: driver.NewValidators([]parser.Validator{
+			{Name: "validator1", Instances: &one, ImageName: "sonic:gas_subsidies_prototype"},
+		}),
 		NetworkRules: map[string]string{
 			"UPGRADES_GAS_SUBSIDIES": "true",
 		},

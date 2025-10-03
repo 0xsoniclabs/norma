@@ -29,6 +29,7 @@ all: \
     pull-prometheus-image \
     build-sonic-docker-image-main \
     build-sonic-docker-image-local \
+	build-sonic-docker-image-subsidies \
     $(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)) \
 
 pull-hello-world-image:
@@ -49,6 +50,9 @@ build-sonic-docker-image-local:
 # Build various client versions
 $(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)):
 	DOCKER_BUILDKIT=1 docker build --build-context client-src=$(CLIENT_URL)\#$(subst build-sonic-docker-image-,,$@) . -t sonic:$(subst build-sonic-docker-image-,,$@)
+
+build-sonic-docker-image-subsidies:
+	DOCKER_BUILDKIT=1 docker build --rm --build-context client-src=https://github.com/0xsoniclabs/sonic.git#luis/gas_subsidies_towards_2.1.2 . -t sonic:gas_subsidies_prototype
 
 generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi load/contracts/abi/SmartAccount.abi load/contracts/abi/EntryPoint.abi # requires installed solc and Ethereum abigen - check README.md
 
