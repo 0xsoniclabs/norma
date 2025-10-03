@@ -86,7 +86,7 @@ func (r Impl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
 	begin := time.Now()
 	delay := time.Millisecond
 	for time.Since(begin) < r.txReceiptTimeout {
-		receipt, err := r.transactionReceipt(context.Background(), txHash)
+		receipt, err := r.transactionReceipt(txHash)
 		if errors.Is(err, ethereum.NotFound) {
 			time.Sleep(delay)
 			delay = 2 * delay
@@ -103,7 +103,7 @@ func (r Impl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
 	return nil, fmt.Errorf("failed to get transaction receipt: timeout")
 }
 
-func (r Impl) transactionReceipt(ctxt context.Context, txHash common.Hash) (*types.Receipt, error) {
+func (r Impl) transactionReceipt(txHash common.Hash) (*types.Receipt, error) {
 	var result map[string]any
 	err := r.Call(&result, "eth_getTransactionReceipt", txHash)
 	if err == nil && result == nil {
