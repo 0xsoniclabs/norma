@@ -18,11 +18,13 @@ package rpc
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum"
 	"math/big"
 	"time"
+
+	"github.com/ethereum/go-ethereum"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -59,7 +61,6 @@ type ethRpcClient interface {
 	NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error)
 	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
 	ChainID(ctx context.Context) (*big.Int, error)
-	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 
 	Close()
 }
@@ -85,7 +86,7 @@ func (r Impl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
 	begin := time.Now()
 	delay := time.Millisecond
 	for time.Since(begin) < r.txReceiptTimeout {
-		receipt, err := r.TransactionReceipt(context.Background(), txHash)
+		receipt, err := r.transactionReceipt(txHash)
 		if errors.Is(err, ethereum.NotFound) {
 			time.Sleep(delay)
 			delay = 2 * delay
@@ -100,4 +101,43 @@ func (r Impl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
 		return receipt, nil
 	}
 	return nil, fmt.Errorf("failed to get transaction receipt: timeout")
+}
+
+func (r Impl) transactionReceipt(txHash common.Hash) (*types.Receipt, error) {
+	var result map[string]any
+	err := r.Call(&result, "eth_getTransactionReceipt", txHash)
+	if err != nil {
+		return nil, err
+	}
+	if err == nil && result == nil {
+		return nil, ethereum.NotFound
+	}
+
+	// Remove all log.blockTimestamps to provide backward compatibility.
+	// This fields was introduced in geth 1.16.1 or 1.16.2, but some versions
+	// of Sonic (at least up to 2.1.2) are using 1.16.0. However, the client
+	// used in this code is based on 1.16.2 or older, depending on this field
+	// to be present and formatted in a specific way to parse the JSON result.
+	// We do not need the field in Norma, so we can filter it out.
+	if logs, ok := result["logs"].([]any); ok {
+		for _, log := range logs {
+			if logMap, ok := log.(map[string]any); ok {
+				delete(logMap, "blockTimestamp")
+			}
+		}
+	}
+
+	// Re-encode the result to JSON and decode it into a types.Receipt.
+	jsonEncoded, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal transaction receipt: %w", err)
+	}
+
+	var receipt *types.Receipt
+	err = json.Unmarshal(jsonEncoded, &receipt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal transaction receipt: %w", err)
+	}
+
+	return receipt, nil
 }
