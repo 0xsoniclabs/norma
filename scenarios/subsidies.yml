@@ -1,0 +1,34 @@
+name: test subsidies
+
+duration: 50
+
+network_rules:
+  genesis:
+    UPGRADES_GAS_SUBSIDIES: true
+
+validators:
+  - name: A
+    instances: 2
+    imagename: "sonic"
+
+applications:
+
+  - name: background 
+    type: counter
+    start: 10          # start time
+    end: 45
+    users: 20          # number of users using the app
+    rate:
+      constant: 10     # Tx/s
+
+  - name: subsidies 
+    type: subsidies
+    start: 15          # start time
+    end: 40            # end time
+    users: 10
+    rate:
+      slope:
+        start: 20
+        increment: 5
+
+
