@@ -151,7 +151,7 @@ func (u *SubsidiesUser) GenerateTx() (*types.Transaction, error) {
 
 	opts.GasLimit = 28036
 	opts.GasPrice = big.NewInt(0) // request subsidy
-	opts.Nonce = big.NewInt(int64(u.Sender.getNextNonce()))
+	opts.Nonce = big.NewInt(int64(u.Sender.getNextNonce()) + 1)
 	opts.NoSend = true // do not send the tx, norma will send it to the network
 	opts.Value = big.NewInt(0)
 	tx, err := u.counterContract.IncrementCounter(opts)

@@ -1,6 +1,6 @@
 name: test subsidies
 
-duration: 50
+duration: 100
 
 network_rules:
   genesis:
@@ -9,7 +9,7 @@ network_rules:
 validators:
   - name: A
     instances: 2
-    imagename: "sonic"
+    imagename: "sonic:local"
 
 applications:
 
@@ -25,10 +25,8 @@ applications:
     type: subsidies
     start: 15          # start time
     end: 40            # end time
-    users: 10
+    users: 8000
     rate:
-      slope:
-        start: 20
-        increment: 5
+      constant: 4000
 
 
