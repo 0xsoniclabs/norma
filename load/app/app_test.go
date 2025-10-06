@@ -43,7 +43,11 @@ func TestGenerators(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
-	t.Cleanup(func() { net.Shutdown() })
+	t.Cleanup(func() {
+		if err := net.Shutdown(); err != nil {
+			t.Fatalf("failed to shutdown network: %v", err)
+		}
+	})
 
 	primaryAccount, err := app.NewAccount(0, PrivateKey, nil, FakeNetworkID)
 	if err != nil {
@@ -92,6 +96,39 @@ func TestGenerators(t *testing.T) {
 	})
 }
 
+func TestGenerators_Subsidies(t *testing.T) {
+	net, err := local.NewLocalNetwork(&driver.NetworkConfig{
+		Validators: driver.DefaultValidators,
+		NetworkRules: map[string]string{
+			"UPGRADES_GAS_SUBSIDIES": "true",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create new local network: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := net.Shutdown(); err != nil {
+			t.Fatalf("failed to shutdown network: %v", err)
+		}
+	})
+
+	primaryAccount, err := app.NewAccount(0, PrivateKey, nil, FakeNetworkID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	context, err := app.NewContext(net, primaryAccount)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	subsidiesApp, err := app.NewSubsidiesApplication(context, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testGenerator(t, subsidiesApp, context)
+}
+
 func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
 	users, err := app.CreateUsers(ctxt, 1)
 	if err != nil {
@@ -110,6 +147,10 @@ func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if tx == nil {
+			t.Fatal("generated transaction is nil")
+		}
+
 		if err := rpcClient.SendTransaction(context.Background(), tx); err != nil {
 			t.Fatal(err)
 		}
