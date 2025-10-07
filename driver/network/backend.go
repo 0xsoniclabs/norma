@@ -25,8 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-//go:generate mockgen -source backend.go -destination backend_mock.go -package network
-
 // ContractBackend is an interface for a client to interact with the network.
 type ContractBackend interface {
 	bind.ContractBackend
