@@ -33,8 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-//go:generate mockgen -source rpc.go -destination rpc_mock.go -package rpc
-
 // Client is an interface that provides a subset of the Ethereum client and RPC client interfaces.
 type Client interface {
 	ethRpcClient
