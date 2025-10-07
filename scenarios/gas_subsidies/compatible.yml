@@ -12,17 +12,14 @@ network_rules:
 
 validators:
   - name: main
-    instances: 1
-    imagename: "sonic:main"
+    imagename: "sonic"
   - name: v2.1
-    instances: 1
     imagename: "sonic:v2.1"
 
 applications:
 
   - name: subsidies 
     type: subsidies
-    start: 0          # start time
     end: 5            # end time
     users: 10
     rate:

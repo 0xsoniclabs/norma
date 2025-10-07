@@ -20,7 +20,7 @@ advance_epoch:
 validators:
   - name: main
     instances: 2
-    imagename: "sonic:main"
+    imagename: "sonic"
   - name: release-branch
     instances: 1
     imagename: "sonic:v2.1"
