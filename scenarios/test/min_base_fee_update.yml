@@ -17,7 +17,7 @@ validators:
   - name: validator-v2.0.3
     imagename: "sonic:v2.0.3"
   - name: validator-allegro
-    imagename: "sonic"
+    imagename: "sonic:main"
 
 # Update the base fee on the network.
 network_rules:

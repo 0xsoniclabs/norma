@@ -312,7 +312,7 @@ func TestLocalNetwork_CanRunWithVariousValidators(t *testing.T) {
 		{Name: "validator1", Instances: &three, ImageName: "sonic:v2.0.0"},
 		{Name: "validator2", Instances: &two, ImageName: "sonic:v2.0.1"},
 		{Name: "validator3", Instances: &one, ImageName: "sonic:v2.0.2"},
-		{Name: "validator4", ImageName: "sonic"},
+		{Name: "validator4", ImageName: "sonic:main"},
 	})
 
 	config := driver.NetworkConfig{Validators: validators}
@@ -479,7 +479,7 @@ func TestLocalNetwork_Num_Validators_Started(t *testing.T) {
 }
 
 // TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions checks if
-// docker can create client through images called "sonic" and "sonic:local"
+// docker can create client through images called "sonic:main" and "sonic:local"
 func TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions(t *testing.T) {
 	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
@@ -492,7 +492,7 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions(t *testing.T
 		_ = net.Shutdown()
 	})
 
-	images := []string{"sonic", "sonic:local"}
+	images := []string{"sonic:main", "sonic:local"}
 	checksum := make(chan string)
 	gotChecksums := 0
 	for _, image := range images {

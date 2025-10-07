@@ -29,7 +29,7 @@ nodes:
     instances: 1
     start: 60   # will start when the base fee is already updated
     client:
-      imagename: "sonic"
+      imagename: "sonic:main"
       type: validator
 
 # In the network, there is a few applications producing the load.

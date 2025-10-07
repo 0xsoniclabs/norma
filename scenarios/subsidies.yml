@@ -9,7 +9,7 @@ network_rules:
 validators:
   - name: A
     instances: 2
-    imagename: "sonic"
+    imagename: "sonic:main"
 
 applications:
 

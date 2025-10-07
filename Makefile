@@ -19,7 +19,7 @@ BUILD_DIR := $(CURDIR)/build
 .PHONY: all test clean
 
 # Define a list of client versions
-CLIENT_VERSIONS := \
+CLIENT_VERSIONS := main \
 	v2.0 v2.0.1 v2.0.2 v2.0.3 \
 	v2.1 v2.1.0 v2.1.1 
 CLIENT_URL=https://github.com/0xsoniclabs/sonic.git
@@ -29,7 +29,6 @@ all: \
     pull-hello-world-image \
     pull-alpine-image \
     pull-prometheus-image \
-    build-sonic-docker-image-main \
     build-sonic-docker-image-local \
     $(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)) \
 
@@ -41,9 +40,6 @@ pull-alpine-image:
 
 pull-prometheus-image:
 	DOCKER_BUILDKIT=1 docker image pull prom/prometheus:v2.44.0
-
-build-sonic-docker-image-main:
-	DOCKER_BUILDKIT=1 docker build --build-context client-src=$(CLIENT_URL) . -t sonic
 
 build-sonic-docker-image-local:
 	DOCKER_BUILDKIT=1 docker build --build-context client-src=sonic . -t sonic:local

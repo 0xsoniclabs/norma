@@ -14,7 +14,7 @@ duration: 90
 validators:
   - name: validator-latest
     instances: 2
-    imagename: "sonic"
+    imagename: "sonic:main"
 
 # Network rules to be applied to the network.
 # It is an extensible list of key-value pairs.

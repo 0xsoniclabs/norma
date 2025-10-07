@@ -24,7 +24,7 @@ validators:
     imagename: "sonic:v2.0.1"
   - name: validator-latest
     instances: 3
-    imagename: "sonic"
+    imagename: "sonic:main"
 
 
 # In the network, there is a few applications producing the load.

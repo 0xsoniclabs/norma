@@ -68,7 +68,7 @@ validators:
     imagename: "sonic:v2.0.1"
   - name: validator-4
     instances: 3
-    imagename: "sonic"
+    imagename: "sonic:main"
 
 nodes:
   - name: A

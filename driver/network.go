@@ -28,7 +28,7 @@ import (
 //go:generate mockgen -source network.go -destination network_mock.go -package driver
 
 // DefaultClientDockerImageName is the name of the docker image to use for clients.
-const DefaultClientDockerImageName = "sonic"
+const DefaultClientDockerImageName = "sonic:main"
 
 // DefaultValidators is a default configuration for a single validator.
 var DefaultValidators = NewDefaultValidators(1)
