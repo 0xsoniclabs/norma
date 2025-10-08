@@ -18,6 +18,8 @@ package network
 
 import "io"
 
+//go:generate mockgen -destination host_mock.go -package network . Host
+
 // AddressPort is a string addressing an IP and a port in the format <IP>:<port>.
 type AddressPort string
 
