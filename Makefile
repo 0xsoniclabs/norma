@@ -21,7 +21,7 @@ BUILD_DIR := $(CURDIR)/build
 # Define a list of client versions
 CLIENT_VERSIONS := \
 	v2.0 v2.0.0 v2.0.1 v2.0.2 v2.0.3 \
-	v2.1 v2.1.0 v2.1.1 
+	v2.1 v2.1.0 v2.1.1 v2.1.2
 CLIENT_URL=https://github.com/0xsoniclabs/sonic.git
 
 all: \
