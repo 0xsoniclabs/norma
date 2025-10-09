@@ -7,9 +7,9 @@ network_rules:
     UPGRADES_GAS_SUBSIDIES: true
 
 validators:
-  - name: A
+  - name: local
     instances: 2
-    imagename: "sonic"
+    imagename: "sonic:local" # local submodule, used to test different versions
 
 applications:
 

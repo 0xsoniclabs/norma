@@ -12,27 +12,27 @@ network_rules:
       rules:
         UPGRADES_GAS_SUBSIDIES: true
 
-# advance epoch, to activate gas subsidies
+# Activate gas subsidies at timestamp 15
 advance_epoch:
   - time: 15
     epochs: 1
 
+# 4 validators, so that one can drop without losing liveness
 validators:
-  - name: main
-    instances: 2
-    imagename: "sonic"
+  - name: local # local submodule, used to test different versions
+    imagename: "sonic:local"
   - name: release-branch
-    instances: 1
-    imagename: "sonic:v2.1"
+    imagename: "sonic:v2.1" # release branch
+  - name: v2.1.2
+    imagename: "sonic:v2.1.2" # first version with gas subsidies
   - name: too-old
-    instances: 1
-    imagename: "sonic:v2.1"
+    imagename: "sonic:v2.1.1" # last version before gas subsidies
     failing: true
 
 applications:
   - name: subsidies 
     type: subsidies
-    start: 20          # start time
+    start: 20          # start time after flag is activated
     users: 10
     rate:
       constant: 20    # Tx/s
