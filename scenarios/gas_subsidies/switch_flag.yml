@@ -1,0 +1,41 @@
+name: test subsidies flag switching
+
+# This scenario demonstrates switching the gas subsidies flag mid-scenario
+
+duration: 60
+
+network_rules:
+  genesis:
+    UPGRADES_GAS_SUBSIDIES: false
+  updates:
+    - time: 10
+      rules:
+        UPGRADES_GAS_SUBSIDIES: true
+
+# Activate gas subsidies at timestamp 15
+advance_epoch:
+  - time: 15
+    epochs: 1
+
+# 4 validators, so that one can drop without losing liveness
+validators:
+  - name: local # local submodule, used to test different versions
+    imagename: "sonic:local"
+  - name: release-branch
+    imagename: "sonic:v2.1" # release branch
+  - name: v2.1.2
+    imagename: "sonic:v2.1.2" # first version with gas subsidies
+  - name: too-old
+    imagename: "sonic:v2.1.1" # last version before gas subsidies
+    failing: true
+
+applications:
+  - name: subsidies 
+    type: subsidies
+    start: 20          # start time after flag is activated
+    users: 10
+    rate:
+      constant: 20    # Tx/s
+
+
+
