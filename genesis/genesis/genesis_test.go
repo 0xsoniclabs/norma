@@ -70,6 +70,7 @@ func TestGenerateJsonGenesis(t *testing.T) {
 				{Name: "NodeDriverAuth", Address: driverauth.ContractAddress, Code: driverauth.GetContractBin(), Nonce: 1},
 				{Name: "SFC", Address: sfc.ContractAddress, Code: sfc.GetContractBin(), Nonce: 1},
 				{Name: "ContractAddress", Address: evmwriter.ContractAddress, Code: []byte{0}, Nonce: 1},
+				{Name: "SubsidiesRegistry", Address: gas_subsidies_registry.GetAddress(), Code: gas_subsidies_registry.GetCode(), Nonce: 1},
 			}
 
 			// add validators to expected accounts
@@ -93,21 +94,6 @@ func TestGenerateJsonGenesis(t *testing.T) {
 				})
 				if index < 0 {
 					t.Errorf("account %s not found in genesis accounts, but should be present", account.Name)
-				}
-			}
-
-			expectedMissingAccounts := []makefakegenesis.Account{
-				{Name: "SubsidiesRegistry", Address: gas_subsidies_registry.GetAddress(), Code: gas_subsidies_registry.GetCode(), Nonce: 1},
-			}
-			for _, account := range expectedMissingAccounts {
-				index := slices.IndexFunc(jsonGenesis.Accounts, func(a makefakegenesis.Account) bool {
-					return a.Name == account.Name &&
-						a.Address == account.Address &&
-						bytes.Equal(a.Code, account.Code) &&
-						a.Nonce == account.Nonce
-				})
-				if index >= 0 {
-					t.Errorf("account %s found in genesis accounts, but should not be present", account.Name)
 				}
 			}
 
