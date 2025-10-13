@@ -1,0 +1,31 @@
+name: test subsidies compatibility between versions
+
+# This scenario tests the compatibility of gas subsidies 
+# in an network with mixed versions of the software.
+# All versions used have the gas subsidies feature.
+
+duration: 5
+
+network_rules:
+  genesis:
+    UPGRADES_GAS_SUBSIDIES: true
+
+validators:
+  - name: local # local branch, used to test different versions
+    imagename: "sonic:local"
+  - name: v2.1 # release branch
+    imagename: "sonic:v2.1"
+  - name: v2.1.2 # first version with gas subsidies
+    imagename: "sonic:v2.1.2"
+
+applications:
+
+  - name: subsidies 
+    type: subsidies
+    end: 5            # end time
+    users: 10
+    rate:
+      constant: 20    # Tx/s
+
+
+
