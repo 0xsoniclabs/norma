@@ -19,7 +19,7 @@
 #
 # It checks out the required version of the client, and builds it.
 #
-FROM golang:1.24.0 AS client-build
+FROM golang:1.25.3 AS client-build
 
 WORKDIR /client
 
@@ -39,12 +39,12 @@ RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
 #
 # Stage 1b: Build Norma related tools supporting Client runs.
 #
-# It prepeares an image with dependencies for the norma.
+# It prepares an image with dependencies for the norma.
 # Its caches the dependencies first, so that the build is faster.
 #
 # It checks out the local version of the norma, and builds it.
 #
-FROM golang:1.24.0 AS norma-build
+FROM golang:1.25.3 AS norma-build
 
 # Download dependencies supporting Sonic run first to cache them for faster build when Norma changes.
 WORKDIR /
@@ -60,7 +60,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build make genesistools
 # Stage 2: Build the final image
 # It consists of the client binaries and the norma tools supporting runtime of the client.
 #
-FROM debian:bookworm
+FROM debian:trixie
 
 RUN apt-get update && \
     apt-get install iproute2 iputils-ping -y
@@ -79,5 +79,10 @@ EXPOSE 18545
 EXPOSE 18546
 
 COPY scripts/run_sonic_privatenet.sh ./run_sonic.sh
+
+# Simple check that the binaries are built correctly
+RUN ./sonictool --version
+RUN ./sonicd version
+
 
 CMD ["./run_sonic.sh"]
