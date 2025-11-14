@@ -145,6 +145,7 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 		maps.Copy(envs, config.NetworkConfig.NetworkRules) // put in the network rules
 
 		return client.Start(&docker.ContainerConfig{
+			Name:            config.Label,
 			ImageName:       config.Image,
 			ShutdownTimeout: &shutdownTimeout,
 			PortForwarding:  portForwarding,
