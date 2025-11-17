@@ -177,7 +177,7 @@ func (c *Client) Start(config *ContainerConfig) (*Container, error) {
 		Init:         &init,
 		CapAdd:       []string{"NET_ADMIN"},
 		Binds:        binds,
-	}, nil, nil, config.Name)
+	}, nil, nil, fmt.Sprintf("%s-%s", config.Name, randomHex(2))
 	if err != nil {
 		return nil, err
 	}
@@ -200,6 +200,13 @@ func (c *Client) Start(config *ContainerConfig) (*Container, error) {
 	}
 
 	return &Container{resp.ID, c, config, false, false}, nil
+}
+
+// randomHex creates a random string of n bytes
+func randomHex(n int) string {
+	b := make([]byte, n)
+	rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 // CreateBridgeNetwork creates a new Docker bridge network.
