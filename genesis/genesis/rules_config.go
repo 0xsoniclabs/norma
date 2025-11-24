@@ -47,6 +47,7 @@ func init() {
 	register("UPGRADES_LLR", upgradesLlr)
 	register("UPGRADES_SONIC", upgradesSonic)
 	register("UPGRADES_ALLEGRO", upgradesAllegro)
+	register("UPGRADES_BRIO", upgradesBrio)
 	register("UPGRADES_SINGLE_PROPOSER", upgradesSingleProposer)
 	register("UPGRADES_GAS_SUBSIDIES", upgradesGasSubsidies)
 
@@ -255,6 +256,11 @@ var upgradesSonic = func(value string, rules *opera.Rules) error {
 
 var upgradesAllegro = func(value string, rules *opera.Rules) error {
 	rules.Upgrades.Allegro = value == "true"
+	return nil
+}
+
+var upgradesBrio = func(value string, rules *opera.Rules) error {
+	rules.Upgrades.Brio = value == "true"
 	return nil
 }
 
