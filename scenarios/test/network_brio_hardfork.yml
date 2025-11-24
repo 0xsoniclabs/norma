@@ -1,0 +1,58 @@
+# This scenario simulates a network with running recent client versions from the start.
+# At some point it enables hardfork verifying that the clients are able to handle the hardfork.
+
+# The name of the scenario
+name: Network Hardfork
+
+# The duration of the scenario's runtime, in seconds.
+duration: 180
+
+# Initial validator nodes in the network.
+validators:
+  - name: validators
+    instances: 3 # 3 validators out of 4 can keep super-majority and run the network
+    imagename: "sonic:latest"
+  - name: validator-v2.1.2
+    failing: true
+    imagename: "sonic:v2.1.2"   # this node should stop working after the hardfork
+
+# Start with the hardfork disabled
+# while enabling the hardfork later
+network_rules:
+  genesis:
+    UPGRADES_ALLEGRO: true
+    UPGRADES_BRIO: false
+    MAX_EPOCH_DURATION: 3s
+  updates:
+    - time: 60
+      rules:
+        UPGRADES_BRIO: true  # hardfork enabled
+
+nodes:
+    - name: node-v212
+      start: 30
+      failing: true
+      client:
+        imagename: sonic:v2.1.2 # this node should stop working after the hardfork
+    - name: node-latest
+      start: 30
+
+# In the network, there is a few applications producing the load.
+applications:
+  - name: counter
+    type: counter
+    users: 10           # number of users using the app
+    rate:
+      constant: 1    # Tx/s
+
+  - name: erc20
+    type: erc20
+    users: 10           # number of users using the app
+    rate:
+      constant: 1     # Tx/s
+
+  - name: uniswap
+    type: uniswap
+    users: 10           # number of users using the app
+    rate:
+      constant: 1     # Tx/s
