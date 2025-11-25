@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"testing"
 
@@ -91,6 +92,12 @@ func TestExportGenesis_ContainsGasSubsidiesFlag(t *testing.T) {
 	if err := os.Setenv("VALIDATORS_COUNT", fmt.Sprintf("%d", ValidatorCount)); err != nil {
 		t.Fatalf("failed to set VALIDATORS_COUNT: %v", err)
 	}
+
+	stakes := slices.Repeat([]string{"5_000_000"}, ValidatorCount)
+	if err := os.Setenv("VALIDATORS_STAKES", strings.Join(stakes, ",")); err != nil {
+		t.Fatalf("failed to set VALIDATORS_STAKES: %v", err)
+	}
+
 	if err := os.Setenv("UPGRADES_GAS_SUBSIDIES", "true"); err != nil {
 		t.Fatalf("failed to set UPGRADES_GAS_SUBSIDIES: %v", err)
 	}
