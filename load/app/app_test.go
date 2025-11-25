@@ -101,7 +101,6 @@ func TestGenerators(t *testing.T) {
 		"SmartAccount": {
 			availableInUpgrades: []string{
 				"UPGRADES_ALLEGRO",
-				"UPGRADES_BRIO",
 			},
 			test: func(t *testing.T, context app.AppContext) {
 				smartAccountApp, err := app.NewSmartAccountApplication(context, 0, 0)
