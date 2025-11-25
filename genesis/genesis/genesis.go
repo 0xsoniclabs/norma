@@ -18,14 +18,15 @@ import (
 	"github.com/0xsoniclabs/sonic/opera/contracts/sfc"
 	"github.com/0xsoniclabs/sonic/scc"
 	"github.com/0xsoniclabs/sonic/scc/bls"
-	futils "github.com/0xsoniclabs/sonic/utils"
+	"github.com/0xsoniclabs/sonic/utils"
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 )
 
 // GenerateJsonGenesis generates a genesis json file with the given number of validators
 // and network rules configurations.
 // The file is written to the given path.
-func GenerateJsonGenesis(jsonFile string, validatorsCount int, rules *opera.Rules) error {
+func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera.Rules) error {
+	validatorsCount := len(validatorStakes)
 	jsonGenesis := makefakegenesis.GenesisJson{
 		Rules:         *rules,
 		BlockZeroTime: time.Unix(100, 0), // genesis files in each container must have the same timestamp
@@ -73,7 +74,7 @@ func GenerateJsonGenesis(jsonFile string, validatorsCount int, rules *opera.Rule
 
 	// Create the validator account and provide tokens, pre-init a maximal limit of validators.
 	const maxValidators = 100
-	totalSupply := futils.ToFtm(1000_000_000)
+	totalSupply := utils.ToFtm(1000_000_000)
 	validators := makefakegenesis.GetFakeValidators(idx.Validator(maxValidators))
 	supplyEach := new(big.Int).Div(totalSupply, big.NewInt(int64(len(validators))))
 	for _, validator := range validators {
@@ -86,12 +87,13 @@ func GenerateJsonGenesis(jsonFile string, validatorsCount int, rules *opera.Rule
 
 	// set genesis validators only for the configured number of validators
 	validators = validators[0:validatorsCount]
-	var delegations []drivercall.Delegation
-	for _, val := range validators {
+	delegations := make([]drivercall.Delegation, 0)
+	for i, stake := range validatorStakes {
+		val := validators[i]
 		delegations = append(delegations, drivercall.Delegation{
 			Address:            val.Address,
 			ValidatorID:        val.ID,
-			Stake:              futils.ToFtm(5_000_000),
+			Stake:              utils.ToFtm(stake),
 			LockedStake:        new(big.Int),
 			LockupFromEpoch:    0,
 			LockupEndTime:      0,
