@@ -1,0 +1,28 @@
+# This scenario runs a load test with different stakes for the validator nodes.
+# it generates a constant load throughout the test duration, it should be possible
+# to observe the effect of different stakes on submission of transactions.
+name: load with different stakes
+duration: 120
+
+# Initial validator nodes in the network.
+validators:
+  - name: large
+    stake: 5000000000
+    imagename: "sonic:local"
+  - name: medium
+    stake: 250000000
+    imagename: "sonic:local"
+  - name: small
+    stake: 5000000
+    instances: 4
+    imagename: "sonic:local"
+
+
+applications:
+  - name: load
+    type: counter
+    start: 10           # start time
+    end: 110            # termination time
+    users: 4000           # number of users / accounts generating txs
+    rate:
+      constant: 200     # Tx/s
