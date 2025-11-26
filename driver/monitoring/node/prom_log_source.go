@@ -41,6 +41,9 @@ var (
 		monitoring.NewPrometheusNameKey("system_memory_used"),
 		monitoring.NewPrometheusNameKey("db_size"),
 		monitoring.NewPrometheusNameKey("statedb_disksize"),
+		monitoring.NewPrometheusNameKey("emitter_events"),
+		monitoring.NewPrometheusNameKey("emitter_txs"),
+		monitoring.NewPrometheusNameKey("emitter_gas"),
 	}
 )
 
