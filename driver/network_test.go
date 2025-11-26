@@ -1,9 +1,10 @@
 package driver
 
 import (
+	"testing"
+
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"golang.org/x/exp/slices"
-	"testing"
 )
 
 var one int = 1
@@ -153,6 +154,48 @@ func TestGetNumValidators(t *testing.T) {
 			result := tt.input.GetNumValidators()
 			if got, want := result, tt.expected; got != want {
 				t.Errorf("unexpected number of validators: got %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func Test_Validators_GetStakeString(t *testing.T) {
+	tests := map[string]struct {
+		input    Validators
+		expected string
+	}{
+		"empty validators": {
+			input:    Validators{},
+			expected: "",
+		},
+		"single validator": {
+			input: Validators{
+				{Name: "validator1", Stake: 500},
+			},
+			expected: "500",
+		},
+		"multiple validators": {
+			input: Validators{
+				{Name: "validator1", Stake: 500},
+				{Name: "validator2", Stake: 100},
+				{Name: "validator3", Stake: 750},
+			},
+			expected: "500,100,750",
+		},
+		"validators with multiple instances": {
+			input: Validators{
+				{Name: "validator1", Stake: 200, Instances: 2},
+				{Name: "validator2", Stake: 300, Instances: 3},
+			},
+			expected: "200,200,300,300,300",
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			result := tt.input.GetStakeString()
+			if got, want := result, tt.expected; got != want {
+				t.Errorf("unexpected stake string: got %v, want %v", got, want)
 			}
 		})
 	}
