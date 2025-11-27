@@ -101,6 +101,7 @@ func TestGenerators(t *testing.T) {
 		"SmartAccount": {
 			availableInUpgrades: []string{
 				"UPGRADES_ALLEGRO",
+				"UPGRADES_BRIO",
 			},
 			test: func(t *testing.T, context app.AppContext) {
 				smartAccountApp, err := app.NewSmartAccountApplication(context, 0, 0)
@@ -121,10 +122,8 @@ func TestGenerators(t *testing.T) {
 
 			// run local network of one node
 			net, err := local.NewLocalNetwork(&driver.NetworkConfig{
-				Validators: driver.DefaultValidators,
-				NetworkRules: map[string]string{
-					upgrade: "true",
-				},
+				Validators:   driver.DefaultValidators,
+				NetworkRules: getCumulativeUpgrades(upgrade),
 			})
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
@@ -155,6 +154,22 @@ func TestGenerators(t *testing.T) {
 			}
 		})
 	}
+}
+
+// getCumulativeUpgrades returns a map of upgrades that are enabled
+// up to and including the lastSupported upgrade.
+// This function is needed because upgrades should be cumulative, not exclusive.
+func getCumulativeUpgrades(lastSupported string) map[string]string {
+	upgrades := map[string][]string{
+		"UPGRADES_SONIC":   {"UPGRADES_SONIC"},
+		"UPGRADES_ALLEGRO": {"UPGRADES_SONIC", "UPGRADES_ALLEGRO"},
+		"UPGRADES_BRIO":    {"UPGRADES_SONIC", "UPGRADES_ALLEGRO", "UPGRADES_BRIO"},
+	}
+	result := make(map[string]string)
+	for _, upgrade := range upgrades[lastSupported] {
+		result[upgrade] = "true"
+	}
+	return result
 }
 
 func TestGenerators_Subsidies(t *testing.T) {
