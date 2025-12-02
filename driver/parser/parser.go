@@ -83,7 +83,7 @@ type Validator struct {
 	Instances *int     `yaml:",omitempty"` // nil is interpreted as 1
 	ImageName string   `yaml:",omitempty"` // empty is interpreted as DefaultClientDockerImageName
 	End       *float32 `yaml:",omitempty"` // nil is interpreted as end-of-scenario
-	Stake     string   `yaml:",omitempty"` // Stake in Native tokens, empty is interpreted as default stake
+	Stake     *uint64  `yaml:",omitempty"` // Stake in Native tokens, empty is interpreted as default stake
 }
 
 // Node is a configuration for a group of nodes with similar properties.

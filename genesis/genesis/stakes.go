@@ -20,3 +20,15 @@ func ParseStakeString(stakeStr string) ([]uint64, error) {
 	}
 	return res, nil
 }
+
+// GetStakesString returns the stake of all validators as a string, which
+// can be used in environment variables to initialize the genesis.
+//
+// This string has format "stake(,stake)*"
+func GetStakesString(stakes []uint64) string {
+	elems := make([]string, 0, len(stakes))
+	for _, val := range stakes {
+		elems = append(elems, fmt.Sprintf("%d", val))
+	}
+	return strings.Join(elems, ",")
+}

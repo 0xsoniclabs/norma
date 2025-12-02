@@ -10,8 +10,10 @@ import (
 var one int = 1
 var two int = 2
 var three int = 3
+var defaultStake uint64 = 5_000_000
 
 func TestNewValidator(t *testing.T) {
+
 	tests := []struct {
 		name     string
 		input    parser.Validator
@@ -26,6 +28,7 @@ func TestNewValidator(t *testing.T) {
 				Name:      "validator1",
 				Instances: 1,
 				ImageName: DefaultClientDockerImageName,
+				Stake:     defaultStake,
 			},
 		},
 		{
@@ -38,6 +41,7 @@ func TestNewValidator(t *testing.T) {
 				Name:      "validator2",
 				Instances: 1,
 				ImageName: "custom-image",
+				Stake:     defaultStake,
 			},
 		},
 		{
@@ -50,6 +54,7 @@ func TestNewValidator(t *testing.T) {
 				Name:      "validator3",
 				Instances: 3,
 				ImageName: DefaultClientDockerImageName,
+				Stake:     defaultStake,
 			},
 		},
 		{
@@ -63,6 +68,7 @@ func TestNewValidator(t *testing.T) {
 				Failing:   true,
 				Instances: 1,
 				ImageName: DefaultClientDockerImageName,
+				Stake:     defaultStake,
 			},
 		},
 	}
@@ -96,7 +102,7 @@ func TestNewValidators(t *testing.T) {
 				{Name: "validator1"},
 			},
 			expected: []Validator{
-				{Name: "validator1", Instances: 1, ImageName: DefaultClientDockerImageName},
+				{Name: "validator1", Instances: 1, ImageName: DefaultClientDockerImageName, Stake: defaultStake},
 			},
 		},
 		{
@@ -106,8 +112,8 @@ func TestNewValidators(t *testing.T) {
 				{Name: "validator2", ImageName: "custom-image2"},
 			},
 			expected: []Validator{
-				{Name: "validator1", Instances: 2, ImageName: "custom-image1"},
-				{Name: "validator2", Instances: 1, ImageName: "custom-image2"},
+				{Name: "validator1", Instances: 2, ImageName: "custom-image1", Stake: defaultStake},
+				{Name: "validator2", Instances: 1, ImageName: "custom-image2", Stake: defaultStake},
 			},
 		},
 	}
@@ -154,48 +160,6 @@ func TestGetNumValidators(t *testing.T) {
 			result := tt.input.GetNumValidators()
 			if got, want := result, tt.expected; got != want {
 				t.Errorf("unexpected number of validators: got %v, want %v", got, want)
-			}
-		})
-	}
-}
-
-func Test_Validators_GetStakeString(t *testing.T) {
-	tests := map[string]struct {
-		input    Validators
-		expected string
-	}{
-		"empty validators": {
-			input:    Validators{},
-			expected: "",
-		},
-		"single validator": {
-			input: Validators{
-				{Name: "validator1", Stake: 500},
-			},
-			expected: "500",
-		},
-		"multiple validators": {
-			input: Validators{
-				{Name: "validator1", Stake: 500},
-				{Name: "validator2", Stake: 100},
-				{Name: "validator3", Stake: 750},
-			},
-			expected: "500,100,750",
-		},
-		"validators with multiple instances": {
-			input: Validators{
-				{Name: "validator1", Stake: 200, Instances: 2},
-				{Name: "validator2", Stake: 300, Instances: 3},
-			},
-			expected: "200,200,300,300,300",
-		},
-	}
-
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			result := tt.input.GetStakeString()
-			if got, want := result, tt.expected; got != want {
-				t.Errorf("unexpected stake string: got %v, want %v", got, want)
 			}
 		})
 	}

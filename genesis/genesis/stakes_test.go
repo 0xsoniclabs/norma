@@ -60,3 +60,38 @@ func TestValidatorStakes_ReturnsErrors(t *testing.T) {
 		})
 	}
 }
+
+func Test_Validators_GetStakeString(t *testing.T) {
+	tests := map[string]struct {
+		input    []uint64
+		expected string
+	}{
+		"empty validators": {
+			input:    []uint64{},
+			expected: "",
+		},
+		"single validator": {
+			input: []uint64{
+				500,
+			},
+			expected: "500",
+		},
+		"multiple validators": {
+			input: []uint64{
+				500,
+				100,
+				750,
+			},
+			expected: "500,100,750",
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			result := GetStakesString(tt.input)
+			if got, want := result, tt.expected; got != want {
+				t.Errorf("unexpected stake string: got %v, want %v", got, want)
+			}
+		})
+	}
+}
