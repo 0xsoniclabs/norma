@@ -627,7 +627,7 @@ ggplot(data=data) +
     scale_x_datetime(date_labels = "%c")               # format date labels
 ```
 
-### Transactions in Emitterd Events per Node
+### Transactions in Emitted Events per Node
 
 Shows the number of transactions contained in emitted events by each node over time.
 This metric can be used to identify whether nodes are effectively including transactions
@@ -643,13 +643,13 @@ ggplot(data=data) +
     geom_line(aes(x=date, y=value, group=node, colour = factor(node))) +
     ggtitle("Transactions in emitted events over time") +   # chart title
     xlab("Time") +                                   # x-axis title
-    ylab("Events") +                                 # y-axis title
+    ylab("Gas Used") +                               # y-axis title
     labs(colour="Nodes") +                           # legend title
     theme(plot.title = element_text(hjust = 0.5)) +  # center title
     scale_x_datetime(date_labels = "%c")             # format date labels
 ```
 
-### Gas used by Emitterd Events per Node
+### Gas used by Emitted Events per Node
 
 Shows the amount of gas used by transactions contained in emitted events by each node over time.
 
