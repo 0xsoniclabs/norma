@@ -17,9 +17,6 @@
 package driver
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/0xsoniclabs/carmen/go/common"
@@ -162,12 +159,9 @@ func NewValidator(v parser.Validator) Validator {
 		imageName = v.ImageName
 	}
 
-	stake := 5_000_000
-	parseStake, err := strconv.Atoi(v.Stake)
-	if err == nil {
-		stake = parseStake
-	} else if v.Stake != "" {
-		panic(fmt.Sprintf("invalid stake value: %s", v.Stake))
+	stake := uint64(5_000_000)
+	if v.Stake != nil {
+		stake = *v.Stake
 	}
 
 	return Validator{
@@ -206,18 +200,4 @@ func (v Validators) GetNumValidators() int {
 		num += val.Instances
 	}
 	return num
-}
-
-// GetStakeString returns the stake of all validators as a string, which
-// can be used in environment variables to initialize the genesis.
-//
-// This string has format "stake(,stake)*"
-func (v Validators) GetStakeString() string {
-	elems := make([]string, 0, len(v))
-	for _, val := range v {
-		for range max(val.Instances, 1) {
-			elems = append(elems, fmt.Sprintf("%d", val.Stake))
-		}
-	}
-	return strings.Join(elems, ",")
 }

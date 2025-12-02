@@ -38,8 +38,13 @@ func exportGenesis(ctx *cli.Context) error {
 		return fmt.Errorf("failed to configure network rules: %w", err)
 	}
 
+	validatorsStakes, found := os.LookupEnv("VALIDATORS_STAKES")
+	if !found {
+		return fmt.Errorf("VALIDATORS_STAKES environment variable not set")
+	}
+
 	// configuration is read from environment variables and defaults
-	validatorStakes, err := genesis.ParseStakeString(os.Getenv("VALIDATORS_STAKES"))
+	validatorStakes, err := genesis.ParseStakeString(validatorsStakes)
 	if err != nil {
 		return fmt.Errorf("failed to parse validators stakes: %w", err)
 	}
