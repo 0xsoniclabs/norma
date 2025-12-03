@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// ParseStakeString parses a stake string in the format "stake(,stake)*"
-func ParseStakeString(stakeStr string) ([]uint64, error) {
+// ParseStakesString parses a stake string in the format "stake(,stake)*"
+func ParseStakesString(stakeStr string) ([]uint64, error) {
 	res := make([]uint64, 0)
 	stakes := strings.Split(stakeStr, ",")
 	for _, s := range stakes {
