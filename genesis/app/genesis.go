@@ -44,7 +44,7 @@ func exportGenesis(ctx *cli.Context) error {
 	}
 
 	// configuration is read from environment variables and defaults
-	validatorStakes, err := genesis.ParseStakeString(validatorsStakes)
+	validatorStakes, err := genesis.ParseStakesString(validatorsStakes)
 	if err != nil {
 		return fmt.Errorf("failed to parse validators stakes: %w", err)
 	}

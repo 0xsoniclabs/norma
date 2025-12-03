@@ -29,7 +29,7 @@ func TestValidatorStakes_CanBeParsed(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			result, err := ParseStakeString(tc.input)
+			result, err := ParseStakesString(tc.input)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -50,7 +50,7 @@ func TestValidatorStakes_ReturnsErrors(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := ParseStakeString(test)
+			_, err := ParseStakesString(test)
 			if err == nil {
 				t.Fatalf("expected error, got nil")
 			}
