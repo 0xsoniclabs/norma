@@ -296,7 +296,7 @@ The following chart shows the time at which nodes have reached a given block hei
 
 ```{r block_height_per_node, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 data <- all_data %>%
-    dplyr::filter(metric == "NodeBlockHeight") %>%  # filter metric of interrest
+    dplyr::filter(metric == "NodeBlockStatus") %>%  # filter metric of interest
     mutate(date = as_datetime(as.numeric(time)/1e9)) %>%   # UNIX time to date
     mutate(value = as.numeric(value))               # convert value to int
 
