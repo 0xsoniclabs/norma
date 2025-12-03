@@ -150,7 +150,7 @@ func (c *Client) Start(config *ContainerConfig) (*Container, error) {
 	portMapping := nat.PortMap{}
 	for inner, outer := range config.PortForwarding {
 		portMapping[nat.Port(fmt.Sprintf("%d/tcp", inner))] = []nat.PortBinding{{
-			HostIP:   "localhost",
+			HostIP:   "0.0.0.0",
 			HostPort: fmt.Sprintf("%d/tcp", outer),
 		}}
 	}
@@ -274,7 +274,7 @@ func (c *Container) GetAddressForService(service *network.ServiceDescription) *n
 	if !ok {
 		return nil
 	}
-	res := network.AddressPort(fmt.Sprintf("%s:%d", "localhost", port))
+	res := network.AddressPort(fmt.Sprintf("%s:%d", "0.0.0.0", port))
 	return &res
 }
 
