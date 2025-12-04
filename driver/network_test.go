@@ -93,7 +93,7 @@ func TestNewValidators(t *testing.T) {
 			name:  "Empty validator list with default values",
 			input: []parser.Validator{},
 			expected: []Validator{
-				{Name: "validator", Instances: 1, ImageName: DefaultClientDockerImageName},
+				{Name: "validator", Instances: 1, ImageName: DefaultClientDockerImageName, Stake: defaultStake},
 			},
 		},
 		{
