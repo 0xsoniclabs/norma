@@ -145,6 +145,7 @@ type Validator struct {
 	Failing   bool
 	Instances int
 	ImageName string
+	Stake     uint64 // < Stake in FTM
 }
 
 // NewValidator creates a new Validator from a parser.Validator.
@@ -157,11 +158,18 @@ func NewValidator(v parser.Validator) Validator {
 	if v.ImageName != "" {
 		imageName = v.ImageName
 	}
+
+	stake := uint64(5_000_000)
+	if v.Stake != nil && *v.Stake != 0 {
+		stake = *v.Stake
+	}
+
 	return Validator{
 		Name:      v.Name,
 		Failing:   v.Failing,
 		Instances: instances,
 		ImageName: imageName,
+		Stake:     uint64(stake),
 	}
 }
 
@@ -170,7 +178,12 @@ type Validators []Validator
 // NewDefaultValidators creates a new Validators with a single validator defining only the number of instances,
 // using the default client docker image.
 func NewDefaultValidators(instances int) Validators {
-	return []Validator{{Name: "validator", Instances: instances, ImageName: DefaultClientDockerImageName}}
+	return []Validator{{
+		Name:      "validator",
+		Instances: instances,
+		ImageName: DefaultClientDockerImageName,
+		Stake:     5_000_000,
+	}}
 }
 
 // NewValidators creates a new Validators from a parser.Validators.

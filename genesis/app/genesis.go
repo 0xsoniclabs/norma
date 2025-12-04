@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/0xsoniclabs/norma/genesistools/genesis"
 	"github.com/0xsoniclabs/sonic/opera"
 	"github.com/urfave/cli/v2"
-	"os"
-	"strconv"
 )
 
 // genesisExportCommand is the command for exporting genesis file.
@@ -38,16 +38,16 @@ func exportGenesis(ctx *cli.Context) error {
 		return fmt.Errorf("failed to configure network rules: %w", err)
 	}
 
+	validatorsStakes, found := os.LookupEnv("VALIDATORS_STAKES")
+	if !found {
+		return fmt.Errorf("VALIDATORS_STAKES environment variable not set")
+	}
+
 	// configuration is read from environment variables and defaults
-	validatorsCount := os.Getenv("VALIDATORS_COUNT")
-	validatorsCountInt, err := strconv.ParseInt(validatorsCount, 10, 32)
+	validatorStakes, err := genesis.ParseStakesString(validatorsStakes)
 	if err != nil {
-		return fmt.Errorf("failed to parse validators count: %w", err)
+		return fmt.Errorf("failed to parse validators stakes: %w", err)
 	}
 
-	if validatorsCountInt < 1 {
-		return fmt.Errorf("invalid validators count: %d, must be greater than 0", validatorsCountInt)
-	}
-
-	return genesis.GenerateJsonGenesis(filePath, int(validatorsCountInt), &rules)
+	return genesis.GenerateJsonGenesis(filePath, validatorStakes, &rules)
 }
