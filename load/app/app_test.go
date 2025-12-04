@@ -19,6 +19,7 @@ package app_test
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -33,67 +34,142 @@ const PrivateKey = "163f5f0f9a621d72fedd85ffca3d08d131ab4e812181e0d30ffd1c885d20
 const FakeNetworkID = 0xfa3
 
 func TestGenerators(t *testing.T) {
-	// run local network of one node
-	net, err := local.NewLocalNetwork(&driver.NetworkConfig{
-		Validators: driver.DefaultValidators,
-		NetworkRules: map[string]string{
-			"UPGRADES_ALLEGRO": "true",
+
+	tests := map[string]struct {
+		availableInUpgrades []string
+		test                func(*testing.T, app.AppContext)
+	}{
+		"Counter": {
+			availableInUpgrades: []string{
+				"UPGRADES_SONIC",
+				"UPGRADES_ALLEGRO",
+				"UPGRADES_BRIO",
+			},
+			test: func(t *testing.T, context app.AppContext) {
+				counterApp, err := app.NewCounterApplication(context, 0, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				testGenerator(t, counterApp, context)
+			},
 		},
-	})
-	if err != nil {
-		t.Fatalf("failed to create new local network: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := net.Shutdown(); err != nil {
-			t.Fatalf("failed to shutdown network: %v", err)
-		}
-	})
+		"ERC20": {
+			availableInUpgrades: []string{
+				"UPGRADES_SONIC",
+				"UPGRADES_ALLEGRO",
+				"UPGRADES_BRIO",
+			},
+			test: func(t *testing.T, context app.AppContext) {
+				erc20app, err := app.NewERC20Application(context, 0, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				testGenerator(t, erc20app, context)
 
-	primaryAccount, err := app.NewAccount(0, PrivateKey, nil, FakeNetworkID)
-	if err != nil {
-		t.Fatal(err)
+			},
+		},
+		"Store": {
+			availableInUpgrades: []string{
+				"UPGRADES_SONIC",
+				"UPGRADES_ALLEGRO",
+				"UPGRADES_BRIO",
+			},
+			test: func(t *testing.T, context app.AppContext) {
+				storeApp, err := app.NewStoreApplication(context, 0, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				testGenerator(t, storeApp, context)
+
+			},
+		},
+		"Uniswap": {
+			availableInUpgrades: []string{
+				"UPGRADES_SONIC",
+				"UPGRADES_ALLEGRO",
+				"UPGRADES_BRIO",
+			},
+			test: func(t *testing.T, context app.AppContext) {
+				uniswapApp, err := app.NewUniswapApplication(context, 0, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				testGenerator(t, uniswapApp, context)
+
+			},
+		},
+		"SmartAccount": {
+			availableInUpgrades: []string{
+				"UPGRADES_ALLEGRO",
+				"UPGRADES_BRIO",
+			},
+			test: func(t *testing.T, context app.AppContext) {
+				smartAccountApp, err := app.NewSmartAccountApplication(context, 0, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				testGenerator(t, smartAccountApp, context)
+			},
+		},
 	}
 
-	context, err := app.NewContext(net, primaryAccount)
-	if err != nil {
-		t.Fatal(err)
-	}
+	for _, upgrade := range []string{
+		"UPGRADES_SONIC",
+		"UPGRADES_ALLEGRO",
+		"UPGRADES_BRIO",
+	} {
+		t.Run(upgrade, func(t *testing.T) {
 
-	t.Run("Counter", func(t *testing.T) {
-		counterApp, err := app.NewCounterApplication(context, 0, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-		testGenerator(t, counterApp, context)
-	})
-	t.Run("ERC20", func(t *testing.T) {
-		erc20app, err := app.NewERC20Application(context, 0, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-		testGenerator(t, erc20app, context)
-	})
-	t.Run("Store", func(t *testing.T) {
-		storeApp, err := app.NewStoreApplication(context, 0, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-		testGenerator(t, storeApp, context)
-	})
-	t.Run("Uniswap", func(t *testing.T) {
-		uniswapApp, err := app.NewUniswapApplication(context, 0, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-		testGenerator(t, uniswapApp, context)
-	})
-	t.Run("SmartAccount", func(t *testing.T) {
-		smartAccountApp, err := app.NewSmartAccountApplication(context, 0, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-		testGenerator(t, smartAccountApp, context)
-	})
+			// run local network of one node
+			net, err := local.NewLocalNetwork(&driver.NetworkConfig{
+				Validators:   driver.DefaultValidators,
+				NetworkRules: getCumulativeUpgrades(upgrade),
+			})
+			if err != nil {
+				t.Fatalf("failed to create new local network: %v", err)
+			}
+			t.Cleanup(func() {
+				if err := net.Shutdown(); err != nil {
+					t.Fatalf("failed to shutdown network: %v", err)
+				}
+			})
+
+			primaryAccount, err := app.NewAccount(0, PrivateKey, nil, FakeNetworkID)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			context, err := app.NewContext(net, primaryAccount)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			for name, test := range tests {
+				if !slices.Contains(test.availableInUpgrades, upgrade) {
+					continue
+				}
+				t.Run(name, func(t *testing.T) {
+					test.test(t, context)
+				})
+			}
+		})
+	}
+}
+
+// getCumulativeUpgrades returns a map of upgrades that are enabled
+// up to and including the lastSupported upgrade.
+// This function is needed because upgrades should be cumulative, not exclusive.
+func getCumulativeUpgrades(lastSupported string) map[string]string {
+	upgrades := map[string][]string{
+		"UPGRADES_SONIC":   {"UPGRADES_SONIC"},
+		"UPGRADES_ALLEGRO": {"UPGRADES_SONIC", "UPGRADES_ALLEGRO"},
+		"UPGRADES_BRIO":    {"UPGRADES_SONIC", "UPGRADES_ALLEGRO", "UPGRADES_BRIO"},
+	}
+	result := make(map[string]string)
+	for _, upgrade := range upgrades[lastSupported] {
+		result[upgrade] = "true"
+	}
+	return result
 }
 
 func TestGenerators_Subsidies(t *testing.T) {
