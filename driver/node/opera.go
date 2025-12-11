@@ -17,6 +17,7 @@
 package node
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -171,15 +172,34 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 	}
 
 	// Wait until the OperaNode inside the Container is ready.
-	if err := network.Retry(network.DefaultRetryAttempts, 1*time.Second, func() error {
+	err = network.Retry(network.DefaultRetryAttempts, 1*time.Second, func() error {
 		_, err := node.GetNodeID()
 		return err
-	}); err == nil {
+	})
+	if err == nil {
 		return node, nil
 	}
 
 	// The node did not show up in time, so we consider the start to have failed.
-	return nil, errors.Join(fmt.Errorf("failed to get node online"), node.host.Cleanup())
+	return nil, errors.Join(
+		printLog(node),
+		fmt.Errorf("failed to get node online, %w", err),
+		node.host.Cleanup(),
+	)
+}
+
+// printLog streams and prints the logs of the given OperaNode, to debug cause of
+// startup failure.
+func printLog(node *OperaNode) error {
+	reader, err := node.StreamLog()
+	if err != nil {
+		return fmt.Errorf("cannot read node logs: %e", err)
+	}
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		fmt.Printf("[Opera Node %s] %s\n", node.GetLabel(), scanner.Text())
+	}
+	return reader.Close()
 }
 
 func (n *OperaNode) GetLabel() string {
