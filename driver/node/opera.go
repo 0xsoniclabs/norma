@@ -127,6 +127,11 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 		stakes := []uint64{}
 		for _, val := range config.NetworkConfig.Validators {
 			for range max(val.Instances, 1) {
+				if val.Stake == 0 {
+					// if no stake defined, use default
+					stakes = append(stakes, 5_000_000)
+					continue
+				}
 				stakes = append(stakes, uint64(val.Stake))
 			}
 		}
