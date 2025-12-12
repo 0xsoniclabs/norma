@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"testing"
 
@@ -27,6 +28,9 @@ func TestExportGenesis(t *testing.T) {
 	if err := os.Setenv("MAX_BLOCK_GAS", fmt.Sprintf("%d", MaxBlockGas)); err != nil {
 		t.Fatalf("failed to set MAX_BLOCK_GAS: %v", err)
 	}
+	if err := os.Setenv("VALIDATORS_STAKES", strings.Join(slices.Repeat([]string{"5000000"}, ValidatorCount), ",")); err != nil {
+		t.Fatalf("failed to set VALIDATORS_STAKES: %v", err)
+	}
 
 	defer func() {
 		if err := os.Unsetenv("VALIDATORS_COUNT"); err != nil {
@@ -35,6 +39,10 @@ func TestExportGenesis(t *testing.T) {
 
 		if err := os.Unsetenv("MAX_BLOCK_GAS"); err != nil {
 			t.Errorf("failed to unset MAX_BLOCK_GAS: %v", err)
+		}
+
+		if err := os.Unsetenv("VALIDATORS_STAKES"); err != nil {
+			t.Errorf("failed to unset VALIDATORS_STAKES: %v", err)
 		}
 	}()
 
@@ -91,6 +99,12 @@ func TestExportGenesis_ContainsGasSubsidiesFlag(t *testing.T) {
 	if err := os.Setenv("VALIDATORS_COUNT", fmt.Sprintf("%d", ValidatorCount)); err != nil {
 		t.Fatalf("failed to set VALIDATORS_COUNT: %v", err)
 	}
+
+	stakes := slices.Repeat([]string{"5000000"}, ValidatorCount)
+	if err := os.Setenv("VALIDATORS_STAKES", strings.Join(stakes, ",")); err != nil {
+		t.Fatalf("failed to set VALIDATORS_STAKES: %v", err)
+	}
+
 	if err := os.Setenv("UPGRADES_GAS_SUBSIDIES", "true"); err != nil {
 		t.Fatalf("failed to set UPGRADES_GAS_SUBSIDIES: %v", err)
 	}

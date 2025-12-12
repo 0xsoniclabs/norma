@@ -30,6 +30,7 @@ import (
 	"golang.org/x/exp/maps"
 
 	rpcdriver "github.com/0xsoniclabs/norma/driver/rpc"
+	"github.com/0xsoniclabs/norma/genesistools/genesis"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
@@ -123,10 +124,23 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 			portForwarding[service.Port] = ports[i]
 		}
 
+		stakes := []uint64{}
+		for _, val := range config.NetworkConfig.Validators {
+			for range max(val.Instances, 1) {
+				if val.Stake == 0 {
+					// if no stake defined, use default
+					stakes = append(stakes, 5_000_000)
+					continue
+				}
+				stakes = append(stakes, uint64(val.Stake))
+			}
+		}
+
 		envs := map[string]string{
-			"VALIDATOR_ID":     validatorId,
-			"VALIDATORS_COUNT": fmt.Sprintf("%d", config.NetworkConfig.Validators.GetNumValidators()),
-			"NETWORK_LATENCY":  fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
+			"VALIDATOR_ID":      validatorId,
+			"VALIDATORS_COUNT":  fmt.Sprintf("%d", config.NetworkConfig.Validators.GetNumValidators()),
+			"VALIDATORS_STAKES": genesis.GetStakesString(stakes),
+			"NETWORK_LATENCY":   fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
 		}
 
 		const dataDir = "/datadir"

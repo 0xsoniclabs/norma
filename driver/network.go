@@ -145,6 +145,7 @@ type Validator struct {
 	Failing   bool
 	Instances int
 	ImageName string
+	Stake     uint64 // < Stake in FTM
 }
 
 // NewValidator creates a new Validator from a parser.Validator.
@@ -157,11 +158,18 @@ func NewValidator(v parser.Validator) Validator {
 	if v.ImageName != "" {
 		imageName = v.ImageName
 	}
+
+	stake := uint64(5_000_000)
+	if v.Stake != nil {
+		stake = *v.Stake
+	}
+
 	return Validator{
 		Name:      v.Name,
 		Failing:   v.Failing,
 		Instances: instances,
 		ImageName: imageName,
+		Stake:     uint64(stake),
 	}
 }
 
