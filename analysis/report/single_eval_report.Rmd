@@ -15,6 +15,9 @@ figure_dimensions <- c(10, 4)
 
 # load monitoring data
 all_data <- read_csv(params$datafile)
+start_time <- min(all_data$time, na.rm = TRUE)
+all_data <- all_data %>%
+    mutate(elapsed_sec = as.numeric(time - start_time) / 1e9)
 ```
 
 This report summarizes the monitoring results of an execution of a Norma scenario.
@@ -242,16 +245,14 @@ The number of nodes in the network over time.
 ```{r nodes_in_network, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 data <- all_data %>%
     dplyr::filter(metric == "NumberOfNodes") %>% # filter metric
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
     mutate(value = as.numeric(value)) # convert value to int
 
 ggplot(data = data) +
-    geom_point(aes(x = date, y = value)) + # the data points
+    geom_point(aes(x = elapsed_sec, y = value)) + # the data points
     ggtitle("Nodes in Network") + # chart title
     xlab("Time") + # x-axis title
     ylab("Number of Nodes") + # y-axis title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 
@@ -297,17 +298,15 @@ The following chart shows the time at which nodes have reached a given block hei
 ```{r block_height_per_node, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 data <- all_data %>%
     dplyr::filter(metric == "NodeBlockStatus") %>% # filter metric of interest
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
     mutate(value = as.numeric(value)) # convert value to int
 
 ggplot(data = data) +
-    geom_line(aes(x = date, y = value, group = node, colour = factor(node))) +
+    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
     ggtitle("Block Height over Time") + # chart title
     xlab("Time") + # x-axis title
     ylab("Block Height") + # y-axis title
     labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 ### TxPool Per Node
@@ -318,85 +317,75 @@ The following charts show statistics of transaction pool.
 ```{r tx_pool_per_node_received_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 data <- all_data %>%
     dplyr::filter(metric == "txpool_received") %>% # filter metric of interrest
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
     mutate(value = as.numeric(value)) # convert value to int
 
 ggplot(data = data) +
-    geom_line(aes(x = date, y = value, group = node, colour = factor(node))) +
+    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
     ggtitle("TxPool Received Transactions over Time") + # chart title
     xlab("Time") + # x-axis title
     ylab("Received Transactions") + # y-axis title
     labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 * The number of valid transactions - accumulated count over time
 ```{r tx_pool_per_node_valid_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 data <- all_data %>%
     dplyr::filter(metric == "txpool_valid") %>% # filter metric of interrest
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
     mutate(value = as.numeric(value)) # convert value to int
 
 ggplot(data = data) +
-    geom_line(aes(x = date, y = value, group = node, colour = factor(node))) +
+    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
     ggtitle("TxPool Valid Transactions over Time") + # chart title
     xlab("Time") + # x-axis title
     ylab("Valid Transactions") + # y-axis title
     labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 * The number of invalid transactions - accumulated count over time
 ```{r tx_pool_per_node_invalid_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 data <- all_data %>%
     dplyr::filter(metric == "txpool_invalid") %>% # filter metric of interrest
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
     mutate(value = as.numeric(value)) # convert value to int
 
 ggplot(data = data) +
-    geom_line(aes(x = date, y = value, group = node, colour = factor(node))) +
+    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
     ggtitle("TxPool Invalid Transactions over Time") + # chart title
     xlab("Time") + # x-axis title
     ylab("Invalid Transactions") + # y-axis title
     labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 * The number of underpriced transactions - accumulated count over time
 ```{r tx_pool_per_node_underpriced_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 data <- all_data %>%
     dplyr::filter(metric == "txpool_underpriced") %>% # filter metric of interrest
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
     mutate(value = as.numeric(value)) # convert value to int
 
 ggplot(data = data) +
-    geom_line(aes(x = date, y = value, group = node, colour = factor(node))) +
+    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
     ggtitle("TxPool Underpriced Transactions over Time") + # chart title
     xlab("Time") + # x-axis title
     ylab("Underpriced Transactions") + # y-axis title
     labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 * The number of overflowed transactions - accumulated count over time
 ```{r tx_pool_per_node_overflowed_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 data <- all_data %>%
     dplyr::filter(metric == "txpool_overflowed") %>% # filter metric of interrest
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
     mutate(value = as.numeric(value)) # convert value to int
 
 ggplot(data = data) +
-    geom_line(aes(x = date, y = value, group = node, colour = factor(node))) +
+    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
     ggtitle("TxPool Overflowed Transactions over Time") + # chart title
     xlab("Time") + # x-axis title
     ylab("Overflowed Transactions") + # y-axis title
     labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 #### TxPool - Queued to Pending Transitions
@@ -406,17 +395,15 @@ ggplot(data = data) +
 ```{r tx_pool_per_node_quedued_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 data <- all_data %>%
     dplyr::filter(metric == "txpool_queued") %>% # filter metric of interrest
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
     mutate(value = as.numeric(value)) # convert value to int
 
 ggplot(data = data) +
-    geom_line(aes(x = date, y = value, group = node, colour = factor(node))) +
+    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
     ggtitle("TxPool Queued Transactions over Time") + # chart title
     xlab("Time") + # x-axis title
     ylab("Queued Transactions") + # y-axis title
     labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 * The number of transactions in the pending state - current count over time
@@ -424,17 +411,15 @@ ggplot(data = data) +
 ```{r tx_pool_per_node_pending_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 data <- all_data %>%
     dplyr::filter(metric == "txpool_pending") %>% # filter metric of interrest
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
     mutate(value = as.numeric(value)) # convert value to int
 
 ggplot(data = data) +
-    geom_line(aes(x = date, y = value, group = node, colour = factor(node))) +
+    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
     ggtitle("TxPool Pending Transactions over Time") + # chart title
     xlab("Time") + # x-axis title
     ylab("Pending Transactions") + # y-axis title
     labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 ### Consumed Disk Space
@@ -447,33 +432,29 @@ the State DB and other files.
 ```{r state_db_size, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 data <- all_data %>%
     dplyr::filter(metric == "statedb_disksize") %>% # filter metric of interrest
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
     mutate(value = as.numeric(value) / 1024 / 1024) # convert value to int and MB
 
 ggplot(data = data) +
-    geom_line(aes(x = date, y = value, group = node, colour = factor(node))) +
+    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
     ggtitle("Actual Size of StateDB over Time") + # chart title
     xlab("Time") + # x-axis title
     ylab("MB") + # y-axis title
     labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 ```{r total_db_size, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 data <- all_data %>%
     dplyr::filter(metric == "db_size") %>% # filter metric of interrest
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
     mutate(value = as.numeric(value) / 1024 / 1024) # convert value to int and MB
 
 ggplot(data = data) +
-    geom_line(aes(x = date, y = value, group = node, colour = factor(node))) +
+    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
     ggtitle("Actual Size of Data Dir including StateDB over Time") + # chart title
     xlab("Time") + # x-axis title
     ylab("MB") + # y-axis title
     labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 ### System Properties
@@ -486,33 +467,29 @@ may grow above 100% depending on the number of cores.
 ```{r system_cpu_procload, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 data <- all_data %>%
     dplyr::filter(metric == "system_cpu_procload") %>% # filter metric of interrest
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
     mutate(value = as.numeric(value)) # convert value to int
 
 ggplot(data = data) +
-    geom_line(aes(x = date, y = value, group = node, colour = factor(node))) +
+    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
     ggtitle("CPU Load") + # chart title
     xlab("Time") + # x-axis title
     ylab("%") + # y-axis title
     labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 ```{r system_memory_used, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 data <- all_data %>%
     dplyr::filter(metric == "system_memory_used") %>% # filter metric of interrest
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
     mutate(value = as.numeric(value) / 1024 / 1024) # convert value to MB
 
 ggplot(data = data) +
-    geom_line(aes(x = date, y = value, group = node, colour = factor(node))) +
+    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
     ggtitle("Memory Load") + # chart title
     xlab("Time") + # x-axis title
     ylab("MB") + # y-axis title
     labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 ## Application Metrics
@@ -525,37 +502,34 @@ The following chart shows the total number of sent and received transactions.
 # compute the send rate for each account
 sent_rate <- all_data %>%
     dplyr::filter(metric == "SentTransactions") %>% # filter metric
-    select(time, app, workers, value) %>% # filter relevant columns
+    select(elapsed_sec, app, workers, value) %>% # filter relevant columns
     mutate(value = as.numeric(value)) %>% # convert value to integer
     group_by(app, workers) %>% # one group per account
-    arrange(app, workers, time) %>% # sort by time in groups
+    arrange(app, workers, elapsed_sec) %>% # sort by time in groups
     reframe(
-        time = time, # preserve the time
+        elapsed_sec = elapsed_sec, # preserve the time
         rate = value - lag(value, default = 0) # change since last
     )
 
 # compute the total number of send transactions per application
 sent <- sent_rate %>%
     group_by(app) %>% # group by application
-    arrange(app, time) %>% # sort by time in groups
-    reframe(time = time, total = cumsum(rate)) %>% # compute prefix sum
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) # convert time
+    arrange(app, elapsed_sec) %>% # sort by time in groups
+    reframe(elapsed_sec = elapsed_sec, total = cumsum(rate)) # compute prefix sum
 
 # compute the number of received transactions
 received <- all_data %>%
     dplyr::filter(metric == "ReceivedTransactions") %>% # filter metric
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
     mutate(value = as.numeric(value)) # convert value to int
 
 ggplot() +
-    geom_line(data = sent, aes(x = date, y = total, group = app, colour = factor(paste(app, " sent")))) +
-    geom_line(data = received, aes(x = date, y = value, group = app, colour = factor(paste(app, " received")))) +
+    geom_line(data = sent, aes(x = elapsed_sec, y = total, group = app, colour = factor(paste(app, " sent")))) +
+    geom_line(data = received, aes(x = elapsed_sec, y = value, group = app, colour = factor(paste(app, " received")))) +
     ggtitle("Sent and Received Transactions per App") + # chart title
     xlab("Time") + # x-axis title
     ylab("Total Number of Transactions") + # y-axis title
     labs(colour = "Apps") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 
@@ -570,35 +544,32 @@ data <- all_data %>%
 
 ggplot(data = data) +
     geom_line(
-        aes(x = date, y = value, group = account, colour = factor(account)),
+        aes(x = elapsed_sec, y = value, group = account, colour = factor(account)),
         show.legend = FALSE
     ) +
     ggtitle("Sent Transactions per User") + # chart title
     xlab("Time") + # x-axis title
     ylab("Total Number of Transactions") + # y-axis title
     labs(colour = "User") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 The following chart shows the send-rate of individual accounts (legend omitted for clarity).
 
 ```{r send_rate_per_account, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 sent_rate <- sent_rate %>%
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>%
     mutate(account = paste(app, "_", workers)) # add an user name
 
 ggplot(data = sent_rate) +
     geom_line(
-        aes(x = date, y = rate, group = account, colour = factor(account)),
+        aes(x = elapsed_sec, y = rate, group = account, colour = factor(account)),
         show.legend = FALSE
     ) +
     ggtitle("Sent Rate of Transactions per User") + # chart title
     xlab("Time") + # x-axis title
     ylab("Rate [Tx/s]") + # y-axis title
     labs(colour = "User") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 ## Event Metrics
@@ -618,13 +589,12 @@ data <- all_data %>%
     mutate(value = as.numeric(value)) # convert value to int
 
 ggplot(data = data) +
-    geom_line(aes(x = date, y = value, group = node, colour = factor(node))) +
+    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
     ggtitle("Emitted events over time") + # chart title
     xlab("Time") + # x-axis title
     ylab("Events") + # y-axis title
     labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 ### Transactions in Emitted Events per Node
@@ -640,13 +610,12 @@ data <- all_data %>%
     mutate(value = as.numeric(value)) # convert value to int
 
 ggplot(data = data) +
-    geom_line(aes(x = date, y = value, group = node, colour = factor(node))) +
+    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
     ggtitle("Transactions in emitted events over time") + # chart title
     xlab("Time") + # x-axis title
     ylab("Gas Used") + # y-axis title
     labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
 ### Gas used by Emitted Events per Node
@@ -660,11 +629,10 @@ data <- all_data %>%
     mutate(value = as.numeric(value)) # convert value to int
 
 ggplot(data = data) +
-    geom_line(aes(x = date, y = value, group = node, colour = factor(node))) +
+    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
     ggtitle("Gas in emitted events over time") + # chart title
     xlab("Time") + # x-axis title
     ylab("Events") + # y-axis title
     labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) + # center title
-    scale_x_datetime(date_labels = "%c") # format date labels
+    theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
