@@ -16,8 +16,13 @@ figure_dimensions <- c(10, 4)
 # load monitoring data
 all_data <- read_csv(params$datafile)
 start_time <- min(all_data$time, na.rm = TRUE)
-all_data <- all_data %>%
-    mutate(elapsed_sec = as.numeric(time - start_time) / 1e9)
+if (nrow(all_data) > 0) {
+    all_data <- all_data %>%
+        mutate(elapsed_sec = as.numeric(time - start_time) / 1e9)
+} else {
+    # guard against empty data sets. prevent crash
+    all_data$elapsed_sec <- 0
+}
 ```
 
 This report summarizes the monitoring results of an execution of a Norma scenario.
