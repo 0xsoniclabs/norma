@@ -114,13 +114,14 @@ type NetworkListener interface {
 }
 
 type NodeConfig struct {
-	Name        string
-	Failing     bool
-	Validator   bool
-	ValidatorId *int
-	Cheater     bool
-	Image       string
-	DataVolume  *string
+	Name           string
+	Failing        bool
+	Validator      bool
+	ValidatorId    *int
+	Cheater        bool
+	Image          string
+	DataVolume     *string
+	ExtraArguments string
 }
 
 type ApplicationConfig struct {
@@ -141,11 +142,12 @@ type ApplicationConfig struct {
 
 // Validator is a configuration for a group of network start-up validators.
 type Validator struct {
-	Name      string
-	Failing   bool
-	Instances int
-	ImageName string
-	Stake     uint64 // < Stake in FTM
+	Name           string
+	Failing        bool
+	Instances      int
+	ImageName      string
+	Stake          uint64 // < Stake in FTM
+	ExtraArguments string // Extra command line arguments for sonicd
 }
 
 // NewValidator creates a new Validator from a parser.Validator.
@@ -165,11 +167,12 @@ func NewValidator(v parser.Validator) Validator {
 	}
 
 	return Validator{
-		Name:      v.Name,
-		Failing:   v.Failing,
-		Instances: instances,
-		ImageName: imageName,
-		Stake:     uint64(stake),
+		Name:           v.Name,
+		Failing:        v.Failing,
+		Instances:      instances,
+		ImageName:      imageName,
+		Stake:          uint64(stake),
+		ExtraArguments: v.ExtraArguments,
 	}
 }
 

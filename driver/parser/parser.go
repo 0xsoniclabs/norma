@@ -78,12 +78,13 @@ type NetworkRulesUpdate struct {
 
 // Validator is a configuration for a group of network start-up validators.
 type Validator struct {
-	Name      string
-	Failing   bool
-	Instances *int     `yaml:",omitempty"` // nil is interpreted as 1
-	ImageName string   `yaml:",omitempty"` // empty is interpreted as DefaultClientDockerImageName
-	End       *float32 `yaml:",omitempty"` // nil is interpreted as end-of-scenario
-	Stake     *uint64  `yaml:",omitempty"` // Stake in Native tokens, empty is interpreted as default stake
+	Name           string
+	Failing        bool
+	Instances      *int     `yaml:",omitempty"` // nil is interpreted as 1
+	ImageName      string   `yaml:",omitempty"` // empty is interpreted as DefaultClientDockerImageName
+	End            *float32 `yaml:",omitempty"` // nil is interpreted as end-of-scenario
+	Stake          *uint64  `yaml:",omitempty"` // Stake in Native tokens, empty is interpreted as default stake
+	ExtraArguments string   `yaml:",omitempty"` // Extra command line arguments for sonicd
 }
 
 // Node is a configuration for a group of nodes with similar properties.
