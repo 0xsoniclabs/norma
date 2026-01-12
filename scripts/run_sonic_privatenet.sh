@@ -84,5 +84,6 @@ export GOMEMLIMIT="1GiB"
     --metrics \
     --metrics.expensive \
     --config config.toml \
+    --datadir.minfreedisk 0 \
     $EXTRA_ARGUMENTS
 
