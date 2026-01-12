@@ -71,6 +71,21 @@ func TestNewValidator(t *testing.T) {
 				Stake:     defaultStake,
 			},
 		},
+		{
+			name: "Custom stake and extra arguments",
+			input: parser.Validator{
+				Name:           "validator4",
+				Stake:          &defaultStake,
+				ExtraArguments: "--arg1 value1 --arg2 value2",
+			},
+			expected: Validator{
+				Name:           "validator4",
+				Instances:      1,
+				ImageName:      DefaultClientDockerImageName,
+				Stake:          defaultStake,
+				ExtraArguments: "--arg1 value1 --arg2 value2",
+			},
+		},
 	}
 
 	for _, tt := range tests {

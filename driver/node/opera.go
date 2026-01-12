@@ -94,6 +94,8 @@ type OperaNodeConfig struct {
 	// MountDataDir is the directory where the node should store its state.
 	// Temporary location is used if nil.
 	MountDataDir *string
+	// ExtraArguments are additional command line arguments to pass to the node.
+	ExtraArguments string
 }
 
 // labelPattern restricts labels for nodes to non-empty alpha-numerical strings
@@ -141,6 +143,7 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 			"VALIDATORS_COUNT":  fmt.Sprintf("%d", config.NetworkConfig.Validators.GetNumValidators()),
 			"VALIDATORS_STAKES": genesis.GetStakesString(stakes),
 			"NETWORK_LATENCY":   fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
+			"EXTRA_ARGUMENTS":   config.ExtraArguments,
 		}
 
 		const dataDir = "/datadir"
