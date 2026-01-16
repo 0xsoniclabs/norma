@@ -120,11 +120,12 @@ func NewLocalNetwork(config *driver.NetworkConfig) (*LocalNetwork, error) {
 				defer wg.Done()
 				validatorId := idx + 1
 				nodeConfig := node.OperaNodeConfig{
-					ValidatorId:   &validatorId,
-					Failing:       validator.Failing,
-					Image:         image,
-					NetworkConfig: config,
-					Label:         label,
+					ValidatorId:    &validatorId,
+					Failing:        validator.Failing,
+					Image:          image,
+					NetworkConfig:  config,
+					Label:          label,
+					ExtraArguments: validator.ExtraArguments,
 				}
 				_, errs[idx] = net.createNode(&nodeConfig)
 			}(idx)
