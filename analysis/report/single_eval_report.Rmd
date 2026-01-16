@@ -599,8 +599,6 @@ throttling_data <- all_data %>%
     dplyr::filter(metric == "emitter_skip_emission_throttle") %>%
     mutate(y = as.numeric(value))
 
-data <- rbind(emit_data, throttling_data)
-
 ggplot(data = emit_data, aes(x = elapsed_sec, y = y, group = node, color = factor(node))) +
     geom_line(
         linetype = "solid",
