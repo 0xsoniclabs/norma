@@ -130,6 +130,7 @@ type ClientType struct {
 	Type        string  `yaml:",omitempty"`            // nil is interpreted as observer
 	ValidatorId *int    `yaml:"val_id,omitempty"`      // nil is interpreted as empty
 	DataVolume  *string `yaml:"data_volume,omitempty"` // nil is interpreted as empty
+	ExtraArgs   string  `yaml:"extra_args,omitempty"`
 }
 
 // Application is a load generator in the simulated network. Each application defines

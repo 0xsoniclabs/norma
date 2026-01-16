@@ -403,13 +403,14 @@ func scheduleNodeEvents(
 					}
 
 					newNode, err := net.CreateNode(&driver.NodeConfig{
-						Name:        name,
-						Failing:     node.Failing,
-						Image:       image,
-						Validator:   nodeIsValidator,
-						ValidatorId: &vid,
-						Cheater:     nodeIsCheater,
-						DataVolume:  node.Client.DataVolume,
+						Name:           name,
+						Failing:        node.Failing,
+						Image:          image,
+						Validator:      nodeIsValidator,
+						ValidatorId:    &vid,
+						Cheater:        nodeIsCheater,
+						DataVolume:     node.Client.DataVolume,
+						ExtraArguments: node.Client.ExtraArgs,
 					})
 
 					*instance = newNode
@@ -424,13 +425,14 @@ func scheduleNodeEvents(
 				fmt.Sprintf("[%s] Creating rejoining node", name),
 				func() error {
 					newNode, err := net.CreateNode(&driver.NodeConfig{
-						Name:        name,
-						Failing:     node.Failing,
-						Image:       image,
-						Validator:   nodeIsValidator,
-						ValidatorId: node.Client.ValidatorId,
-						Cheater:     nodeIsCheater,
-						DataVolume:  node.Client.DataVolume,
+						Name:           name,
+						Failing:        node.Failing,
+						Image:          image,
+						Validator:      nodeIsValidator,
+						ValidatorId:    node.Client.ValidatorId,
+						Cheater:        nodeIsCheater,
+						DataVolume:     node.Client.DataVolume,
+						ExtraArguments: node.Client.ExtraArgs,
 					})
 
 					*instance = newNode
