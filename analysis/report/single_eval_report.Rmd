@@ -587,14 +587,26 @@ Shows the number of events emitted by each node over time. This metric can be us
 to identify whether nodes are actively participating in the network, and the effectiveness
 of event throttling mechanisms.
 
-```{r emitter_events_per_node, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "emitter_events") %>% # filter metric of interrest
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
-    mutate(value = as.numeric(value)) # convert value to int
+- Solid lines represent the number of emitted events.
+- Dashed lines represent the number of events skipped due to throttling.
 
-ggplot(data = data) +
-    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
+```{r emitter_events_per_node, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
+emit_data <- all_data %>%
+    dplyr::filter(metric == "emitter_events") %>%
+    mutate(y = as.numeric(value))
+
+throttling_data <- all_data %>%
+    dplyr::filter(metric == "emitter_skip_emission_throttle") %>%
+    mutate(y = as.numeric(value))
+
+ggplot(data = emit_data, aes(x = elapsed_sec, y = y, group = node, color = factor(node))) +
+    geom_line(
+        linetype = "solid",
+    ) +
+    geom_line(
+        data = throttling_data,
+        linetype = "dashed",
+    ) +
     ggtitle("Emitted events over time") + # chart title
     xlab("Time") + # x-axis title
     ylab("Events") + # y-axis title
@@ -609,16 +621,18 @@ This metric can be used to identify whether nodes are effectively including tran
 in their emitted events.
 
 ```{r emitter_tx_per_node, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
+emit_data <- all_data %>%
     dplyr::filter(metric == "emitter_txs") %>% # filter metric of interrest
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
     mutate(value = as.numeric(value)) # convert value to int
 
-ggplot(data = data) +
-    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
+ggplot() +
+    geom_line(
+        data = emit_data,
+        aes(x = elapsed_sec, y = value, group = node, colour = factor(node))
+    ) +
     ggtitle("Transactions in emitted events over time") + # chart title
     xlab("Time") + # x-axis title
-    ylab("Gas Used") + # y-axis title
+    ylab("Transactions") + # y-axis title
     labs(colour = "Nodes") + # legend title
     theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
@@ -630,14 +644,13 @@ Shows the amount of gas used by transactions contained in emitted events by each
 ```{r emitter_gas_per_node, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 data <- all_data %>%
     dplyr::filter(metric == "emitter_gas") %>% # filter metric of interrest
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
     mutate(value = as.numeric(value)) # convert value to int
 
 ggplot(data = data) +
     geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
     ggtitle("Gas in emitted events over time") + # chart title
     xlab("Time") + # x-axis title
-    ylab("Events") + # y-axis title
+    ylab("Gas Used") + # y-axis title
     labs(colour = "Nodes") + # legend title
     theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
