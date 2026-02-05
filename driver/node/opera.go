@@ -17,6 +17,7 @@
 package node
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -29,6 +30,7 @@ import (
 	"golang.org/x/exp/maps"
 
 	rpcdriver "github.com/0xsoniclabs/norma/driver/rpc"
+	"github.com/0xsoniclabs/norma/genesistools/genesis"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
@@ -92,6 +94,8 @@ type OperaNodeConfig struct {
 	// MountDataDir is the directory where the node should store its state.
 	// Temporary location is used if nil.
 	MountDataDir *string
+	// ExtraArguments are additional command line arguments to pass to the node.
+	ExtraArguments string
 }
 
 // labelPattern restricts labels for nodes to non-empty alpha-numerical strings
@@ -122,10 +126,24 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 			portForwarding[service.Port] = ports[i]
 		}
 
+		stakes := []uint64{}
+		for _, val := range config.NetworkConfig.Validators {
+			for range max(val.Instances, 1) {
+				if val.Stake == 0 {
+					// if no stake defined, use default
+					stakes = append(stakes, 5_000_000)
+					continue
+				}
+				stakes = append(stakes, uint64(val.Stake))
+			}
+		}
+
 		envs := map[string]string{
-			"VALIDATOR_ID":     validatorId,
-			"VALIDATORS_COUNT": fmt.Sprintf("%d", config.NetworkConfig.Validators.GetNumValidators()),
-			"NETWORK_LATENCY":  fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
+			"VALIDATOR_ID":      validatorId,
+			"VALIDATORS_COUNT":  fmt.Sprintf("%d", config.NetworkConfig.Validators.GetNumValidators()),
+			"VALIDATORS_STAKES": genesis.GetStakesString(stakes),
+			"NETWORK_LATENCY":   fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
+			"EXTRA_ARGUMENTS":   config.ExtraArguments,
 		}
 
 		const dataDir = "/datadir"
@@ -171,15 +189,34 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 	}
 
 	// Wait until the OperaNode inside the Container is ready.
-	if err := network.Retry(network.DefaultRetryAttempts, 1*time.Second, func() error {
+	err = network.Retry(network.DefaultRetryAttempts, 1*time.Second, func() error {
 		_, err := node.GetNodeID()
 		return err
-	}); err == nil {
+	})
+	if err == nil {
 		return node, nil
 	}
 
 	// The node did not show up in time, so we consider the start to have failed.
-	return nil, errors.Join(fmt.Errorf("failed to get node online"), node.host.Cleanup())
+	return nil, errors.Join(
+		printLog(node),
+		fmt.Errorf("failed to get node online, %w", err),
+		node.host.Cleanup(),
+	)
+}
+
+// printLog streams and prints the logs of the given OperaNode, to debug cause of
+// startup failure.
+func printLog(node *OperaNode) error {
+	reader, err := node.StreamLog()
+	if err != nil {
+		return fmt.Errorf("cannot read node logs: %e", err)
+	}
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		fmt.Printf("[Opera Node %s] %s\n", node.GetLabel(), scanner.Text())
+	}
+	return reader.Close()
 }
 
 func (n *OperaNode) GetLabel() string {

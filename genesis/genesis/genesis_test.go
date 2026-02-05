@@ -21,7 +21,6 @@ import (
 	"github.com/0xsoniclabs/sonic/opera/contracts/netinit"
 	"github.com/0xsoniclabs/sonic/opera/contracts/sfc"
 	"github.com/0xsoniclabs/sonic/utils"
-	futils "github.com/0xsoniclabs/sonic/utils"
 )
 
 func TestGenerateJsonGenesis(t *testing.T) {
@@ -42,7 +41,9 @@ func TestGenerateJsonGenesis(t *testing.T) {
 			tmpFile := path.Join(t.TempDir(), "genesis.json")
 
 			// Call the GenerateJsonGenesis function
-			if err := GenerateJsonGenesis(tmpFile, ValidatorsCount, &rules); err != nil {
+
+			stakes := slices.Repeat([]uint64{5_000_000}, ValidatorsCount)
+			if err := GenerateJsonGenesis(tmpFile, stakes, &rules); err != nil {
 				t.Fatalf("failed to generate genesis.json: %v", err)
 			}
 
@@ -103,7 +104,7 @@ func TestGenerateJsonGenesis(t *testing.T) {
 				delegations = append(delegations, drivercall.Delegation{
 					Address:            val.Address,
 					ValidatorID:        val.ID,
-					Stake:              futils.ToFtm(5_000_000),
+					Stake:              utils.ToFtm(5_000_000),
 					LockedStake:        new(big.Int),
 					LockupFromEpoch:    0,
 					LockupEndTime:      0,
@@ -139,7 +140,8 @@ func TestGenerateJsonGenesis_SubsidiesContractShallBeInstalled_IfFeatureEnabled(
 			rules.Upgrades.GasSubsidies = true
 
 			tmpFile := path.Join(t.TempDir(), "genesis.json")
-			if err := GenerateJsonGenesis(tmpFile, 1, &rules); err != nil {
+			stakes := []uint64{1}
+			if err := GenerateJsonGenesis(tmpFile, stakes, &rules); err != nil {
 				t.Fatalf("failed to generate genesis.json: %v", err)
 			}
 

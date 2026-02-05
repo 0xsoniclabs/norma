@@ -1,16 +1,19 @@
 package driver
 
 import (
+	"testing"
+
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"golang.org/x/exp/slices"
-	"testing"
 )
 
 var one int = 1
 var two int = 2
 var three int = 3
+var defaultStake uint64 = 5_000_000
 
 func TestNewValidator(t *testing.T) {
+
 	tests := []struct {
 		name     string
 		input    parser.Validator
@@ -25,6 +28,7 @@ func TestNewValidator(t *testing.T) {
 				Name:      "validator1",
 				Instances: 1,
 				ImageName: DefaultClientDockerImageName,
+				Stake:     defaultStake,
 			},
 		},
 		{
@@ -37,6 +41,7 @@ func TestNewValidator(t *testing.T) {
 				Name:      "validator2",
 				Instances: 1,
 				ImageName: "custom-image",
+				Stake:     defaultStake,
 			},
 		},
 		{
@@ -49,6 +54,7 @@ func TestNewValidator(t *testing.T) {
 				Name:      "validator3",
 				Instances: 3,
 				ImageName: DefaultClientDockerImageName,
+				Stake:     defaultStake,
 			},
 		},
 		{
@@ -62,6 +68,22 @@ func TestNewValidator(t *testing.T) {
 				Failing:   true,
 				Instances: 1,
 				ImageName: DefaultClientDockerImageName,
+				Stake:     defaultStake,
+			},
+		},
+		{
+			name: "Custom stake and extra arguments",
+			input: parser.Validator{
+				Name:           "validator4",
+				Stake:          &defaultStake,
+				ExtraArguments: "--arg1 value1 --arg2 value2",
+			},
+			expected: Validator{
+				Name:           "validator4",
+				Instances:      1,
+				ImageName:      DefaultClientDockerImageName,
+				Stake:          defaultStake,
+				ExtraArguments: "--arg1 value1 --arg2 value2",
 			},
 		},
 	}
@@ -95,7 +117,7 @@ func TestNewValidators(t *testing.T) {
 				{Name: "validator1"},
 			},
 			expected: []Validator{
-				{Name: "validator1", Instances: 1, ImageName: DefaultClientDockerImageName},
+				{Name: "validator1", Instances: 1, ImageName: DefaultClientDockerImageName, Stake: defaultStake},
 			},
 		},
 		{
@@ -105,8 +127,8 @@ func TestNewValidators(t *testing.T) {
 				{Name: "validator2", ImageName: "custom-image2"},
 			},
 			expected: []Validator{
-				{Name: "validator1", Instances: 2, ImageName: "custom-image1"},
-				{Name: "validator2", Instances: 1, ImageName: "custom-image2"},
+				{Name: "validator1", Instances: 2, ImageName: "custom-image1", Stake: defaultStake},
+				{Name: "validator2", Instances: 1, ImageName: "custom-image2", Stake: defaultStake},
 			},
 		},
 	}
