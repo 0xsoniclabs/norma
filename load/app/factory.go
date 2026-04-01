@@ -48,6 +48,8 @@ func getFactory(appType string) appFactoryFunc {
 		return NewSmartAccountApplication
 	case "subsidies":
 		return NewSubsidiesApplication
+	case "transient":
+		return NewTransientApplication
 	}
 	return nil
 }
