@@ -52,7 +52,7 @@ build-sonic-docker-image-local:
 $(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)):
 	DOCKER_BUILDKIT=1 docker build --build-context client-src=$(CLIENT_URL)\#$(subst build-sonic-docker-image-,,$@) . -t sonic:$(subst build-sonic-docker-image-,,$@)
 
-generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi load/contracts/abi/SmartAccount.abi load/contracts/abi/EntryPoint.abi load/contracts/abi/TransientCounter.abi load/contracts/abi/SelfDestructor.abi load/contracts/abi/InstantSelfDestructor.abi # requires installed solc and Ethereum abigen - check README.md
+generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi load/contracts/abi/SmartAccount.abi load/contracts/abi/EntryPoint.abi load/contracts/abi/TransientCounter.abi load/contracts/abi/SelfDestructor.abi load/contracts/abi/InstantSelfDestructor.abi load/contracts/abi/OsakaCounter.abi # requires installed solc and Ethereum abigen - check README.md
 
 load/contracts/abi/Counter.abi: load/contracts/Counter.sol
 	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/Counter.sol
@@ -98,6 +98,11 @@ load/contracts/abi/InstantSelfDestructor.abi: load/contracts/InstantSelfDestruct
 load/contracts/abi/TransientCounter.abi: load/contracts/TransientCounter.sol
 	solc --evm-version cancun -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/TransientCounter.sol
 	abigen --type TransientCounter --pkg abi --abi load/contracts/abi/TransientCounter.abi --bin load/contracts/abi/TransientCounter.bin --out load/contracts/abi/TransientCounter.go
+
+# OsakaCounter uses EOF (EIP-7692) – requires solc >=0.8.29 and jq; see scripts/compile_eof.sh
+load/contracts/abi/OsakaCounter.abi: load/contracts/OsakaCounter.sol
+	scripts/compile_eof.sh load/contracts/OsakaCounter.sol load/contracts/abi/OsakaCounter.abi load/contracts/abi/OsakaCounter.bin
+	abigen --type OsakaCounter --pkg abi --abi load/contracts/abi/OsakaCounter.abi --bin load/contracts/abi/OsakaCounter.bin --out load/contracts/abi/OsakaCounter.go
 
 generate-mocks: # requires installed mockgen
 	go generate ./...
