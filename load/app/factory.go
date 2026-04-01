@@ -50,6 +50,10 @@ func getFactory(appType string) appFactoryFunc {
 		return NewSubsidiesApplication
 	case "transient":
 		return NewTransientApplication
+	case "selfdestructor":
+		return NewSelfDestructorApplication
+	case "instantselfdestructor":
+		return NewInstantSelfDestructorApplication
 	}
 	return nil
 }
