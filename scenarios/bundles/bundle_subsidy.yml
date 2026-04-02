@@ -1,0 +1,31 @@
+name: test bundle subsidy
+
+duration: 50
+
+network_rules:
+  genesis:
+    UPGRADES_GAS_SUBSIDIES: true
+    UPGRADES_BRIO: true
+
+validators:
+  - name: local
+    instances: 2
+    imagename: "sonic:local" # local submodule, used to test different versions
+
+applications:
+
+  - name: background
+    type: counter
+    start: 10
+    end: 45
+    users: 20
+    rate:
+      constant: 2 # Tx/s
+
+  - name: bundlesubsidy
+    type: bundlesubsidy
+    start: 15
+    end: 40
+    users: 10
+    rate:
+      constant: 2 # Tx/s
