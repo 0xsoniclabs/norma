@@ -43,6 +43,7 @@ var mixAppTypes = []mixEntry{
 	{"smartaccount", 1},
 	{"subsidies", 1},
 	{"transient", 1},
+	{"osakacounter", 1},
 	{"selfdestructor", 1},
 	{"instantselfdestructor", 1},
 	{"bundlesubsidy", 4},
