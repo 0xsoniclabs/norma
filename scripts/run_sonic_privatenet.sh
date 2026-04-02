@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e # Exit immediately if a command exits with a non-zero status.
 
 echo "Sonic binary checksum: $(sha256sum   /sonicd | cut -d ' ' -f 1 )"
 

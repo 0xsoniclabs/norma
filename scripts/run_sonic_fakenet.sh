@@ -1,4 +1,6 @@
 #!/bin/bash
+set -e # Exit immediately if a command exits with a non-zero status.
+
 # Get the local node's IP.
 list=`hostname -I`
 array=($list)
