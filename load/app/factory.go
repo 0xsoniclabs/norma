@@ -58,6 +58,8 @@ func getFactory(appType string) appFactoryFunc {
 		return NewInstantSelfDestructorApplication
 	case "bundlesubsidy":
 		return NewBundleSubsidyApplication
+	case "mix":
+		return NewMixApplication
 	}
 	return nil
 }
