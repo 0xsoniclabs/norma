@@ -111,6 +111,59 @@ func TestGenerators(t *testing.T) {
 				testGenerator(t, smartAccountApp, context)
 			},
 		},
+		"Transient": {
+			availableInUpgrades: []string{
+				"UPGRADES_ALLEGRO",
+				"UPGRADES_BRIO",
+			},
+			test: func(t *testing.T, context app.AppContext) {
+				transientApp, err := app.NewTransientApplication(context, 0, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				testGenerator(t, transientApp, context)
+			},
+		},
+		"SelfDestructor": {
+			availableInUpgrades: []string{
+				"UPGRADES_SONIC",
+				"UPGRADES_ALLEGRO",
+				"UPGRADES_BRIO",
+			},
+			test: func(t *testing.T, context app.AppContext) {
+				selfDestructorApp, err := app.NewSelfDestructorApplication(context, 0, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				testGenerator(t, selfDestructorApp, context)
+			},
+		},
+		"InstantSelfDestructor": {
+			availableInUpgrades: []string{
+				"UPGRADES_SONIC",
+				"UPGRADES_ALLEGRO",
+				"UPGRADES_BRIO",
+			},
+			test: func(t *testing.T, context app.AppContext) {
+				instantSelfDestructorApp, err := app.NewInstantSelfDestructorApplication(context, 0, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				testGenerator(t, instantSelfDestructorApp, context)
+			},
+		},
+		"OsakaCounter": {
+			availableInUpgrades: []string{
+				"UPGRADES_BRIO",
+			},
+			test: func(t *testing.T, context app.AppContext) {
+				osakaCounterApp, err := app.NewOsakaCounterApplication(context, 0, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				testGenerator(t, osakaCounterApp, context)
+			},
+		},
 	}
 
 	for _, upgrade := range []string{
@@ -203,6 +256,42 @@ func TestGenerators_Subsidies(t *testing.T) {
 		t.Fatal(err)
 	}
 	testGenerator(t, subsidiesApp, context)
+}
+
+func TestGenerators_BatchesSubsidies(t *testing.T) {
+	net, err := local.NewLocalNetwork(&driver.NetworkConfig{
+		Validators: driver.DefaultValidators,
+		NetworkRules: map[string]string{
+			"UPGRADES_GAS_SUBSIDIES":       "true",
+			"UPGRADES_ALLEGRO":             "true",
+			"UPGRADES_BRIO":                "true",
+			"UPGRADES_TRANSACTION_BUNDLES": "true",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create new local network: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := net.Shutdown(); err != nil {
+			t.Fatalf("failed to shutdown network: %v", err)
+		}
+	})
+
+	primaryAccount, err := app.NewAccount(0, PrivateKey, nil, FakeNetworkID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	context, err := app.NewContext(net, primaryAccount)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bundleSubsidyApp, err := app.NewBundleSubsidyApplication(context, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testGenerator(t, bundleSubsidyApp, context)
 }
 
 func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {

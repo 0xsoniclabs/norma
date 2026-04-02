@@ -5,7 +5,9 @@ duration: 50
 network_rules:
   genesis:
     UPGRADES_GAS_SUBSIDIES: true
+    UPGRADES_ALLEGRO: true
     UPGRADES_BRIO: true
+    UPGRADES_TRANSACTION_BUNDLES: true
 
 validators:
   - name: local

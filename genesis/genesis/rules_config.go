@@ -50,6 +50,7 @@ func init() {
 	register("UPGRADES_BRIO", upgradesBrio)
 	register("UPGRADES_SINGLE_PROPOSER", upgradesSingleProposer)
 	register("UPGRADES_GAS_SUBSIDIES", upgradesGasSubsidies)
+	register("UPGRADES_TRANSACTION_BUNDLES", upgradesTransactionBundles)
 
 	// Economy
 	register("MIN_GAS_PRICE", minGasPrice)
@@ -271,6 +272,11 @@ var upgradesSingleProposer = func(value string, rules *opera.Rules) error {
 
 var upgradesGasSubsidies = func(value string, rules *opera.Rules) error {
 	rules.Upgrades.GasSubsidies = value == "true"
+	return nil
+}
+
+var upgradesTransactionBundles = func(value string, rules *opera.Rules) error {
+	rules.Upgrades.TransactionBundles = value == "true"
 	return nil
 }
 

@@ -150,7 +150,7 @@ func (g *OsakaCounterUser) GenerateTx() (*types.Transaction, error) {
 		return nil, fmt.Errorf("failed to pack incrementCounter calldata; %w", err)
 	}
 
-	const gasLimit = 100_000
+	const gasLimit = 50_000
 	tx, err := createTx(g.sender, g.contract, big.NewInt(0), data, gasLimit)
 	if err == nil {
 		g.sentTxs.Add(1)
