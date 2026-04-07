@@ -1,9 +1,13 @@
 [
   {
     "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [],
     "name": "constructedContract",
-    "outputs":
-    [
+    "outputs": [
       {
         "internalType": "address",
         "name": "",
@@ -15,7 +19,7 @@
   },
   {
     "inputs": [],
-    "name": "deployOrDestruct",
+    "name": "destructAndDeploy",
     "outputs": [],
     "stateMutability": "payable",
     "type": "function"
@@ -23,8 +27,7 @@
   {
     "inputs": [],
     "name": "getCount",
-    "outputs":
-    [
+    "outputs": [
       {
         "internalType": "uint256",
         "name": "",

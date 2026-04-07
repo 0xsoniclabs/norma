@@ -29,22 +29,20 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// oneWei is passed as value with every deployOrDestruct / deployAndDestruct call.
-var oneWei = big.NewInt(1)
-
-// NewSelfDestructorApplication deploys a SelfDestructorFactory contract.
-// Alternating transactions deploy and then destroy a child SelfDestructor contract,
-// transferring 1 wei to the child on deploy and receiving it back via selfdestruct.
-func NewSelfDestructorApplication(ctxt AppContext, feederId, appId uint32) (Application, error) {
+// NewInstantSelfDestructorApplication deploys an InstantSelfDestructorFactory contract.
+// Every transaction deploys a child contract and immediately destroys it in the same
+// transaction, transferring 1 wei to the child and receiving it back via selfdestruct.
+// On Cancun+, contracts created and destroyed in the same transaction are truly removed.
+func NewInstantSelfDestructorApplication(ctxt AppContext, feederId, appId uint32) (Application, error) {
 	client := ctxt.GetClient()
 	chainId, err := client.ChainID(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain ID; %w", err)
 	}
 
-	_, receipt, err := DeployContract(ctxt, contract.DeploySelfDestructorFactory)
+	_, receipt, err := DeployContract(ctxt, contract.DeployInstantSelfDestructorFactory)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deploy SelfDestructorFactory contract; %w", err)
+		return nil, fmt.Errorf("failed to deploy InstantSelfDestructorFactory contract; %w", err)
 	}
 
 	accountFactory, err := NewAccountFactory(chainId, feederId, appId)
@@ -52,25 +50,25 @@ func NewSelfDestructorApplication(ctxt AppContext, feederId, appId uint32) (Appl
 		return nil, err
 	}
 
-	parsedAbi, err := contract.SelfDestructorFactoryMetaData.GetAbi()
+	parsedAbi, err := contract.InstantSelfDestructorFactoryMetaData.GetAbi()
 	if err != nil {
 		return nil, err
 	}
 
-	return &SelfDestructorApplication{
+	return &InstantSelfDestructorApplication{
 		abi:             parsedAbi,
 		contractAddress: receipt.ContractAddress,
 		accountFactory:  accountFactory,
 	}, nil
 }
 
-type SelfDestructorApplication struct {
+type InstantSelfDestructorApplication struct {
 	abi             *abi.ABI
 	contractAddress common.Address
 	accountFactory  *AccountFactory
 }
 
-func (f *SelfDestructorApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
+func (f *InstantSelfDestructorApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
 	users := make([]User, numUsers)
 	addresses := make([]common.Address, numUsers)
 	for i := 0; i < numUsers; i++ {
@@ -78,7 +76,7 @@ func (f *SelfDestructorApplication) CreateUsers(appContext AppContext, numUsers 
 		if err != nil {
 			return nil, err
 		}
-		users[i] = &SelfDestructorUser{
+		users[i] = &InstantSelfDestructorUser{
 			abi:      f.abi,
 			sender:   workerAccount,
 			contract: f.contractAddress,
@@ -91,10 +89,10 @@ func (f *SelfDestructorApplication) CreateUsers(appContext AppContext, numUsers 
 	return users, err
 }
 
-func (f *SelfDestructorApplication) GetReceivedTransactions(rpcClient rpc.Client) (uint64, error) {
-	c, err := contract.NewSelfDestructorFactory(f.contractAddress, rpcClient)
+func (f *InstantSelfDestructorApplication) GetReceivedTransactions(rpcClient rpc.Client) (uint64, error) {
+	c, err := contract.NewInstantSelfDestructorFactory(f.contractAddress, rpcClient)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get SelfDestructorFactory contract representation; %w", err)
+		return 0, fmt.Errorf("failed to get InstantSelfDestructorFactory contract representation; %w", err)
 	}
 	count, err := c.GetCount(nil)
 	if err != nil {
@@ -103,17 +101,17 @@ func (f *SelfDestructorApplication) GetReceivedTransactions(rpcClient rpc.Client
 	return count.Uint64(), nil
 }
 
-// SelfDestructorUser sends destructAndDeploy() transactions.
-// The factory contract alternates between deploying and destroying a child contract.
-type SelfDestructorUser struct {
+// InstantSelfDestructorUser sends deployAndDestruct() transactions.
+// Each transaction deploys and immediately destroys a child contract.
+type InstantSelfDestructorUser struct {
 	abi      *abi.ABI
 	sender   *Account
 	contract common.Address
 	sentTxs  atomic.Uint64
 }
 
-func (g *SelfDestructorUser) GenerateTx() (*types.Transaction, error) {
-	data, err := g.abi.Pack("destructAndDeploy")
+func (g *InstantSelfDestructorUser) GenerateTx() (*types.Transaction, error) {
+	data, err := g.abi.Pack("deployAndDestruct")
 	if err != nil || data == nil {
 		return nil, fmt.Errorf("failed to prepare tx data; %w", err)
 	}
@@ -126,6 +124,6 @@ func (g *SelfDestructorUser) GenerateTx() (*types.Transaction, error) {
 	return tx, err
 }
 
-func (g *SelfDestructorUser) GetSentTransactions() uint64 {
+func (g *InstantSelfDestructorUser) GetSentTransactions() uint64 {
 	return g.sentTxs.Load()
 }
