@@ -122,7 +122,7 @@ func (g *SelfDestructorUser) GenerateTx() (*types.Transaction, error) {
 
 	// Deploy path costs more gas (CREATE + SSTORE) than destroy path (CALL + selfdestruct).
 	// Use the higher bound to cover both cases.
-	const gasLimit = 100_000
+	const gasLimit = 200_000
 	tx, err := createTx(g.sender, g.contract, oneWei, data, gasLimit)
 	if err == nil {
 		g.sentTxs.Add(1)
