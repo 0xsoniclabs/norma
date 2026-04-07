@@ -48,10 +48,6 @@ func TestOperaNode_StartAndStop(t *testing.T) {
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
 	})
-	t.Cleanup(func() {
-		_ = node.Cleanup()
-	})
-
 	if err != nil {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
 	}
@@ -76,10 +72,6 @@ func TestOperaNode_RpcServiceIsReadyAfterStartup(t *testing.T) {
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
 	})
-	t.Cleanup(func() {
-		_ = node.Cleanup()
-	})
-
 	if err != nil {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
 	}
