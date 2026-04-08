@@ -52,7 +52,7 @@ build-sonic-docker-image-local:
 $(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)):
 	DOCKER_BUILDKIT=1 docker build --build-context client-src=$(CLIENT_URL)\#$(subst build-sonic-docker-image-,,$@) . -t sonic:$(subst build-sonic-docker-image-,,$@)
 
-generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi load/contracts/abi/SmartAccount.abi load/contracts/abi/EntryPoint.abi load/contracts/abi/TransientCounter.abi load/contracts/abi/SelfDestructOldContract.abi load/contracts/abi/SelfDestructNewContract.abi load/contracts/abi/EcdsaCounter.abi # requires installed solc and Ethereum abigen - check README.md
+generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi load/contracts/abi/SmartAccount.abi load/contracts/abi/EntryPoint.abi load/contracts/abi/TransientCounter.abi load/contracts/abi/SelfDestructOldContract.abi load/contracts/abi/SelfDestructNewContract.abi load/contracts/abi/EcdsaCounter.abi load/contracts/abi/ClzCounter.abi # requires installed solc and Ethereum abigen - check README.md
 
 load/contracts/abi/Counter.abi: load/contracts/Counter.sol
 	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/Counter.sol
@@ -102,6 +102,13 @@ load/contracts/abi/TransientCounter.abi: load/contracts/TransientCounter.sol
 load/contracts/abi/EcdsaCounter.abi: load/contracts/EcdsaCounter.sol
 	solc --evm-version osaka -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/EcdsaCounter.sol
 	abigen --type EcdsaCounter --pkg abi --abi load/contracts/abi/EcdsaCounter.abi --bin load/contracts/abi/EcdsaCounter.bin --out load/contracts/abi/EcdsaCounter.go
+
+# ClzCounter uses CLZ opcode (EIP-7939) – pure Yul, ABI is maintained manually in ClzCounter.abi
+# Note: --strict-assembly does not support -o; extract binary from stdout.
+load/contracts/abi/ClzCounter.go: load/contracts/ClzCounter.yul load/contracts/abi/ClzCounter.abi
+	solc --strict-assembly --evm-version osaka --optimize --optimize-runs 200 --bin load/contracts/ClzCounter.yul \
+		| grep -A1 "^Binary representation:" | tail -1 > load/contracts/abi/ClzCounter.bin
+	abigen --type ClzCounter --pkg abi --abi load/contracts/abi/ClzCounter.abi --bin load/contracts/abi/ClzCounter.bin --out load/contracts/abi/ClzCounter.go
 
 generate-mocks: # requires installed mockgen
 	go generate ./...

@@ -165,6 +165,18 @@ func TestGenerators(t *testing.T) {
 				testGenerator(t, ecdsaApp, context)
 			},
 		},
+		"Clz": {
+			availableInUpgrades: []string{
+				"UPGRADES_BRIO",
+			},
+			test: func(t *testing.T, context app.AppContext) {
+				clzApp, err := app.NewClzApplication(context, 0, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				testGenerator(t, clzApp, context)
+			},
+		},
 	}
 
 	for _, upgrade := range []string{
