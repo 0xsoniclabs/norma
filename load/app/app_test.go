@@ -113,6 +113,7 @@ func TestGenerators(t *testing.T) {
 		},
 		"Transient": {
 			availableInUpgrades: []string{
+				"UPGRADES_SONIC",
 				"UPGRADES_ALLEGRO",
 				"UPGRADES_BRIO",
 			},

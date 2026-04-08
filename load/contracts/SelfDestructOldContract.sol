@@ -2,7 +2,7 @@
 pragma solidity ^0.8.4;
 
 /// @notice SelfDestructOldContractFactory allows self-destruct testing by deploying and self-destructing a contract.
-/// Contracts are not actually destroyed on Cancun, but self-destructing should still transfer the balance.
+/// Already existing contracts are not actually destroyed on Cancun, but self-destructing should still transfer the balance.
 contract SelfDestructOldContractFactory {
     address public constructedContract;
 
