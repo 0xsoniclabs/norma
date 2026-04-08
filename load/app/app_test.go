@@ -153,6 +153,18 @@ func TestGenerators(t *testing.T) {
 				testGenerator(t, selfDestructNewContractApp, context)
 			},
 		},
+		"Ecdsa": {
+			availableInUpgrades: []string{
+				"UPGRADES_BRIO",
+			},
+			test: func(t *testing.T, context app.AppContext) {
+				ecdsaApp, err := app.NewEcdsaApplication(context, 0, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				testGenerator(t, ecdsaApp, context)
+			},
+		},
 	}
 
 	for _, upgrade := range []string{
