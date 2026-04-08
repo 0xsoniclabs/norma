@@ -54,6 +54,8 @@ func getFactory(appType string) appFactoryFunc {
 		return NewSelfDestructOldContractApplication
 	case "selfdestructnewcontract":
 		return NewSelfDestructNewContractApplication
+	case "ecdsa":
+		return NewEcdsaApplication
 	}
 	return nil
 }
