@@ -32,19 +32,19 @@ import (
 // oneWei is passed as value with every deployOrDestruct / deployAndDestruct call.
 var oneWei = big.NewInt(1)
 
-// NewSelfDestructorApplication deploys a SelfDestructorFactory contract.
+// NewSelfDestructOldContractApplication deploys a SelfDestructOldContractFactory contract.
 // Alternating transactions deploy and then destroy a child SelfDestructor contract,
 // transferring 1 wei to the child on deploy and receiving it back via selfdestruct.
-func NewSelfDestructorApplication(ctxt AppContext, feederId, appId uint32) (Application, error) {
+func NewSelfDestructOldContractApplication(ctxt AppContext, feederId, appId uint32) (Application, error) {
 	client := ctxt.GetClient()
 	chainId, err := client.ChainID(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain ID; %w", err)
 	}
 
-	_, receipt, err := DeployContractWithValue(ctxt, contract.DeploySelfDestructorFactory, big.NewInt(1))
+	_, receipt, err := DeployContractWithValue(ctxt, contract.DeploySelfDestructOldContractFactory, big.NewInt(1))
 	if err != nil {
-		return nil, fmt.Errorf("failed to deploy SelfDestructorFactory contract; %w", err)
+		return nil, fmt.Errorf("failed to deploy SelfDestructOldContractFactory contract; %w", err)
 	}
 
 	accountFactory, err := NewAccountFactory(chainId, feederId, appId)
@@ -52,25 +52,25 @@ func NewSelfDestructorApplication(ctxt AppContext, feederId, appId uint32) (Appl
 		return nil, err
 	}
 
-	parsedAbi, err := contract.SelfDestructorFactoryMetaData.GetAbi()
+	parsedAbi, err := contract.SelfDestructOldContractFactoryMetaData.GetAbi()
 	if err != nil {
 		return nil, err
 	}
 
-	return &SelfDestructorApplication{
+	return &SelfDestructOldContractApplication{
 		abi:             parsedAbi,
 		contractAddress: receipt.ContractAddress,
 		accountFactory:  accountFactory,
 	}, nil
 }
 
-type SelfDestructorApplication struct {
+type SelfDestructOldContractApplication struct {
 	abi             *abi.ABI
 	contractAddress common.Address
 	accountFactory  *AccountFactory
 }
 
-func (f *SelfDestructorApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
+func (f *SelfDestructOldContractApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
 	users := make([]User, numUsers)
 	addresses := make([]common.Address, numUsers)
 	for i := 0; i < numUsers; i++ {
@@ -78,7 +78,7 @@ func (f *SelfDestructorApplication) CreateUsers(appContext AppContext, numUsers 
 		if err != nil {
 			return nil, err
 		}
-		users[i] = &SelfDestructorUser{
+		users[i] = &SelfDestructOldContractUser{
 			abi:      f.abi,
 			sender:   workerAccount,
 			contract: f.contractAddress,
@@ -91,10 +91,10 @@ func (f *SelfDestructorApplication) CreateUsers(appContext AppContext, numUsers 
 	return users, err
 }
 
-func (f *SelfDestructorApplication) GetReceivedTransactions(rpcClient rpc.Client) (uint64, error) {
-	c, err := contract.NewSelfDestructorFactory(f.contractAddress, rpcClient)
+func (f *SelfDestructOldContractApplication) GetReceivedTransactions(rpcClient rpc.Client) (uint64, error) {
+	c, err := contract.NewSelfDestructOldContractFactory(f.contractAddress, rpcClient)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get SelfDestructorFactory contract representation; %w", err)
+		return 0, fmt.Errorf("failed to get SelfDestructOldContractFactory contract representation; %w", err)
 	}
 	count, err := c.GetCount(nil)
 	if err != nil {
@@ -103,16 +103,16 @@ func (f *SelfDestructorApplication) GetReceivedTransactions(rpcClient rpc.Client
 	return count.Uint64(), nil
 }
 
-// SelfDestructorUser sends destructAndDeploy() transactions.
+// SelfDestructOldContractUser sends destructAndDeploy() transactions.
 // The factory contract alternates between deploying and destroying a child contract.
-type SelfDestructorUser struct {
+type SelfDestructOldContractUser struct {
 	abi      *abi.ABI
 	sender   *Account
 	contract common.Address
 	sentTxs  atomic.Uint64
 }
 
-func (g *SelfDestructorUser) GenerateTx() (*types.Transaction, error) {
+func (g *SelfDestructOldContractUser) GenerateTx() (*types.Transaction, error) {
 	data, err := g.abi.Pack("destructAndDeploy")
 	if err != nil || data == nil {
 		return nil, fmt.Errorf("failed to prepare tx data; %w", err)
@@ -126,6 +126,6 @@ func (g *SelfDestructorUser) GenerateTx() (*types.Transaction, error) {
 	return tx, err
 }
 
-func (g *SelfDestructorUser) GetSentTransactions() uint64 {
+func (g *SelfDestructOldContractUser) GetSentTransactions() uint64 {
 	return g.sentTxs.Load()
 }

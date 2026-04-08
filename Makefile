@@ -52,7 +52,7 @@ build-sonic-docker-image-local:
 $(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)):
 	DOCKER_BUILDKIT=1 docker build --build-context client-src=$(CLIENT_URL)\#$(subst build-sonic-docker-image-,,$@) . -t sonic:$(subst build-sonic-docker-image-,,$@)
 
-generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi load/contracts/abi/SmartAccount.abi load/contracts/abi/EntryPoint.abi load/contracts/abi/TransientCounter.abi load/contracts/abi/SelfDestructor.abi load/contracts/abi/InstantSelfDestructor.abi # requires installed solc and Ethereum abigen - check README.md
+generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi load/contracts/abi/SmartAccount.abi load/contracts/abi/EntryPoint.abi load/contracts/abi/TransientCounter.abi load/contracts/abi/SelfDestructOldContract.abi load/contracts/abi/SelfDestructNewContract.abi # requires installed solc and Ethereum abigen - check README.md
 
 load/contracts/abi/Counter.abi: load/contracts/Counter.sol
 	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/Counter.sol
@@ -86,13 +86,13 @@ load/contracts/abi/EntryPoint.abi: load/contracts/EntryPoint.sol
 	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/EntryPoint.sol
 	abigen --type EntryPoint --pkg abi --abi load/contracts/abi/EntryPoint.abi --bin load/contracts/abi/EntryPoint.bin --out load/contracts/abi/EntryPoint.go
 
-load/contracts/abi/SelfDestructor.abi: load/contracts/SelfDestructor.sol
-	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/SelfDestructor.sol
-	abigen --type SelfDestructorFactory --pkg abi --abi load/contracts/abi/SelfDestructorFactory.abi --bin load/contracts/abi/SelfDestructorFactory.bin --out load/contracts/abi/SelfDestructor.go
+load/contracts/abi/SelfDestructOldContract.abi: load/contracts/SelfDestructOldContract.sol
+	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/SelfDestructOldContract.sol
+	abigen --type SelfDestructOldContractFactory --pkg abi --abi load/contracts/abi/SelfDestructOldContractFactory.abi --bin load/contracts/abi/SelfDestructOldContractFactory.bin --out load/contracts/abi/SelfDestructOldContract.go
 
-load/contracts/abi/InstantSelfDestructor.abi: load/contracts/InstantSelfDestructor.sol
-	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/InstantSelfDestructor.sol
-	abigen --type InstantSelfDestructorFactory --pkg abi --abi load/contracts/abi/InstantSelfDestructorFactory.abi --bin load/contracts/abi/InstantSelfDestructorFactory.bin --out load/contracts/abi/InstantSelfDestructor.go
+load/contracts/abi/SelfDestructNewContract.abi: load/contracts/SelfDestructNewContract.sol
+	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/SelfDestructNewContract.sol
+	abigen --type SelfDestructNewContractFactory --pkg abi --abi load/contracts/abi/SelfDestructNewContractFactory.abi --bin load/contracts/abi/SelfDestructNewContractFactory.bin --out load/contracts/abi/SelfDestructNewContract.go
 
 # TransientCounter uses EIP-1153 transient storage (Cancun) – requires solc >=0.8.24 and --evm-version cancun
 load/contracts/abi/TransientCounter.abi: load/contracts/TransientCounter.sol

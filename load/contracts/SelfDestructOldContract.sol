@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.4;
 
-/// @notice SelfDestructorFactory allows self-destruct testing by deploying and self-destructing a contract.
+/// @notice SelfDestructOldContractFactory allows self-destruct testing by deploying and self-destructing a contract.
 /// Contracts are not actually destroyed on Cancun, but self-destructing should still transfer the balance.
-contract SelfDestructorFactory {
+contract SelfDestructOldContractFactory {
     address public constructedContract;
 
     constructor() payable {
-        SelfDestructor newContract = new SelfDestructor{value: msg.value}();
+        SelfDestructOldContract newContract = new SelfDestructOldContract{value: msg.value}();
         constructedContract = address(newContract);
     }
 
@@ -16,10 +16,10 @@ contract SelfDestructorFactory {
             revert("Expected 1 wei paid");
         }
         // destroy old contract (obtain its balance)
-        SelfDestructor(constructedContract).destroy();
+        SelfDestructOldContract(constructedContract).destroy();
 
         // deploy new contract
-        SelfDestructor newContract = new SelfDestructor{value: msg.value}();
+        SelfDestructOldContract newContract = new SelfDestructOldContract{value: msg.value}();
         constructedContract = address(newContract);
     }
 
@@ -28,7 +28,7 @@ contract SelfDestructorFactory {
     }
 }
 
-contract SelfDestructor {
+contract SelfDestructOldContract {
     constructor() payable {}
 
     function destroy() public {

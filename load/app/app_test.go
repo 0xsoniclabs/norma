@@ -124,32 +124,32 @@ func TestGenerators(t *testing.T) {
 				testGenerator(t, transientApp, context)
 			},
 		},
-		"SelfDestructor": {
+		"SelfDestructOldContract": {
 			availableInUpgrades: []string{
 				"UPGRADES_SONIC",
 				"UPGRADES_ALLEGRO",
 				"UPGRADES_BRIO",
 			},
 			test: func(t *testing.T, context app.AppContext) {
-				selfDestructorApp, err := app.NewSelfDestructorApplication(context, 0, 0)
+				selfDestructOldContractApp, err := app.NewSelfDestructOldContractApplication(context, 0, 0)
 				if err != nil {
 					t.Fatal(err)
 				}
-				testGenerator(t, selfDestructorApp, context)
+				testGenerator(t, selfDestructOldContractApp, context)
 			},
 		},
-		"InstantSelfDestructor": {
+		"SelfDestructNewContract": {
 			availableInUpgrades: []string{
 				"UPGRADES_SONIC",
 				"UPGRADES_ALLEGRO",
 				"UPGRADES_BRIO",
 			},
 			test: func(t *testing.T, context app.AppContext) {
-				instantSelfDestructorApp, err := app.NewInstantSelfDestructorApplication(context, 0, 0)
+				selfDestructNewContractApp, err := app.NewSelfDestructNewContractApplication(context, 0, 0)
 				if err != nil {
 					t.Fatal(err)
 				}
-				testGenerator(t, instantSelfDestructorApp, context)
+				testGenerator(t, selfDestructNewContractApp, context)
 			},
 		},
 	}
