@@ -111,6 +111,48 @@ func TestGenerators(t *testing.T) {
 				testGenerator(t, smartAccountApp, context)
 			},
 		},
+		"Transient": {
+			availableInUpgrades: []string{
+				"UPGRADES_SONIC",
+				"UPGRADES_ALLEGRO",
+				"UPGRADES_BRIO",
+			},
+			test: func(t *testing.T, context app.AppContext) {
+				transientApp, err := app.NewTransientApplication(context, 0, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				testGenerator(t, transientApp, context)
+			},
+		},
+		"SelfDestructOldContract": {
+			availableInUpgrades: []string{
+				"UPGRADES_SONIC",
+				"UPGRADES_ALLEGRO",
+				"UPGRADES_BRIO",
+			},
+			test: func(t *testing.T, context app.AppContext) {
+				selfDestructOldContractApp, err := app.NewSelfDestructOldContractApplication(context, 0, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				testGenerator(t, selfDestructOldContractApp, context)
+			},
+		},
+		"SelfDestructNewContract": {
+			availableInUpgrades: []string{
+				"UPGRADES_SONIC",
+				"UPGRADES_ALLEGRO",
+				"UPGRADES_BRIO",
+			},
+			test: func(t *testing.T, context app.AppContext) {
+				selfDestructNewContractApp, err := app.NewSelfDestructNewContractApplication(context, 0, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				testGenerator(t, selfDestructNewContractApp, context)
+			},
+		},
 	}
 
 	for _, upgrade := range []string{
@@ -240,7 +282,7 @@ func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
 			t.Fatal(err)
 		}
 		if receipt.Status != types.ReceiptStatusSuccessful {
-			t.Fatalf("transaction failed, receipt status: %v", receipt.Status)
+			t.Fatalf("transaction failed, receipt status: %v (gas limit %d used %d)", receipt.Status, tx.Gas(), receipt.GasUsed)
 		}
 		if tx.Gas() > 2*receipt.GasUsed {
 			t.Errorf("gas limit unnecessary high: limit %d used %d", tx.Gas(), receipt.GasUsed)
