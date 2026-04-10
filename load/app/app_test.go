@@ -37,20 +37,12 @@ func TestGenerators(t *testing.T) {
 
 	tests := map[string]struct {
 		availableInUpgrades []string
-		test                func(*testing.T, app.AppContext)
 	}{
 		"Counter": {
 			availableInUpgrades: []string{
 				"UPGRADES_SONIC",
 				"UPGRADES_ALLEGRO",
 				"UPGRADES_BRIO",
-			},
-			test: func(t *testing.T, context app.AppContext) {
-				counterApp, err := app.NewCounterApplication(context, 0, 0)
-				if err != nil {
-					t.Fatal(err)
-				}
-				testGenerator(t, counterApp, context)
 			},
 		},
 		"ERC20": {
@@ -59,28 +51,12 @@ func TestGenerators(t *testing.T) {
 				"UPGRADES_ALLEGRO",
 				"UPGRADES_BRIO",
 			},
-			test: func(t *testing.T, context app.AppContext) {
-				erc20app, err := app.NewERC20Application(context, 0, 0)
-				if err != nil {
-					t.Fatal(err)
-				}
-				testGenerator(t, erc20app, context)
-
-			},
 		},
 		"Store": {
 			availableInUpgrades: []string{
 				"UPGRADES_SONIC",
 				"UPGRADES_ALLEGRO",
 				"UPGRADES_BRIO",
-			},
-			test: func(t *testing.T, context app.AppContext) {
-				storeApp, err := app.NewStoreApplication(context, 0, 0)
-				if err != nil {
-					t.Fatal(err)
-				}
-				testGenerator(t, storeApp, context)
-
 			},
 		},
 		"Uniswap": {
@@ -89,26 +65,11 @@ func TestGenerators(t *testing.T) {
 				"UPGRADES_ALLEGRO",
 				"UPGRADES_BRIO",
 			},
-			test: func(t *testing.T, context app.AppContext) {
-				uniswapApp, err := app.NewUniswapApplication(context, 0, 0)
-				if err != nil {
-					t.Fatal(err)
-				}
-				testGenerator(t, uniswapApp, context)
-
-			},
 		},
 		"SmartAccount": {
 			availableInUpgrades: []string{
 				"UPGRADES_ALLEGRO",
 				"UPGRADES_BRIO",
-			},
-			test: func(t *testing.T, context app.AppContext) {
-				smartAccountApp, err := app.NewSmartAccountApplication(context, 0, 0)
-				if err != nil {
-					t.Fatal(err)
-				}
-				testGenerator(t, smartAccountApp, context)
 			},
 		},
 		"Transient": {
@@ -117,26 +78,12 @@ func TestGenerators(t *testing.T) {
 				"UPGRADES_ALLEGRO",
 				"UPGRADES_BRIO",
 			},
-			test: func(t *testing.T, context app.AppContext) {
-				transientApp, err := app.NewTransientApplication(context, 0, 0)
-				if err != nil {
-					t.Fatal(err)
-				}
-				testGenerator(t, transientApp, context)
-			},
 		},
 		"SelfDestructOldContract": {
 			availableInUpgrades: []string{
 				"UPGRADES_SONIC",
 				"UPGRADES_ALLEGRO",
 				"UPGRADES_BRIO",
-			},
-			test: func(t *testing.T, context app.AppContext) {
-				selfDestructOldContractApp, err := app.NewSelfDestructOldContractApplication(context, 0, 0)
-				if err != nil {
-					t.Fatal(err)
-				}
-				testGenerator(t, selfDestructOldContractApp, context)
 			},
 		},
 		"SelfDestructNewContract": {
@@ -145,24 +92,15 @@ func TestGenerators(t *testing.T) {
 				"UPGRADES_ALLEGRO",
 				"UPGRADES_BRIO",
 			},
-			test: func(t *testing.T, context app.AppContext) {
-				selfDestructNewContractApp, err := app.NewSelfDestructNewContractApplication(context, 0, 0)
-				if err != nil {
-					t.Fatal(err)
-				}
-				testGenerator(t, selfDestructNewContractApp, context)
-			},
 		},
 		"Ecdsa": {
 			availableInUpgrades: []string{
 				"UPGRADES_BRIO",
 			},
-			test: func(t *testing.T, context app.AppContext) {
-				ecdsaApp, err := app.NewEcdsaApplication(context, 0, 0)
-				if err != nil {
-					t.Fatal(err)
-				}
-				testGenerator(t, ecdsaApp, context)
+		},
+		"Mix": {
+			availableInUpgrades: []string{
+				"UPGRADES_BRIO",
 			},
 		},
 	}
@@ -203,7 +141,11 @@ func TestGenerators(t *testing.T) {
 					continue
 				}
 				t.Run(name, func(t *testing.T) {
-					test.test(t, context)
+					application, err := app.NewApplication(name, context, 0, 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					testGenerator(t, application, context)
 				})
 			}
 		})
