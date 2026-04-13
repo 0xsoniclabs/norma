@@ -29,6 +29,7 @@ all: \
     pull-hello-world-image \
     pull-alpine-image \
     pull-prometheus-image \
+    build-r-renderer-image \
     build-sonic-docker-image-main \
     build-sonic-docker-image-local \
     $(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)) \
@@ -41,6 +42,9 @@ pull-alpine-image:
 
 pull-prometheus-image:
 	DOCKER_BUILDKIT=1 docker image pull prom/prometheus:v2.44.0
+
+build-r-renderer-image:
+	DOCKER_BUILDKIT=1 docker build analysis/report/ -t norma-r-renderer
 
 build-sonic-docker-image-main:
 	DOCKER_BUILDKIT=1 docker build --build-context client-src=$(CLIENT_URL) . -t sonic
@@ -106,10 +110,10 @@ load/contracts/abi/EcdsaCounter.abi: load/contracts/EcdsaCounter.sol
 generate-mocks: # requires installed mockgen
 	go generate ./...
 
-norma: pull-prometheus-image build-sonic-docker-image-main
+norma:
 	go build -o $(BUILD_DIR)/norma ./driver/norma
 
-test: pull-hello-world-image pull-alpine-image pull-prometheus-image build-sonic-docker-image-main
+test: pull-hello-world-image pull-alpine-image pull-prometheus-image build-r-renderer-image build-sonic-docker-image-main
 	go test ./... -v
 
 clean:
