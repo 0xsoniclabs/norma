@@ -78,7 +78,7 @@ EXPOSE 6060
 EXPOSE 18545
 EXPOSE 18546
 
-COPY scripts/run_sonic_privatenet.sh ./run_sonic.sh
+COPY scripts/run_sonic.sh ./run_sonic.sh
 
 # Simple check that the binaries are built correctly
 RUN ./sonictool --version
