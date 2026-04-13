@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail # fail if anything fails
 
 echo "Sonic binary checksum: $(sha256sum   /sonicd | cut -d ' ' -f 1 )"
 
@@ -16,8 +17,10 @@ echo "genesis validator count=${VALIDATORS_COUNT}"
 
 datadir=$STATE_DB_DATADIR
 # Initialize datadir
-mkdir -p ${datadir}
-./sonictool --datadir ${datadir} genesis json --experimental /genesis.json
+if [[ ! -d "${datadir}/chaindata" ]]; then
+  mkdir -p ${datadir}
+  ./sonictool --datadir ${datadir} genesis json --experimental /genesis.json
+fi
 
 ##
 ## if $VALIDATOR_ID is set, it is a validator
