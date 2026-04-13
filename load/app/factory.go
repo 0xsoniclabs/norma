@@ -56,6 +56,8 @@ func getFactory(appType string) appFactoryFunc {
 		return NewSelfDestructNewContractApplication
 	case "ecdsa":
 		return NewEcdsaApplication
+	case "mix":
+		return NewMixApplication
 	}
 	return nil
 }
