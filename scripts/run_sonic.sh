@@ -71,7 +71,9 @@ echo "NETWORK_LATENCY=${NETWORK_LATENCY}"
 if [[ -n "${NETWORK_LATENCY}" ]]; then
   echo "Adding network latency .."
   tc qdisc add dev eth0 root netem delay $NETWORK_LATENCY
-  tc qdisc add dev eth1 root netem delay $NETWORK_LATENCY
+  if ip link show eth1 &>/dev/null; then # if eth1 exists
+    tc qdisc add dev eth1 root netem delay $NETWORK_LATENCY
+  fi
 fi
 
 
