@@ -74,7 +74,14 @@ func (r *Report) Render(datafile, outputdir string) (string, error) {
 
 	outputfile := r.name + ".html"
 
-	cmd := exec.Command("Rscript", script, template, datafile, outputdir, outputfile)
+	cmd := exec.Command("docker", "run", "--rm",
+		"-v", script+":/render.R:ro",
+		"-v", template+":/template.Rmd:ro",
+		"-v", datafile+":/input.csv:ro",
+		"-v", outputdir+":/output",
+		"norma-r-renderer",
+		"Rscript", "/render.R", "/template.Rmd", "/input.csv", "/output", outputfile,
+	)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
