@@ -58,6 +58,8 @@ func getFactory(appType string) appFactoryFunc {
 		return NewEcdsaApplication
 	case "largecontract":
 		return NewLargeContractApplication
+	case "mix":
+		return NewMixApplication
 	}
 	return nil
 }
