@@ -24,7 +24,7 @@ for yaml_file in "${yaml_files[@]}"; do
     run_yaml "${yaml_file}" &
 
     # Check if the number of running jobs has reached the limit
-    while [  "$(ls -1 ${yaml_dir}/*.job 2>/dev/null | wc -l)" -ge "$max_jobs" ]; do
+    while [[ "$(find "${yaml_dir}" -maxdepth 1 -name '*.job' 2>/dev/null | wc -l)" -ge "$max_jobs" ]]; do
       sleep 10s
     done
 done
@@ -34,5 +34,5 @@ wait
 
 # Check exit codes
 echo "Exit codes for all scenarios:"
-cat ${yaml_dir}/*.exitcode | sort
-rm ${yaml_dir}/*.exitcode
+sort "${yaml_dir}"/*.exitcode
+rm "${yaml_dir}"/*.exitcode
