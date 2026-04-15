@@ -93,6 +93,21 @@ func (mr *MockClientMockRecorder) CallContract(ctx, call, blockNumber any) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CallContract", reflect.TypeOf((*MockClient)(nil).CallContract), ctx, call, blockNumber)
 }
 
+// BlockNumber mocks base method.
+func (m *MockClient) BlockNumber(ctx context.Context) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BlockNumber", ctx)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BlockNumber indicates an expected call of BlockNumber.
+func (mr *MockClientMockRecorder) BlockNumber(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockNumber", reflect.TypeOf((*MockClient)(nil).BlockNumber), ctx)
+}
+
 // ChainID mocks base method.
 func (m *MockClient) ChainID(ctx context.Context) (*big.Int, error) {
 	m.ctrl.T.Helper()
@@ -351,6 +366,21 @@ func (m *MockethRpcClient) CallContract(ctx context.Context, call ethereum.CallM
 func (mr *MockethRpcClientMockRecorder) CallContract(ctx, call, blockNumber any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CallContract", reflect.TypeOf((*MockethRpcClient)(nil).CallContract), ctx, call, blockNumber)
+}
+
+// BlockNumber mocks base method.
+func (m *MockethRpcClient) BlockNumber(ctx context.Context) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BlockNumber", ctx)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BlockNumber indicates an expected call of BlockNumber.
+func (mr *MockethRpcClientMockRecorder) BlockNumber(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockNumber", reflect.TypeOf((*MockethRpcClient)(nil).BlockNumber), ctx)
 }
 
 // ChainID mocks base method.
