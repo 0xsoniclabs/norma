@@ -19,12 +19,13 @@ package app
 import (
 	"context"
 	"fmt"
+	"math/big"
+
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"math/big"
 )
 
 //go:generate mockgen -source context.go -destination context_mock.go -package app
@@ -141,7 +142,14 @@ func (c *appContext) Run(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
-	return c.GetReceipt(transaction.Hash())
+	receipt, err := c.GetReceipt(transaction.Hash())
+	if err != nil {
+		return nil, err
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return receipt, fmt.Errorf("transaction reverted")
+	}
+	return receipt, nil
 }
 
 // FundAccounts transfers the given amount of funds from the treasure to each of the
