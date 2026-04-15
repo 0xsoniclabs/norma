@@ -62,12 +62,9 @@ func NewContext(factory RpcClientFactory, treasury *Account) (*appContext, error
 	}
 
 	// Install a helper contract on the network to perform operations.
-	helper, receipt, err := DeployContract(res, contract.DeployHelper)
+	helper, _, err := DeployContract(res, contract.DeployHelper)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deploy helper contract: %w", err)
-	}
-	if receipt.Status != types.ReceiptStatusSuccessful {
-		return nil, fmt.Errorf("failed to deploy helper contract: transaction reverted")
 	}
 
 	res.helper = helper
@@ -207,6 +204,9 @@ func DeployContract[T any](c AppContext, deploy contractDeployer[T]) (*T, *types
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get receipt: %w", err)
 	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return nil, receipt, fmt.Errorf("contract deployment transaction reverted")
+	}
 	return contract, receipt, nil
 }
 
@@ -228,6 +228,9 @@ func DeployContractWithValue[T any](c AppContext, deploy contractDeployer[T], va
 	receipt, err := c.GetReceipt(transaction.Hash())
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get receipt: %w", err)
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return nil, receipt, fmt.Errorf("contract deployment transaction reverted")
 	}
 	return contract, receipt, nil
 }
