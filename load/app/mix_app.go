@@ -46,6 +46,7 @@ var mixAppTypes = []mixEntry{
 	{"selfdestructoldcontract", 1},
 	{"selfdestructnewcontract", 1},
 	{"ecdsa", 4},
+	{"largecontract", 1},
 }
 
 // MixApplication initialises one instance of every application type and
