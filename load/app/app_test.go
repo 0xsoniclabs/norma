@@ -131,7 +131,7 @@ func TestGenerators(t *testing.T) {
 				}
 			})
 
-			primaryAccount, err := app.NewAccount(0, PrivateKey, nil, FakeNetworkID)
+			primaryAccount, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -189,7 +189,7 @@ func TestGenerators_Subsidies(t *testing.T) {
 		}
 	})
 
-	primaryAccount, err := app.NewAccount(0, PrivateKey, nil, FakeNetworkID)
+	primaryAccount, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -50,7 +50,7 @@ func TestLoadGeneration_CanRealizeConstantTrafficShape(t *testing.T) {
 			user := app.NewMockUser(ctrl)
 			transaction := types.Transaction{}
 
-			treasure, err := app.NewAccount(0, PrivateKey, nil, FakeNetworkID)
+			treasure, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
 			if err != nil {
 				t.Fatal(err)
 			}
