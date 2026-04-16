@@ -98,6 +98,11 @@ func TestGenerators(t *testing.T) {
 				"UPGRADES_BRIO",
 			},
 		},
+		"LargeContract": {
+			availableInUpgrades: []string{
+				"UPGRADES_BRIO",
+			},
+		},
 		"Mix": {
 			availableInUpgrades: []string{
 				"UPGRADES_BRIO",
