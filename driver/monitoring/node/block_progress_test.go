@@ -131,7 +131,7 @@ func TestLocalRpcServer_CanHandleRequests(t *testing.T) {
 		t.Fatalf("failed to start the fake server: %v", err)
 	}
 
-	rpcClient, err := rpc.DialContext(context.Background(), server.GetUrl())
+	rpcClient, err := rpc.DialContext(t.Context(), server.GetUrl())
 	if err != nil {
 		t.Fatalf("failed to connect to server: %v", err)
 	}
