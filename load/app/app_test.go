@@ -315,7 +315,7 @@ func testBundleGenerator(t *testing.T, app app.Application, ctxt app.AppContext)
 
 	rpcClient := ctxt.GetClient()
 	numTransactions := 10
-	transactions := []*types.Transaction{}
+	envelopeTxs := []*types.Transaction{}
 	for range numTransactions {
 		tx, err := user.GenerateTx()
 		if err != nil {
@@ -328,7 +328,7 @@ func testBundleGenerator(t *testing.T, app app.Application, ctxt app.AppContext)
 		if err := rpcClient.SendTransaction(context.Background(), tx); err != nil {
 			t.Fatal(err)
 		}
-		transactions = append(transactions, tx)
+		envelopeTxs = append(envelopeTxs, tx)
 	}
 
 	// The envelope itself has no receipt - wait for each inner step tx to land on
@@ -339,17 +339,12 @@ func testBundleGenerator(t *testing.T, app app.Application, ctxt app.AppContext)
 	}
 	signer := types.NewCancunSigner(chainID)
 
-	for _, envelope := range transactions {
-		fmt.Printf("envelope %s\n", envelope.Hash().String())
-		tb, openErr := bundle.OpenEnvelope(signer, envelope)
+	for _, envelopeTx := range envelopeTxs {
+		txBundle, openErr := bundle.OpenEnvelope(signer, envelopeTx)
 		if openErr != nil {
-			t.Fatalf("failed to open bundle envelope: %v", openErr)
+			t.Fatalf("failed to open bundle envelopeTx: %v", openErr)
 		}
-		for _, innerTx := range tb.GetTransactionsInReferencedOrder() {
-			fmt.Printf("inner tx %s\n", innerTx.Hash().String())
-		}
-		for _, innerTx := range tb.GetTransactionsInReferencedOrder() {
-			fmt.Printf("waiting for tx %s\n", innerTx.Hash().String())
+		for _, innerTx := range txBundle.GetTransactionsInReferencedOrder() {
 			if _, err := ctxt.GetReceipt(innerTx.Hash()); err != nil {
 				t.Errorf("inner step tx receipt not available: %v", err)
 			}
