@@ -17,6 +17,7 @@
 package app_test
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"testing"
@@ -283,7 +284,7 @@ func TestGenerators_Bundles(t *testing.T) {
 		}
 	})
 
-	primaryAccount, err := app.NewAccount(0, PrivateKey, nil, FakeNetworkID)
+	primaryAccount, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,7 +314,7 @@ func testBundleGenerator(t *testing.T, app app.Application, ctxt app.AppContext)
 	user := users[0]
 
 	rpcClient := ctxt.GetClient()
-	numTransactions := 1 // multiple bundles fail with current sonic version
+	numTransactions := 10
 	transactions := []*types.Transaction{}
 	for range numTransactions {
 		tx, err := user.GenerateTx()

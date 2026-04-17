@@ -89,7 +89,6 @@ func (a *AllOfBundleApplication) CreateUsers(appContext AppContext, numUsers int
 	users := make([]User, numUsers)
 	approverAddresses := make([]common.Address, numUsers)
 	spenderAddresses := make([]common.Address, numUsers)
-	bundlerAddresses := make([]common.Address, numUsers)
 
 	for i := range users {
 		approver, err := a.accountFactory.CreateAccount(appContext.GetClient())
@@ -100,27 +99,22 @@ func (a *AllOfBundleApplication) CreateUsers(appContext AppContext, numUsers int
 		if err != nil {
 			return nil, err
 		}
-		bundler, err := a.accountFactory.CreateAccount(appContext.GetClient())
-		if err != nil {
-			return nil, err
-		}
 		users[i] = &AllOfBundleUser{
-			erc20Address: a.erc20Address,
-			erc20Abi:     a.erc20Abi,
-			approver:     approver,
-			spender:      spender,
-			bundler:      bundler,
-			signer:       types.NewLondonSigner(approver.chainID),
-			client:       appContext.GetClient(),
+			erc20Address:   a.erc20Address,
+			erc20Abi:       a.erc20Abi,
+			approver:       approver,
+			spender:        spender,
+			accountFactory: a.accountFactory,
+			signer:         types.NewLondonSigner(approver.chainID),
+			client:         appContext.GetClient(),
 		}
 		approverAddresses[i] = approver.address
 		spenderAddresses[i] = spender.address
-		bundlerAddresses[i] = bundler.address
 	}
 
 	// Fund all accounts with native currency for gas.
 	fundsPerAccount := new(big.Int).Mul(big.NewInt(1_000), big.NewInt(1e18))
-	allAddresses := append(append(approverAddresses, spenderAddresses...), bundlerAddresses...)
+	allAddresses := append(append(approverAddresses, spenderAddresses...))
 	if err := appContext.FundAccounts(allAddresses, fundsPerAccount); err != nil {
 		return nil, fmt.Errorf("failed to fund accounts: %w", err)
 	}
@@ -165,14 +159,14 @@ func (a *AllOfBundleApplication) GetReceivedTransactions(rpcClient rpc.Client) (
 // The envelope is sent from the bundler account. The AllOf execution plan
 // ensures both inner transactions run or neither does.
 type AllOfBundleUser struct {
-	erc20Address common.Address
-	erc20Abi     *abi.ABI
-	approver     *Account
-	spender      *Account
-	bundler      *Account
-	signer       types.Signer
-	client       rpc.Client
-	sentTxs      atomic.Uint64
+	erc20Address   common.Address
+	erc20Abi       *abi.ABI
+	approver       *Account
+	spender        *Account
+	accountFactory *AccountFactory
+	signer         types.Signer
+	client         rpc.Client
+	sentTxs        atomic.Uint64
 }
 
 func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
@@ -187,6 +181,11 @@ func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
 		return nil, fmt.Errorf("failed to pack transferFrom: %w", err)
 	}
 
+	bundler, err := u.accountFactory.CreateAccount(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create bundler account: %w", err)
+	}
+
 	currentBlock, err := u.client.BlockNumber(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current block number: %w", err)
@@ -194,8 +193,7 @@ func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
 
 	envelope := bundle.NewBuilder().
 		WithSigner(u.signer).
-		SetEnvelopeSenderKey(u.bundler.privateKey).
-		SetEnvelopeNonce(u.bundler.getNextNonce()).
+		SetEnvelopeSenderKey(bundler.privateKey).
 		SetEnvelopeGasPrice(gasFeeCap).
 		AllOf(
 			bundle.Step(u.approver.privateKey, &types.DynamicFeeTx{
