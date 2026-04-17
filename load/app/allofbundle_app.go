@@ -194,7 +194,6 @@ func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
 	envelope := bundle.NewBuilder().
 		WithSigner(u.signer).
 		SetEnvelopeSenderKey(bundler.privateKey).
-		SetEnvelopeGasPrice(gasFeeCap).
 		AllOf(
 			bundle.Step(u.approver.privateKey, &types.DynamicFeeTx{
 				Nonce:     u.approver.getNextNonce(),
