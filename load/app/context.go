@@ -19,12 +19,13 @@ package app
 import (
 	"context"
 	"fmt"
+	"math/big"
+
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"math/big"
 )
 
 //go:generate mockgen -source context.go -destination context_mock.go -package app
@@ -62,12 +63,9 @@ func NewContext(factory RpcClientFactory, treasury *Account) (*appContext, error
 	}
 
 	// Install a helper contract on the network to perform operations.
-	helper, receipt, err := DeployContract(res, contract.DeployHelper)
+	helper, _, err := DeployContract(res, contract.DeployHelper)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deploy helper contract: %w", err)
-	}
-	if receipt.Status != types.ReceiptStatusSuccessful {
-		return nil, fmt.Errorf("failed to deploy helper contract: transaction reverted")
 	}
 
 	res.helper = helper
@@ -144,7 +142,14 @@ func (c *appContext) Run(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
-	return c.GetReceipt(transaction.Hash())
+	receipt, err := c.GetReceipt(transaction.Hash())
+	if err != nil {
+		return nil, err
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return receipt, fmt.Errorf("transaction reverted")
+	}
+	return receipt, nil
 }
 
 // FundAccounts transfers the given amount of funds from the treasure to each of the
@@ -207,6 +212,9 @@ func DeployContract[T any](c AppContext, deploy contractDeployer[T]) (*T, *types
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get receipt: %w", err)
 	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return nil, receipt, fmt.Errorf("contract deployment transaction reverted")
+	}
 	return contract, receipt, nil
 }
 
@@ -228,6 +236,9 @@ func DeployContractWithValue[T any](c AppContext, deploy contractDeployer[T], va
 	receipt, err := c.GetReceipt(transaction.Hash())
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get receipt: %w", err)
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return nil, receipt, fmt.Errorf("contract deployment transaction reverted")
 	}
 	return contract, receipt, nil
 }

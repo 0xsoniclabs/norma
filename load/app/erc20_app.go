@@ -130,14 +130,11 @@ func (f *ERC20Application) CreateUsers(appContext AppContext, numUsers int) ([]U
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ERC20 contract representation; %w", err)
 	}
-	receipt, err := appContext.Run(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+	_, err = appContext.Run(func(opts *bind.TransactOpts) (*types.Transaction, error) {
 		return erc20Contract.MintForAll(opts, addresses, big.NewInt(1_000000000000000000))
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to mint ERC-20 for all users; %w", err)
-	}
-	if receipt.Status != types.ReceiptStatusSuccessful {
-		return nil, fmt.Errorf("failed to mint ERC-20 for all users; transaction reverted")
 	}
 	return users, nil
 }
