@@ -87,7 +87,7 @@ func NewLocalNetwork(config *driver.NetworkConfig) (*LocalNetwork, error) {
 	}
 
 	// Create chain account, which will be used for the initialization
-	primaryAccount, err := app.NewAccount(0, treasureAccountPrivateKey, nil, fakeNetworkID)
+	primaryAccount, err := app.NewAccount(0, treasureAccountPrivateKey, fakeNetworkID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create primary account; %v", err)
 	}

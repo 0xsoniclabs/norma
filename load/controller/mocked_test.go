@@ -63,7 +63,7 @@ func TestMockedTrafficGenerating(t *testing.T) {
 	}
 
 	// let the app run for 100 ms - should give 10 txs
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 
 	// note: Run is supposed to run in a new thread

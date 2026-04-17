@@ -18,7 +18,6 @@ package docker
 
 import (
 	"bufio"
-	"context"
 	"io"
 	"log"
 	"os"
@@ -232,7 +231,7 @@ func TestContainer_SendSignal(t *testing.T) {
 		t.Fatalf("error: %v", err)
 	}
 	// check the container is stopped
-	info, err := cli.cli.ContainerInspect(context.Background(), cont.id)
+	info, err := cli.cli.ContainerInspect(t.Context(), cont.id)
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}

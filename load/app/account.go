@@ -84,11 +84,10 @@ type Account struct {
 	address    common.Address
 	chainID    *big.Int
 	nonce      uint64
-	publicKey  []byte
 }
 
 // NewAccount creates an Account instance from the provided private key
-func NewAccount(id int, privateKeyHex string, publicKey []byte, chainID int64) (*Account, error) {
+func NewAccount(id int, privateKeyHex string, chainID int64) (*Account, error) {
 	privateKey, err := crypto.HexToECDSA(privateKeyHex)
 	if err != nil {
 		return nil, err
@@ -100,7 +99,6 @@ func NewAccount(id int, privateKeyHex string, publicKey []byte, chainID int64) (
 		address:    address,
 		chainID:    big.NewInt(chainID),
 		nonce:      0,
-		publicKey:  publicKey,
 	}, nil
 }
 

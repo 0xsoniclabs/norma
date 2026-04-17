@@ -50,7 +50,7 @@ func TestLoadGeneration_CanRealizeConstantTrafficShape(t *testing.T) {
 			user := app.NewMockUser(ctrl)
 			transaction := types.Transaction{}
 
-			treasure, err := app.NewAccount(0, PrivateKey, nil, FakeNetworkID)
+			treasure, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -94,7 +94,7 @@ func TestLoadGeneration_CanRealizeConstantTrafficShape(t *testing.T) {
 				t.Fatalf("failed to create app controller: %v", err)
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			done := make(chan bool)
 			go func() {
 				defer close(done)

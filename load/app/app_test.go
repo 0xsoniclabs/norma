@@ -17,7 +17,6 @@
 package app_test
 
 import (
-	"context"
 	"fmt"
 	"slices"
 	"testing"
@@ -131,12 +130,12 @@ func TestGenerators(t *testing.T) {
 				}
 			})
 
-			primaryAccount, err := app.NewAccount(0, PrivateKey, nil, FakeNetworkID)
+			primaryAccount, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			context, err := app.NewContext(net, primaryAccount)
+			appCtx, err := app.NewContext(net, primaryAccount)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -146,11 +145,11 @@ func TestGenerators(t *testing.T) {
 					continue
 				}
 				t.Run(name, func(t *testing.T) {
-					application, err := app.NewApplication(name, context, 0, 0)
+					application, err := app.NewApplication(name, appCtx, 0, 0)
 					if err != nil {
 						t.Fatal(err)
 					}
-					testGenerator(t, application, context)
+					testGenerator(t, application, appCtx)
 				})
 			}
 		})
@@ -189,21 +188,21 @@ func TestGenerators_Subsidies(t *testing.T) {
 		}
 	})
 
-	primaryAccount, err := app.NewAccount(0, PrivateKey, nil, FakeNetworkID)
+	primaryAccount, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	context, err := app.NewContext(net, primaryAccount)
+	appCtx, err := app.NewContext(net, primaryAccount)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	subsidiesApp, err := app.NewSubsidiesApplication(context, 0, 0)
+	subsidiesApp, err := app.NewSubsidiesApplication(appCtx, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	testGenerator(t, subsidiesApp, context)
+	testGenerator(t, subsidiesApp, appCtx)
 }
 
 func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
@@ -228,7 +227,7 @@ func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
 			t.Fatal("generated transaction is nil")
 		}
 
-		if err := rpcClient.SendTransaction(context.Background(), tx); err != nil {
+		if err := rpcClient.SendTransaction(t.Context(), tx); err != nil {
 			t.Fatal(err)
 		}
 		transactions = append(transactions, tx)
