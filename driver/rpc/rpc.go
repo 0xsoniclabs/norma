@@ -60,6 +60,7 @@ type ethRpcClient interface {
 	bind.ContractBackend
 	NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error)
 	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
+	BlockNumber(ctx context.Context) (uint64, error)
 	ChainID(ctx context.Context) (*big.Int, error)
 
 	Close()

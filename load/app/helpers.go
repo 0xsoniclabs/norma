@@ -26,11 +26,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+var gasFeeCap = big.NewInt(1e12)
+var gasTipCap = big.NewInt(0)
+
 func createTx(from *Account, toAddress common.Address, value *big.Int, data []byte, gasLimit uint64) (*types.Transaction, error) {
 	tx := types.NewTx(&types.DynamicFeeTx{
 		Nonce:     from.getNextNonce(),
-		GasFeeCap: big.NewInt(1e12),
-		GasTipCap: big.NewInt(0),
+		GasFeeCap: gasFeeCap,
+		GasTipCap: gasTipCap,
 		Gas:       gasLimit,
 		To:        &toAddress,
 		Value:     value,
