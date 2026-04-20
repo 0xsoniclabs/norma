@@ -117,11 +117,11 @@ func TestGenerators(t *testing.T) {
 		"UPGRADES_BRIO",
 	} {
 		t.Run(upgrade, func(t *testing.T) {
-
 			// run local network of one node
+			rules := getCumulativeUpgrades(upgrade)
 			net, err := local.NewLocalNetwork(&driver.NetworkConfig{
 				Validators:   driver.DefaultValidators,
-				NetworkRules: getCumulativeUpgrades(upgrade),
+				NetworkRules: rules,
 			})
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
@@ -137,7 +137,7 @@ func TestGenerators(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			appCtx, err := app.NewContext(net, primaryAccount)
+			appCtx, err := app.NewContext(net, primaryAccount, rules)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -175,11 +175,12 @@ func getCumulativeUpgrades(lastSupported string) map[string]string {
 }
 
 func TestGenerators_Subsidies(t *testing.T) {
+	rules := map[string]string{
+		"UPGRADES_GAS_SUBSIDIES": "true",
+	}
 	net, err := local.NewLocalNetwork(&driver.NetworkConfig{
-		Validators: driver.DefaultValidators,
-		NetworkRules: map[string]string{
-			"UPGRADES_GAS_SUBSIDIES": "true",
-		},
+		Validators:   driver.DefaultValidators,
+		NetworkRules: rules,
 	})
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
@@ -195,7 +196,7 @@ func TestGenerators_Subsidies(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	appCtx, err := app.NewContext(net, primaryAccount)
+	appCtx, err := app.NewContext(net, primaryAccount, rules)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +290,7 @@ func TestGenerators_Bundles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	context, err := app.NewContext(net, primaryAccount)
+	context, err := app.NewContext(net, primaryAccount, rules)
 	if err != nil {
 		t.Fatal(err)
 	}

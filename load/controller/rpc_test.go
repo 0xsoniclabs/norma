@@ -44,7 +44,7 @@ func TestTrafficGenerating(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	appContext, err := app.NewContext(net, primaryAccount)
+	appContext, err := app.NewContext(net, primaryAccount, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -85,6 +85,20 @@ func (mr *MockAppContextMockRecorder) FundAccounts(accounts, value any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FundAccounts", reflect.TypeOf((*MockAppContext)(nil).FundAccounts), accounts, value)
 }
 
+// GetNetworkRules mocks base method.
+func (m *MockAppContext) GetNetworkRules() map[string]string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNetworkRules")
+	ret0, _ := ret[0].(map[string]string)
+	return ret0
+}
+
+// GetNetworkRules indicates an expected call of GetNetworkRules.
+func (mr *MockAppContextMockRecorder) GetNetworkRules() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkRules", reflect.TypeOf((*MockAppContext)(nil).GetNetworkRules))
+}
+
 // GetClient mocks base method.
 func (m *MockAppContext) GetClient() rpc.Client {
 	m.ctrl.T.Helper()
