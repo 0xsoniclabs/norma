@@ -140,7 +140,7 @@ func NewLocalNetwork(config *driver.NetworkConfig) (*LocalNetwork, error) {
 	}
 
 	// Setup infrastructure for managing applications on the network.
-	appContext, err := app.NewContext(net, primaryAccount)
+	appContext, err := app.NewContext(net, primaryAccount, config.NetworkRules)
 	if err != nil {
 		return nil, errors.Join(
 			fmt.Errorf("failed to create app context; %w", err),

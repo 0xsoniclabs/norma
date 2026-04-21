@@ -38,6 +38,7 @@ import (
 type AppContext interface {
 	GetClient() rpc.Client
 	GetTreasure() *Account
+	GetNetworkRules() map[string]string
 	GetTransactOptions(account *Account) (*bind.TransactOpts, error)
 	GetReceipt(txHash common.Hash) (*types.Receipt, error)
 	Run(operation func(*bind.TransactOpts) (*types.Transaction, error)) (*types.Receipt, error)
@@ -49,7 +50,7 @@ type RpcClientFactory interface {
 	DialRandomRpc() (rpc.Client, error)
 }
 
-func NewContext(factory RpcClientFactory, treasury *Account) (*appContext, error) {
+func NewContext(factory RpcClientFactory, treasury *Account, networkRules map[string]string) (AppContext, error) {
 	rpcClient, err := factory.DialRandomRpc()
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to network: %w", err)
@@ -58,8 +59,9 @@ func NewContext(factory RpcClientFactory, treasury *Account) (*appContext, error
 	// Install the helper contract used by this contract for its operations.
 	// Create a context to interact with the network.
 	res := &appContext{
-		rpcClient: rpcClient,
-		treasury:  treasury,
+		rpcClient:    rpcClient,
+		treasury:     treasury,
+		networkRules: networkRules,
 	}
 
 	// Install a helper contract on the network to perform operations.
@@ -73,9 +75,10 @@ func NewContext(factory RpcClientFactory, treasury *Account) (*appContext, error
 }
 
 type appContext struct {
-	rpcClient rpc.Client       // < access to the network
-	treasury  *Account         // < the account paying for management tasks
-	helper    *contract.Helper // < a contract used for on-chain operations
+	rpcClient    rpc.Client       // < access to the network
+	treasury     *Account         // < the account paying for management tasks
+	helper       *contract.Helper // < a contract used for on-chain operations
+	networkRules map[string]string
 }
 
 func (c *appContext) Close() {
@@ -88,6 +91,10 @@ func (c *appContext) GetClient() rpc.Client {
 
 func (c *appContext) GetTreasure() *Account {
 	return c.treasury
+}
+
+func (c *appContext) GetNetworkRules() map[string]string {
+	return c.networkRules
 }
 
 // GetTransactOptions provides transaction options to be used to send a transaction

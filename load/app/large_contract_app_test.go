@@ -34,13 +34,14 @@ import (
 // LargeContractCounter and LargeContract on a network without the Brio upgrade
 // fails due to the contract code size exceeding the pre-Brio limits.
 func TestLargeContractDeploymentFailsWithoutBrio(t *testing.T) {
+	rules := map[string]string{
+		"UPGRADES_SONIC":   "true",
+		"UPGRADES_ALLEGRO": "true",
+		// UPGRADES_BRIO omitted intentionally - deployment of large contracts should fail
+	}
 	net, err := local.NewLocalNetwork(&driver.NetworkConfig{
-		Validators: driver.DefaultValidators,
-		NetworkRules: map[string]string{
-			"UPGRADES_SONIC":   "true",
-			"UPGRADES_ALLEGRO": "true",
-			// UPGRADES_BRIO omitted intentionally - deployment of large contracts should fail
-		},
+		Validators:   driver.DefaultValidators,
+		NetworkRules: rules,
 	})
 	if err != nil {
 		t.Fatalf("failed to create local network: %v", err)
@@ -56,7 +57,7 @@ func TestLargeContractDeploymentFailsWithoutBrio(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctxt, err := app.NewContext(net, primaryAccount)
+	ctxt, err := app.NewContext(net, primaryAccount, rules)
 	if err != nil {
 		t.Fatal(err)
 	}
