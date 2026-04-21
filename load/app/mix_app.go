@@ -54,10 +54,11 @@ var mixAppTypes = []mixEntry{
 	{"transient", 1, nil},
 	{"selfdestructoldcontract", 1, nil},
 	{"selfdestructnewcontract", 1, nil},
-	{"ecdsa", 4, nil},
+	{"ecdsa", 2, nil},
 	{"largecontract", 1, nil},
 	{"allofbundle", 3, []string{"UPGRADES_TRANSACTION_BUNDLES"}},
-	{"subsidizedbundle", 1, []string{"UPGRADES_GAS_SUBSIDIES", "UPGRADES_TRANSACTION_BUNDLES"}},
+	{"oneofbundle", 3, []string{"UPGRADES_TRANSACTION_BUNDLES"}},
+	{"subsidizedbundle", 4, []string{"UPGRADES_GAS_SUBSIDIES", "UPGRADES_TRANSACTION_BUNDLES"}},
 }
 
 // MixApplication initialises one instance of every application type and
