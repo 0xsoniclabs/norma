@@ -57,22 +57,25 @@ func TestGenerators_Bundles(t *testing.T) {
 	}
 }
 
-func testBundleGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
-	users, err := app.CreateUsers(ctxt, 1)
+func testBundleGenerator(t *testing.T, application app.Application, ctxt app.AppContext) {
+	users, err := application.CreateUsers(ctxt, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(users) != 1 {
 		t.Fatalf("unexpected number of users created, wanted 1, got %d", len(users))
 	}
-	user := users[0]
+	user, ok := users[0].(app.BundleUser)
+	if !ok {
+		t.Fatal("User does not implement BundleUser")
+	}
 
 	numBundles := 5
 	rpcClient := ctxt.GetClient()
 	planHashes := make([]common.Hash, 0, numBundles)
 	signer := types.LatestSignerForChainID(big.NewInt(FakeNetworkID))
 	for range numBundles {
-		tx, err := user.GenerateTx()
+		tx, shouldFail, err := user.GenerateBundle()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -84,14 +87,16 @@ func testBundleGenerator(t *testing.T, app app.Application, ctxt app.AppContext)
 			t.Fatal(err)
 		}
 
-		txBundle, err := bundle.OpenEnvelope(signer, tx)
-		if err != nil {
-			t.Fatalf("failed to open bundle envelope: %v", err)
+		if !shouldFail {
+			txBundle, err := bundle.OpenEnvelope(signer, tx)
+			if err != nil {
+				t.Fatalf("failed to open bundle envelope: %v", err)
+			}
+			planHashes = append(planHashes, txBundle.Plan.Hash())
 		}
-		planHashes = append(planHashes, txBundle.Plan.Hash())
 	}
 
-	// Wait for each bundle execution via sonic_getBundleInfo. This detects
+	// Wait for each successful bundle execution via sonic_getBundleInfo. This detects
 	// rolled-back bundles which commit no transactions and have no receipts.
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
@@ -105,7 +110,7 @@ func testBundleGenerator(t *testing.T, app app.Application, ctxt app.AppContext)
 
 	err = network.Retry(network.DefaultRetryAttempts, 1*time.Second, func() error {
 		sent := user.GetSentTransactions()
-		received, err := app.GetReceivedTransactions(rpcClient)
+		received, err := application.GetReceivedTransactions(rpcClient)
 		if err != nil {
 			return fmt.Errorf("unable to get amount of received txs; %v", err)
 		}

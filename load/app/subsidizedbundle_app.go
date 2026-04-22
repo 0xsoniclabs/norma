@@ -208,6 +208,11 @@ type SubsidizedBundleUser struct {
 }
 
 func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
+	tx, _, err := u.GenerateBundle()
+	return tx, err
+}
+
+func (u *SubsidizedBundleUser) GenerateBundle() (tx *types.Transaction, successExpected bool, err error) {
 	shouldFail := rand.Intn(2) == 0
 
 	// sponsoredValue must cover the user's approve tx gas cost.
@@ -216,12 +221,12 @@ func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
 
 	sponsorData, err := u.registryAbi.Pack("sponsor", u.approvalFundId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to pack sponsor: %w", err)
+		return nil, false, fmt.Errorf("failed to pack sponsor: %w", err)
 	}
 
 	approveData, err := u.erc20Abi.Pack("approve", u.sponsor.address, big.NewInt(1))
 	if err != nil {
-		return nil, fmt.Errorf("failed to pack approve: %w", err)
+		return nil, false, fmt.Errorf("failed to pack approve: %w", err)
 	}
 
 	transferAmount := big.NewInt(1)
@@ -230,12 +235,12 @@ func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
 	}
 	transferData, err := u.erc20Abi.Pack("transferFrom", u.user.address, u.sponsor.address, transferAmount)
 	if err != nil {
-		return nil, fmt.Errorf("failed to pack transferFrom: %w", err)
+		return nil, false, fmt.Errorf("failed to pack transferFrom: %w", err)
 	}
 
 	currentBlock, err := u.client.BlockNumber(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("failed to get current block number: %w", err)
+		return nil, false, fmt.Errorf("failed to get current block number: %w", err)
 	}
 
 	envelope := bundle.NewBuilder().
@@ -276,7 +281,7 @@ func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
 		u.sponsor.getNextNonce()
 		u.sentTxs.Add(1)
 	}
-	return envelope, nil
+	return envelope, shouldFail, nil
 }
 
 func (u *SubsidizedBundleUser) GetSentTransactions() uint64 {

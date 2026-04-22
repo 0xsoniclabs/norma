@@ -171,11 +171,16 @@ type AllOfBundleUser struct {
 }
 
 func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
+	tx, _, err := u.GenerateBundle()
+	return tx, err
+}
+
+func (u *AllOfBundleUser) GenerateBundle() (tx *types.Transaction, successExpected bool, err error) {
 	shouldFail := rand.Intn(2) == 0
 
 	approveData, err := u.erc20Abi.Pack("approve", u.spender.address, big.NewInt(1))
 	if err != nil {
-		return nil, fmt.Errorf("failed to pack approve: %w", err)
+		return nil, false, fmt.Errorf("failed to pack approve: %w", err)
 	}
 
 	transferAmount := big.NewInt(1)
@@ -184,12 +189,12 @@ func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
 	}
 	transferData, err := u.erc20Abi.Pack("transferFrom", u.approver.address, u.spender.address, transferAmount)
 	if err != nil {
-		return nil, fmt.Errorf("failed to pack transferFrom: %w", err)
+		return nil, false, fmt.Errorf("failed to pack transferFrom: %w", err)
 	}
 
 	currentBlock, err := u.client.BlockNumber(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("failed to get current block number: %w", err)
+		return nil, false, fmt.Errorf("failed to get current block number: %w", err)
 	}
 
 	envelope := bundle.NewBuilder().
@@ -220,7 +225,7 @@ func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
 		u.spender.getNextNonce()
 		u.sentTxs.Add(1)
 	}
-	return envelope, nil
+	return envelope, shouldFail, nil
 }
 
 func (u *AllOfBundleUser) GetSentTransactions() uint64 {
