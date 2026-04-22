@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver/network/local"
 	"github.com/0xsoniclabs/norma/load/app"
 	"github.com/0xsoniclabs/sonic/gossip/blockproc/bundle"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -65,10 +67,11 @@ func testBundleGenerator(t *testing.T, app app.Application, ctxt app.AppContext)
 	}
 	user := users[0]
 
+	numBundles := 5
 	rpcClient := ctxt.GetClient()
-	numTransactions := 5
-	envelopeTxs := []*types.Transaction{}
-	for range numTransactions {
+	planHashes := make([]common.Hash, 0, numBundles)
+	signer := types.LatestSignerForChainID(big.NewInt(FakeNetworkID))
+	for range numBundles {
 		tx, err := user.GenerateTx()
 		if err != nil {
 			t.Fatal(err)
@@ -77,34 +80,27 @@ func testBundleGenerator(t *testing.T, app app.Application, ctxt app.AppContext)
 			t.Fatal("generated transaction is nil")
 		}
 
-		if err := rpcClient.SendTransaction(context.Background(), tx); err != nil {
+		if err := rpcClient.SendTransaction(t.Context(), tx); err != nil {
 			t.Fatal(err)
 		}
-		envelopeTxs = append(envelopeTxs, tx)
+
+		txBundle, err := bundle.OpenEnvelope(signer, tx)
+		if err != nil {
+			t.Fatalf("failed to open bundle envelope: %v", err)
+		}
+		planHashes = append(planHashes, txBundle.Plan.Hash())
 	}
 
-	// The envelope itself has no receipt - wait for each inner step tx to land on
-	// chain individually, mirroring how testGenerator waits for tx receipts.
-	chainID, err := rpcClient.ChainID(context.Background())
-	if err != nil {
-		t.Fatalf("failed to get chain ID: %v", err)
-	}
-	signer := types.NewCancunSigner(chainID)
-
-	for _, envelopeTx := range envelopeTxs {
-		txBundle, openErr := bundle.OpenEnvelope(signer, envelopeTx)
-		if openErr != nil {
-			t.Fatalf("failed to open bundle envelopeTx: %v", openErr)
+	// Wait for each bundle execution via sonic_getBundleInfo. This detects
+	// rolled-back bundles which commit no transactions and have no receipts.
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	for i, planHash := range planHashes {
+		info, err := rpcClient.WaitForBundleInfo(ctx, planHash)
+		if err != nil {
+			t.Fatalf("bundle %d (plan %s) not executed: %v", i, planHash, err)
 		}
-		for _, innerTx := range txBundle.GetTransactionsInReferencedOrder() {
-			if receipt, err := ctxt.GetReceipt(innerTx.Hash()); err != nil {
-				t.Errorf("inner step tx receipt not available: %v", err)
-			} else if receipt.Status != types.ReceiptStatusSuccessful {
-				t.Errorf("tx %s failed with status %d", innerTx.Hash(), receipt.Status)
-			} else {
-				fmt.Printf("tx receipt %s OK\n", innerTx.Hash())
-			}
-		}
+		fmt.Printf("bundle %d (plan %s) executed: block=%d position=%d count=%d\n", i, planHash, info.Block, info.Position, info.Count)
 	}
 
 	err = network.Retry(network.DefaultRetryAttempts, 1*time.Second, func() error {

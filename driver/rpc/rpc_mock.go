@@ -14,6 +14,7 @@ import (
 	big "math/big"
 	reflect "reflect"
 
+	sonicapi "github.com/0xsoniclabs/sonic/api/sonicapi"
 	ethereum "github.com/ethereum/go-ethereum"
 	common "github.com/ethereum/go-ethereum/common"
 	types "github.com/ethereum/go-ethereum/core/types"
@@ -297,6 +298,36 @@ func (m *MockClient) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 func (mr *MockClientMockRecorder) SuggestGasTipCap(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SuggestGasTipCap", reflect.TypeOf((*MockClient)(nil).SuggestGasTipCap), ctx)
+}
+
+// WaitForBundleInfo mocks base method.
+func (m *MockClient) WaitForBundleInfo(ctx context.Context, planHash common.Hash) (*sonicapi.RPCBundleInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WaitForBundleInfo", ctx, planHash)
+	ret0, _ := ret[0].(*sonicapi.RPCBundleInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// WaitForBundleInfo indicates an expected call of WaitForBundleInfo.
+func (mr *MockClientMockRecorder) WaitForBundleInfo(ctx, planHash any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForBundleInfo", reflect.TypeOf((*MockClient)(nil).WaitForBundleInfo), ctx, planHash)
+}
+
+// GetBundleInfo mocks base method.
+func (m *MockClient) GetBundleInfo(planHash common.Hash) (*sonicapi.RPCBundleInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBundleInfo", planHash)
+	ret0, _ := ret[0].(*sonicapi.RPCBundleInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBundleInfo indicates an expected call of GetBundleInfo.
+func (mr *MockClientMockRecorder) GetBundleInfo(planHash any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleInfo", reflect.TypeOf((*MockClient)(nil).GetBundleInfo), planHash)
 }
 
 // WaitTransactionReceipt mocks base method.

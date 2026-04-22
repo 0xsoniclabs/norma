@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
@@ -141,7 +142,7 @@ func (a *SubsidizedBundleApplication) CreateUsers(appContext AppContext, numUser
 			user:            user,
 			sponsor:         sponsor,
 			accountFactory:  a.accountFactory,
-			signer:          types.NewCancunSigner(user.chainID),
+			signer:          types.LatestSignerForChainID(user.chainID),
 			client:          appContext.GetClient(),
 			approvalFundId:  approvalFundId,
 		}
@@ -207,6 +208,8 @@ type SubsidizedBundleUser struct {
 }
 
 func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
+	shouldFail := rand.Intn(2) == 0
+
 	// sponsoredValue must cover the user's approve tx gas cost.
 	approveGasLimit := big.NewInt(70_000)
 	sponsoredValue := new(big.Int).Mul(approveGasLimit, gasFeeCap)
@@ -221,14 +224,13 @@ func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
 		return nil, fmt.Errorf("failed to pack approve: %w", err)
 	}
 
-	transferData, err := u.erc20Abi.Pack("transferFrom", u.user.address, u.sponsor.address, big.NewInt(1))
+	transferAmount := big.NewInt(1)
+	if shouldFail {
+		transferAmount = big.NewInt(2) // exceeds the approved allowance, causing the bundle to fail
+	}
+	transferData, err := u.erc20Abi.Pack("transferFrom", u.user.address, u.sponsor.address, transferAmount)
 	if err != nil {
 		return nil, fmt.Errorf("failed to pack transferFrom: %w", err)
-	}
-
-	bundler, err := u.accountFactory.CreateAccount(nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create bundler account: %w", err)
 	}
 
 	currentBlock, err := u.client.BlockNumber(context.Background())
@@ -238,7 +240,6 @@ func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
 
 	envelope := bundle.NewBuilder().
 		WithSigner(u.signer).
-		SetEnvelopeSenderKey(bundler.privateKey).
 		AllOf(
 			bundle.Step(u.sponsor.privateKey, &types.DynamicFeeTx{
 				Nonce:     u.sponsor.getNextNonce(),
@@ -269,7 +270,9 @@ func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
 		SetEarliest(currentBlock).
 		Build()
 
-	u.sentTxs.Add(1)
+	if !shouldFail {
+		u.sentTxs.Add(1)
+	}
 	return envelope, nil
 }
 
