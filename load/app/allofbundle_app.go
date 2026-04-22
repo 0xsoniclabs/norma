@@ -196,7 +196,7 @@ func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
 		WithSigner(u.signer).
 		AllOf(
 			bundle.Step(u.approver.privateKey, &types.DynamicFeeTx{
-				Nonce:     u.approver.getNextNonce(),
+				Nonce:     u.approver.getCurrentNonce(),
 				Gas:       70_000, // base (21k) + approve SSTORE (22k) + event
 				GasFeeCap: gasFeeCap,
 				GasTipCap: gasTipCap,
@@ -204,7 +204,7 @@ func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
 				Data:      approveData,
 			}),
 			bundle.Step(u.spender.privateKey, &types.DynamicFeeTx{
-				Nonce:     u.spender.getNextNonce(),
+				Nonce:     u.spender.getCurrentNonce(),
 				Gas:       90_000, // base (21k) + 3x SLOAD + 3x SSTORE (22k) + event
 				GasFeeCap: gasFeeCap,
 				GasTipCap: gasTipCap,
@@ -216,6 +216,8 @@ func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
 		Build()
 
 	if !shouldFail {
+		u.approver.getNextNonce()
+		u.spender.getNextNonce()
 		u.sentTxs.Add(1)
 	}
 	return envelope, nil

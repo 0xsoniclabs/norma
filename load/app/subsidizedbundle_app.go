@@ -242,7 +242,7 @@ func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
 		WithSigner(u.signer).
 		AllOf(
 			bundle.Step(u.sponsor.privateKey, &types.DynamicFeeTx{
-				Nonce:     u.sponsor.getNextNonce(),
+				Nonce:     u.sponsor.getCurrentNonce(),
 				Gas:       90_000,
 				GasFeeCap: gasFeeCap,
 				GasTipCap: gasTipCap,
@@ -251,7 +251,7 @@ func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
 				Data:      sponsorData,
 			}),
 			bundle.Step(u.user.privateKey, &types.DynamicFeeTx{
-				Nonce:     u.user.getNextNonce(),
+				Nonce:     u.user.getCurrentNonce(),
 				Gas:       approveGasLimit.Uint64(),
 				GasFeeCap: big.NewInt(0), // gasPrice=0: covered by the subsidy from step 1
 				GasTipCap: big.NewInt(0),
@@ -259,7 +259,7 @@ func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
 				Data:      approveData,
 			}),
 			bundle.Step(u.sponsor.privateKey, &types.DynamicFeeTx{
-				Nonce:     u.sponsor.getNextNonce(),
+				Nonce:     u.sponsor.getCurrentNonce() + 1,
 				Gas:       90_000,
 				GasFeeCap: gasFeeCap,
 				GasTipCap: gasTipCap,
@@ -271,6 +271,9 @@ func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
 		Build()
 
 	if !shouldFail {
+		u.sponsor.getNextNonce()
+		u.user.getNextNonce()
+		u.sponsor.getNextNonce()
 		u.sentTxs.Add(1)
 	}
 	return envelope, nil
