@@ -171,8 +171,13 @@ type OneOfBundleUser struct {
 }
 
 func (u *OneOfBundleUser) GenerateTx() (*types.Transaction, error) {
+	tx, _, err := u.GenerateBundle()
+	return tx, err
+}
+
+func (u *OneOfBundleUser) GenerateBundle() (tx *types.Transaction, shouldFail bool, err error) {
 	random := rand.Intn(3)
-	shouldFail := random == 0
+	shouldFail = random == 0
 	successfulFirst := random == 1
 
 	transferAmount := big.NewInt(1)
@@ -181,12 +186,12 @@ func (u *OneOfBundleUser) GenerateTx() (*types.Transaction, error) {
 	}
 	transferData, err := u.erc20Abi.Pack("transfer", u.targetAddress, transferAmount)
 	if err != nil {
-		return nil, fmt.Errorf("failed to pack rich transfer: %w", err)
+		return nil, false, fmt.Errorf("failed to pack rich transfer: %w", err)
 	}
 
 	currentBlock, err := u.client.BlockNumber(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("failed to get current block number: %w", err)
+		return nil, false, fmt.Errorf("failed to get current block number: %w", err)
 	}
 
 	successfulStep := bundle.Step(u.richSender.privateKey, &types.DynamicFeeTx{
@@ -228,7 +233,7 @@ func (u *OneOfBundleUser) GenerateTx() (*types.Transaction, error) {
 		}
 		u.sentTxs.Add(1)
 	}
-	return envelope, nil
+	return envelope, shouldFail, nil
 }
 
 func (u *OneOfBundleUser) GetSentTransactions() uint64 {

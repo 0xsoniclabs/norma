@@ -175,8 +175,8 @@ func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
 	return tx, err
 }
 
-func (u *AllOfBundleUser) GenerateBundle() (tx *types.Transaction, successExpected bool, err error) {
-	shouldFail := rand.Intn(2) == 0
+func (u *AllOfBundleUser) GenerateBundle() (tx *types.Transaction, shouldFail bool, err error) {
+	shouldFail = rand.Intn(2) == 0
 
 	approveData, err := u.erc20Abi.Pack("approve", u.spender.address, big.NewInt(1))
 	if err != nil {
