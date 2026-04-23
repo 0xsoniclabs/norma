@@ -45,6 +45,7 @@ func TestGenerators_Bundles(t *testing.T) {
 
 	for appId, name := range []string{
 		"AllOfBundle",
+		"OneOfBundle",
 		"SubsidizedBundle",
 	} {
 		t.Run(name, func(t *testing.T) {

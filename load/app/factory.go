@@ -60,6 +60,8 @@ func getFactory(appType string) appFactoryFunc {
 		return NewLargeContractApplication
 	case "allofbundle":
 		return NewAllOfBundleApplication
+	case "oneofbundle":
+		return NewOneOfBundleApplication
 	case "subsidizedbundle":
 		return NewSubsidizedBundleApplication
 	case "mix":

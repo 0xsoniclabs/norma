@@ -212,8 +212,8 @@ func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
 	return tx, err
 }
 
-func (u *SubsidizedBundleUser) GenerateBundle() (tx *types.Transaction, successExpected bool, err error) {
-	shouldFail := rand.Intn(2) == 0
+func (u *SubsidizedBundleUser) GenerateBundle() (tx *types.Transaction, shouldFail bool, err error) {
+	shouldFail = rand.Intn(2) == 0
 
 	// sponsoredValue must cover the user's approve tx gas cost.
 	approveGasLimit := big.NewInt(70_000)
