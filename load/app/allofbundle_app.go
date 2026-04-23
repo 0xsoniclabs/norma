@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
@@ -105,7 +106,7 @@ func (a *AllOfBundleApplication) CreateUsers(appContext AppContext, numUsers int
 			approver:       approver,
 			spender:        spender,
 			accountFactory: a.accountFactory,
-			signer:         types.NewLondonSigner(approver.chainID),
+			signer:         types.LatestSignerForChainID(approver.chainID),
 			client:         appContext.GetClient(),
 		}
 		approverAddresses[i] = approver.address
@@ -170,33 +171,37 @@ type AllOfBundleUser struct {
 }
 
 func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
+	tx, _, err := u.GenerateBundle()
+	return tx, err
+}
+
+func (u *AllOfBundleUser) GenerateBundle() (tx *types.Transaction, successExpected bool, err error) {
+	shouldFail := rand.Intn(2) == 0
 
 	approveData, err := u.erc20Abi.Pack("approve", u.spender.address, big.NewInt(1))
 	if err != nil {
-		return nil, fmt.Errorf("failed to pack approve: %w", err)
+		return nil, false, fmt.Errorf("failed to pack approve: %w", err)
 	}
 
-	transferData, err := u.erc20Abi.Pack("transferFrom", u.approver.address, u.spender.address, big.NewInt(1))
-	if err != nil {
-		return nil, fmt.Errorf("failed to pack transferFrom: %w", err)
+	transferAmount := big.NewInt(1)
+	if shouldFail {
+		transferAmount = big.NewInt(2) // exceeds the approved allowance, causing the bundle to fail
 	}
-
-	bundler, err := u.accountFactory.CreateAccount(nil)
+	transferData, err := u.erc20Abi.Pack("transferFrom", u.approver.address, u.spender.address, transferAmount)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create bundler account: %w", err)
+		return nil, false, fmt.Errorf("failed to pack transferFrom: %w", err)
 	}
 
 	currentBlock, err := u.client.BlockNumber(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("failed to get current block number: %w", err)
+		return nil, false, fmt.Errorf("failed to get current block number: %w", err)
 	}
 
 	envelope := bundle.NewBuilder().
 		WithSigner(u.signer).
-		SetEnvelopeSenderKey(bundler.privateKey).
 		AllOf(
 			bundle.Step(u.approver.privateKey, &types.DynamicFeeTx{
-				Nonce:     u.approver.getNextNonce(),
+				Nonce:     u.approver.getCurrentNonce(),
 				Gas:       70_000, // base (21k) + approve SSTORE (22k) + event
 				GasFeeCap: gasFeeCap,
 				GasTipCap: gasTipCap,
@@ -204,7 +209,7 @@ func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
 				Data:      approveData,
 			}),
 			bundle.Step(u.spender.privateKey, &types.DynamicFeeTx{
-				Nonce:     u.spender.getNextNonce(),
+				Nonce:     u.spender.getCurrentNonce(),
 				Gas:       90_000, // base (21k) + 3x SLOAD + 3x SSTORE (22k) + event
 				GasFeeCap: gasFeeCap,
 				GasTipCap: gasTipCap,
@@ -215,8 +220,12 @@ func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
 		SetEarliest(currentBlock).
 		Build()
 
-	u.sentTxs.Add(1)
-	return envelope, nil
+	if !shouldFail {
+		u.approver.getNextNonce()
+		u.spender.getNextNonce()
+		u.sentTxs.Add(1)
+	}
+	return envelope, shouldFail, nil
 }
 
 func (u *AllOfBundleUser) GetSentTransactions() uint64 {

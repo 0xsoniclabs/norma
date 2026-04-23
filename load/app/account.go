@@ -106,8 +106,13 @@ func NewAccount(id int, privateKeyHex string, chainID int64) (*Account, error) {
 	}, nil
 }
 
-// getNextNonce provides a nonce to be used for next transactions sent using this account
+// getNextNonce provides a nonce to be used for next transactions sent using this account, with incrementing
 func (a *Account) getNextNonce() uint64 {
 	current := atomic.AddUint64(&a.nonce, 1)
 	return current - 1
+}
+
+// getCurrentNonce provides a nonce to be used for next transactions sent using this account, without incrementing
+func (a *Account) getCurrentNonce() uint64 {
+	return atomic.LoadUint64(&a.nonce)
 }

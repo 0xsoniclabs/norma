@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/0xsoniclabs/sonic/api/sonicapi"
 	"github.com/ethereum/go-ethereum"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -45,6 +46,15 @@ type Client interface {
 	// This method retries with exponential backoff to fetch the transaction receipt,
 	//  until a certain timeout is reached.
 	WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
+
+	// GetBundleInfo calls sonic_getBundleInfo with the given execution plan hash.
+	// Returns nil, nil if the bundle has not been executed yet.
+	GetBundleInfo(planHash common.Hash) (*sonicapi.RPCBundleInfo, error)
+
+	// WaitForBundleInfo polls sonic_getBundleInfo until the bundle has been
+	// executed or the context is cancelled. Returns nil, nil if the context
+	// expires before the bundle is executed.
+	WaitForBundleInfo(ctx context.Context, planHash common.Hash) (*sonicapi.RPCBundleInfo, error)
 }
 
 func WrapRpcClient(rpcClient *rpc.Client) *Impl {
@@ -102,6 +112,40 @@ func (r Impl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
 		return receipt, nil
 	}
 	return nil, fmt.Errorf("failed to get transaction receipt: timeout")
+}
+
+func (r Impl) GetBundleInfo(planHash common.Hash) (*sonicapi.RPCBundleInfo, error) {
+	var info *sonicapi.RPCBundleInfo
+	if err := r.Call(&info, "sonic_getBundleInfo", planHash); err != nil {
+		return nil, err
+	}
+	return info, nil
+}
+
+// WaitForBundleInfo polls sonic_getBundleInfo until the bundle has been executed
+// or the context is cancelled. Returns nil, nil if the bundle has not been
+// executed yet when the context expires.
+func (r Impl) WaitForBundleInfo(ctx context.Context, planHash common.Hash) (*sonicapi.RPCBundleInfo, error) {
+	const maxDelay = 5 * time.Second
+	delay := 10 * time.Millisecond
+	for {
+		info, err := r.GetBundleInfo(planHash)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get bundle info: %w", err)
+		}
+		if info != nil {
+			return info, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, context.Canceled
+		case <-time.After(delay):
+			delay *= 2
+			if delay > maxDelay {
+				delay = maxDelay
+			}
+		}
+	}
 }
 
 func (r Impl) transactionReceipt(txHash common.Hash) (*types.Receipt, error) {
