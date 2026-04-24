@@ -78,17 +78,14 @@ func testBundleGenerator(t *testing.T, application app.Application, ctxt app.App
 	if len(users) != 1 {
 		t.Fatalf("unexpected number of users created, wanted 1, got %d", len(users))
 	}
-	user, ok := users[0].(app.BundleUser)
-	if !ok {
-		t.Fatal("User does not implement BundleUser")
-	}
+	user := users[0]
 
 	numBundles := 5
 	rpcClient := ctxt.GetClient()
 	planHashes := make([]common.Hash, 0, numBundles)
 	signer := types.LatestSignerForChainID(big.NewInt(FakeNetworkID))
-	for range numBundles {
-		tx, shouldFail, err := user.GenerateBundle()
+	for i := range numBundles {
+		tx, err := user.GenerateTx()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -100,13 +97,13 @@ func testBundleGenerator(t *testing.T, application app.Application, ctxt app.App
 			t.Fatal(err)
 		}
 
-		if !shouldFail {
-			txBundle, err := bundle.OpenEnvelope(signer, tx)
-			if err != nil {
-				t.Fatalf("failed to open bundle envelope: %v", err)
-			}
-			planHashes = append(planHashes, txBundle.Plan.Hash())
+		txBundle, err := bundle.OpenEnvelope(signer, tx)
+		if err != nil {
+			t.Fatalf("failed to open bundle envelope: %v", err)
 		}
+		planHash := txBundle.Plan.Hash()
+		fmt.Printf("Sent bundle %d (plan %s)\n", i, planHash)
+		planHashes = append(planHashes, planHash)
 	}
 
 	// Wait for each successful bundle execution via sonic_getBundleInfo. This detects
@@ -114,6 +111,7 @@ func testBundleGenerator(t *testing.T, application app.Application, ctxt app.App
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	for i, planHash := range planHashes {
+		fmt.Printf("Awaiting bundle %d (plan %s)...\n", i, planHash)
 		info, err := rpcClient.WaitForBundleInfo(ctx, planHash)
 		if err != nil {
 			t.Fatalf("bundle %d (plan %s) not executed: %v", i, planHash, err)
@@ -150,7 +148,7 @@ func testFailingBundleGenerator(t *testing.T, application app.Application, ctxt 
 	numBundles := 5
 	rpcClient := ctxt.GetClient()
 	lastReceived := uint64(0)
-	for range numBundles {
+	for i := range numBundles {
 		tx, err := user.GenerateTx()
 		if err != nil {
 			t.Fatal(err)
@@ -160,8 +158,10 @@ func testFailingBundleGenerator(t *testing.T, application app.Application, ctxt 
 		}
 
 		if err := rpcClient.SendTransaction(t.Context(), tx); err != nil {
-			t.Fatal(err)
+			fmt.Printf("eth_sendRawTransaction failed for randomly failing bundle (expected): %v\n", err)
+			continue
 		}
+		fmt.Printf("Sent bundle %d\n", i)
 
 		// wait for tx to be processed (necessary because of nonce loading in GenerateTx())
 		_ = network.Retry(5, 1*time.Second, func() error {
@@ -170,7 +170,7 @@ func testFailingBundleGenerator(t *testing.T, application app.Application, ctxt 
 				return fmt.Errorf("unable to get amount of received txs; %v", err)
 			}
 			if received <= lastReceived {
-				fmt.Printf("wating for tx to be or not to be processed (%d vs %d)\n", received, lastReceived)
+				fmt.Printf("Waiting for received txs increase before sending next tx (received %d)\n", received)
 				return fmt.Errorf("not enough bundled txs received, received %d", received)
 			}
 			lastReceived = received
@@ -183,7 +183,7 @@ func testFailingBundleGenerator(t *testing.T, application app.Application, ctxt 
 		if err != nil {
 			return fmt.Errorf("unable to get amount of received txs; %v", err)
 		}
-		if received < 1 {
+		if received < 2 {
 			return fmt.Errorf("not enough bundled txs received, received %d", received)
 		}
 		return nil

@@ -31,8 +31,8 @@ var (
 
 // ProbabilisticFailingMetaData contains all meta data concerning the ProbabilisticFailing contract.
 var ProbabilisticFailingMetaData = &bind.MetaData{
-	ABI: "[{\"inputs\":[],\"name\":\"getCount\",\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":\"int256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint8\",\"name\":\"failureProbability\",\"type\":\"uint8\"}],\"name\":\"incrementCounter\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
-	Bin: "0x60806040526001600055348015601457600080fd5b50610223806100246000396000f3fe608060405234801561001057600080fd5b50600436106100355760003560e01c80627554551461003a578063a87d942c1461004f575b600080fd5b61004d61004836600461013c565b610069565b005b610057610126565b60405190815260200160405180910390f35b600080546040516bffffffffffffffffffffffff193360601b166020820152603481019190915242605482015260740160408051601f198184030181529190528051602090910120905060ff82166100c2606483610166565b101561010b5760405162461bcd60e51b8152602060048201526014602482015273141c9bd898589a5b1a5cdd1a58c81c995d995c9d60621b604482015260640160405180910390fd5b600160008082825461011d919061019e565b90915550505050565b6000600160005461013791906101c6565b905090565b60006020828403121561014e57600080fd5b813560ff8116811461015f57600080fd5b9392505050565b60008261018357634e487b7160e01b600052601260045260246000fd5b500690565b634e487b7160e01b600052601160045260246000fd5b80820182811260008312801582168215821617156101be576101be610188565b505092915050565b81810360008312801583831316838312821617156101e6576101e6610188565b509291505056fea2646970667358221220b801152c3af77199c5450d75941f5f1f72d2425985ad4da068c1796435106e9864736f6c634300081d0033",
+	ABI: "[{\"inputs\":[],\"name\":\"getCount\",\"outputs\":[{\"internalType\":\"int256\",\"name\":\"\",\"type\":\"int256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint8\",\"name\":\"failureProbability\",\"type\":\"uint8\"},{\"internalType\":\"uint32\",\"name\":\"seed\",\"type\":\"uint32\"}],\"name\":\"incrementCounter\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
+	Bin: "0x60806040526001600055348015601457600080fd5b50610257806100246000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c806319dde1691461003b578063a87d942c14610050575b600080fd5b61004e610049366004610152565b61006a565b005b61005861013c565b60405190815260200160405180910390f35b600080546040516bffffffffffffffffffffffff193360601b16602082015260348101919091524260548201526001600160e01b031960e084901b16607482015260780160408051601f198184030181529190528051602090910120905060ff83166100d760648361019a565b10156101205760405162461bcd60e51b8152602060048201526014602482015273141c9bd898589a5b1a5cdd1a58c81c995d995c9d60621b604482015260640160405180910390fd5b600160008082825461013291906101d2565b9091555050505050565b6000600160005461014d91906101fa565b905090565b6000806040838503121561016557600080fd5b823560ff8116811461017657600080fd5b9150602083013563ffffffff8116811461018f57600080fd5b809150509250929050565b6000826101b757634e487b7160e01b600052601260045260246000fd5b500690565b634e487b7160e01b600052601160045260246000fd5b80820182811260008312801582168215821617156101f2576101f26101bc565b505092915050565b818103600083128015838313168383128216171561021a5761021a6101bc565b509291505056fea26469706673582212202f43548103680a5d9716504a1450dbece641976702e5b3c616621c8b77491d0f64736f6c634300081d0033",
 }
 
 // ProbabilisticFailingABI is the input ABI used to generate the binding from.
@@ -233,23 +233,23 @@ func (_ProbabilisticFailing *ProbabilisticFailingCallerSession) GetCount() (*big
 	return _ProbabilisticFailing.Contract.GetCount(&_ProbabilisticFailing.CallOpts)
 }
 
-// IncrementCounter is a paid mutator transaction binding the contract method 0x00755455.
+// IncrementCounter is a paid mutator transaction binding the contract method 0x19dde169.
 //
-// Solidity: function incrementCounter(uint8 failureProbability) returns()
-func (_ProbabilisticFailing *ProbabilisticFailingTransactor) IncrementCounter(opts *bind.TransactOpts, failureProbability uint8) (*types.Transaction, error) {
-	return _ProbabilisticFailing.contract.Transact(opts, "incrementCounter", failureProbability)
+// Solidity: function incrementCounter(uint8 failureProbability, uint32 seed) returns()
+func (_ProbabilisticFailing *ProbabilisticFailingTransactor) IncrementCounter(opts *bind.TransactOpts, failureProbability uint8, seed uint32) (*types.Transaction, error) {
+	return _ProbabilisticFailing.contract.Transact(opts, "incrementCounter", failureProbability, seed)
 }
 
-// IncrementCounter is a paid mutator transaction binding the contract method 0x00755455.
+// IncrementCounter is a paid mutator transaction binding the contract method 0x19dde169.
 //
-// Solidity: function incrementCounter(uint8 failureProbability) returns()
-func (_ProbabilisticFailing *ProbabilisticFailingSession) IncrementCounter(failureProbability uint8) (*types.Transaction, error) {
-	return _ProbabilisticFailing.Contract.IncrementCounter(&_ProbabilisticFailing.TransactOpts, failureProbability)
+// Solidity: function incrementCounter(uint8 failureProbability, uint32 seed) returns()
+func (_ProbabilisticFailing *ProbabilisticFailingSession) IncrementCounter(failureProbability uint8, seed uint32) (*types.Transaction, error) {
+	return _ProbabilisticFailing.Contract.IncrementCounter(&_ProbabilisticFailing.TransactOpts, failureProbability, seed)
 }
 
-// IncrementCounter is a paid mutator transaction binding the contract method 0x00755455.
+// IncrementCounter is a paid mutator transaction binding the contract method 0x19dde169.
 //
-// Solidity: function incrementCounter(uint8 failureProbability) returns()
-func (_ProbabilisticFailing *ProbabilisticFailingTransactorSession) IncrementCounter(failureProbability uint8) (*types.Transaction, error) {
-	return _ProbabilisticFailing.Contract.IncrementCounter(&_ProbabilisticFailing.TransactOpts, failureProbability)
+// Solidity: function incrementCounter(uint8 failureProbability, uint32 seed) returns()
+func (_ProbabilisticFailing *ProbabilisticFailingTransactorSession) IncrementCounter(failureProbability uint8, seed uint32) (*types.Transaction, error) {
+	return _ProbabilisticFailing.Contract.IncrementCounter(&_ProbabilisticFailing.TransactOpts, failureProbability, seed)
 }
