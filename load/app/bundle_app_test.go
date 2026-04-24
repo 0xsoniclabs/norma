@@ -56,6 +56,18 @@ func TestGenerators_Bundles(t *testing.T) {
 			testBundleGenerator(t, application, appCtx)
 		})
 	}
+
+	for appId, name := range []string{
+		"FailingBundle",
+	} {
+		t.Run(name, func(t *testing.T) {
+			application, err := app.NewApplication(name, appCtx, 0, uint32(appId))
+			if err != nil {
+				t.Fatal(err)
+			}
+			testFailingBundleGenerator(t, application, appCtx)
+		})
+	}
 }
 
 func testBundleGenerator(t *testing.T, application app.Application, ctxt app.AppContext) {
@@ -116,7 +128,63 @@ func testBundleGenerator(t *testing.T, application app.Application, ctxt app.App
 			return fmt.Errorf("unable to get amount of received txs; %v", err)
 		}
 		if received != sent {
-			return fmt.Errorf("unexpected amount of txs in chain (sent %d, received%d)", sent, received)
+			return fmt.Errorf("unexpected amount of txs in chain (sent %d, received %d)", sent, received)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func testFailingBundleGenerator(t *testing.T, application app.Application, ctxt app.AppContext) {
+	users, err := application.CreateUsers(ctxt, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(users) != 1 {
+		t.Fatalf("unexpected number of users created, wanted 1, got %d", len(users))
+	}
+	user := users[0]
+
+	numBundles := 5
+	rpcClient := ctxt.GetClient()
+	lastReceived := uint64(0)
+	for range numBundles {
+		tx, err := user.GenerateTx()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tx == nil {
+			t.Fatal("generated transaction is nil")
+		}
+
+		if err := rpcClient.SendTransaction(t.Context(), tx); err != nil {
+			t.Fatal(err)
+		}
+
+		// wait for tx to be processed (necessary because of nonce loading in GenerateTx())
+		_ = network.Retry(5, 1*time.Second, func() error {
+			received, err := application.GetReceivedTransactions(rpcClient)
+			if err != nil {
+				return fmt.Errorf("unable to get amount of received txs; %v", err)
+			}
+			if received <= lastReceived {
+				fmt.Printf("wating for tx to be or not to be processed (%d vs %d)\n", received, lastReceived)
+				return fmt.Errorf("not enough bundled txs received, received %d", received)
+			}
+			lastReceived = received
+			return nil
+		})
+	}
+
+	err = network.Retry(10, 1*time.Second, func() error {
+		received, err := application.GetReceivedTransactions(rpcClient)
+		if err != nil {
+			return fmt.Errorf("unable to get amount of received txs; %v", err)
+		}
+		if received < 1 {
+			return fmt.Errorf("not enough bundled txs received, received %d", received)
 		}
 		return nil
 	})

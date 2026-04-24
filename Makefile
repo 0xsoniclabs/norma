@@ -56,7 +56,7 @@ build-sonic-docker-image-local:
 $(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)):
 	DOCKER_BUILDKIT=1 docker build --build-context client-src=$(CLIENT_URL)\#$(subst build-sonic-docker-image-,,$@) . -t sonic:$(subst build-sonic-docker-image-,,$@)
 
-generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi load/contracts/abi/SmartAccount.abi load/contracts/abi/EntryPoint.abi load/contracts/abi/TransientCounter.abi load/contracts/abi/SelfDestructOldContract.abi load/contracts/abi/SelfDestructNewContract.abi load/contracts/abi/EcdsaCounter.abi load/contracts/abi/LargeContract.abi # requires installed solc and Ethereum abigen - check README.md
+generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi load/contracts/abi/SmartAccount.abi load/contracts/abi/EntryPoint.abi load/contracts/abi/TransientCounter.abi load/contracts/abi/SelfDestructOldContract.abi load/contracts/abi/SelfDestructNewContract.abi load/contracts/abi/EcdsaCounter.abi load/contracts/abi/LargeContract.abi load/contracts/abi/ProbabilisticFailing.abi # requires installed solc and Ethereum abigen - check README.md
 
 load/contracts/abi/Counter.abi: load/contracts/Counter.sol
 	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/Counter.sol
@@ -112,6 +112,10 @@ load/contracts/abi/LargeContract.abi: load/contracts/LargeContract.sol
 	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --abi --bin ./load/contracts/LargeContract.sol
 	abigen --type LargeContractCounter --pkg abi --abi load/contracts/abi/LargeContractCounter.abi --bin load/contracts/abi/LargeContractCounter.bin --out load/contracts/abi/LargeContractCounter.go
 	abigen --type LargeContract --pkg abi --abi load/contracts/abi/LargeContract.abi --bin load/contracts/abi/LargeContract.bin --out load/contracts/abi/LargeContract.go
+
+load/contracts/abi/ProbabilisticFailing.abi: load/contracts/ProbabilisticFailing.sol
+	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/ProbabilisticFailing.sol
+	abigen --type ProbabilisticFailing --pkg abi --abi load/contracts/abi/ProbabilisticFailing.abi --bin load/contracts/abi/ProbabilisticFailing.bin --out load/contracts/abi/ProbabilisticFailing.go
 
 generate-mocks: # requires installed mockgen
 	go generate ./...
