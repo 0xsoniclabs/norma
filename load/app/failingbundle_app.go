@@ -42,6 +42,9 @@ const (
 // contract. Each bundle randomly chooses between:
 //   - AllOf with 2x incrementCounter(10): both calls must succeed (10% individual fail rate)
 //   - OneOf with 2x incrementCounter(40): first success wins (40% individual fail rate)
+//
+// This app have to fetch nonces from the chain during GenerateTx, therefor it cannot be used
+// to generate transactions at a high rate.
 type FailingBundleApplication struct {
 	contract        *contract.ProbabilisticFailing
 	contractAddress common.Address
