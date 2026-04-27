@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"math/rand"
 	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
@@ -115,7 +114,7 @@ func (a *AllOfBundleApplication) CreateUsers(appContext AppContext, numUsers int
 
 	// Fund all accounts with native currency for gas.
 	fundsPerAccount := new(big.Int).Mul(big.NewInt(1_000), big.NewInt(1e18))
-	allAddresses := append(append(approverAddresses, spenderAddresses...))
+	allAddresses := append(approverAddresses, spenderAddresses...)
 	if err := appContext.FundAccounts(allAddresses, fundsPerAccount); err != nil {
 		return nil, fmt.Errorf("failed to fund accounts: %w", err)
 	}
@@ -171,30 +170,20 @@ type AllOfBundleUser struct {
 }
 
 func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
-	tx, _, err := u.GenerateBundle()
-	return tx, err
-}
-
-func (u *AllOfBundleUser) GenerateBundle() (tx *types.Transaction, shouldFail bool, err error) {
-	shouldFail = rand.Intn(2) == 0
 
 	approveData, err := u.erc20Abi.Pack("approve", u.spender.address, big.NewInt(1))
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to pack approve: %w", err)
+		return nil, fmt.Errorf("failed to pack approve: %w", err)
 	}
 
-	transferAmount := big.NewInt(1)
-	if shouldFail {
-		transferAmount = big.NewInt(2) // exceeds the approved allowance, causing the bundle to fail
-	}
-	transferData, err := u.erc20Abi.Pack("transferFrom", u.approver.address, u.spender.address, transferAmount)
+	transferData, err := u.erc20Abi.Pack("transferFrom", u.approver.address, u.spender.address, big.NewInt(1))
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to pack transferFrom: %w", err)
+		return nil, fmt.Errorf("failed to pack transferFrom: %w", err)
 	}
 
 	currentBlock, err := u.client.BlockNumber(context.Background())
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to get current block number: %w", err)
+		return nil, fmt.Errorf("failed to get current block number: %w", err)
 	}
 
 	envelope := bundle.NewBuilder().
@@ -220,12 +209,10 @@ func (u *AllOfBundleUser) GenerateBundle() (tx *types.Transaction, shouldFail bo
 		SetEarliest(currentBlock).
 		Build()
 
-	if !shouldFail {
-		u.approver.getNextNonce()
-		u.spender.getNextNonce()
-		u.sentTxs.Add(1)
-	}
-	return envelope, shouldFail, nil
+	u.approver.getNextNonce()
+	u.spender.getNextNonce()
+	u.sentTxs.Add(1)
+	return envelope, nil
 }
 
 func (u *AllOfBundleUser) GetSentTransactions() uint64 {

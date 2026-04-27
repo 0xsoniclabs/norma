@@ -110,7 +110,7 @@ func (a *OneOfBundleApplication) CreateUsers(appContext AppContext, numUsers int
 			poorSender:     poorSender,
 			targetAddress:  a.targetAddress,
 			accountFactory: a.accountFactory,
-			signer:         types.NewLondonSigner(richSender.chainID),
+			signer:         types.LatestSignerForChainID(richSender.chainID),
 			client:         appContext.GetClient(),
 		}
 		richSenderAddresses[i] = richSender.address
@@ -171,27 +171,16 @@ type OneOfBundleUser struct {
 }
 
 func (u *OneOfBundleUser) GenerateTx() (*types.Transaction, error) {
-	tx, _, err := u.GenerateBundle()
-	return tx, err
-}
+	successfulFirst := rand.Intn(2) == 0
 
-func (u *OneOfBundleUser) GenerateBundle() (tx *types.Transaction, shouldFail bool, err error) {
-	random := rand.Intn(3)
-	shouldFail = random == 0
-	successfulFirst := random == 1
-
-	transferAmount := big.NewInt(1)
-	if shouldFail {
-		transferAmount = new(big.Int).Mul(big.NewInt(1e10), big.NewInt(1e18)) // exceeds the approved allowance, causing the bundle to fail
-	}
-	transferData, err := u.erc20Abi.Pack("transfer", u.targetAddress, transferAmount)
+	transferData, err := u.erc20Abi.Pack("transfer", u.targetAddress, big.NewInt(1))
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to pack rich transfer: %w", err)
+		return nil, fmt.Errorf("failed to pack rich transfer: %w", err)
 	}
 
 	currentBlock, err := u.client.BlockNumber(context.Background())
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to get current block number: %w", err)
+		return nil, fmt.Errorf("failed to get current block number: %w", err)
 	}
 
 	successfulStep := bundle.Step(u.richSender.privateKey, &types.DynamicFeeTx{
@@ -223,17 +212,15 @@ func (u *OneOfBundleUser) GenerateBundle() (tx *types.Transaction, shouldFail bo
 		SetEarliest(currentBlock).
 		Build()
 
-	if !shouldFail {
-		if successfulFirst {
-			u.richSender.getNextNonce()
-			// not incrementing poorSender nonce when second (not executed)
-		} else {
-			u.poorSender.getNextNonce() // incrementing nonce when first (failed)
-			u.richSender.getNextNonce()
-		}
-		u.sentTxs.Add(1)
+	if successfulFirst {
+		u.richSender.getNextNonce()
+		// poorSender's step is second and not executed in OneOf
+	} else {
+		u.poorSender.getNextNonce() // first step (failed), nonce consumed
+		u.richSender.getNextNonce()
 	}
-	return envelope, shouldFail, nil
+	u.sentTxs.Add(1)
+	return envelope, nil
 }
 
 func (u *OneOfBundleUser) GetSentTransactions() uint64 {
