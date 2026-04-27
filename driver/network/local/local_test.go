@@ -62,8 +62,7 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 					Name:  fmt.Sprintf("T-%d", i),
 				})
 				if err != nil {
-					t.Errorf("failed to create node: %v", err)
-					continue
+					t.Fatalf("failed to create node: %v", err)
 				}
 				nodes = append(nodes, node)
 			}
@@ -142,8 +141,7 @@ func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
 					Name: fmt.Sprintf("T-%d", i),
 				})
 				if err != nil {
-					t.Errorf("failed to create app: %v", err)
-					continue
+					t.Fatalf("failed to create app: %v", err)
 				}
 
 				if got, want := app.Config().Name, fmt.Sprintf("T-%d", i); got != want {
@@ -187,7 +185,7 @@ func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 			Image: driver.DefaultClientDockerImageName,
 		})
 		if err != nil {
-			t.Errorf("failed to create node: %v", err)
+			t.Fatalf("failed to create node: %v", err)
 		}
 	}
 
@@ -214,6 +212,9 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
+	t.Cleanup(func() {
+		_ = net.Shutdown()
+	})
 
 	done := make(chan bool, N)
 
@@ -248,7 +249,7 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 			Image: driver.DefaultClientDockerImageName,
 		})
 		if err != nil {
-			t.Errorf("failed to create node: %v", err)
+			t.Fatalf("failed to create node: %v", err)
 		}
 	}
 
@@ -354,10 +355,13 @@ func TestLocalNetwork_NotifiesListenersOnNodeStartup(t *testing.T) {
 	net.RegisterListener(listener)
 	listener.EXPECT().AfterNodeCreation(gomock.Any())
 
-	net.CreateNode(&driver.NodeConfig{
+	_, err = net.CreateNode(&driver.NodeConfig{
 		Name:  "Test",
 		Image: driver.DefaultClientDockerImageName,
 	})
+	if err != nil {
+		t.Fatalf("failed to create node: %v", err)
+	}
 
 	activeNodes = net.GetActiveNodes()
 	if got, want := len(activeNodes), config.Validators.GetNumValidators()+1; got != want {
@@ -399,18 +403,18 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
 			t.Parallel()
 			net, err := NewLocalNetwork(&config)
-			ctrl := gomock.NewController(t)
-			listener := driver.NewMockNetworkListener(ctrl)
-			listener.EXPECT().AfterNodeCreation(gomock.Any()).Times(N)
-			listener.EXPECT().BeforeNodeRemoval(gomock.Any()).Times(N)
-			net.RegisterListener(listener)
-
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
 			}
 			t.Cleanup(func() {
 				_ = net.Shutdown()
 			})
+
+			ctrl := gomock.NewController(t)
+			listener := driver.NewMockNetworkListener(ctrl)
+			listener.EXPECT().AfterNodeCreation(gomock.Any()).Times(N)
+			listener.EXPECT().BeforeNodeRemoval(gomock.Any()).Times(N)
+			net.RegisterListener(listener)
 
 			nodes := make([]driver.Node, 0, N)
 			for i := 0; i < N; i++ {
@@ -419,7 +423,7 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 					Image: driver.DefaultClientDockerImageName,
 				})
 				if err != nil {
-					t.Errorf("failed to create node: %s", err)
+					t.Fatalf("failed to create node: %s", err)
 				}
 				nodes = append(nodes, node)
 			}
