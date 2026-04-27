@@ -47,6 +47,7 @@ func TestGenerators_Bundles(t *testing.T) {
 		"AllOfBundle",
 		"OneOfBundle",
 		"SubsidizedBundle",
+		"DuplicatedBundle",
 	} {
 		t.Run(name, func(t *testing.T) {
 			application, err := app.NewApplication(name, appCtx, 0, uint32(appId))
