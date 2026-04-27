@@ -14,6 +14,7 @@ import (
 	big "math/big"
 	reflect "reflect"
 
+	sonicapi "github.com/0xsoniclabs/sonic/api/sonicapi"
 	ethereum "github.com/ethereum/go-ethereum"
 	common "github.com/ethereum/go-ethereum/common"
 	types "github.com/ethereum/go-ethereum/core/types"
@@ -91,6 +92,21 @@ func (m *MockClient) CallContract(ctx context.Context, call ethereum.CallMsg, bl
 func (mr *MockClientMockRecorder) CallContract(ctx, call, blockNumber any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CallContract", reflect.TypeOf((*MockClient)(nil).CallContract), ctx, call, blockNumber)
+}
+
+// BlockNumber mocks base method.
+func (m *MockClient) BlockNumber(ctx context.Context) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BlockNumber", ctx)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BlockNumber indicates an expected call of BlockNumber.
+func (mr *MockClientMockRecorder) BlockNumber(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockNumber", reflect.TypeOf((*MockClient)(nil).BlockNumber), ctx)
 }
 
 // ChainID mocks base method.
@@ -284,6 +300,36 @@ func (mr *MockClientMockRecorder) SuggestGasTipCap(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SuggestGasTipCap", reflect.TypeOf((*MockClient)(nil).SuggestGasTipCap), ctx)
 }
 
+// WaitForBundleInfo mocks base method.
+func (m *MockClient) WaitForBundleInfo(ctx context.Context, planHash common.Hash) (*sonicapi.RPCBundleInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WaitForBundleInfo", ctx, planHash)
+	ret0, _ := ret[0].(*sonicapi.RPCBundleInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// WaitForBundleInfo indicates an expected call of WaitForBundleInfo.
+func (mr *MockClientMockRecorder) WaitForBundleInfo(ctx, planHash any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForBundleInfo", reflect.TypeOf((*MockClient)(nil).WaitForBundleInfo), ctx, planHash)
+}
+
+// GetBundleInfo mocks base method.
+func (m *MockClient) GetBundleInfo(planHash common.Hash) (*sonicapi.RPCBundleInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBundleInfo", planHash)
+	ret0, _ := ret[0].(*sonicapi.RPCBundleInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBundleInfo indicates an expected call of GetBundleInfo.
+func (mr *MockClientMockRecorder) GetBundleInfo(planHash any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleInfo", reflect.TypeOf((*MockClient)(nil).GetBundleInfo), planHash)
+}
+
 // WaitTransactionReceipt mocks base method.
 func (m *MockClient) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error) {
 	m.ctrl.T.Helper()
@@ -351,6 +397,21 @@ func (m *MockethRpcClient) CallContract(ctx context.Context, call ethereum.CallM
 func (mr *MockethRpcClientMockRecorder) CallContract(ctx, call, blockNumber any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CallContract", reflect.TypeOf((*MockethRpcClient)(nil).CallContract), ctx, call, blockNumber)
+}
+
+// BlockNumber mocks base method.
+func (m *MockethRpcClient) BlockNumber(ctx context.Context) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BlockNumber", ctx)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BlockNumber indicates an expected call of BlockNumber.
+func (mr *MockethRpcClientMockRecorder) BlockNumber(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockNumber", reflect.TypeOf((*MockethRpcClient)(nil).BlockNumber), ctx)
 }
 
 // ChainID mocks base method.

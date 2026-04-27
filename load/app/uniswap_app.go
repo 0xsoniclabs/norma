@@ -219,24 +219,18 @@ func (f *UniswapApplication) CreateUsers(appContext AppContext, numUsers int) ([
 		return nil, fmt.Errorf("failed to get token representation; %w", err)
 	}
 
-	receipt, err := appContext.Run(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+	_, err = appContext.Run(func(opts *bind.TransactOpts) (*types.Transaction, error) {
 		return token0Contract.MintForAll(opts, addresses, WorkerInitialBalance)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to mint ERC-20; %w", err)
 	}
-	if receipt.Status != types.ReceiptStatusSuccessful {
-		return nil, fmt.Errorf("failed to mint ERC-20; transaction reverted")
-	}
 
-	receipt, err = appContext.Run(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+	_, err = appContext.Run(func(opts *bind.TransactOpts) (*types.Transaction, error) {
 		return tokenNContract.MintForAll(opts, addresses, WorkerInitialBalance)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to mint ERC-20; %w", err)
-	}
-	if receipt.Status != types.ReceiptStatusSuccessful {
-		return nil, fmt.Errorf("failed to mint ERC-20; transaction reverted")
 	}
 
 	return users, nil

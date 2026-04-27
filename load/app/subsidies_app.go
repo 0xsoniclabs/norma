@@ -64,8 +64,8 @@ func NewSubsidiesApplication(appContext AppContext, feederId, appId uint32) (App
 
 	// Deploy the Counter counterContract to be used by this application.
 	counterContract, receipt, err := DeployContract(appContext, contract.DeployCounter)
-	if err != nil || receipt.Status != types.ReceiptStatusSuccessful {
-		return nil, errors.Join(fmt.Errorf("failed to deploy Counter contract"), err)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deploy Counter contract: %w", err)
 	}
 	counterContractAddress := receipt.ContractAddress
 

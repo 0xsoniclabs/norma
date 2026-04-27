@@ -29,6 +29,7 @@ all: \
     pull-hello-world-image \
     pull-alpine-image \
     pull-prometheus-image \
+    build-r-renderer-image \
     build-sonic-docker-image-main \
     build-sonic-docker-image-local \
     $(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)) \
@@ -42,6 +43,9 @@ pull-alpine-image:
 pull-prometheus-image:
 	DOCKER_BUILDKIT=1 docker image pull prom/prometheus:v2.44.0
 
+build-r-renderer-image:
+	DOCKER_BUILDKIT=1 docker build analysis/report/ -t norma-r-renderer
+
 build-sonic-docker-image-main:
 	DOCKER_BUILDKIT=1 docker build --build-context client-src=$(CLIENT_URL) . -t sonic
 
@@ -52,7 +56,7 @@ build-sonic-docker-image-local:
 $(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)):
 	DOCKER_BUILDKIT=1 docker build --build-context client-src=$(CLIENT_URL)\#$(subst build-sonic-docker-image-,,$@) . -t sonic:$(subst build-sonic-docker-image-,,$@)
 
-generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi load/contracts/abi/SmartAccount.abi load/contracts/abi/EntryPoint.abi # requires installed solc and Ethereum abigen - check README.md
+generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi load/contracts/abi/SmartAccount.abi load/contracts/abi/EntryPoint.abi load/contracts/abi/TransientCounter.abi load/contracts/abi/SelfDestructOldContract.abi load/contracts/abi/SelfDestructNewContract.abi load/contracts/abi/EcdsaCounter.abi load/contracts/abi/LargeContract.abi load/contracts/abi/ProbabilisticFailing.abi # requires installed solc and Ethereum abigen - check README.md
 
 load/contracts/abi/Counter.abi: load/contracts/Counter.sol
 	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/Counter.sol
@@ -86,13 +90,40 @@ load/contracts/abi/EntryPoint.abi: load/contracts/EntryPoint.sol
 	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/EntryPoint.sol
 	abigen --type EntryPoint --pkg abi --abi load/contracts/abi/EntryPoint.abi --bin load/contracts/abi/EntryPoint.bin --out load/contracts/abi/EntryPoint.go
 
+load/contracts/abi/SelfDestructOldContract.abi: load/contracts/SelfDestructOldContract.sol
+	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/SelfDestructOldContract.sol
+	abigen --type SelfDestructOldContractFactory --pkg abi --abi load/contracts/abi/SelfDestructOldContractFactory.abi --bin load/contracts/abi/SelfDestructOldContractFactory.bin --out load/contracts/abi/SelfDestructOldContract.go
+
+load/contracts/abi/SelfDestructNewContract.abi: load/contracts/SelfDestructNewContract.sol
+	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/SelfDestructNewContract.sol
+	abigen --type SelfDestructNewContractFactory --pkg abi --abi load/contracts/abi/SelfDestructNewContractFactory.abi --bin load/contracts/abi/SelfDestructNewContractFactory.bin --out load/contracts/abi/SelfDestructNewContract.go
+
+# TransientCounter uses EIP-1153 transient storage (Cancun) – requires solc >=0.8.24 and --evm-version cancun
+load/contracts/abi/TransientCounter.abi: load/contracts/TransientCounter.sol
+	solc --evm-version cancun -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/TransientCounter.sol
+	abigen --type TransientCounter --pkg abi --abi load/contracts/abi/TransientCounter.abi --bin load/contracts/abi/TransientCounter.bin --out load/contracts/abi/TransientCounter.go
+
+load/contracts/abi/EcdsaCounter.abi: load/contracts/EcdsaCounter.sol
+	solc --evm-version osaka -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/EcdsaCounter.sol
+	abigen --type EcdsaCounter --pkg abi --abi load/contracts/abi/EcdsaCounter.abi --bin load/contracts/abi/EcdsaCounter.bin --out load/contracts/abi/EcdsaCounter.go
+
+# LargeContract and LargeContractCounter exceed the standard 24 KiB code size limit (EIP-170).
+load/contracts/abi/LargeContract.abi: load/contracts/LargeContract.sol
+	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --abi --bin ./load/contracts/LargeContract.sol
+	abigen --type LargeContractCounter --pkg abi --abi load/contracts/abi/LargeContractCounter.abi --bin load/contracts/abi/LargeContractCounter.bin --out load/contracts/abi/LargeContractCounter.go
+	abigen --type LargeContract --pkg abi --abi load/contracts/abi/LargeContract.abi --bin load/contracts/abi/LargeContract.bin --out load/contracts/abi/LargeContract.go
+
+load/contracts/abi/ProbabilisticFailing.abi: load/contracts/ProbabilisticFailing.sol
+	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --optimize --optimize-runs 200 --abi --bin ./load/contracts/ProbabilisticFailing.sol
+	abigen --type ProbabilisticFailing --pkg abi --abi load/contracts/abi/ProbabilisticFailing.abi --bin load/contracts/abi/ProbabilisticFailing.bin --out load/contracts/abi/ProbabilisticFailing.go
+
 generate-mocks: # requires installed mockgen
 	go generate ./...
 
-norma: pull-prometheus-image build-sonic-docker-image-main
+norma:
 	go build -o $(BUILD_DIR)/norma ./driver/norma
 
-test: pull-hello-world-image pull-alpine-image pull-prometheus-image build-sonic-docker-image-main
+test: pull-hello-world-image pull-alpine-image pull-prometheus-image build-r-renderer-image build-sonic-docker-image-main
 	go test ./... -v
 
 clean:

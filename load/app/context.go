@@ -19,12 +19,13 @@ package app
 import (
 	"context"
 	"fmt"
+	"math/big"
+
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"math/big"
 )
 
 //go:generate mockgen -source context.go -destination context_mock.go -package app
@@ -37,6 +38,7 @@ import (
 type AppContext interface {
 	GetClient() rpc.Client
 	GetTreasure() *Account
+	GetNetworkRules() map[string]string
 	GetTransactOptions(account *Account) (*bind.TransactOpts, error)
 	GetReceipt(txHash common.Hash) (*types.Receipt, error)
 	Run(operation func(*bind.TransactOpts) (*types.Transaction, error)) (*types.Receipt, error)
@@ -48,7 +50,7 @@ type RpcClientFactory interface {
 	DialRandomRpc() (rpc.Client, error)
 }
 
-func NewContext(factory RpcClientFactory, treasury *Account) (*appContext, error) {
+func NewContext(factory RpcClientFactory, treasury *Account, networkRules map[string]string) (AppContext, error) {
 	rpcClient, err := factory.DialRandomRpc()
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to network: %w", err)
@@ -57,17 +59,15 @@ func NewContext(factory RpcClientFactory, treasury *Account) (*appContext, error
 	// Install the helper contract used by this contract for its operations.
 	// Create a context to interact with the network.
 	res := &appContext{
-		rpcClient: rpcClient,
-		treasury:  treasury,
+		rpcClient:    rpcClient,
+		treasury:     treasury,
+		networkRules: networkRules,
 	}
 
 	// Install a helper contract on the network to perform operations.
-	helper, receipt, err := DeployContract(res, contract.DeployHelper)
+	helper, _, err := DeployContract(res, contract.DeployHelper)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deploy helper contract: %w", err)
-	}
-	if receipt.Status != types.ReceiptStatusSuccessful {
-		return nil, fmt.Errorf("failed to deploy helper contract: transaction reverted")
 	}
 
 	res.helper = helper
@@ -75,9 +75,10 @@ func NewContext(factory RpcClientFactory, treasury *Account) (*appContext, error
 }
 
 type appContext struct {
-	rpcClient rpc.Client       // < access to the network
-	treasury  *Account         // < the account paying for management tasks
-	helper    *contract.Helper // < a contract used for on-chain operations
+	rpcClient    rpc.Client       // < access to the network
+	treasury     *Account         // < the account paying for management tasks
+	helper       *contract.Helper // < a contract used for on-chain operations
+	networkRules map[string]string
 }
 
 func (c *appContext) Close() {
@@ -90,6 +91,10 @@ func (c *appContext) GetClient() rpc.Client {
 
 func (c *appContext) GetTreasure() *Account {
 	return c.treasury
+}
+
+func (c *appContext) GetNetworkRules() map[string]string {
+	return c.networkRules
 }
 
 // GetTransactOptions provides transaction options to be used to send a transaction
@@ -144,7 +149,14 @@ func (c *appContext) Run(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
-	return c.GetReceipt(transaction.Hash())
+	receipt, err := c.GetReceipt(transaction.Hash())
+	if err != nil {
+		return nil, err
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return receipt, fmt.Errorf("transaction reverted")
+	}
+	return receipt, nil
 }
 
 // FundAccounts transfers the given amount of funds from the treasure to each of the
@@ -206,6 +218,34 @@ func DeployContract[T any](c AppContext, deploy contractDeployer[T]) (*T, *types
 	receipt, err := c.GetReceipt(transaction.Hash())
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get receipt: %w", err)
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return nil, receipt, fmt.Errorf("contract deployment transaction reverted")
+	}
+	return contract, receipt, nil
+}
+
+// DeployContractWithValue is like DeployContract but sends value (in wei) with the deployment transaction.
+func DeployContractWithValue[T any](c AppContext, deploy contractDeployer[T], value *big.Int) (*T, *types.Receipt, error) {
+	client := c.GetClient()
+
+	transactOptions, err := c.GetTransactOptions(c.GetTreasure())
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get transaction options: %w", err)
+	}
+	transactOptions.Value = value
+
+	_, transaction, contract, err := deploy(transactOptions, client)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to deploy contract: %w", err)
+	}
+
+	receipt, err := c.GetReceipt(transaction.Hash())
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get receipt: %w", err)
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return nil, receipt, fmt.Errorf("contract deployment transaction reverted")
 	}
 	return contract, receipt, nil
 }

@@ -48,6 +48,26 @@ func getFactory(appType string) appFactoryFunc {
 		return NewSmartAccountApplication
 	case "subsidies":
 		return NewSubsidiesApplication
+	case "transient":
+		return NewTransientApplication
+	case "selfdestructoldcontract":
+		return NewSelfDestructOldContractApplication
+	case "selfdestructnewcontract":
+		return NewSelfDestructNewContractApplication
+	case "ecdsa":
+		return NewEcdsaApplication
+	case "largecontract":
+		return NewLargeContractApplication
+	case "allofbundle":
+		return NewAllOfBundleApplication
+	case "oneofbundle":
+		return NewOneOfBundleApplication
+	case "subsidizedbundle":
+		return NewSubsidizedBundleApplication
+	case "failingbundle":
+		return NewFailingBundleApplication
+	case "mix":
+		return NewMixApplication
 	}
 	return nil
 }

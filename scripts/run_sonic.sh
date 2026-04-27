@@ -1,10 +1,11 @@
 #!/bin/bash
+set -euo pipefail # fail if anything fails
 
 echo "Sonic binary checksum: $(sha256sum   /sonicd | cut -d ' ' -f 1 )"
 
 # Get the local node's IP.
-list=`hostname -I`
-array=($list)
+list=$(hostname -I)
+read -ra array <<< "$list"
 external_ip=${array[0]}
 
 echo "Sonic is going to export its services on ${external_ip}"
@@ -16,16 +17,18 @@ echo "genesis validator count=${VALIDATORS_COUNT}"
 
 datadir=$STATE_DB_DATADIR
 # Initialize datadir
-mkdir -p ${datadir}
-./sonictool --datadir ${datadir} genesis json --experimental /genesis.json
+if [[ ! -d "${datadir}/chaindata" ]]; then
+  mkdir -p "${datadir}"
+  ./sonictool --datadir "${datadir}" genesis json --experimental /genesis.json
+fi
 
 ##
 ## if $VALIDATOR_ID is set, it is a validator
 ##
 if [[ $VALIDATOR_ID -ne 0 ]]
 then
-	cmd=`./genesistools validator from -id ${VALIDATOR_ID} -d ${datadir}`
-	res=($cmd)
+	cmd=$(./genesistools validator from -id "${VALIDATOR_ID}" -d "${datadir}")
+	read -ra res <<< "$cmd"
 	VALIDATOR_PUBKEY=${res[0]}
 	VALIDATOR_ADDRESS=${res[1]}
 fi
@@ -51,7 +54,7 @@ fi
 # when network starts with only one genesis validator, then he will not wait to start emitting
 # if there are two or more validators at genesis they have to wait 5 seconds after connecting to the network
 # if another validator connects to the network during run it will wait also 5 seconds to start emitting
-echo [Emitter.EmitIntervals] >> config.toml
+echo '[Emitter.EmitIntervals]' >> config.toml
 if [[ $VALIDATORS_COUNT == 1 && $VALIDATOR_ID == 1 ]]
 then
   echo DoublesignProtection = 0 >> config.toml
@@ -67,20 +70,23 @@ fi
 echo "NETWORK_LATENCY=${NETWORK_LATENCY}"
 if [[ -n "${NETWORK_LATENCY}" ]]; then
   echo "Adding network latency .."
-  tc qdisc add dev eth0 root netem delay $NETWORK_LATENCY
-  tc qdisc add dev eth1 root netem delay $NETWORK_LATENCY
+  tc qdisc add dev eth0 root netem delay "${NETWORK_LATENCY}"
+  if ip link show eth1 &>/dev/null; then # if eth1 exists
+    tc qdisc add dev eth1 root netem delay "${NETWORK_LATENCY}"
+  fi
 fi
 
 
 # Start sonic as part of a fake net with RPC service.
 export GOMEMLIMIT="1GiB"
+# shellcheck disable=SC2086
 ./sonicd \
-    --datadir=${datadir} \
+    --datadir="${datadir}" \
     ${val_flag} \
-    --http --http.addr 0.0.0.0 --http.port 18545 --http.api admin,eth,ftm \
-    --ws --ws.addr 0.0.0.0 --ws.port 18546 --ws.api admin,eth,ftm \
+    --http --http.addr 0.0.0.0 --http.port 18545 --http.api admin,eth,sonic \
+    --ws --ws.addr 0.0.0.0 --ws.port 18546 --ws.api admin,eth,sonic \
     --pprof --pprof.addr 0.0.0.0 \
-    --nat=extip:${external_ip} \
+    --nat="extip:${external_ip}" \
     --metrics \
     --metrics.expensive \
     --config config.toml \

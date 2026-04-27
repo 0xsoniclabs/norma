@@ -10,10 +10,9 @@ Project of integrating Carmen Storage and Tosca VM into go-opera.
 For building/running the project, the following tools are required:
 * Go: version 1.20 or later; we recommend to use your system's package manager; alternatively, you can follow Go's [installation manual](https://go.dev/doc/install) or; if you need to maintain multiple versions, [this tutorial](https://go.dev/doc/manage-install) describes how to do so
 * Docker: version 23.0 or later; we recommend to use your system's package manager or the installation manuals listed in the [Using Docker](#using-docker) section below
+  * [Docker buildx](https://docs.docker.com/reference/cli/docker/buildx/): to install it on Ubuntu run `apt install docker-buildx`.
 * GNU make, or compatible
-* [R](https://www.r-project.org/): make sure the command `Rscript` is available on your system.
-  * To install R and all needed dependencies on Ubuntu, use `sudo apt install r-base-core pandoc libcurl4-openssl-dev libssl-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev`
-  * To install R packages manually (may be necessary for first-time R usage), start an R session by running the command `R`, and run the command `install.packages(c("rmarkdown", "tidyverse", "lubridate", "slider"))` inside the R session. You may be prompted to create a user-specific directory for library dependencies. If so, confirm this.
+* R report rendering is handled via Docker - no local R installation required.
 
 Optionally, before running `make generate-mocks`, make sure you installed:
 * GoMock: `go install github.com/golang/mock/mockgen@v1.6.0`
@@ -32,6 +31,10 @@ Optionally, before running `make generate-abi`, make sure you have installed:
 
 ## Building
 
+Before building, initialize the git submodules
+```
+git submodule update --init
+```
 To build the project, run
 ```
 make -j

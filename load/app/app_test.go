@@ -17,7 +17,6 @@
 package app_test
 
 import (
-	"context"
 	"fmt"
 	"slices"
 	"testing"
@@ -37,20 +36,12 @@ func TestGenerators(t *testing.T) {
 
 	tests := map[string]struct {
 		availableInUpgrades []string
-		test                func(*testing.T, app.AppContext)
 	}{
 		"Counter": {
 			availableInUpgrades: []string{
 				"UPGRADES_SONIC",
 				"UPGRADES_ALLEGRO",
 				"UPGRADES_BRIO",
-			},
-			test: func(t *testing.T, context app.AppContext) {
-				counterApp, err := app.NewCounterApplication(context, 0, 0)
-				if err != nil {
-					t.Fatal(err)
-				}
-				testGenerator(t, counterApp, context)
 			},
 		},
 		"ERC20": {
@@ -59,28 +50,12 @@ func TestGenerators(t *testing.T) {
 				"UPGRADES_ALLEGRO",
 				"UPGRADES_BRIO",
 			},
-			test: func(t *testing.T, context app.AppContext) {
-				erc20app, err := app.NewERC20Application(context, 0, 0)
-				if err != nil {
-					t.Fatal(err)
-				}
-				testGenerator(t, erc20app, context)
-
-			},
 		},
 		"Store": {
 			availableInUpgrades: []string{
 				"UPGRADES_SONIC",
 				"UPGRADES_ALLEGRO",
 				"UPGRADES_BRIO",
-			},
-			test: func(t *testing.T, context app.AppContext) {
-				storeApp, err := app.NewStoreApplication(context, 0, 0)
-				if err != nil {
-					t.Fatal(err)
-				}
-				testGenerator(t, storeApp, context)
-
 			},
 		},
 		"Uniswap": {
@@ -89,26 +64,47 @@ func TestGenerators(t *testing.T) {
 				"UPGRADES_ALLEGRO",
 				"UPGRADES_BRIO",
 			},
-			test: func(t *testing.T, context app.AppContext) {
-				uniswapApp, err := app.NewUniswapApplication(context, 0, 0)
-				if err != nil {
-					t.Fatal(err)
-				}
-				testGenerator(t, uniswapApp, context)
-
-			},
 		},
 		"SmartAccount": {
 			availableInUpgrades: []string{
 				"UPGRADES_ALLEGRO",
 				"UPGRADES_BRIO",
 			},
-			test: func(t *testing.T, context app.AppContext) {
-				smartAccountApp, err := app.NewSmartAccountApplication(context, 0, 0)
-				if err != nil {
-					t.Fatal(err)
-				}
-				testGenerator(t, smartAccountApp, context)
+		},
+		"Transient": {
+			availableInUpgrades: []string{
+				"UPGRADES_SONIC",
+				"UPGRADES_ALLEGRO",
+				"UPGRADES_BRIO",
+			},
+		},
+		"SelfDestructOldContract": {
+			availableInUpgrades: []string{
+				"UPGRADES_SONIC",
+				"UPGRADES_ALLEGRO",
+				"UPGRADES_BRIO",
+			},
+		},
+		"SelfDestructNewContract": {
+			availableInUpgrades: []string{
+				"UPGRADES_SONIC",
+				"UPGRADES_ALLEGRO",
+				"UPGRADES_BRIO",
+			},
+		},
+		"Ecdsa": {
+			availableInUpgrades: []string{
+				"UPGRADES_BRIO",
+			},
+		},
+		"LargeContract": {
+			availableInUpgrades: []string{
+				"UPGRADES_BRIO",
+			},
+		},
+		"Mix": {
+			availableInUpgrades: []string{
+				"UPGRADES_BRIO",
 			},
 		},
 	}
@@ -119,11 +115,11 @@ func TestGenerators(t *testing.T) {
 		"UPGRADES_BRIO",
 	} {
 		t.Run(upgrade, func(t *testing.T) {
-
 			// run local network of one node
+			rules := getCumulativeUpgrades(upgrade)
 			net, err := local.NewLocalNetwork(&driver.NetworkConfig{
 				Validators:   driver.DefaultValidators,
-				NetworkRules: getCumulativeUpgrades(upgrade),
+				NetworkRules: rules,
 			})
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
@@ -134,12 +130,12 @@ func TestGenerators(t *testing.T) {
 				}
 			})
 
-			primaryAccount, err := app.NewAccount(0, PrivateKey, nil, FakeNetworkID)
+			primaryAccount, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			context, err := app.NewContext(net, primaryAccount)
+			appCtx, err := app.NewContext(net, primaryAccount, rules)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -149,7 +145,11 @@ func TestGenerators(t *testing.T) {
 					continue
 				}
 				t.Run(name, func(t *testing.T) {
-					test.test(t, context)
+					application, err := app.NewApplication(name, appCtx, 0, 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					testGenerator(t, application, appCtx)
 				})
 			}
 		})
@@ -173,11 +173,12 @@ func getCumulativeUpgrades(lastSupported string) map[string]string {
 }
 
 func TestGenerators_Subsidies(t *testing.T) {
+	rules := map[string]string{
+		"UPGRADES_GAS_SUBSIDIES": "true",
+	}
 	net, err := local.NewLocalNetwork(&driver.NetworkConfig{
-		Validators: driver.DefaultValidators,
-		NetworkRules: map[string]string{
-			"UPGRADES_GAS_SUBSIDIES": "true",
-		},
+		Validators:   driver.DefaultValidators,
+		NetworkRules: rules,
 	})
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
@@ -188,21 +189,21 @@ func TestGenerators_Subsidies(t *testing.T) {
 		}
 	})
 
-	primaryAccount, err := app.NewAccount(0, PrivateKey, nil, FakeNetworkID)
+	primaryAccount, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	context, err := app.NewContext(net, primaryAccount)
+	appCtx, err := app.NewContext(net, primaryAccount, rules)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	subsidiesApp, err := app.NewSubsidiesApplication(context, 0, 0)
+	subsidiesApp, err := app.NewSubsidiesApplication(appCtx, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	testGenerator(t, subsidiesApp, context)
+	testGenerator(t, subsidiesApp, appCtx)
 }
 
 func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
@@ -227,7 +228,7 @@ func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
 			t.Fatal("generated transaction is nil")
 		}
 
-		if err := rpcClient.SendTransaction(context.Background(), tx); err != nil {
+		if err := rpcClient.SendTransaction(t.Context(), tx); err != nil {
 			t.Fatal(err)
 		}
 		transactions = append(transactions, tx)
@@ -240,7 +241,7 @@ func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
 			t.Fatal(err)
 		}
 		if receipt.Status != types.ReceiptStatusSuccessful {
-			t.Fatalf("transaction failed, receipt status: %v", receipt.Status)
+			t.Fatalf("transaction failed, receipt status: %v (gas limit %d used %d)", receipt.Status, tx.Gas(), receipt.GasUsed)
 		}
 		if tx.Gas() > 2*receipt.GasUsed {
 			t.Errorf("gas limit unnecessary high: limit %d used %d", tx.Gas(), receipt.GasUsed)

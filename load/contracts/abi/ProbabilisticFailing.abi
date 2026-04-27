@@ -1,0 +1,33 @@
+[
+  {
+    "inputs": [],
+    "name": "getCount",
+    "outputs": [
+      {
+        "internalType": "int256",
+        "name": "",
+        "type": "int256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint8",
+        "name": "failureProbability",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint32",
+        "name": "seed",
+        "type": "uint32"
+      }
+    ],
+    "name": "incrementCounter",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]

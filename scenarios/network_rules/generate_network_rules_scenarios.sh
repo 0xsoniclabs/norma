@@ -50,7 +50,7 @@ keys=(
 
 # Iterate over each key and generate a new YAML file
 for key in "${keys[@]}"; do
-  sanitized_key=$(echo "$key" | sed 's/[^a-zA-Z0-9_-]/_/g')
+  sanitized_key="${key//[^a-zA-Z0-9_-]/_}"
   # Replace the string "MAX_PARENTS: 0" with the current key
   sed "s/MAX_PARENTS:.*/$key/" "$input_yaml" > "$output_dir/network_rules_constraints_$sanitized_key.yml"
 done
