@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
@@ -166,7 +167,7 @@ func (u *FailingBundleUser) GenerateTx() (*types.Transaction, error) {
 		failureProbability = oneOfFailureProbability
 	}
 
-	callData, err := u.contractAbi.Pack("incrementCounter", failureProbability)
+	callData, err := u.contractAbi.Pack("incrementCounter", failureProbability, uint32(time.Now().Nanosecond()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to pack incrementCounter: %w", err)
 	}

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"math/rand"
 	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
@@ -208,39 +207,28 @@ type SubsidizedBundleUser struct {
 }
 
 func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
-	tx, _, err := u.GenerateBundle()
-	return tx, err
-}
-
-func (u *SubsidizedBundleUser) GenerateBundle() (tx *types.Transaction, shouldFail bool, err error) {
-	shouldFail = rand.Intn(2) == 0
-
 	// sponsoredValue must cover the user's approve tx gas cost.
 	approveGasLimit := big.NewInt(70_000)
 	sponsoredValue := new(big.Int).Mul(approveGasLimit, gasFeeCap)
 
 	sponsorData, err := u.registryAbi.Pack("sponsor", u.approvalFundId)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to pack sponsor: %w", err)
+		return nil, fmt.Errorf("failed to pack sponsor: %w", err)
 	}
 
 	approveData, err := u.erc20Abi.Pack("approve", u.sponsor.address, big.NewInt(1))
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to pack approve: %w", err)
+		return nil, fmt.Errorf("failed to pack approve: %w", err)
 	}
 
-	transferAmount := big.NewInt(1)
-	if shouldFail {
-		transferAmount = big.NewInt(2) // exceeds the approved allowance, causing the bundle to fail
-	}
-	transferData, err := u.erc20Abi.Pack("transferFrom", u.user.address, u.sponsor.address, transferAmount)
+	transferData, err := u.erc20Abi.Pack("transferFrom", u.user.address, u.sponsor.address, big.NewInt(1))
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to pack transferFrom: %w", err)
+		return nil, fmt.Errorf("failed to pack transferFrom: %w", err)
 	}
 
 	currentBlock, err := u.client.BlockNumber(context.Background())
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to get current block number: %w", err)
+		return nil, fmt.Errorf("failed to get current block number: %w", err)
 	}
 
 	envelope := bundle.NewBuilder().
@@ -275,13 +263,11 @@ func (u *SubsidizedBundleUser) GenerateBundle() (tx *types.Transaction, shouldFa
 		SetEarliest(currentBlock).
 		Build()
 
-	if !shouldFail {
-		u.sponsor.getNextNonce()
-		u.user.getNextNonce()
-		u.sponsor.getNextNonce()
-		u.sentTxs.Add(1)
-	}
-	return envelope, shouldFail, nil
+	u.sponsor.getNextNonce()
+	u.user.getNextNonce()
+	u.sponsor.getNextNonce()
+	u.sentTxs.Add(1)
+	return envelope, nil
 }
 
 func (u *SubsidizedBundleUser) GetSentTransactions() uint64 {

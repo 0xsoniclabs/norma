@@ -18,6 +18,11 @@
         "internalType": "uint8",
         "name": "failureProbability",
         "type": "uint8"
+      },
+      {
+        "internalType": "uint32",
+        "name": "seed",
+        "type": "uint32"
       }
     ],
     "name": "incrementCounter",

@@ -39,8 +39,3 @@ type User interface {
 	GenerateTx() (*types.Transaction, error)
 	GetSentTransactions() uint64
 }
-
-type BundleUser interface {
-	GenerateBundle() (tx *types.Transaction, shouldFail bool, err error)
-	GetSentTransactions() uint64
-}
