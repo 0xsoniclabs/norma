@@ -1,8 +1,6 @@
-# This scenario simulates a network with running recent client versions from the start.
-# At some point it enables hardfork verifying that the clients are able to handle the hardfork.
-
-# The name of the scenario
-name: Bundle Pre-Brio
+# This scenario the Sonic client upgrade. It verifies that the new client is compatible
+# with the older clients, while the Brio hardfork is disabled.
+name: Pre-Brio
 
 # The duration of the scenario's runtime, in seconds.
 duration: 120
@@ -12,29 +10,34 @@ validators:
   - name: validators
     instances: 3
     imagename: "sonic:latest"
+  - name: validator-v2.2.0
+    imagename: "sonic:v2.2.0" # the first version supporting Brio, should be compatible with latest
   - name: validator-v2.1.6
-    imagename: "sonic:v2.1.6" # nodes at 2.1.6 should be compatible until the hardfork
+    imagename: "sonic:v2.1.6" # the last version not supporting Brio, should be compatible as long as Brio is disabled
 
-# Start with the hardfork disabled, enable Brio after 30 seconds
-# while enabling the hardfork later
+# Start with the Brio hardfork disabled, no enabling in this scenario
 network_rules:
   genesis:
     UPGRADES_SONIC: true
-    UPGRADES_ALLEGRO: false
+    UPGRADES_ALLEGRO: true
+    UPGRADES_GAS_SUBSIDIES: true
+    UPGRADES_BRIO: false
     MAX_EPOCH_DURATION: 3s
-  updates:
-    - time: 30
-      rules:
-        UPGRADES_ALLEGRO: true  # hardfork enabled
 
+# Start few nodes with delays, let them sync with existing network
 nodes:
-  - name: node-v202
-    start: 30
-    failing: true
-    client:
-      imagename: "sonic:v2.0.2"   # this node should stop working after the hardfork
   - name: node-latest
-    start: 30
+    start: 60
+
+  - name: node-v2.2.0
+    start: 60
+    client:
+      imagename: "sonic:v2.2.0" # the first version supporting Brio, should be compatible with latest
+
+  - name: node-v2.1.6
+    start: 60
+    client:
+      imagename: "sonic:v2.1.6" # the last version not supporting Brio, should be compatible as long as Brio is disabled
 
 applications:
   - name: mix
