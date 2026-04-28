@@ -1,0 +1,78 @@
+# This scenario simulates a network with Brio hardfork enabled from the start.
+# At some point it enables bundles support, verifying that the clients are able to handle it.
+
+# The name of the scenario
+name: Enabling Bundles
+
+# The duration of the scenario's runtime, in seconds.
+duration: 120
+
+# Initial validator nodes in the network.
+validators:
+  - name: validators
+    instances: 3
+    imagename: "sonic:latest"
+
+  - name: validator-v2.2.0
+    imagename: "sonic:v2.2.0" # nodes at 2.2.0 should stay compatible with main
+
+# Start with the Brio hardfork and transaction bundles enabled
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: true
+    UPGRADES_GAS_SUBSIDIES: true
+    UPGRADES_BRIO: true
+    UPGRADES_TRANSACTION_BUNDLES: false
+    MAX_EPOCH_DURATION: 3s
+  updates:
+    - time: 30
+      rules:
+        UPGRADES_TRANSACTION_BUNDLES: true  # bundles enabled 30s after the start
+
+nodes:
+  - name: node-added-after-hardfork
+    start: 32
+
+# In the network, there is a few applications producing the load.
+applications:
+  - name: mix
+    type: mix
+    users: 10
+    rate:
+      constant: 5 # Tx/s
+
+  - name: largecontract
+    type: largecontract
+    users: 1
+    start: 10 # start before the Brio hardfork to make sure txs fails consistently between nodes
+    rate:
+      constant: 0.5 # Tx/s
+
+  - name: allofbundle
+    type: allofbundle
+    users: 5
+    start: 10 # start before the Brio hardfork, processed as regular txs first, rejected in between, accepted as Bundles then
+    rate:
+      constant: 1 # Tx/s
+
+  - name: oneofbundle
+    type: oneofbundle
+    users: 5
+    start: 10 # start before the Brio hardfork, processed as regular txs first, rejected in between, accepted as Bundles then
+    rate:
+      constant: 1 # Tx/s
+
+  - name: subsidizedbundle
+    type: subsidizedbundle
+    users: 5
+    start: 10 # start before the Brio hardfork, processed as regular txs first, rejected in between, accepted as Bundles then
+    rate:
+      constant: 1 # Tx/s
+
+  - name: failingbundle
+    type: failingbundle
+    users: 5
+    start: 10 # start before the Brio hardfork, processed as regular txs first, rejected in between, accepted as Bundles then
+    rate:
+      constant: 1 # Tx/s

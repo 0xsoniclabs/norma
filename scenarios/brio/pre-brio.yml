@@ -1,0 +1,44 @@
+# This scenario simulates a network with running recent client versions from the start.
+# At some point it enables hardfork verifying that the clients are able to handle the hardfork.
+
+# The name of the scenario
+name: Bundle Pre-Brio
+
+# The duration of the scenario's runtime, in seconds.
+duration: 120
+
+# Initial validator nodes in the network.
+validators:
+  - name: validators
+    instances: 3
+    imagename: "sonic:latest"
+  - name: validator-v2.1.6
+    imagename: "sonic:v2.1.6" # nodes at 2.1.6 should be compatible until the hardfork
+
+# Start with the hardfork disabled, enable Brio after 30 seconds
+# while enabling the hardfork later
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: false
+    MAX_EPOCH_DURATION: 3s
+  updates:
+    - time: 30
+      rules:
+        UPGRADES_ALLEGRO: true  # hardfork enabled
+
+nodes:
+  - name: node-v202
+    start: 30
+    failing: true
+    client:
+      imagename: "sonic:v2.0.2"   # this node should stop working after the hardfork
+  - name: node-latest
+    start: 30
+
+applications:
+  - name: mix
+    type: mix
+    users: 10
+    rate:
+      constant: 5 # Tx/s

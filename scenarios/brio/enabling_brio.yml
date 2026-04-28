@@ -1,0 +1,88 @@
+# This scenario simulates a network with Allegro and Gas Subsidies enabled from the start.
+# At some point it enables Brio hardfork, verifying that the clients are able to handle it.
+
+# The name of the scenario
+name: Enabling Brio
+
+# The duration of the scenario's runtime, in seconds.
+duration: 120
+
+# Initial validator nodes in the network.
+validators:
+  - name: validators
+    instances: 3
+    imagename: "sonic:latest"
+
+  - name: validator-v2.2.0
+    imagename: "sonic:v2.2.0" # nodes at 2.2.0 should stay compatible
+
+  - name: validator-v2.1.6
+    failing: true # this node should stop working after the hardfork
+    imagename: "sonic:v2.1.6"
+
+# Start with the Brio hardfork and transaction bundles disabled
+# while enabling the both later
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: true
+    UPGRADES_GAS_SUBSIDIES: true
+    UPGRADES_BRIO: false
+    UPGRADES_TRANSACTION_BUNDLES: false
+    MAX_EPOCH_DURATION: 3s
+  updates:
+    - time: 30
+      rules:
+        UPGRADES_BRIO: true  # hardfork enabled 60s after the start
+
+nodes:
+  - name: node-v216-dying
+    start: 32 # this node should start after the hardfork
+    failing: true # this node should stop working after the hardfork
+    client:
+      imagename: "sonic:v2.1.6"
+  - name: node-latest
+    start: 32
+
+# In the network, there is a few applications producing the load.
+applications:
+  - name: mix
+    type: mix # does not include bundles (as they are not enabled at the start)
+    users: 10
+    rate:
+      constant: 5 # Tx/s
+
+  - name: ecdsa
+    type: ecdsa
+    users: 5
+    start: 10 # start before the Brio hardfork, failing before Brio, starts to be accepted then
+    rate:
+      constant: 1 # Tx/s
+
+  - name: allofbundle
+    type: allofbundle
+    users: 5
+    start: 10 # start before the Brio hardfork, processed as regular txs first, then rejected (until Bandles enabled)
+    rate:
+      constant: 1 # Tx/s
+
+  - name: oneofbundle
+    type: oneofbundle
+    users: 5
+    start: 10 # start before the Brio hardfork, processed as regular txs first, then rejected (until Bandles enabled)
+    rate:
+      constant: 1 # Tx/s
+
+  - name: subsidizedbundle
+    type: subsidizedbundle
+    users: 5
+    start: 10 # start before the Brio hardfork, processed as regular txs first, then rejected (until Bandles enabled)
+    rate:
+      constant: 1 # Tx/s
+
+  - name: failingbundle
+    type: failingbundle
+    users: 5
+    start: 10 # start before the Brio hardfork, processed as regular txs first, then rejected (until Bandles enabled)
+    rate:
+      constant: 1 # Tx/s
