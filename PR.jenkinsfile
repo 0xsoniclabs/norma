@@ -1,7 +1,7 @@
 // Norma CI test norma using "make test"
 
 pipeline {
-	agent { label 'x86-8-64-m' }
+	agent { label 'x86-8-42-m' }
 	
 	options {
 		timestamps ()
