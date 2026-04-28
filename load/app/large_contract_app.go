@@ -43,9 +43,9 @@ func NewLargeContractApplication(ctxt AppContext, feederId, appId uint32) (Appli
 		return nil, fmt.Errorf("failed to get chain ID; %w", err)
 	}
 
-	_, receipt, err := DeployContract(ctxt, contract.DeployLargeContractCounter)
+	_, receipt, err := DeployContract(ctxt, contract.DeployCounter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deploy LargeContractCounter; %w", err)
+		return nil, fmt.Errorf("failed to deploy Counter; %w", err)
 	}
 
 	largeContractAbi, err := contract.LargeContractMetaData.GetAbi()
@@ -96,7 +96,7 @@ func (f *LargeContractApplication) CreateUsers(appContext AppContext, numUsers i
 }
 
 func (f *LargeContractApplication) GetReceivedTransactions(rpcClient rpc.Client) (uint64, error) {
-	c, err := contract.NewLargeContractCounter(f.counterAddress, rpcClient)
+	c, err := contract.NewCounter(f.counterAddress, rpcClient)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get LargeContractCounter; %w", err)
 	}
