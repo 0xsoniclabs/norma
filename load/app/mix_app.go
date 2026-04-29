@@ -25,42 +25,31 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// mixEntry pairs an application type name with a relative weight and the set
-// of NetworkRules that must be set for this app to be supported.
+// mixEntry pairs an application type name with a relative weight.
 type mixEntry struct {
-	appType       string
-	weight        int
-	requiredRules []string
-}
-
-func (e mixEntry) isEnabled(have map[string]string) bool {
-	for _, name := range e.requiredRules {
-		if have[name] != "true" {
-			return false
-		}
-	}
-	return true
+	appType string
+	weight  int
 }
 
 // mixAppTypes lists the application types included in the mix together with
-// their relative selection weights and required network rules.
+// their relative selection weights.
 var mixAppTypes = []mixEntry{
-	{"erc20", 10, nil},
-	{"counter", 10, nil},
-	{"store", 10, nil},
-	{"uniswap", 5, nil},
-	{"smartaccount", 1, nil},
-	{"subsidies", 1, []string{"UPGRADES_GAS_SUBSIDIES"}},
-	{"transient", 1, nil},
-	{"selfdestructoldcontract", 1, nil},
-	{"selfdestructnewcontract", 1, nil},
-	{"ecdsa", 2, nil},
-	{"largecontract", 1, nil},
-	{"allofbundle", 3, []string{"UPGRADES_TRANSACTION_BUNDLES"}},
-	{"oneofbundle", 3, []string{"UPGRADES_TRANSACTION_BUNDLES"}},
-	{"subsidizedbundle", 3, []string{"UPGRADES_GAS_SUBSIDIES", "UPGRADES_TRANSACTION_BUNDLES"}},
-	{"failingbundle", 1, []string{"UPGRADES_TRANSACTION_BUNDLES"}},
-	{"duplicatedbundle", 1, []string{"UPGRADES_TRANSACTION_BUNDLES"}},
+	{"erc20", 10},
+	{"counter", 10},
+	{"store", 10},
+	{"uniswap", 5},
+	{"smartaccount", 1},
+	{"subsidies", 1},
+	{"transient", 1},
+	{"selfdestructoldcontract", 1},
+	{"selfdestructnewcontract", 1},
+	{"ecdsa", 2},
+	{"largecontract", 1},
+	{"allofbundle", 3},
+	{"oneofbundle", 3},
+	{"subsidizedbundle", 3},
+	{"failingbundle", 1},
+	{"duplicatedbundle", 1},
 }
 
 // MixApplication initialises one instance of every application type and
@@ -76,13 +65,9 @@ func NewMixApplication(appContext AppContext, feederId, appId uint32) (Applicati
 	cumulativeWeights := make([]int, 0, len(mixAppTypes))
 	totalWeight := 0
 
-	networkRules := appContext.GetNetworkRules()
 	for i, entry := range mixAppTypes {
 		if entry.weight <= 0 {
 			return nil, fmt.Errorf("mix: weight for %q must be positive, got %d", entry.appType, entry.weight)
-		}
-		if !entry.isEnabled(networkRules) {
-			continue
 		}
 
 		// choose subAppId to avoid collision with regular apps, even with sub-apps of other Mix apps
