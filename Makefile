@@ -110,7 +110,6 @@ load/contracts/abi/EcdsaCounter.abi: load/contracts/EcdsaCounter.sol
 # LargeContract and LargeContractCounter exceed the standard 24 KiB code size limit (EIP-170).
 load/contracts/abi/LargeContract.abi: load/contracts/LargeContract.sol
 	solc --evm-version london -o ./load/contracts/abi --overwrite --pretty-json --abi --bin ./load/contracts/LargeContract.sol
-	abigen --type LargeContractCounter --pkg abi --abi load/contracts/abi/LargeContractCounter.abi --bin load/contracts/abi/LargeContractCounter.bin --out load/contracts/abi/LargeContractCounter.go
 	abigen --type LargeContract --pkg abi --abi load/contracts/abi/LargeContract.abi --bin load/contracts/abi/LargeContract.bin --out load/contracts/abi/LargeContract.go
 
 load/contracts/abi/ProbabilisticFailing.abi: load/contracts/ProbabilisticFailing.sol
