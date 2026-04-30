@@ -258,11 +258,20 @@ func (n *LocalNetwork) SendTransaction(tx *types.Transaction) {
 }
 
 func (n *LocalNetwork) DialRandomRpc() (rpcdriver.Client, error) {
-	if len(n.nodes) == 0 {
+	nodes := n.GetActiveNodes()
+	if len(nodes) == 0 {
 		return nil, driver.ErrEmptyNetwork
 	}
-	nodes := n.GetActiveNodes()
-	return nodes[rand.Intn(len(nodes))].DialRpc()
+	reliable := make([]driver.Node, 0, len(nodes))
+	for _, node := range nodes {
+		if !node.IsExpectedFailure() {
+			reliable = append(reliable, node)
+		}
+	}
+	if len(reliable) == 0 {
+		reliable = nodes // use failing nodes if there are no reliable nodes
+	}
+	return reliable[rand.Intn(len(reliable))].DialRpc()
 }
 
 func (n *LocalNetwork) ApplyNetworkRules(rules driver.NetworkRules) error {
