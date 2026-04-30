@@ -1,0 +1,47 @@
+# This scenario the Sonic client upgrade. It verifies that the new client is compatible
+# with the older clients, while the Brio hardfork is disabled.
+name: Pre-Brio
+
+# The duration of the scenario's runtime, in seconds.
+duration: 120
+
+# Initial validator nodes in the network.
+validators:
+  - name: validators
+    instances: 3
+    imagename: "sonic:latest"
+  - name: validator-v2.2.0
+    imagename: "sonic:v2.2.0" # the first version supporting Brio, should be compatible with latest
+  - name: validator-v2.1.6
+    imagename: "sonic:v2.1.6" # the last version not supporting Brio, should be compatible as long as Brio is disabled
+
+# Start with the Brio hardfork disabled, no enabling in this scenario
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: true
+    UPGRADES_GAS_SUBSIDIES: true
+    UPGRADES_BRIO: false
+    MAX_EPOCH_DURATION: 3s
+
+# Start few nodes with delays, let them sync with existing network
+nodes:
+  - name: node-latest
+    start: 60
+
+  - name: node-v2.2.0
+    start: 60
+    client:
+      imagename: "sonic:v2.2.0" # the first version supporting Brio, should be compatible with latest
+
+  - name: node-v2.1.6
+    start: 60
+    client:
+      imagename: "sonic:v2.1.6" # the last version not supporting Brio, should be compatible as long as Brio is disabled
+
+applications:
+  - name: mix
+    type: mix
+    users: 10
+    rate:
+      constant: 5 # Tx/s

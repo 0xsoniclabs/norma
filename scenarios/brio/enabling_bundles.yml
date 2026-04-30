@@ -1,0 +1,70 @@
+# This scenario simulates a network with Brio hardfork and Gas Subsidies enabled from the start.
+# At some point it enables bundles support, verifying that the clients are able to handle it.
+name: Enabling Bundles
+
+# The duration of the scenario's runtime, in seconds.
+duration: 120
+
+# Initial validator nodes in the network.
+validators:
+  - name: validators
+    instances: 3
+    imagename: "sonic:latest"
+
+  - name: validator-v2.2.0
+    imagename: "sonic:v2.2.0" # nodes at 2.2.0 should stay compatible with main
+
+# Start with the Brio hardfork and transaction bundles enabled
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: true
+    UPGRADES_GAS_SUBSIDIES: true
+    UPGRADES_BRIO: true
+    UPGRADES_TRANSACTION_BUNDLES: false
+    MAX_EPOCH_DURATION: 3s
+  updates:
+    - time: 30
+      rules:
+        UPGRADES_TRANSACTION_BUNDLES: true  # bundles enabled 30s after the start
+
+nodes:
+  - name: node-latest
+    start: 60
+
+  - name: node-v2.2.0
+    start: 60
+    client:
+      imagename: "sonic:v2.2.0" # the first version supporting Brio, should be compatible with latest
+
+# In the network, there is a few applications producing the load.
+applications:
+  - name: mix
+    type: mix
+    users: 10
+    rate:
+      constant: 5 # Tx/s
+
+  - name: allofbundle
+    type: allofbundle
+    users: 2
+    rate:
+      constant: 1 # Tx/s
+
+  - name: oneofbundle
+    type: oneofbundle
+    users: 2
+    rate:
+      constant: 1 # Tx/s
+
+  - name: subsidizedbundle
+    type: subsidizedbundle
+    users: 2
+    rate:
+      constant: 1 # Tx/s
+
+  - name: failingbundle
+    type: failingbundle
+    users: 4
+    rate:
+      constant: 1 # Tx/s
