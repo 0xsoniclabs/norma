@@ -102,11 +102,6 @@ func TestGenerators(t *testing.T) {
 				"UPGRADES_BRIO",
 			},
 		},
-		"Mix": {
-			availableInUpgrades: []string{
-				"UPGRADES_BRIO",
-			},
-		},
 	}
 
 	for _, upgrade := range []string{

@@ -3,10 +3,10 @@ set -euo pipefail # fail if anything fails
 
 echo "Sonic binary checksum: $(sha256sum   /sonicd | cut -d ' ' -f 1 )"
 
-# Get the local node's IP.
-list=$(hostname -I)
-read -ra array <<< "$list"
-external_ip=${array[0]}
+# Get the local node's IP, waiting for the network interface to be ready.
+until external_ip=$(hostname -I | awk '{print $1}') && [[ -n "$external_ip" ]]; do
+  sleep 1
+done
 
 echo "Sonic is going to export its services on ${external_ip}"
 echo "val id=${VALIDATOR_ID}"
