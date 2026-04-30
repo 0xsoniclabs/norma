@@ -1,197 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.4;
 
-// @notice LargeContract and LargeContractCounter both have deployed bytecode exceeding
-// the standard Ethereum code size limit of 24 KiB (EIP-170, 24576 bytes).
-// They require Sonic Brio or later, which doubles the limit to 48 KiB.
-//
-// Load test pattern: each transaction is a CREATE transaction deploying a new
-// LargeContract. The constructor calls LargeContractCounter.incrementCounter() so the
-// number of successful deployments can be queried on-chain.
-contract LargeContractCounter {
-    uint256 private count;
-
-    // an immutable variable to calculate in constructor
-    uint256 private immutable immutableVariable;
-
-    constructor() payable {
-        uint256 v = 0;
-        // useless calculations to make the constructor (init bytecode) larger
-        v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;
-        v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;
-        v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;
-        v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;
-        v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;
-        v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;
-        v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;
-        v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;
-        v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;v++;
-        immutableVariable = v;
-    }
-
-    // unused function to make the contract larger
-    function paddingAdd1() external view returns (uint256) {
-        uint256 x = count;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        return x;
-    }
-
-    // unused function to make the contract larger
-    function paddingAdd2() external view returns (uint256) {
-        uint256 x = count;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        return x;
-    }
-
-    // unused function to make the contract larger
-    function paddingAdd3() external view returns (uint256) {
-        uint256 x = count;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
-        return x;
-    }
-
-    function incrementCounter() external {
-        uint256 c = count;
-        // useless incrementation and decrementations to make the function larger and more expensive
-        c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;
-        c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;
-        c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;
-        c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;
-        c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;
-        c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;
-        c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;
-        c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;
-        c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;
-        c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;
-        c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;
-        c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;
-        c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;
-        c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;
-        c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;
-        c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;
-        c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;
-        c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;
-        c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;
-        c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;
-        c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;
-        c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;
-        c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;
-        c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;
-        c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;c++;
-        c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;c--;
-        c++; // the only useful incrementation
-        count = c;
-    }
-
-    function getCount() external view returns (uint256) {
-        return count;
-    }
+interface ICounter {
+    function incrementCounter() external;
 }
 
+// @notice LargeContract has deployed bytecode exceeding the standard Ethereum
+// runtime code size limit of 24 KiB (EIP-170, 24576 bytes) and initialization
+// code exceeding the standard limit of 48 KiB (EIP-3860, 49152 bytes).
+// They require Sonic Brio or later, which doubles both limits:
+// runtime code from 24576b to 49152b, initialization code from 49152b to 98304b.
+//
 contract LargeContract {
     // an immutable variable to make each deployed contract code unique
     uint256 private immutable randomId;
+    ICounter private counter;
 
-    constructor(address _counter, uint256 _id) payable {
+    constructor(ICounter _counter, uint256 _id) payable {
         uint256 i = _id;
         // useless calculations to make the constructor (init bytecode) larger
         i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;
@@ -309,7 +134,8 @@ contract LargeContract {
         i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;
         i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;i++;
         randomId = i;
-        LargeContractCounter(_counter).incrementCounter();
+        counter = _counter;
+        counter.incrementCounter();
     }
 
     // unused function to make the contract larger
@@ -456,5 +282,9 @@ contract LargeContract {
         x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
         x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;x++;
         return x;
+    }
+
+    function incrementCounter() external {
+        counter.incrementCounter();
     }
 }

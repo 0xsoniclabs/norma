@@ -63,16 +63,6 @@ func TestLargeContractDeploymentFailsWithoutBrio(t *testing.T) {
 	}
 	defer ctxt.Close()
 
-	t.Run("LargeContractCounter", func(t *testing.T) {
-		_, _, err := app.DeployContract(ctxt, contract.DeployLargeContractCounter)
-		if err == nil {
-			t.Fatal("expected deployment to fail due to contract size, but it succeeded")
-		}
-		if !strings.Contains(err.Error(), "max initcode size exceeded") {
-			t.Errorf("expected a max initcode size error, got: %v", err)
-		}
-	})
-
 	t.Run("LargeContract", func(t *testing.T) {
 		deployer := func(opts *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *contract.LargeContract, error) {
 			return contract.DeployLargeContract(opts, backend, common.Address{}, big.NewInt(0))

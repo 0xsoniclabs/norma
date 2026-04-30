@@ -2,7 +2,7 @@
   {
     "inputs": [
       {
-        "internalType": "address",
+        "internalType": "contract ICounter",
         "name": "_counter",
         "type": "address"
       },
@@ -14,6 +14,13 @@
     ],
     "stateMutability": "payable",
     "type": "constructor"
+  },
+  {
+    "inputs": [],
+    "name": "incrementCounter",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
     "inputs": [],
