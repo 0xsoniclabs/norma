@@ -19,15 +19,15 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/0xsoniclabs/norma/driver/checking"
-	"golang.org/x/exp/maps"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/0xsoniclabs/norma/driver/checking"
+	"golang.org/x/exp/maps"
 
 	"github.com/0xsoniclabs/norma/analysis/report"
 	"github.com/0xsoniclabs/norma/driver"
@@ -155,19 +155,23 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 
 	// create symlink as qol (_latest => _####) where #### is the randomly generated name
 	symlink := filepath.Join(filepath.Dir(outputDir), fmt.Sprintf("norma_data_%s_latest", label))
-	if _, err := os.Lstat(symlink); err == nil {
-		os.Remove(symlink)
+	if _, lstatErr := os.Lstat(symlink); lstatErr == nil {
+		if err := os.Remove(symlink); err != nil {
+			return fmt.Errorf("failed to remove existing _latest symlink: %w", err)
+		}
 	}
-	os.Symlink(outputDir, symlink)
+	if err := os.Symlink(outputDir, symlink); err != nil {
+		return fmt.Errorf("failed to create _latest symlink: %w", err)
+	}
 
 	fmt.Printf("Monitoring data is written to %v\n", outputDir)
 
 	// Copy scenario yml to outputDir as well to provide context
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(filepath.Join(outputDir, filepath.Base(path)), data, 0644)
+	err = os.WriteFile(filepath.Join(outputDir, filepath.Base(path)), data, 0644)
 	if err != nil {
 		return err
 	}
