@@ -17,13 +17,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/0xsoniclabs/norma/driver/checking"
 	"golang.org/x/exp/maps"
 	"io/fs"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/0xsoniclabs/norma/analysis/report"
@@ -169,6 +172,12 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 		return err
 	}
 
+	// Create a context that is cancelled on SIGINT/SIGTERM so that both
+	// network startup and scenario execution can be interrupted cleanly,
+	// allowing all deferred shutdowns to execute.
+	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+
 	clock := executor.NewWallTimeClock()
 
 	// Startup network.
@@ -177,7 +186,7 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 		fmt.Printf("Network Rule: %s: %s\n", k, v)
 	}
 
-	net, err := local.NewLocalNetwork(&driver.NetworkConfig{
+	net, err := local.NewLocalNetwork(ctx, &driver.NetworkConfig{
 		Validators:    driver.NewValidators(scenario.Validators),
 		RoundTripTime: scenario.GetRoundTripTime(),
 		NetworkRules:  driver.NetworkRules(maps.Clone(scenario.NetworkRules.Genesis)),
@@ -252,7 +261,7 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 	fmt.Printf("Running '%s' ...\n", path)
 	logger := startProgressLogger(monitor, net)
 	defer logger.shutdown()
-	err = executor.Run(clock, net, &scenario, checks)
+	err = executor.Run(ctx, clock, net, &scenario, checks)
 	if err != nil {
 		return err
 	}

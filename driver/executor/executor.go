@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
-	"os"
-	"os/signal"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
@@ -37,9 +35,9 @@ import (
 
 // Run executes the given scenario on the given network using the provided clock
 // as a time source. Execution will fail (fast) if the scenario is not valid (see
-// Scenario's Check() function).
-func Run(clock Clock, network driver.Network, scenario *parser.Scenario, checks checking.Checks) error {
-	return run(clock, network, scenario, checks, &netBasedValidatorRegistry{
+// Scenario's Check() function). The context can be used to abort the execution.
+func Run(ctx context.Context, clock Clock, network driver.Network, scenario *parser.Scenario, checks checking.Checks) error {
+	return run(ctx, clock, network, scenario, checks, &netBasedValidatorRegistry{
 		net: network,
 	})
 }
@@ -47,6 +45,7 @@ func Run(clock Clock, network driver.Network, scenario *parser.Scenario, checks 
 // run is the internal implementation of the Run function, allowing to
 // inject a validatorRegistry for testing purposes.
 func run(
+	ctx context.Context,
 	clock Clock,
 	network driver.Network,
 	scenario *parser.Scenario,
@@ -117,11 +116,6 @@ func run(
 		scheduleAdvanceEpochEvents(adv.Time, epochs, queue, network)
 	}
 
-	// Register a handler for Ctrl+C events.
-	abort := make(chan os.Signal, 1)
-	signal.Notify(abort, os.Interrupt)
-	defer signal.Stop(abort)
-
 	// restart clock as network initialization could time considerable amount of time.
 	clock.Restart()
 	// Run all events.
@@ -135,7 +129,7 @@ func run(
 		select {
 		case <-clock.NotifyAt(event.time()):
 			// continue processing
-		case <-abort:
+		case <-ctx.Done():
 			// abort processing
 			slog.Warn("received user abort, ending execution")
 			return fmt.Errorf("aborted by user")

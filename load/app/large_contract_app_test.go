@@ -39,7 +39,7 @@ func TestLargeContractDeploymentFailsWithoutBrio(t *testing.T) {
 		"UPGRADES_ALLEGRO": "true",
 		// UPGRADES_BRIO omitted intentionally - deployment of large contracts should fail
 	}
-	net, err := local.NewLocalNetwork(&driver.NetworkConfig{
+	net, err := local.NewLocalNetwork(t.Context(), &driver.NetworkConfig{
 		Validators:   driver.DefaultValidators,
 		NetworkRules: rules,
 	})

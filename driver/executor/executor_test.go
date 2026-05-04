@@ -17,11 +17,11 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"github.com/0xsoniclabs/norma/driver/checking"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"reflect"
-	"syscall"
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -39,7 +39,7 @@ func TestExecutor_RunEmptyScenario(t *testing.T) {
 		Validators: []parser.Validator{{Name: "validator"}},
 	}
 
-	if err := Run(clock, net, &scenario, nil); err != nil {
+	if err := Run(t.Context(), clock, net, &scenario, nil); err != nil {
 		t.Errorf("failed to run empty scenario: %v", err)
 	}
 	want := Seconds(10)
@@ -74,7 +74,7 @@ func TestExecutor_RunSingleNodeScenario(t *testing.T) {
 		node.EXPECT().Cleanup(),
 	)
 
-	if err := Run(clock, net, &scenario, nil); err != nil {
+	if err := Run(t.Context(), clock, net, &scenario, nil); err != nil {
 		t.Errorf("failed to run scenario: %v", err)
 	}
 	want := Seconds(10)
@@ -117,7 +117,7 @@ func TestExecutor_RunMultipleNodeScenario(t *testing.T) {
 		node2.EXPECT().Cleanup(),
 	)
 
-	if err := Run(clock, net, &scenario, nil); err != nil {
+	if err := Run(t.Context(), clock, net, &scenario, nil); err != nil {
 		t.Errorf("failed to run scenario: %v", err)
 	}
 	want := Seconds(10)
@@ -226,7 +226,7 @@ func TestExecutor_Validator_StartEndRejoinLeave(t *testing.T) {
 		node4.EXPECT().Cleanup(),
 	)
 
-	if err := run(clock, net, &scenario, nil, registry); err != nil {
+	if err := run(t.Context(), clock, net, &scenario, nil, registry); err != nil {
 		t.Errorf("failed to run scenario: %v", err)
 	}
 }
@@ -256,7 +256,7 @@ func TestExecutor_RunSingleApplicationScenario(t *testing.T) {
 	app.EXPECT().Start()
 	app.EXPECT().Stop()
 
-	if err := Run(clock, net, &scenario, nil); err != nil {
+	if err := Run(t.Context(), clock, net, &scenario, nil); err != nil {
 		t.Errorf("failed to run scenario: %v", err)
 	}
 	want := Seconds(10)
@@ -295,7 +295,7 @@ func TestExecutor_RunMultipleApplicationScenario(t *testing.T) {
 	app2.EXPECT().Start()
 	app2.EXPECT().Stop()
 
-	if err := Run(clock, net, &scenario, nil); err != nil {
+	if err := Run(t.Context(), clock, net, &scenario, nil); err != nil {
 		t.Errorf("failed to run scenario: %v", err)
 	}
 	want := Seconds(10)
@@ -322,13 +322,15 @@ func TestExecutor_TestUserAbort(t *testing.T) {
 	net := driver.NewMockNetwork(ctrl)
 	node := driver.NewMockNode(ctrl)
 
-	// In this scenario, a node is created, after which a user interrupt is send.
+	ctx, cancel := context.WithCancel(t.Context())
+
+	// In this scenario, a node is created, after which the context is cancelled.
 	net.EXPECT().CreateNode(gomock.Any()).Do(func(_ any) {
-		fmt.Printf("Sending interrupt signal to local process ..\n")
-		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+		fmt.Printf("Cancelling context to simulate user abort ..\n")
+		cancel()
 	}).Return(node, nil)
 
-	if err := Run(clock, net, &scenario, nil); err == nil {
+	if err := Run(ctx, clock, net, &scenario, nil); err == nil {
 		t.Errorf("a user interrupt error should be reported")
 	}
 	want := Seconds(1)
@@ -371,7 +373,7 @@ func TestExecutor_RunScenarioWithDefaultChecks(t *testing.T) {
 	checkBlockGasRate.EXPECT().Check().Return(nil)
 
 	checks := checking.InitNetworkChecks(net, nil)
-	if err := Run(clock, net, &scenario, checks); err != nil {
+	if err := Run(t.Context(), clock, net, &scenario, checks); err != nil {
 		t.Errorf("failed to run scenario with default checks: %v", err)
 	}
 	want := Seconds(10)
@@ -400,7 +402,7 @@ func TestExecutor_scheduleNetworkRulesEvents(t *testing.T) {
 		net.EXPECT().ApplyNetworkRules(map[string]string{"MAX_EPOCH_GAS": "1500000000000"}),
 	)
 
-	if err := Run(clock, net, &scenario, nil); err != nil {
+	if err := Run(t.Context(), clock, net, &scenario, nil); err != nil {
 		t.Errorf("failed to run scenario: %v", err)
 	}
 }
@@ -452,7 +454,7 @@ func TestExecutor_scheduleAdvanceEpochEvents(t *testing.T) {
 		net.EXPECT().AdvanceEpoch(7),
 	)
 
-	if err := Run(clock, net, &scenario, nil); err != nil {
+	if err := Run(t.Context(), clock, net, &scenario, nil); err != nil {
 		t.Errorf("failed to run scenario: %v", err)
 	}
 }

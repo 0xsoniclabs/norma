@@ -33,7 +33,7 @@ func TestCanCollectCpuProfileDateFromOperaNode(t *testing.T) {
 	t.Cleanup(func() {
 		_ = docker.Close()
 	})
-	node, err := opera.StartOperaDockerNode(docker, nil, &opera.OperaNodeConfig{
+	node, err := opera.StartOperaDockerNode(t.Context(), docker, nil, &opera.OperaNodeConfig{
 		Label:         "test",
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},

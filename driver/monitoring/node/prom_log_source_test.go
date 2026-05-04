@@ -98,7 +98,7 @@ func TestLogsIntegrationGetRealMetric(t *testing.T) {
 	t.Cleanup(func() {
 		_ = client.Close()
 	})
-	node, err := opera.StartOperaDockerNode(client, nil, &opera.OperaNodeConfig{
+	node, err := opera.StartOperaDockerNode(t.Context(), client, nil, &opera.OperaNodeConfig{
 		Label:         "test",
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
