@@ -3,9 +3,9 @@ module github.com/0xsoniclabs/norma
 go 1.25.0
 
 require (
-	github.com/0xsoniclabs/carmen/go v0.0.0-20260413073511-38e882c830d4
+	github.com/0xsoniclabs/carmen/go v0.0.0-20260427113009-ed285bc2e427
 	github.com/0xsoniclabs/norma/genesistools v0.0.0-20250218144827-28263a9a85f9
-	github.com/0xsoniclabs/sonic v0.0.0-20260414143741-680121a212bc
+	github.com/0xsoniclabs/sonic v0.0.0-20260504073722-eca599aa77f8
 	github.com/docker/docker v27.3.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/ethereum/go-ethereum v1.17.1
@@ -18,7 +18,7 @@ require (
 )
 
 require (
-	github.com/0xsoniclabs/tosca v0.0.0-20260327130322-2d1aa839a807 // indirect
+	github.com/0xsoniclabs/tosca v0.0.0-20260429071638-3f4119284c42 // indirect
 	github.com/0xsoniclabs/tracy v0.0.0-20251027125423-00a5ab7968fb // indirect
 	github.com/DataDog/zstd v1.5.6 // indirect
 	github.com/Fantom-foundation/lachesis-base v0.0.0-20240116072301-a75735c4ef00 // indirect
@@ -37,7 +37,7 @@ require (
 	github.com/consensys/gnark-crypto v0.18.1 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
-	github.com/crate-crypto/go-eth-kzg v1.4.0 // indirect
+	github.com/crate-crypto/go-eth-kzg v1.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
@@ -101,12 +101,12 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.56.0 // indirect
-	go.opentelemetry.io/otel v1.39.0 // indirect
-	go.opentelemetry.io/otel/metric v1.39.0 // indirect
-	go.opentelemetry.io/otel/trace v1.39.0 // indirect
+	go.opentelemetry.io/otel v1.40.0 // indirect
+	go.opentelemetry.io/otel/metric v1.40.0 // indirect
+	go.opentelemetry.io/otel/trace v1.40.0 // indirect
 	golang.org/x/crypto v0.44.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect
-	golang.org/x/sys v0.39.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251222181119-0a764e51fe1b // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251222181119-0a764e51fe1b // indirect
@@ -118,6 +118,6 @@ require (
 
 replace github.com/0xsoniclabs/norma/genesistools => ./genesis
 
-replace github.com/ethereum/go-ethereum => github.com/0xsoniclabs/go-ethereum v0.0.0-20260316131102-1779772a79a7
+replace github.com/ethereum/go-ethereum => github.com/0xsoniclabs/go-ethereum v0.0.0-20260424113012-971561538c58
 
-replace github.com/Fantom-foundation/lachesis-base => github.com/Fantom-foundation/lachesis-base-sonic v0.0.0-20250701061954-44075d09185c
+replace github.com/Fantom-foundation/lachesis-base => github.com/Fantom-foundation/lachesis-base-sonic v0.0.0-20260429065829-930ae462cd09
