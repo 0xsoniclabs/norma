@@ -5,14 +5,14 @@ go 1.25.0
 require (
 	github.com/0xsoniclabs/carmen/go v0.0.0-20260427113009-ed285bc2e427
 	github.com/0xsoniclabs/norma/genesistools v0.0.0-20250218144827-28263a9a85f9
-	github.com/0xsoniclabs/sonic v0.0.0-20260504073722-eca599aa77f8
+	github.com/0xsoniclabs/sonic v0.0.0-20260505095123-e821c67c97b2
 	github.com/docker/docker v27.3.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/ethereum/go-ethereum v1.17.1
 	github.com/holiman/uint256 v1.3.2
 	github.com/jupp0r/go-priority-queue v0.0.0-20160601094913-ab1073853bde
 	github.com/urfave/cli/v2 v2.27.5
-	go.uber.org/mock v0.5.0
+	go.uber.org/mock v0.6.0
 	golang.org/x/exp v0.0.0-20241204233417-43b7b7cde48d
 	gopkg.in/yaml.v3 v3.0.1
 )
