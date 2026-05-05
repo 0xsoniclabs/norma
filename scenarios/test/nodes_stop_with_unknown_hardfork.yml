@@ -1,0 +1,94 @@
+# This scenario simulates a network with running recent client versions from the start.
+# At some point it enables hardfork verifying that the clients are able to handle the hardfork.
+
+# The name of the scenario
+name: Nodes previous to a fork cannot join it
+
+# The duration of the scenario's runtime, in seconds.
+duration: 180
+
+# Initial validator nodes in the network.
+validators:
+  - name: validators
+    instances: 13 # need to keep super-majority and run the network
+    imagename: "sonic:latest"
+  # the following nodes should fail to start.
+  - name: validator-v2.1.2
+    failing: true
+    imagename: "sonic:v2.1.2"
+  - name: validator-v2.1.3
+    failing: true
+    imagename: "sonic:v2.1.3"
+  - name: validator-v2.1.4
+    failing: true
+    imagename: "sonic:v2.1.4"
+  - name: validator-v2.1.5
+    failing: true
+    imagename: "sonic:v2.1.5"
+  - name: validator-v2.1.6
+    failing: true
+    imagename: "sonic:v2.1.6"
+  - name: validator-v2.1.7
+    failing: true
+    imagename: "sonic:v2.1.7-rc.1"
+
+# Start with the allegro and brio hardforks enabled.
+network_rules:
+  genesis:
+    UPGRADES_ALLEGRO: true
+    UPGRADES_BRIO: true
+    MAX_EPOCH_DURATION: 3s
+
+nodes:
+    - name: node-v212
+      start: 30
+      failing: true
+      client:
+        imagename: sonic:v2.1.2 # this node should fail to join the network
+    - name: node-v213
+      start: 30
+      failing: true
+      client:
+        imagename: sonic:v2.1.3 # this node should fail to join the network
+    - name: node-v214
+      start: 30
+      failing: true
+      client:
+        imagename: sonic:v2.1.4 # this node should fail to join the network
+    - name: node-v215
+      start: 30
+      failing: true
+      client:
+        imagename: sonic:v2.1.5 # this node should fail to join the network
+    - name: node-v216
+      start: 30
+      failing: true
+      client:
+        imagename: sonic:v2.1.6 # this node should fail to join the network
+    - name: node-v217
+      start: 30
+      failing: true
+      client:
+        imagename: sonic:v2.1.7-rc.1 # this node should fail to join the network
+    - name: node-latest
+      start: 30
+
+# In the network, there is a few applications producing the load.
+applications:
+  - name: counter
+    type: counter
+    users: 10           # number of users using the app
+    rate:
+      constant: 1    # Tx/s
+
+  - name: erc20
+    type: erc20
+    users: 10           # number of users using the app
+    rate:
+      constant: 1     # Tx/s
+
+  - name: uniswap
+    type: uniswap
+    users: 10           # number of users using the app
+    rate:
+      constant: 1     # Tx/s
