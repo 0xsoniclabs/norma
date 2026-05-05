@@ -1,23 +1,23 @@
 Project Norma
 =============
 
-Project of integrating Carmen Storage and Tosca VM into go-opera.
+Project Norma is a system testing infrastructure for the Sonic blockchain client.
 
 # Building and Running
 
 ## Requirements
 
 For building/running the project, the following tools are required:
-* Go: version 1.20 or later; we recommend to use your system's package manager; alternatively, you can follow Go's [installation manual](https://go.dev/doc/install) or; if you need to maintain multiple versions, [this tutorial](https://go.dev/doc/manage-install) describes how to do so
+* Go: version 1.25 or later; we recommend to use your system's package manager; alternatively, you can follow Go's [installation manual](https://go.dev/doc/install) or; if you need to maintain multiple versions, [this tutorial](https://go.dev/doc/manage-install) describes how to do so
 * Docker: version 23.0 or later; we recommend to use your system's package manager or the installation manuals listed in the [Using Docker](#using-docker) section below
   * [Docker buildx](https://docs.docker.com/reference/cli/docker/buildx/): to install it on Ubuntu run `apt install docker-buildx`.
 * GNU make, or compatible
 * R report rendering is handled via Docker - no local R installation required.
 
 Optionally, before running `make generate-mocks`, make sure you installed:
-* GoMock: `go install github.com/golang/mock/mockgen@v1.6.0`
-  * Make sure `$GOPATH/bin` is in your `$PATH`. `$GOPATH` defaults to `$HOME/go` if not set, i.e. configure `$PATH` 
-  * either to `PATH=$GOPATH/bin:$PATH` or `PATH=$HOME/go/bin:$PATH` 
+* mockgen from `go.uber.org/mock`: `go install go.uber.org/mock/mockgen@latest`
+  * Make sure `$GOPATH/bin` is in your `$PATH`. `$GOPATH` defaults to `$HOME/go` if not set, i.e. configure `$PATH`
+  * either to `PATH=$GOPATH/bin:$PATH` or `PATH=$HOME/go/bin:$PATH`
 
 Optionally, before running `make generate-abi`, make sure you have installed:
 * Solidity Compiler (solc) - see [Installing the Solidity Compiler](https://docs.soliditylang.org/en/latest/installing-solidity.html)
@@ -90,7 +90,7 @@ alternatively
 
 
 ### Building
-The experiments use the docker image that wraps the forked Opera/Norma client. The image is build as part of 
+The experiments use the docker image that wraps the Sonic client. The image is built as part of
 the build process, and can be explicitly triggered:
 ```
 make build-docker-image
@@ -99,7 +99,7 @@ make build-docker-image
 ### Commands
 During the development, a few Docker commands can come handy:
 ```
-docker run -i -t -d opera         // runs container with Opera in background (without -d it would run in foreground)
+docker run -i -t -d sonic         // runs container with Sonic in background (without -d it would run in foreground)
 docker ps                         // shows running container
 docker exec -it <ID> /bin/sh      // opens interactive shell inside the container, the ID is obtained by previous command
 docker logs <ID>                  // prints stdout (log) of the container
@@ -207,7 +207,7 @@ The directory has the following structure:
     | - <sample_number>.prof
       ...
 ```
-These files can be transfered to a developer's machine, and analysed by running
+These files can be transferred to a developer's machine, and analysed by running
 
 ```
 go tool pprof -http=":8000" <sample_number>.prof
@@ -216,5 +216,5 @@ go tool pprof -http=":8000" <sample_number>.prof
 ## Known Norma Restrictions
 
 Known restrictions
- - only one node will be a validator, and it is the first node to be started; this node must life until the end of the scenario
- - currently, all transactions are send to the validator node
+ - validator nodes must be started at the beginning of the simulation and must remain running throughout; adding validators after the simulation has started is not supported
+ - generating double-sign events simulating misbehaving validators is not supported
