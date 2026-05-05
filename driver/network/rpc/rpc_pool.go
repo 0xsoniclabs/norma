@@ -158,10 +158,7 @@ func (p *worker) close() {
 
 func (p *worker) runRpcSenderLoop() error {
 	defer close(p.done)
-	rpcClient, err := network.RetryReturn(network.DefaultRetryAttempts, 1*time.Second, func() (*ethclient.Client, error) {
-		if p.ctx.Err() == context.Canceled {
-			return nil, nil
-		}
+	rpcClient, err := network.RetryReturn(p.ctx, network.DefaultRetryAttempts, 1*time.Second, func() (*ethclient.Client, error) {
 		return ethclient.Dial(string(p.rpcUrl))
 	})
 

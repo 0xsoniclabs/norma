@@ -103,7 +103,7 @@ type OperaNodeConfig struct {
 var labelPattern = regexp.MustCompile("[A-Za-z0-9_-]+")
 
 // StartOperaDockerNode creates a new OperaNode running in a Docker container.
-func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *OperaNodeConfig) (*OperaNode, error) {
+func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker.Network, config *OperaNodeConfig) (*OperaNode, error) {
 	if !labelPattern.Match([]byte(config.Label)) {
 		return nil, fmt.Errorf("invalid label for node: '%v'", config.Label)
 	}
@@ -115,7 +115,7 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 		validatorId = fmt.Sprintf("%d", *config.ValidatorId)
 	}
 
-	host, err := network.RetryReturn(network.DefaultRetryAttempts, 1*time.Second, func() (*docker.Container, error) {
+	host, err := network.RetryReturn(ctx, network.DefaultRetryAttempts, 1*time.Second, func() (*docker.Container, error) {
 		ports, err := network.GetFreePorts(len(operaServices.Services()))
 		if err != nil {
 			return nil, err
@@ -189,7 +189,7 @@ func StartOperaDockerNode(client *docker.Client, dn *docker.Network, config *Ope
 	}
 
 	// Wait until the OperaNode inside the Container is ready.
-	err = network.Retry(network.DefaultRetryAttempts, 1*time.Second, func() error {
+	err = network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second, func() error {
 		_, err := node.GetNodeID()
 		return err
 	})
@@ -293,7 +293,7 @@ func (n *OperaNode) DialRpc() (rpcdriver.Client, error) {
 		return nil, fmt.Errorf("node %s does not export an RPC server", n.GetLabel())
 	}
 
-	rpcClient, err := network.RetryReturn(network.DefaultRetryAttempts, 1*time.Second, func() (*rpc.Client, error) {
+	rpcClient, err := network.RetryReturn(context.Background(), network.DefaultRetryAttempts, 1*time.Second, func() (*rpc.Client, error) {
 		return rpc.DialContext(context.Background(), string(*url))
 	})
 	if err != nil {
@@ -309,7 +309,7 @@ func (n *OperaNode) AddPeer(id driver.NodeID) error {
 	if err != nil {
 		return err
 	}
-	return network.Retry(network.DefaultRetryAttempts, 1*time.Second, func() error {
+	return network.Retry(context.Background(), network.DefaultRetryAttempts, 1*time.Second, func() error {
 		return rpcClient.Call(nil, "admin_addPeer", id)
 	})
 }
@@ -321,7 +321,7 @@ func (n *OperaNode) RemovePeer(id driver.NodeID) error {
 	if err != nil {
 		return err
 	}
-	return network.Retry(network.DefaultRetryAttempts, 1*time.Second, func() error {
+	return network.Retry(context.Background(), network.DefaultRetryAttempts, 1*time.Second, func() error {
 		return rpcClient.Call(nil, "admin_removePeer", id)
 	})
 }

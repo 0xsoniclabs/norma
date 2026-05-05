@@ -75,7 +75,7 @@ type LocalNetwork struct {
 	appContext app.AppContext
 }
 
-func NewLocalNetwork(config *driver.NetworkConfig) (*LocalNetwork, error) {
+func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalNetwork, error) {
 	client, err := docker.NewClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client; %v", err)
@@ -127,7 +127,7 @@ func NewLocalNetwork(config *driver.NetworkConfig) (*LocalNetwork, error) {
 					Label:          label,
 					ExtraArguments: validator.ExtraArguments,
 				}
-				_, errs[idx] = net.createNode(&nodeConfig)
+				_, errs[idx] = net.createNode(ctx, &nodeConfig)
 			}(idx)
 			idx++
 		}
@@ -187,8 +187,8 @@ func (n *LocalNetwork) startNode(node *node.OperaNode) (*node.OperaNode, error) 
 
 // createNode is an internal version of CreateNode enabling the creation
 // of validator and non-validator nodes in the network.
-func (n *LocalNetwork) createNode(nodeConfig *node.OperaNodeConfig) (*node.OperaNode, error) {
-	node, err := node.StartOperaDockerNode(n.docker, n.network, nodeConfig)
+func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNodeConfig) (*node.OperaNode, error) {
+	node, err := node.StartOperaDockerNode(ctx, n.docker, n.network, nodeConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start opera docker; %v", err)
 	}
@@ -198,7 +198,7 @@ func (n *LocalNetwork) createNode(nodeConfig *node.OperaNodeConfig) (*node.Opera
 // CreateNode creates nodes in the network during run.
 func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error) {
 	if config.Cheater {
-		_, err := n.createNode(&node.OperaNodeConfig{
+		_, err := n.createNode(context.Background(), &node.OperaNodeConfig{
 			Label:          "cheater-" + config.Name,
 			Failing:        config.Failing,
 			Image:          config.Image,
@@ -217,7 +217,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 		*datadir = fmt.Sprintf("%s/%s", n.config.OutputDir, *config.DataVolume)
 	}
 
-	return n.createNode(&node.OperaNodeConfig{
+	return n.createNode(context.Background(), &node.OperaNodeConfig{
 		Label:          config.Name,
 		Failing:        config.Failing,
 		Image:          config.Image,

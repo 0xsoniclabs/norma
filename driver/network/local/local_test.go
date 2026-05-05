@@ -47,7 +47,7 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 		N := N
 		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
 			t.Parallel()
-			net, err := NewLocalNetwork(&config)
+			net, err := NewLocalNetwork(t.Context(), &config)
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
 			}
@@ -92,7 +92,7 @@ func TestLocalNetwork_CanEnforceNetworkLatency(t *testing.T) {
 				Validators:    driver.NewDefaultValidators(2),
 				RoundTripTime: rtt,
 			}
-			net, err := NewLocalNetwork(&config)
+			net, err := NewLocalNetwork(t.Context(), &config)
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
 			}
@@ -127,7 +127,7 @@ func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
 		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
 			t.Parallel()
 
-			net, err := NewLocalNetwork(&config)
+			net, err := NewLocalNetwork(t.Context(), &config)
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
 			}
@@ -171,7 +171,7 @@ func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 	N := 2
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 
-	net, err := NewLocalNetwork(&config)
+	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 	N := 3
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 
-	net, err := NewLocalNetwork(&config)
+	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
@@ -275,7 +275,7 @@ func TestLocalNetwork_CanRunWithMultipleValidators(t *testing.T) {
 		config := driver.NetworkConfig{Validators: driver.NewDefaultValidators(N)}
 		t.Run(fmt.Sprintf("num_validators=%d", N), func(t *testing.T) {
 			t.Parallel()
-			net, err := NewLocalNetwork(&config)
+			net, err := NewLocalNetwork(t.Context(), &config)
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
 			}
@@ -317,7 +317,7 @@ func TestLocalNetwork_CanRunWithVariousValidators(t *testing.T) {
 	})
 
 	config := driver.NetworkConfig{Validators: validators}
-	net, err := NewLocalNetwork(&config)
+	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
@@ -339,7 +339,7 @@ func TestLocalNetwork_NotifiesListenersOnNodeStartup(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	listener := driver.NewMockNetworkListener(ctrl)
 
-	net, err := NewLocalNetwork(&config)
+	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
@@ -376,7 +376,7 @@ func TestLocalNetwork_NotifiesListenersOnAppStartup(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	listener := driver.NewMockNetworkListener(ctrl)
 
-	net, err := NewLocalNetwork(&config)
+	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
@@ -402,7 +402,7 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 		N := N
 		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
 			t.Parallel()
-			net, err := NewLocalNetwork(&config)
+			net, err := NewLocalNetwork(t.Context(), &config)
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
 			}
@@ -465,7 +465,7 @@ func TestLocalNetwork_Num_Validators_Started(t *testing.T) {
 		t.Run(fmt.Sprintf("num_validators=%d", i), func(t *testing.T) {
 			t.Parallel()
 			config := driver.NetworkConfig{Validators: driver.NewDefaultValidators(i)}
-			net, err := NewLocalNetwork(&config)
+			net, err := NewLocalNetwork(t.Context(), &config)
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
 			}
@@ -488,7 +488,7 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions(t *testing.T
 	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 
-	net, err := NewLocalNetwork(&config)
+	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
@@ -530,7 +530,7 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T
 	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 
-	net, err := NewLocalNetwork(&config)
+	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
@@ -599,7 +599,7 @@ func getChecksum(net *LocalNetwork, image string) (string, error) {
 func TestLocalNetworkApplyNetworkRules_Success(t *testing.T) {
 	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
-	net, err := NewLocalNetwork(&config)
+	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
@@ -648,7 +648,7 @@ func TestLocalNetworkApplyNetworkRules_Success(t *testing.T) {
 func TestLocalNetworkAdvanceEpoch_Success(t *testing.T) {
 	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
-	net, err := NewLocalNetwork(&config)
+	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
@@ -690,7 +690,7 @@ func TestLocalNetwork_FailingFlagPropagated(t *testing.T) {
 	config := driver.NetworkConfig{Validators: []driver.Validator{
 		{Name: "validator", Failing: true, Instances: 1, ImageName: driver.DefaultClientDockerImageName}},
 	}
-	net, err := NewLocalNetwork(&config)
+	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
@@ -731,7 +731,7 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	}()
 
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators, OutputDir: temp}
-	net, err := NewLocalNetwork(&config)
+	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}

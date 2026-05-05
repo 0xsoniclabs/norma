@@ -17,6 +17,7 @@
 package prometheusmon
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -82,7 +83,7 @@ func Start(net driver.Network, dn *docker.Network) (*Prometheus, error) {
 
 	// wait until the prometheus inside the Container is ready.
 	// this is necessary for SIGHUP signal to be delivered correctly
-	if err := network.Retry(network.DefaultRetryAttempts, 1*time.Second, func() error {
+	if err := network.Retry(context.Background(), network.DefaultRetryAttempts, 1*time.Second, func() error {
 		resp, err := http.Get(prometheus.GetUrl() + "/-/ready")
 		if err == nil && resp.StatusCode != http.StatusOK {
 			err = fmt.Errorf("not yet HTTP OK")

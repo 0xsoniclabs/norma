@@ -78,7 +78,7 @@ func TestNodeCanBeAdded(t *testing.T) {
 		t.Fatalf("error: %v", err)
 	}
 	// wait for prometheus to reload config
-	err := network.Retry(network.DefaultRetryAttempts, 1*time.Second, func() error {
+	err := network.Retry(t.Context(), network.DefaultRetryAttempts, 1*time.Second, func() error {
 		// verify node is added by calling prometheus API
 		resp, err := http.Get(prom.GetUrl() + "/api/v1/targets")
 		if err != nil {
@@ -122,7 +122,7 @@ func startPrometheus(t *testing.T, net *local.LocalNetwork) *Prometheus {
 // createLocalNetwork creates a docker network and returns it.
 func createLocalNetwork(t *testing.T) *local.LocalNetwork {
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
-	net, err := local.NewLocalNetwork(&config)
+	net, err := local.NewLocalNetwork(t.Context(), &config)
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}

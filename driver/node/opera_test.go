@@ -43,7 +43,7 @@ func TestOperaNode_StartAndStop(t *testing.T) {
 	t.Cleanup(func() {
 		_ = docker.Close()
 	})
-	node, err := StartOperaDockerNode(docker, nil, &OperaNodeConfig{
+	node, err := StartOperaDockerNode(t.Context(), docker, nil, &OperaNodeConfig{
 		Label:         "test",
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
@@ -67,7 +67,7 @@ func TestOperaNode_RpcServiceIsReadyAfterStartup(t *testing.T) {
 	t.Cleanup(func() {
 		_ = docker.Close()
 	})
-	node, err := StartOperaDockerNode(docker, nil, &OperaNodeConfig{
+	node, err := StartOperaDockerNode(t.Context(), docker, nil, &OperaNodeConfig{
 		Label:         "test",
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
@@ -92,7 +92,7 @@ func TestOperaNode_StreamLog(t *testing.T) {
 		_ = docker.Close()
 	})
 
-	node, err := StartOperaDockerNode(docker, nil, &OperaNodeConfig{
+	node, err := StartOperaDockerNode(t.Context(), docker, nil, &OperaNodeConfig{
 		Label:         "test",
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
@@ -146,7 +146,7 @@ func TestOperaNode_MetricsExposed(t *testing.T) {
 		_ = docker.Close()
 	})
 
-	node, err := StartOperaDockerNode(docker, nil, &OperaNodeConfig{
+	node, err := StartOperaDockerNode(t.Context(), docker, nil, &OperaNodeConfig{
 		Label:         "test",
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
@@ -192,7 +192,7 @@ func TestClient_Stop_Graceful(t *testing.T) {
 		}
 	}()
 
-	node, err := StartOperaDockerNode(client, nil, &OperaNodeConfig{
+	node, err := StartOperaDockerNode(t.Context(), client, nil, &OperaNodeConfig{
 		Label:         "test",
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},

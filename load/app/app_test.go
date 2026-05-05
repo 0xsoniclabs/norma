@@ -112,7 +112,7 @@ func TestGenerators(t *testing.T) {
 		t.Run(upgrade, func(t *testing.T) {
 			// run local network of one node
 			rules := getCumulativeUpgrades(upgrade)
-			net, err := local.NewLocalNetwork(&driver.NetworkConfig{
+			net, err := local.NewLocalNetwork(t.Context(), &driver.NetworkConfig{
 				Validators:   driver.DefaultValidators,
 				NetworkRules: rules,
 			})
@@ -171,7 +171,7 @@ func TestGenerators_Subsidies(t *testing.T) {
 	rules := map[string]string{
 		"UPGRADES_GAS_SUBSIDIES": "true",
 	}
-	net, err := local.NewLocalNetwork(&driver.NetworkConfig{
+	net, err := local.NewLocalNetwork(t.Context(), &driver.NetworkConfig{
 		Validators:   driver.DefaultValidators,
 		NetworkRules: rules,
 	})
@@ -247,7 +247,7 @@ func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
 		t.Errorf("invalid number of sent transactions reported, wanted %d, got %d", want, got)
 	}
 
-	err = network.Retry(network.DefaultRetryAttempts, 1*time.Second, func() error {
+	err = network.Retry(t.Context(), network.DefaultRetryAttempts, 1*time.Second, func() error {
 		received, err := app.GetReceivedTransactions(rpcClient)
 		if err != nil {
 			return fmt.Errorf("unable to get amount of received txs; %v", err)

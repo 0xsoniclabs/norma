@@ -77,7 +77,7 @@ func TestRetry(t *testing.T) {
 	t.Parallel()
 
 	var count int
-	err := Retry(5, 1*time.Millisecond, func() error {
+	err := Retry(t.Context(), 5, 1*time.Millisecond, func() error {
 		count++
 		if count >= 5 {
 			return nil
