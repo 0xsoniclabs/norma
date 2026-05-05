@@ -17,14 +17,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io/fs"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
+
 	"github.com/0xsoniclabs/norma/driver/checking"
 	"golang.org/x/exp/maps"
-	"io/fs"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"time"
 
 	"github.com/0xsoniclabs/norma/analysis/report"
 	"github.com/0xsoniclabs/norma/driver"
@@ -152,22 +155,32 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 
 	// create symlink as qol (_latest => _####) where #### is the randomly generated name
 	symlink := filepath.Join(filepath.Dir(outputDir), fmt.Sprintf("norma_data_%s_latest", label))
-	if _, err := os.Lstat(symlink); err == nil {
-		os.Remove(symlink)
+	if _, lstatErr := os.Lstat(symlink); lstatErr == nil {
+		if err := os.Remove(symlink); err != nil {
+			return fmt.Errorf("failed to remove existing _latest symlink: %w", err)
+		}
 	}
-	os.Symlink(outputDir, symlink)
+	if err := os.Symlink(outputDir, symlink); err != nil {
+		return fmt.Errorf("failed to create _latest symlink: %w", err)
+	}
 
 	fmt.Printf("Monitoring data is written to %v\n", outputDir)
 
 	// Copy scenario yml to outputDir as well to provide context
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(filepath.Join(outputDir, filepath.Base(path)), data, 0644)
+	err = os.WriteFile(filepath.Join(outputDir, filepath.Base(path)), data, 0644)
 	if err != nil {
 		return err
 	}
+
+	// Create a context that is cancelled on SIGINT/SIGTERM so that both
+	// network startup and scenario execution can be interrupted cleanly,
+	// allowing all deferred shutdowns to execute.
+	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
 
 	clock := executor.NewWallTimeClock()
 
@@ -177,7 +190,7 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 		fmt.Printf("Network Rule: %s: %s\n", k, v)
 	}
 
-	net, err := local.NewLocalNetwork(&driver.NetworkConfig{
+	net, err := local.NewLocalNetwork(ctx, &driver.NetworkConfig{
 		Validators:    driver.NewValidators(scenario.Validators),
 		RoundTripTime: scenario.GetRoundTripTime(),
 		NetworkRules:  driver.NetworkRules(maps.Clone(scenario.NetworkRules.Genesis)),
@@ -252,7 +265,7 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 	fmt.Printf("Running '%s' ...\n", path)
 	logger := startProgressLogger(monitor, net)
 	defer logger.shutdown()
-	err = executor.Run(clock, net, &scenario, checks)
+	err = executor.Run(ctx, clock, net, &scenario, checks)
 	if err != nil {
 		return err
 	}

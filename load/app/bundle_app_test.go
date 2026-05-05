@@ -20,7 +20,7 @@ func TestGenerators_Bundles(t *testing.T) {
 	rules := getCumulativeUpgrades("UPGRADES_BRIO")
 	rules["UPGRADES_TRANSACTION_BUNDLES"] = "true"
 	rules["UPGRADES_GAS_SUBSIDIES"] = "true"
-	net, err := local.NewLocalNetwork(&driver.NetworkConfig{
+	net, err := local.NewLocalNetwork(t.Context(), &driver.NetworkConfig{
 		Validators:   driver.DefaultValidators,
 		NetworkRules: rules,
 	})
@@ -120,7 +120,7 @@ func testBundleGenerator(t *testing.T, application app.Application, ctxt app.App
 		fmt.Printf("bundle %d (plan %s) executed: block=%d position=%d count=%d\n", i, planHash, info.Block, info.Position, info.Count)
 	}
 
-	err = network.Retry(network.DefaultRetryAttempts, 1*time.Second, func() error {
+	err = network.Retry(t.Context(), network.DefaultRetryAttempts, 1*time.Second, func() error {
 		sent := user.GetSentTransactions()
 		received, err := application.GetReceivedTransactions(rpcClient)
 		if err != nil {
@@ -165,7 +165,7 @@ func testFailingBundleGenerator(t *testing.T, application app.Application, ctxt 
 		fmt.Printf("Sent bundle %d\n", i)
 
 		// wait for tx to be processed (necessary because of nonce loading in GenerateTx())
-		_ = network.Retry(5, 1*time.Second, func() error {
+		_ = network.Retry(t.Context(), 5, 1*time.Second, func() error {
 			received, err := application.GetReceivedTransactions(rpcClient)
 			if err != nil {
 				return fmt.Errorf("unable to get amount of received txs; %v", err)
@@ -179,7 +179,7 @@ func testFailingBundleGenerator(t *testing.T, application app.Application, ctxt 
 		})
 	}
 
-	err = network.Retry(10, 1*time.Second, func() error {
+	err = network.Retry(t.Context(), 10, 1*time.Second, func() error {
 		received, err := application.GetReceivedTransactions(rpcClient)
 		if err != nil {
 			return fmt.Errorf("unable to get amount of received txs; %v", err)
