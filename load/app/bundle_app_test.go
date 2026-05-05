@@ -45,7 +45,6 @@ func TestGenerators_Bundles(t *testing.T) {
 
 	for appId, name := range []string{
 		"AllOfBundle",
-		// "OneOfBundle", // Temporarily disabled: fails because of sonic-admin#742
 		"SubsidizedBundle",
 		"DuplicatedBundle",
 	} {
@@ -60,13 +59,14 @@ func TestGenerators_Bundles(t *testing.T) {
 
 	for appId, name := range []string{
 		"FailingBundle",
+		"OneOfBundle",
 	} {
 		t.Run(name, func(t *testing.T) {
 			application, err := app.NewApplication(name, appCtx, 0, uint32(appId))
 			if err != nil {
 				t.Fatal(err)
 			}
-			testFailingBundleGenerator(t, application, appCtx)
+			testRpcNonceBundleGenerator(t, application, appCtx)
 		})
 	}
 }
@@ -136,7 +136,7 @@ func testBundleGenerator(t *testing.T, application app.Application, ctxt app.App
 	}
 }
 
-func testFailingBundleGenerator(t *testing.T, application app.Application, ctxt app.AppContext) {
+func testRpcNonceBundleGenerator(t *testing.T, application app.Application, ctxt app.AppContext) {
 	users, err := application.CreateUsers(ctxt, 1)
 	if err != nil {
 		t.Fatal(err)
