@@ -19,7 +19,7 @@
 #
 # It checks out the required version of the client, and builds it.
 #
-FROM golang:1.25.3 AS client-build
+FROM golang:1.26 AS client-build
 
 WORKDIR /client
 
@@ -44,7 +44,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
 #
 # It checks out the local version of the norma, and builds it.
 #
-FROM golang:1.25.3 AS norma-build
+FROM golang:1.26 AS norma-build
 
 # Download dependencies supporting Sonic run first to cache them for faster build when Norma changes.
 WORKDIR /
