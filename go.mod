@@ -1,6 +1,6 @@
 module github.com/0xsoniclabs/norma
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/0xsoniclabs/carmen/go v0.0.0-20260427113009-ed285bc2e427
