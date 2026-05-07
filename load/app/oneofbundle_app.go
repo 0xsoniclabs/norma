@@ -34,10 +34,11 @@ import (
 )
 
 // OneOfBundleApplication generates bundle transactions where each bundle
-// contains a OneOf section with two transfers to a target account: one from a
-// richSender (who has ERC-20 tokens) and one from a poorSender (who has none).
-// The OneOf execution plan picks the first successful transaction — exactly one
-// of the two inner transactions will execute per bundle.
+// contains a OneOf section with two transfers to a target account, both signed
+// by the same sender. One step transfers 1 token (succeeds) and the other
+// attempts to transfer more tokens than the sender holds (fails). The OneOf
+// execution plan picks the first successful transaction — exactly one of the
+// two inner transactions will execute per bundle.
 type OneOfBundleApplication struct {
 	erc20Contract  *contract.ERC20
 	erc20Address   common.Address
@@ -87,50 +88,42 @@ func NewOneOfBundleApplication(appContext AppContext, feederId, appId uint32) (A
 	}, nil
 }
 
-// CreateUsers creates numUsers user pairs (richSender, poorSender). All users
-// share the single target address created during application initialisation.
+// CreateUsers creates numUsers users. All users share the single target address
+// created during application initialisation.
 func (a *OneOfBundleApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
 	users := make([]User, numUsers)
-	richSenderAddresses := make([]common.Address, numUsers)
-	poorSenderAddresses := make([]common.Address, numUsers)
+	senderAddresses := make([]common.Address, numUsers)
 
 	for i := range users {
-		richSender, err := a.accountFactory.CreateAccount(appContext.GetClient())
-		if err != nil {
-			return nil, err
-		}
-		poorSender, err := a.accountFactory.CreateAccount(appContext.GetClient())
+		sender, err := a.accountFactory.CreateAccount(appContext.GetClient())
 		if err != nil {
 			return nil, err
 		}
 		users[i] = &OneOfBundleUser{
 			erc20Address:   a.erc20Address,
 			erc20Abi:       a.erc20Abi,
-			richSender:     richSender,
-			poorSender:     poorSender,
+			sender:         sender,
 			targetAddress:  a.targetAddress,
 			accountFactory: a.accountFactory,
-			signer:         types.LatestSignerForChainID(richSender.chainID),
+			signer:         types.LatestSignerForChainID(sender.chainID),
 			client:         appContext.GetClient(),
 		}
-		richSenderAddresses[i] = richSender.address
-		poorSenderAddresses[i] = poorSender.address
+		senderAddresses[i] = sender.address
 	}
 
 	// Fund all tx sending accounts with native currency for gas.
 	fundsPerAccount := new(big.Int).Mul(big.NewInt(1_000), big.NewInt(1e18))
-	fundedAddresses := append(richSenderAddresses, poorSenderAddresses...)
-	if err := appContext.FundAccounts(fundedAddresses, fundsPerAccount); err != nil {
+	if err := appContext.FundAccounts(senderAddresses, fundsPerAccount); err != nil {
 		return nil, fmt.Errorf("failed to fund accounts: %w", err)
 	}
 
-	// Mint ERC-20 tokens only to richSender accounts; poorSenders receive none.
+	// Mint ERC-20 tokens to sender accounts.
 	tokenAmount := new(big.Int).Mul(big.NewInt(1_000_000), big.NewInt(1e18))
 	receipt, err := appContext.Run(func(opts *bind.TransactOpts) (*types.Transaction, error) {
-		return a.erc20Contract.MintForAll(opts, richSenderAddresses, tokenAmount)
+		return a.erc20Contract.MintForAll(opts, senderAddresses, tokenAmount)
 	})
 	if err != nil || receipt.Status != types.ReceiptStatusSuccessful {
-		return nil, errors.Join(fmt.Errorf("failed to mint ERC-20 tokens for rich senders"), err)
+		return nil, errors.Join(fmt.Errorf("failed to mint ERC-20 tokens for senders"), err)
 	}
 
 	return users, nil
@@ -150,19 +143,19 @@ func (a *OneOfBundleApplication) GetReceivedTransactions(rpcClient rpc.Client) (
 	return balance.Uint64(), nil
 }
 
-// OneOfBundleUser represents one (richSender, poorSender, target) triple. Each
-// GenerateTx call produces one bundle envelope containing a OneOf section with:
+// OneOfBundleUser holds a single sender account. Each GenerateTx call produces
+// one bundle envelope containing a OneOf section with:
 //
-//  1. richSender.transfer(target, 1) — succeeds (richSender has tokens)
-//  2. poorSender.transfer(target, 1) — fails   (poorSender has no tokens)
+//  1. sender.transfer(target, 1)               — succeeds (sender has tokens)
+//  2. sender.transfer(target, overBalance)     — fails   (amount exceeds balance)
 //
-// The order of the two steps within the OneOf section is randomized on every
-// call. The OneOf execution plan picks the first succeeding transaction.
+// Both steps share the same nonce. The order of the two steps within the OneOf
+// section is randomized on every call. The OneOf execution plan picks the first
+// succeeding transaction — exactly one execution per bundle.
 type OneOfBundleUser struct {
 	erc20Address   common.Address
 	erc20Abi       *abi.ABI
-	richSender     *Account
-	poorSender     *Account
+	sender         *Account
 	targetAddress  common.Address
 	accountFactory *AccountFactory
 	signer         types.Signer
@@ -171,50 +164,60 @@ type OneOfBundleUser struct {
 }
 
 func (u *OneOfBundleUser) GenerateTx() (*types.Transaction, error) {
-	ctx := context.Background()
 	successfulFirst := rand.Intn(2) == 0
 
-	transferData, err := u.erc20Abi.Pack("transfer", u.targetAddress, big.NewInt(1))
+	transferSuccessfulData, err := u.erc20Abi.Pack("transfer", u.targetAddress, big.NewInt(1))
 	if err != nil {
-		return nil, fmt.Errorf("failed to pack rich transfer: %w", err)
+		return nil, fmt.Errorf("failed to pack transfer data: %w", err)
 	}
 
-	nonceRich, err := u.client.PendingNonceAt(ctx, u.richSender.address)
+	// Exceeds the minted token supply (1_000_000 * 1e18), so this step always fails.
+	overBalanceAmount := new(big.Int).Mul(big.NewInt(2_000_000), big.NewInt(1e18))
+	transferFailingData, err := u.erc20Abi.Pack("transfer", u.targetAddress, overBalanceAmount)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get nonce for senderA: %w", err)
-	}
-	noncePoor, err := u.client.PendingNonceAt(ctx, u.richSender.address)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get nonce for senderB: %w", err)
+		return nil, fmt.Errorf("failed to pack over-balance transfer data: %w", err)
 	}
 
-	currentBlock, err := u.client.BlockNumber(ctx)
+	currentBlock, err := u.client.BlockNumber(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current block number: %w", err)
 	}
 
-	successfulStep := bundle.Step(u.richSender.privateKey, &types.DynamicFeeTx{
-		Nonce:     nonceRich,
-		Gas:       70_000,
-		GasFeeCap: gasFeeCap,
-		GasTipCap: gasTipCap,
-		To:        &u.erc20Address,
-		Data:      transferData,
-	})
-	failingStep := bundle.Step(u.poorSender.privateKey, &types.DynamicFeeTx{
-		Nonce:     noncePoor,
-		Gas:       70_000,
-		GasFeeCap: gasFeeCap,
-		GasTipCap: gasTipCap,
-		To:        &u.erc20Address,
-		Data:      transferData,
-	})
-
 	var firstStep, secondStep bundle.BuilderStep
 	if successfulFirst {
-		firstStep, secondStep = successfulStep, failingStep
+		firstStep = bundle.Step(u.sender.privateKey, &types.DynamicFeeTx{
+			Nonce:     u.sender.getNextNonce(),
+			Gas:       70_000,
+			GasFeeCap: gasFeeCap,
+			GasTipCap: gasTipCap,
+			To:        &u.erc20Address,
+			Data:      transferSuccessfulData,
+		})
+		secondStep = bundle.Step(u.sender.privateKey, &types.DynamicFeeTx{
+			Nonce:     u.sender.getCurrentNonce(), // will not run, nonce not consumed
+			Gas:       70_000,
+			GasFeeCap: gasFeeCap,
+			GasTipCap: gasTipCap,
+			To:        &u.erc20Address,
+			Data:      transferFailingData,
+		})
 	} else {
-		firstStep, secondStep = failingStep, successfulStep
+		firstStep = bundle.Step(u.sender.privateKey, &types.DynamicFeeTx{
+			Nonce:     u.sender.getNextNonce(),
+			Gas:       70_000,
+			GasFeeCap: gasFeeCap,
+			GasTipCap: gasTipCap,
+			To:        &u.erc20Address,
+			Data:      transferFailingData,
+		})
+		secondStep = bundle.Step(u.sender.privateKey, &types.DynamicFeeTx{
+			Nonce:     u.sender.getNextNonce(), // both will run, both nonces will be consumed
+			Gas:       70_000,
+			GasFeeCap: gasFeeCap,
+			GasTipCap: gasTipCap,
+			To:        &u.erc20Address,
+			Data:      transferSuccessfulData,
+		})
 	}
 	envelope := bundle.NewBuilder().
 		WithSigner(u.signer).

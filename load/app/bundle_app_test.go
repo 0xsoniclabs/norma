@@ -45,6 +45,7 @@ func TestGenerators_Bundles(t *testing.T) {
 
 	for appId, name := range []string{
 		"AllOfBundle",
+		"OneOfBundle",
 		"SubsidizedBundle",
 		"DuplicatedBundle",
 	} {
@@ -59,7 +60,6 @@ func TestGenerators_Bundles(t *testing.T) {
 
 	for appId, name := range []string{
 		"FailingBundle",
-		"OneOfBundle",
 	} {
 		t.Run(name, func(t *testing.T) {
 			application, err := app.NewApplication(name, appCtx, 0, uint32(appId))
