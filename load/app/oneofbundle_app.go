@@ -33,12 +33,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// OneOfBundleApplication generates bundle transactions where each bundle
-// contains a OneOf section with two transfers to a target account, both signed
-// by the same sender. One step transfers 1 token (succeeds) and the other
-// attempts to transfer more tokens than the sender holds (fails). The OneOf
-// execution plan picks the first successful transaction — exactly one of the
-// two inner transactions will execute per bundle.
+// OneOfBundleApplication generates OneOf bundles where only one transaction within the bundle is expected to succeed.
+// Both transactions have the same sender, the successful one transfers 1 token, failing attempts to transfer
+// more than available.
 type OneOfBundleApplication struct {
 	erc20Contract  *contract.ERC20
 	erc20Address   common.Address
@@ -146,12 +143,10 @@ func (a *OneOfBundleApplication) GetReceivedTransactions(rpcClient rpc.Client) (
 // OneOfBundleUser holds a single sender account. Each GenerateTx call produces
 // one bundle envelope containing a OneOf section with:
 //
-//  1. sender.transfer(target, 1)               — succeeds (sender has tokens)
-//  2. sender.transfer(target, overBalance)     — fails   (amount exceeds balance)
+//  1. sender.transfer(target, 1)           - succeeds
+//  2. sender.transfer(target, overBalance) - fails (amount exceeds balance)
 //
-// Both steps share the same nonce. The order of the two steps within the OneOf
-// section is randomized on every call. The OneOf execution plan picks the first
-// succeeding transaction — exactly one execution per bundle.
+// The order of the two steps within the OneOf section is randomized on every call.
 type OneOfBundleUser struct {
 	erc20Address   common.Address
 	erc20Abi       *abi.ABI
@@ -171,7 +166,7 @@ func (u *OneOfBundleUser) GenerateTx() (*types.Transaction, error) {
 		return nil, fmt.Errorf("failed to pack transfer data: %w", err)
 	}
 
-	// Exceeds the minted token supply (1_000_000 * 1e18), so this step always fails.
+	// overBalanceAmount exceeds the minted token supply
 	overBalanceAmount := new(big.Int).Mul(big.NewInt(2_000_000), big.NewInt(1e18))
 	transferFailingData, err := u.erc20Abi.Pack("transfer", u.targetAddress, overBalanceAmount)
 	if err != nil {
