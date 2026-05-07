@@ -127,3 +127,4 @@ test: pull-hello-world-image pull-alpine-image pull-prometheus-image build-r-ren
 
 clean:
 	rm -rvf $(CURDIR)/build
+	docker image rm -f sonic sonic:local

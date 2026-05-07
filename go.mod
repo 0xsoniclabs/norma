@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/0xsoniclabs/carmen/go v0.0.0-20260427113009-ed285bc2e427
 	github.com/0xsoniclabs/norma/genesistools v0.0.0-20250218144827-28263a9a85f9
-	github.com/0xsoniclabs/sonic v0.0.0-20260505095123-e821c67c97b2
+	github.com/0xsoniclabs/sonic v0.0.0-20260505152818-400acf397f1a
 	github.com/docker/docker v27.3.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/ethereum/go-ethereum v1.17.1

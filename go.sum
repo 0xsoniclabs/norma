@@ -2,10 +2,8 @@ github.com/0xsoniclabs/carmen/go v0.0.0-20260427113009-ed285bc2e427 h1:sMPNQv8eW
 github.com/0xsoniclabs/carmen/go v0.0.0-20260427113009-ed285bc2e427/go.mod h1:ebS6LBL8TM3tKnRf9AHVb4FYQbb+edg3f7Gw/HnAffA=
 github.com/0xsoniclabs/go-ethereum v0.0.0-20260424113012-971561538c58 h1:FXc86ukHR2flWIFTGanxow99cOagC8ek73GeagYP3wI=
 github.com/0xsoniclabs/go-ethereum v0.0.0-20260424113012-971561538c58/go.mod h1:F60oMGNtPsr0hhwnGzwZv4ooj0AfnXJ1iGMGXylfjrg=
-github.com/0xsoniclabs/sonic v0.0.0-20260504073722-eca599aa77f8 h1:K1sZadvMdQIFZqHrQMNtTUzNOvXYp4vXxIghF8KPmUU=
-github.com/0xsoniclabs/sonic v0.0.0-20260504073722-eca599aa77f8/go.mod h1:0H/+1j2PuKb+K5QAucEHamKv5O3wq1J99s5D9PnJauQ=
-github.com/0xsoniclabs/sonic v0.0.0-20260505095123-e821c67c97b2 h1:jW4n4nQ4czbMt24/MXd8yNWgc97KQ3t4/AlrfJLq6vg=
-github.com/0xsoniclabs/sonic v0.0.0-20260505095123-e821c67c97b2/go.mod h1:p9vjX11vFypX26+kKEpTCJIwx/UM1/MvoB3YwKV8sDs=
+github.com/0xsoniclabs/sonic v0.0.0-20260505152818-400acf397f1a h1:2axfIPTnmRFu2pYRWasyJoahLm+/VxeWcQMKOT16An4=
+github.com/0xsoniclabs/sonic v0.0.0-20260505152818-400acf397f1a/go.mod h1:p9vjX11vFypX26+kKEpTCJIwx/UM1/MvoB3YwKV8sDs=
 github.com/0xsoniclabs/tosca v0.0.0-20260429071638-3f4119284c42 h1:oJMc/vekaRHmIwiRYHzfn8pofD4AwR8awgJe8DeUaDs=
 github.com/0xsoniclabs/tosca v0.0.0-20260429071638-3f4119284c42/go.mod h1:iXtx7i9R25Oc5SD/xGI7aamdnF0nCteBpulZGIOIYJI=
 github.com/0xsoniclabs/tracy v0.0.0-20251027125423-00a5ab7968fb h1:mb6rPN+DpA/N2QWrQrLQEG2uzrYgy061PPauifstXNM=
@@ -325,8 +323,6 @@ go.opentelemetry.io/otel/trace v1.40.0 h1:WA4etStDttCSYuhwvEa8OP8I5EWu24lkOzp+ZY
 go.opentelemetry.io/otel/trace v1.40.0/go.mod h1:zeAhriXecNGP/s2SEG3+Y8X9ujcJOTqQ5RgdEJcawiA=
 go.opentelemetry.io/proto/otlp v1.9.0 h1:l706jCMITVouPOqEnii2fIAuO3IVGBRPV5ICjceRb/A=
 go.opentelemetry.io/proto/otlp v1.9.0/go.mod h1:xE+Cx5E/eEHw+ISFkwPLwCZefwVjY+pqKg1qcK03+/4=
-go.uber.org/mock v0.5.0 h1:KAMbZvZPyBPWgD14IrIQ38QCyjwpvVVV6K/bHl1IwQU=
-go.uber.org/mock v0.5.0/go.mod h1:ge71pBPLYDk7QIi1LupWxdAykm7KIEFchiOqd6z7qMM=
 go.uber.org/mock v0.6.0 h1:hyF9dfmbgIX5EfOdasqLsWD6xqpNZlXblLB/Dbnwv3Y=
 go.uber.org/mock v0.6.0/go.mod h1:KiVJ4BqZJaMj4svdfmHM0AUx4NJYO8ZNpPnZn1Z+BBU=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
