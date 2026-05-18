@@ -190,7 +190,10 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 
 	// Wait until the OperaNode inside the Container is ready.
 	err = network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second, func() error {
-		_, err := node.GetNodeID()
+		if err := node.host.CheckRunning(); err != nil {
+			return fmt.Errorf("%w: %w", err, network.ErrPermanent)
+		}
+		_, err = node.GetNodeID()
 		return err
 	})
 	if err == nil {

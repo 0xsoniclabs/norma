@@ -43,7 +43,6 @@ type Signal string
 var SigHup Signal = "SIGHUP"
 var SigKill Signal = "SIGKILL"
 var SigInt Signal = "SIGINT"
-var Sigterm Signal = "SIGTERM"
 
 // Client provides means to spawn Docker containers capable of hosting
 // services like the go-opera client.
@@ -234,6 +233,19 @@ func (c *Container) Hostname() string {
 // expected to offer its services.
 func (c *Container) IsRunning() bool {
 	return !c.stopped
+}
+
+// CheckRunning returns an error if the container process is no longer running,
+// either because it exited on its own or because its state cannot be determined.
+func (c *Container) CheckRunning() error {
+	info, err := c.client.cli.ContainerInspect(context.Background(), c.id)
+	if err != nil {
+		return fmt.Errorf("failed to inspect container: %w", err)
+	}
+	if !info.State.Running {
+		return fmt.Errorf("container exited with code %d", info.State.ExitCode)
+	}
+	return nil
 }
 
 // Stop terminates this container. Services within the container will be

@@ -152,37 +152,22 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 	return net, nil
 }
 
-// StartNode starts a node after it has been created.
-func (n *LocalNetwork) StartNode(nd driver.Node) (driver.Node, error) {
-	opera, ok := nd.(*node.OperaNode)
-	if !ok {
-		return nil, fmt.Errorf("trying to start non-sonic node")
-	}
-	return n.startNode(opera)
-}
-
-func (n *LocalNetwork) startNode(node *node.OperaNode) (*node.OperaNode, error) {
+// addNodeIntoNetwork connects the node with other nodes in the network, adds it into the list of nodes.
+func (n *LocalNetwork) addNodeIntoNetwork(node *node.OperaNode) error {
 	n.nodesMutex.Lock()
+	defer n.nodesMutex.Unlock()
+
 	id, err := node.GetNodeID()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get node id; %v", err)
+		return fmt.Errorf("failed to get node id; %v", err)
 	}
 	for _, other := range n.nodes {
 		if err = other.AddPeer(id); err != nil {
-			n.nodesMutex.Unlock()
-			return nil, fmt.Errorf("failed to add peer; %v", err)
+			return fmt.Errorf("failed to add peer; %v", err)
 		}
 	}
 	n.nodes[id] = node
-	n.nodesMutex.Unlock()
-
-	n.listenerMutex.Lock()
-	for listener := range n.listeners {
-		listener.AfterNodeCreation(node)
-	}
-	n.listenerMutex.Unlock()
-
-	return node, nil
+	return nil
 }
 
 // createNode is an internal version of CreateNode enabling the creation
@@ -192,7 +177,15 @@ func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNod
 	if err != nil {
 		return nil, fmt.Errorf("failed to start opera docker; %v", err)
 	}
-	return n.startNode(node)
+	if err := n.addNodeIntoNetwork(node); err != nil {
+		return nil, fmt.Errorf("failed to connect node; %w", err)
+	}
+	n.listenerMutex.Lock()
+	for listener := range n.listeners {
+		listener.AfterNodeCreation(node)
+	}
+	n.listenerMutex.Unlock()
+	return node, nil
 }
 
 // CreateNode creates nodes in the network during run.
