@@ -34,6 +34,10 @@ type Host interface {
 	// IsRunning tests whether this host is running or has been stopped.
 	IsRunning() bool
 
+	// CheckRunning returns an error if the host process is no longer running,
+	// either because it exited on its own or because its state cannot be determined.
+	CheckRunning() error
+
 	// GetAddressForService returns the address of a service running on this
 	// host, or nil if such a service is not offered.
 	GetAddressForService(*ServiceDescription) *AddressPort

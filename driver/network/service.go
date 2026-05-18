@@ -17,13 +17,11 @@
 package network
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // ServiceDescription is
@@ -114,45 +112,4 @@ func GetFreePorts(num int) ([]Port, error) {
 		}
 	}
 	return ports, nil
-}
-
-const DefaultRetryAttempts = 180
-
-// RetryReturn executes the input function until it produces no error.
-// It however executes only the configured number of times with the configured
-// delay between attempts. If the execution is not successful since,
-// the execution returns the last error.
-// When execution is successful, the execution result is returned from this method.
-// The context can be used to abort the retry loop early.
-func RetryReturn[Out any](ctx context.Context, numAttempts int, delay time.Duration, do func() (Out, error)) (Out, error) {
-	var out Out
-	var err error
-	for i := 0; i < numAttempts; i++ {
-		if ctx.Err() != nil {
-			return out, ctx.Err()
-		}
-		out, err = do()
-		if err == nil {
-			break
-		}
-		select {
-		case <-ctx.Done():
-			return out, ctx.Err()
-		case <-time.After(delay):
-		}
-	}
-	return out, err
-}
-
-// Retry executes the input function until it produces no error.
-// It however executes only the configured number of times with the configured
-// delay between attempts. If the execution is not successful since,
-// the execution returns the last error.
-// The context can be used to abort the retry loop early.
-func Retry(ctx context.Context, numAttempts int, delay time.Duration, do func() error) error {
-	_, err := RetryReturn(ctx, numAttempts, delay, func() (*int, error) {
-		err := do()
-		return nil, err
-	})
-	return err
 }
