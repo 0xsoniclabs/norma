@@ -98,7 +98,7 @@ func run(
 		scheduleNodeEvents(&node, queue, network, endTime, registry)
 	}
 	for _, app := range scenario.Applications {
-		if err := scheduleApplicationEvents(&app, queue, network, endTime); err != nil {
+		if err := scheduleApplicationEvents(ctx, &app, queue, network, endTime); err != nil {
 			return err
 		}
 	}
@@ -524,7 +524,7 @@ func (a netBasedValidatorRegistry) unregisterValidator(validatorId int) error {
 // scheduleApplicationEvents schedules a number of events covering the life-cycle of a class of
 // applications during the scenario execution. The nature of the scheduled applications is taken from the
 // given application description, and actions are applied to the given network.
-func scheduleApplicationEvents(source *parser.Application, queue *eventQueue, net driver.Network, end Time) error {
+func scheduleApplicationEvents(ctx context.Context, source *parser.Application, queue *eventQueue, net driver.Network, end Time) error {
 	instances := 1
 	if source.Instances != nil {
 		instances = *source.Instances
@@ -543,6 +543,9 @@ func scheduleApplicationEvents(source *parser.Application, queue *eventQueue, ne
 	}
 
 	for i := 0; i < instances; i++ {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		name := fmt.Sprintf("%s-%d", source.Name, i)
 		newApp, err := net.CreateApplication(&driver.ApplicationConfig{
 			Name:  name,

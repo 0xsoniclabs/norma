@@ -101,6 +101,17 @@ func run(ctx *cli.Context) (err error) {
 
 	path := args.First()
 
+	// Create a context that is cancelled on SIGINT/SIGTERM so that both
+	// network startup and scenario execution can be interrupted cleanly,
+	// allowing all deferred shutdowns to execute.
+	stoppableCtx, stop := signal.NotifyContext(ctx.Context, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		<-stoppableCtx.Done()
+		fmt.Printf("Interrupted - stopping...\n")
+		stop() // second Ctrl+C will force-kill
+	}()
+
 	// Check if the path is a directory
 	fileInfo, err := os.Stat(path)
 	if err != nil {
@@ -113,10 +124,13 @@ func run(ctx *cli.Context) (err error) {
 			if err != nil {
 				return err
 			}
+			if stoppableCtx.Err() != nil {
+				return stoppableCtx.Err()
+			}
 			if !d.IsDir() && (filepath.Ext(d.Name()) == ".yaml" || filepath.Ext(d.Name()) == ".yml") {
 				// Call runScenario for each YAML file
 				label := fmt.Sprintf("eval_%d", time.Now().Unix())
-				if err := runScenario(p, outputDir, label, keepPrometheusRunning, skipChecks, skipReportRendering); err != nil {
+				if err := runScenario(stoppableCtx, p, outputDir, label, keepPrometheusRunning, skipChecks, skipReportRendering); err != nil {
 					return fmt.Errorf("failed to run: %s: %w", p, err)
 				}
 			}
@@ -129,11 +143,13 @@ func run(ctx *cli.Context) (err error) {
 			label = fmt.Sprintf("eval_%d", time.Now().Unix())
 		}
 
-		return runScenario(path, outputDir, label, keepPrometheusRunning, skipChecks, skipReportRendering)
+		return runScenario(stoppableCtx, path, outputDir, label, keepPrometheusRunning, skipChecks, skipReportRendering)
 	}
 }
 
-func runScenario(path, outputDir, label string, keepPrometheusRunning, skipChecks, skipReportRendering bool) error {
+func runScenario(ctx context.Context, path, outputDir, label string, keepPrometheusRunning, skipChecks, skipReportRendering bool) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	// if not configured, default to /tmp/norma_data_<label>_<timestamp> else /configured/path/norma_data_<l>_<t>
 	outputDir, err := os.MkdirTemp(outputDir, fmt.Sprintf("norma_data_%s_", label))
@@ -175,12 +191,6 @@ func runScenario(path, outputDir, label string, keepPrometheusRunning, skipCheck
 	if err != nil {
 		return err
 	}
-
-	// Create a context that is cancelled on SIGINT/SIGTERM so that both
-	// network startup and scenario execution can be interrupted cleanly,
-	// allowing all deferred shutdowns to execute.
-	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stopSignals()
 
 	clock := executor.NewWallTimeClock()
 
