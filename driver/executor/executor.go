@@ -65,6 +65,7 @@ func run(
 	}))
 
 	if checks != nil {
+		// apply default check unless custom checks are provided
 		if len(scenario.Checks) == 0 {
 			// Seal two epochs after the scenario ends, before default consistency checks run.
 			scheduleAdvanceEpochEvents(scenario.Duration+1, 2, queue, network)
