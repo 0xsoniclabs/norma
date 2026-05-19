@@ -192,12 +192,16 @@ type Cheat struct {
 // Parse parses a YAML based scenario description from the given reader.
 // The parsing will fail if there are syntactic issues in the YAML file
 // or if there are unknown keys. However, no semantic checks on the resulting
-// scenariou will be conducted.
+// scenario will be conducted.
 func Parse(reader io.Reader) (Scenario, error) {
 	var res Scenario
 	decoder := yaml.NewDecoder(reader)
 	decoder.KnownFields(true)
 	err := decoder.Decode(&res)
+	if err != nil {
+		return Scenario{}, err
+	}
+	res.setDefaults()
 	return res, err
 }
 
@@ -209,6 +213,7 @@ func ParseBytes(data []byte) (Scenario, error) {
 // ParseFile parses the YAML encoded scenario in the given file.
 func ParseFile(path string) (Scenario, error) {
 	if reader, err := os.Open(path); err == nil {
+		defer reader.Close()
 		return Parse(reader)
 	} else {
 		return Scenario{}, err

@@ -230,6 +230,10 @@ func TestNetwork_Rules(t *testing.T) {
 		t.Errorf("unexpected value: got: %v, want: %v", got, want)
 	}
 
+	if got, want := scenario.NetworkRules.Genesis["MAX_EPOCH_DURATION"], "123s"; got != want {
+		t.Errorf("unexpected value: got: %v, want: %v", got, want)
+	}
+
 	if got, want := scenario.NetworkRules.Updates[0].Time, float32(10); got != want {
 		t.Errorf("unexpected value: got: %v, want: %v", got, want)
 	}
@@ -258,6 +262,7 @@ network_rules:
   genesis:
       MAX_BLOCK_GAS: 20500000000
       MAX_EPOCH_GAS: 1500000000000
+      MAX_EPOCH_DURATION: 123s
       YET_ANOTHER_RULE: abcd
   updates:
       - time: 10
@@ -271,3 +276,17 @@ network_rules:
           YET_ANOTHER_RULE: abcdef
 
 `
+
+func TestNetworkRulesDefault(t *testing.T) {
+	scenario, err := ParseBytes([]byte(`
+name: Empty
+duration: 10
+`))
+	if err != nil {
+		t.Fatalf("parsing of input failed: %v", err)
+	}
+
+	if got, want := scenario.NetworkRules.Genesis["MAX_EPOCH_DURATION"], "15s"; got != want {
+		t.Errorf("unexpected value: got: %v, want: %v", got, want)
+	}
+}
