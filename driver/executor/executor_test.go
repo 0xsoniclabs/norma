@@ -367,6 +367,8 @@ func TestExecutor_RunScenarioWithDefaultChecks(t *testing.T) {
 		return checkBlockGasRate
 	})
 
+	net.EXPECT().AdvanceEpoch(2).Return(nil)
+
 	checkBlockHeight.EXPECT().Check().Return(nil)
 	checkBlocksHashes.EXPECT().Check().Return(nil)
 	checkBlocksRolling.EXPECT().Check().Return(nil)
