@@ -1,6 +1,6 @@
 module github.com/0xsoniclabs/norma/genesistools
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/0xsoniclabs/sonic v0.0.0-20260414143741-680121a212bc

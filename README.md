@@ -8,7 +8,7 @@ Project Norma is a system testing infrastructure for the Sonic blockchain client
 ## Requirements
 
 For building/running the project, the following tools are required:
-* Go: version 1.25 or later; we recommend to use your system's package manager; alternatively, you can follow Go's [installation manual](https://go.dev/doc/install) or; if you need to maintain multiple versions, [this tutorial](https://go.dev/doc/manage-install) describes how to do so
+* Go: version 1.26 or later; we recommend to use your system's package manager; alternatively, you can follow Go's [installation manual](https://go.dev/doc/install) or; if you need to maintain multiple versions, [this tutorial](https://go.dev/doc/manage-install) describes how to do so
 * Docker: version 23.0 or later; we recommend to use your system's package manager or the installation manuals listed in the [Using Docker](#using-docker) section below
   * [Docker buildx](https://docs.docker.com/reference/cli/docker/buildx/): to install it on Ubuntu run `apt install docker-buildx`.
 * GNU make, or compatible

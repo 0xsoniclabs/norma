@@ -108,7 +108,7 @@ func run(ctx *cli.Context) (err error) {
 	defer stop()
 	go func() {
 		<-stoppableCtx.Done()
-		fmt.Printf("Interrupted - stopping...\n")
+		fmt.Printf("Stopping...\n")
 		stop() // second Ctrl+C will force-kill
 	}()
 

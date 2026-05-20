@@ -72,9 +72,9 @@ func TestNodeSourceRetrievesSensorData(t *testing.T) {
 	node2.EXPECT().GetLabel().AnyTimes().Return(string(node2Id))
 	node3.EXPECT().GetLabel().AnyTimes().Return(string(node3Id))
 
-	url1 := driver.URL("node1")
-	url2 := driver.URL("node2")
-	url3 := driver.URL("node3")
+	url1 := driver.URL("http://node1")
+	url2 := driver.URL("http://node2")
+	url3 := driver.URL("http://node3")
 	node1.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&url1)
 	node2.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&url2)
 	node3.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&url3)

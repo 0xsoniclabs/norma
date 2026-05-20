@@ -64,15 +64,18 @@ func run(
 		return nil
 	}))
 
-	// schedule network consistency just before the end of simulation
 	if checks != nil {
 		// apply default check unless custom checks are provided
 		if len(scenario.Checks) == 0 {
-			queue.add(toSingleEvent(endTime-1, "consistency check", func() error {
+			// Seal two epochs after the scenario ends, before default consistency checks run.
+			scheduleAdvanceEpochEvents(scenario.Duration+1, 2, queue, network)
+			// Schedule default consistency checks 2 seconds after the scenario end (after the epoch sealing).
+			queue.add(toSingleEvent(Seconds(scenario.Duration+2), "consistency check", func() error {
 				log.Printf("Checking network consistency ...\n")
 				return checks.Check()
 			}))
 		} else {
+			// Schedule custom checks defined in the scenario.
 			for _, c := range scenario.Checks {
 				checker := checks.GetCheckerByName(c.Check)
 				if checker == nil {
