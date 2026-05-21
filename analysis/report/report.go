@@ -75,6 +75,8 @@ func (r *Report) Render(datafile, outputdir string) (string, error) {
 	outputfile := r.name + ".html"
 
 	cmd := exec.Command("docker", "run", "--rm",
+		"--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
+		"-w", "/output",
 		"-v", script+":/render.R:ro",
 		"-v", template+":/template.Rmd:ro",
 		"-v", datafile+":/input.csv:ro",
