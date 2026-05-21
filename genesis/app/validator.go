@@ -18,6 +18,7 @@ package main
 
 import (
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"path"
 
@@ -108,11 +109,13 @@ func generateValidatorFrom(ctx *cli.Context) (err error) {
 		Type: validatorpk.Types.Secp256k1,
 	}
 
-	var pathSecretFile string = ""
+	pathSecretFile := ""
 	if datadir != "" {
 		valKeystore := valkeystore.NewDefaultFileRawKeystore(path.Join(datadir, "keystore", "validator"))
 		err = valKeystore.Add(publicKey, privateKey, "password")
-		if err != nil {
+
+		// Allowing creating an already existing validator allows to restart them
+		if err != nil && !errors.Is(err, valkeystore.ErrAlreadyExists) {
 			return fmt.Errorf("failed to create account: %w", err)
 		}
 

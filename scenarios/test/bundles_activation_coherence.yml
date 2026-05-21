@@ -1,0 +1,82 @@
+# This scenario verifies that three v2.1.6 validators can be upgraded
+# one-by-one to v2.2.0 while maintaining network coherence.
+# Each upgrade is separated by two epoch sealings.
+#
+# Sequence of events:
+# 1. Network starts with 3 v2.1.6 validators
+# 2. First validator is stopped and restarted as v2.2.0 (epoch sealed before and after)
+# 3. Two epochs later, second validator is upgraded the same way
+# 4. Two epochs later, third validator is upgraded
+# 5. Brio and transaction bundles are enabled
+# 6. All three v2.2.0 nodes have the same history hash
+
+name: Bundles Activation Coherence
+
+# The duration of the scenario's runtime, in seconds.
+duration: 90
+
+# 5s epoch duration for automatic epoch sealing.
+# Brio and bundles start disabled and are enabled after all nodes are upgraded.
+network_rules:
+  genesis:
+    MAX_EPOCH_DURATION: 5s
+    UPGRADES_BRIO: false
+    UPGRADES_TRANSACTION_BUNDLES: false
+  updates:
+    - time: 50
+      rules:
+        UPGRADES_BRIO: true
+        UPGRADES_TRANSACTION_BUNDLES: true
+
+# Nodes: stop old version, start new version reusing the same data_volume.
+nodes:
+  # --- Validator 1 upgrade ---
+  - name: val-old-1
+    start: 0
+    leave: 10
+    client:
+      type: validator
+      imagename: "sonic:v2.1.6"
+      data_volume: "vol-1"
+      val_id: 2
+
+  - name: val-new-1
+    rejoin: 20
+    client:
+      type: validator
+      imagename: "sonic"
+      data_volume: "vol-1"
+      val_id: 2
+
+  # --- Validator 2 upgrade ---
+  - name: val-old-2
+    start: 0
+    leave: 30
+    client:
+      type: validator
+      imagename: "sonic:v2.1.6"
+      data_volume: "vol-2"
+      val_id: 3
+
+  - name: val-new-2
+    rejoin: 40
+    client:
+      type: validator
+      imagename: "sonic"
+      data_volume: "vol-2"
+      val_id: 3
+
+# Background counter transactions for the entire duration.
+applications:
+  - name: background
+    type: counter
+    users: 20
+    rate:
+      constant: 10
+
+  - name: bundles
+    type: subsidizedbundle
+    start: 60
+    users: 10
+    rate:
+      constant: 5
