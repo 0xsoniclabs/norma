@@ -196,7 +196,8 @@ func (u *DuplicatedBundleUser) GenerateTx() (*types.Transaction, error) {
 
 // generateNewBundleTx builds a fresh bundle tx.
 func (u *DuplicatedBundleUser) generateNewBundleTx() (*types.Transaction, error) {
-	currentBlock, err := u.client.BlockNumber(context.Background())
+	ctx := context.Background()
+	currentBlock, err := u.client.BlockNumber(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current block number: %w", err)
 	}
@@ -209,21 +210,30 @@ func (u *DuplicatedBundleUser) generateNewBundleTx() (*types.Transaction, error)
 		return nil, fmt.Errorf("failed to pack transfer: %w", err)
 	}
 
+	nonceA, err := u.client.PendingNonceAt(ctx, u.senderA.address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get nonce for senderA: %w", err)
+	}
+	nonceB, err := u.client.PendingNonceAt(ctx, u.senderB.address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get nonce for senderB: %w", err)
+	}
+
 	b := bundle.NewBuilder().WithSigner(u.signer).SetEarliest(currentBlock)
 	if rand.Intn(2) == 0 {
 		b = b.OneOf(bundle.Step(u.senderA.privateKey, types.DynamicFeeTx{
-			Nonce: u.senderA.getNextNonce(), Gas: 70_000, GasFeeCap: gasFeeCap, GasTipCap: gasTipCap,
+			Nonce: nonceA, Gas: 70_000, GasFeeCap: gasFeeCap, GasTipCap: gasTipCap,
 			To: &u.erc20Address, Data: transferToTargetData,
 		}), bundle.Step(u.senderB.privateKey, &types.DynamicFeeTx{
-			Nonce: u.senderB.getCurrentNonce(), Gas: 70_000, GasFeeCap: gasFeeCap, GasTipCap: gasTipCap,
+			Nonce: nonceB, Gas: 70_000, GasFeeCap: gasFeeCap, GasTipCap: gasTipCap,
 			To: &u.erc20Address, Data: transferToTargetData,
 		}))
 	} else {
 		b = b.AllOf(bundle.Step(u.senderA.privateKey, types.DynamicFeeTx{
-			Nonce: u.senderA.getNextNonce(), Gas: 70_000, GasFeeCap: gasFeeCap, GasTipCap: gasTipCap,
+			Nonce: nonceA, Gas: 70_000, GasFeeCap: gasFeeCap, GasTipCap: gasTipCap,
 			To: &u.erc20Address, Data: transferToBData,
 		}), bundle.Step(u.senderB.privateKey, &types.DynamicFeeTx{
-			Nonce: u.senderB.getNextNonce(), Gas: 70_000, GasFeeCap: gasFeeCap, GasTipCap: gasTipCap,
+			Nonce: nonceB, Gas: 70_000, GasFeeCap: gasFeeCap, GasTipCap: gasTipCap,
 			To: &u.erc20Address, Data: transferToTargetData,
 		}))
 	}

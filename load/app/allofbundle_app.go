@@ -170,6 +170,7 @@ type AllOfBundleUser struct {
 }
 
 func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
+	ctx := context.Background()
 
 	approveData, err := u.erc20Abi.Pack("approve", u.spender.address, big.NewInt(1))
 	if err != nil {
@@ -181,16 +182,27 @@ func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
 		return nil, fmt.Errorf("failed to pack transferFrom: %w", err)
 	}
 
-	currentBlock, err := u.client.BlockNumber(context.Background())
+	nonceApprover, err := u.client.PendingNonceAt(ctx, u.approver.address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get nonce for approver: %w", err)
+	}
+
+	nonceSpender, err := u.client.PendingNonceAt(ctx, u.spender.address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get nonce for spender: %w", err)
+	}
+
+	currentBlock, err := u.client.BlockNumber(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current block number: %w", err)
 	}
 
-	envelope := bundle.NewBuilder().
+	u.sentTxs.Add(1)
+	return bundle.NewBuilder().
 		WithSigner(u.signer).
 		AllOf(
 			bundle.Step(u.approver.privateKey, &types.DynamicFeeTx{
-				Nonce:     u.approver.getCurrentNonce(),
+				Nonce:     nonceApprover,
 				Gas:       70_000, // base (21k) + approve SSTORE (22k) + event
 				GasFeeCap: gasFeeCap,
 				GasTipCap: gasTipCap,
@@ -198,7 +210,7 @@ func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
 				Data:      approveData,
 			}),
 			bundle.Step(u.spender.privateKey, &types.DynamicFeeTx{
-				Nonce:     u.spender.getCurrentNonce(),
+				Nonce:     nonceSpender,
 				Gas:       90_000, // base (21k) + 3x SLOAD + 3x SSTORE (22k) + event
 				GasFeeCap: gasFeeCap,
 				GasTipCap: gasTipCap,
@@ -207,12 +219,7 @@ func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
 			}),
 		).
 		SetEarliest(currentBlock).
-		Build()
-
-	u.approver.getNextNonce()
-	u.spender.getNextNonce()
-	u.sentTxs.Add(1)
-	return envelope, nil
+		Build(), nil
 }
 
 func (u *AllOfBundleUser) GetSentTransactions() uint64 {
