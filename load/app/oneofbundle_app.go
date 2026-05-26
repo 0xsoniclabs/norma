@@ -173,15 +173,22 @@ func (u *OneOfBundleUser) GenerateTx() (*types.Transaction, error) {
 		return nil, fmt.Errorf("failed to pack over-balance transfer data: %w", err)
 	}
 
-	currentBlock, err := u.client.BlockNumber(context.Background())
+	ctx := context.Background()
+
+	currentBlock, err := u.client.BlockNumber(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current block number: %w", err)
+	}
+
+	nonce, err := u.client.PendingNonceAt(ctx, u.sender.address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get nonce for sender: %w", err)
 	}
 
 	var firstStep, secondStep bundle.BuilderStep
 	if successfulFirst {
 		firstStep = bundle.Step(u.sender.privateKey, &types.DynamicFeeTx{
-			Nonce:     u.sender.getNextNonce(),
+			Nonce:     nonce,
 			Gas:       70_000,
 			GasFeeCap: gasFeeCap,
 			GasTipCap: gasTipCap,
@@ -189,7 +196,7 @@ func (u *OneOfBundleUser) GenerateTx() (*types.Transaction, error) {
 			Data:      transferSuccessfulData,
 		})
 		secondStep = bundle.Step(u.sender.privateKey, &types.DynamicFeeTx{
-			Nonce:     u.sender.getCurrentNonce(), // will not run, nonce not consumed
+			Nonce:     nonce, // will not run, nonce not consumed
 			Gas:       70_000,
 			GasFeeCap: gasFeeCap,
 			GasTipCap: gasTipCap,
@@ -198,7 +205,7 @@ func (u *OneOfBundleUser) GenerateTx() (*types.Transaction, error) {
 		})
 	} else {
 		firstStep = bundle.Step(u.sender.privateKey, &types.DynamicFeeTx{
-			Nonce:     u.sender.getNextNonce(),
+			Nonce:     nonce,
 			Gas:       70_000,
 			GasFeeCap: gasFeeCap,
 			GasTipCap: gasTipCap,
@@ -206,7 +213,7 @@ func (u *OneOfBundleUser) GenerateTx() (*types.Transaction, error) {
 			Data:      transferFailingData,
 		})
 		secondStep = bundle.Step(u.sender.privateKey, &types.DynamicFeeTx{
-			Nonce:     u.sender.getNextNonce(), // both will run, both nonces will be consumed
+			Nonce:     nonce + 1, // both will run, both nonces will be consumed
 			Gas:       70_000,
 			GasFeeCap: gasFeeCap,
 			GasTipCap: gasTipCap,

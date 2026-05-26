@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/0xsoniclabs/norma/driver/network/local"
 	"github.com/0xsoniclabs/norma/load/app"
 	"github.com/0xsoniclabs/sonic/gossip/blockproc/bundle"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -83,7 +83,6 @@ func testBundleGenerator(t *testing.T, application app.Application, ctxt app.App
 
 	numBundles := 5
 	rpcClient := ctxt.GetClient()
-	planHashes := make([]common.Hash, 0, numBundles)
 	signer := types.LatestSignerForChainID(big.NewInt(FakeNetworkID))
 	for i := range numBundles {
 		tx, err := user.GenerateTx()
@@ -95,6 +94,12 @@ func testBundleGenerator(t *testing.T, application app.Application, ctxt app.App
 		}
 
 		if err := rpcClient.SendTransaction(t.Context(), tx); err != nil {
+			// DuplicatedBundle intentionally re-sends the same plan after it has been
+			// committed, so ErrBundleAlreadyProcessed is expected in that case.
+			if strings.Contains(err.Error(), "already been processed") {
+				fmt.Printf("bundle %d: plan already processed, skipping wait\n", i)
+				continue
+			}
 			t.Fatal(err)
 		}
 
@@ -104,16 +109,12 @@ func testBundleGenerator(t *testing.T, application app.Application, ctxt app.App
 		}
 		planHash := txBundle.Plan.Hash()
 		fmt.Printf("Sent bundle %d (plan %s)\n", i, planHash)
-		planHashes = append(planHashes, planHash)
-	}
 
-	// Wait for each successful bundle execution via sonic_getBundleInfo. This detects
-	// rolled-back bundles which commit no transactions and have no receipts.
-	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
-	defer cancel()
-	for i, planHash := range planHashes {
-		fmt.Printf("Awaiting bundle %d (plan %s)...\n", i, planHash)
+		// Wait for this bundle to execute before sending the next one so that
+		// the pending nonce of the inner-transaction accounts is up to date.
+		ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 		info, err := rpcClient.WaitForBundleInfo(ctx, planHash)
+		cancel()
 		if err != nil {
 			t.Fatalf("bundle %d (plan %s) not executed: %v", i, planHash, err)
 		}
