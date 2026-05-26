@@ -29,4 +29,5 @@ rmarkdown::render(
     params = list(datafile = data),
     output_dir = outputdir,
     output_file = outputfile,
+    intermediates_dir = outputdir,
 )
