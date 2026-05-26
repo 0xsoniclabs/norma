@@ -68,9 +68,9 @@ func run(
 		// apply default check unless custom checks are provided
 		if len(scenario.Checks) == 0 {
 			// Seal two epochs after the scenario ends, before default consistency checks run.
-			scheduleAdvanceEpochEvents(scenario.Duration+1, 2, queue, network)
-			// Schedule default consistency checks 2 seconds after the scenario end (after the epoch sealing).
-			queue.add(toSingleEvent(Seconds(scenario.Duration+2), "consistency check", func() error {
+			scheduleAdvanceEpochEvents(scenario.Duration-2, 2, queue, network)
+			// Schedule default consistency checks 1 second before the scenario end (after the epoch sealing).
+			queue.add(toSingleEvent(Seconds(scenario.Duration-1), "consistency check", func() error {
 				log.Printf("Checking network consistency ...\n")
 				return checks.Check()
 			}))
