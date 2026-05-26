@@ -353,10 +353,7 @@ func scheduleNodeEvents(
 		endTime = Seconds(*node.End)
 	}
 
-	nodeIsValidator := false
-	if node.Client.Type == "validator" {
-		nodeIsValidator = true
-	}
+	nodeIsValidator := node.Client.Type == "validator"
 	nodeIsCheater := false
 
 	image := driver.DefaultClientDockerImageName
@@ -366,7 +363,7 @@ func scheduleNodeEvents(
 
 	for i := 0; i < instances; i++ {
 		name := fmt.Sprintf("%s-%d", node.Name, i)
-		var instance = new(driver.Node)
+		var instance driver.Node
 
 		if node.Start != nil {
 			queue.add(toSingleEvent(
@@ -410,7 +407,7 @@ func scheduleNodeEvents(
 						ExtraArguments: node.Client.ExtraArgs,
 					})
 
-					*instance = newNode
+					instance = newNode
 					return err
 				},
 			))
@@ -432,7 +429,7 @@ func scheduleNodeEvents(
 						ExtraArguments: node.Client.ExtraArgs,
 					})
 
-					*instance = newNode
+					instance = newNode
 					return err
 				},
 			))
@@ -446,13 +443,13 @@ func scheduleNodeEvents(
 					if instance == nil {
 						return nil
 					}
-					if err := net.RemoveNode(*instance); err != nil {
+					if err := net.RemoveNode(instance); err != nil {
 						return err
 					}
-					if err := (*instance).Stop(); err != nil {
+					if err := instance.Stop(); err != nil {
 						return err
 					}
-					if err := (*instance).Cleanup(); err != nil {
+					if err := instance.Cleanup(); err != nil {
 						return err
 					}
 					return nil
@@ -473,17 +470,19 @@ func scheduleNodeEvents(
 					// validators can no longer be unregistered since the network
 					// is being shut down, losing the ability to run transactions.
 					if endTime != end && nodeIsValidator {
-						if id := (*instance).GetValidatorId(); id != nil {
-							registry.unregisterValidator(*id)
+						if id := instance.GetValidatorId(); id != nil {
+							if err := registry.unregisterValidator(*id); err != nil {
+								return fmt.Errorf("failed to unregister validator %s; %v", name, err)
+							}
 						}
 					}
-					if err := net.RemoveNode(*instance); err != nil {
+					if err := net.RemoveNode(instance); err != nil {
 						return err
 					}
-					if err := (*instance).Stop(); err != nil {
+					if err := instance.Stop(); err != nil {
 						return err
 					}
-					if err := (*instance).Cleanup(); err != nil {
+					if err := instance.Cleanup(); err != nil {
 						return err
 					}
 					return nil
