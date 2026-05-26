@@ -226,16 +226,29 @@ func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
 		return nil, fmt.Errorf("failed to pack transferFrom: %w", err)
 	}
 
-	currentBlock, err := u.client.BlockNumber(context.Background())
+	ctx := context.Background()
+
+	currentBlock, err := u.client.BlockNumber(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current block number: %w", err)
 	}
 
-	envelope := bundle.NewBuilder().
+	nonceSponsor, err := u.client.PendingNonceAt(ctx, u.sponsor.address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get nonce for sponsor: %w", err)
+	}
+
+	nonceUser, err := u.client.PendingNonceAt(ctx, u.user.address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get nonce for user: %w", err)
+	}
+
+	u.sentTxs.Add(1)
+	return bundle.NewBuilder().
 		WithSigner(u.signer).
 		AllOf(
 			bundle.Step(u.sponsor.privateKey, &types.DynamicFeeTx{
-				Nonce:     u.sponsor.getCurrentNonce(),
+				Nonce:     nonceSponsor,
 				Gas:       90_000,
 				GasFeeCap: gasFeeCap,
 				GasTipCap: gasTipCap,
@@ -244,7 +257,7 @@ func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
 				Data:      sponsorData,
 			}),
 			bundle.Step(u.user.privateKey, &types.DynamicFeeTx{
-				Nonce:     u.user.getCurrentNonce(),
+				Nonce:     nonceUser,
 				Gas:       approveGasLimit.Uint64(),
 				GasFeeCap: big.NewInt(0), // gasPrice=0: covered by the subsidy from step 1
 				GasTipCap: big.NewInt(0),
@@ -252,7 +265,7 @@ func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
 				Data:      approveData,
 			}),
 			bundle.Step(u.sponsor.privateKey, &types.DynamicFeeTx{
-				Nonce:     u.sponsor.getCurrentNonce() + 1,
+				Nonce:     nonceSponsor + 1,
 				Gas:       90_000,
 				GasFeeCap: gasFeeCap,
 				GasTipCap: gasTipCap,
@@ -261,13 +274,7 @@ func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
 			}),
 		).
 		SetEarliest(currentBlock).
-		Build()
-
-	u.sponsor.getNextNonce()
-	u.user.getNextNonce()
-	u.sponsor.getNextNonce()
-	u.sentTxs.Add(1)
-	return envelope, nil
+		Build(), nil
 }
 
 func (u *SubsidizedBundleUser) GetSentTransactions() uint64 {
