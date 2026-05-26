@@ -199,6 +199,9 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 	if err == nil {
 		return node, nil
 	}
+	if errors.Is(err, context.Canceled) {
+		return nil, errors.Join(err, node.host.Cleanup())
+	}
 
 	// The node did not show up in time, so we consider the start to have failed.
 	return nil, errors.Join(
