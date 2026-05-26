@@ -89,7 +89,7 @@ func TestLoadGeneration_CanRealizeConstantTrafficShape(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create app context: %v", err)
 			}
-			controller, err := controller.NewAppController(application, shaper, 100, appContext, net)
+			controller, err := controller.NewAppController(t.Context(), application, shaper, 100, appContext, net)
 			if err != nil {
 				t.Fatalf("failed to create app controller: %v", err)
 			}

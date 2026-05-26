@@ -252,7 +252,7 @@ func TestExecutor_RunSingleApplicationScenario(t *testing.T) {
 	app := driver.NewMockApplication(ctrl)
 
 	// In this scenario, an application is expected to be created and shut down.
-	net.EXPECT().CreateApplication(gomock.Any()).Return(app, nil)
+	net.EXPECT().CreateApplication(gomock.Any(), gomock.Any()).Return(app, nil)
 	app.EXPECT().Start()
 	app.EXPECT().Stop()
 
@@ -288,8 +288,8 @@ func TestExecutor_RunMultipleApplicationScenario(t *testing.T) {
 	app2 := driver.NewMockApplication(ctrl)
 
 	// In this scenario, an application is expected to be created and shut down.
-	net.EXPECT().CreateApplication(gomock.Any()).Return(app1, nil)
-	net.EXPECT().CreateApplication(gomock.Any()).Return(app2, nil)
+	net.EXPECT().CreateApplication(gomock.Any(), gomock.Any()).Return(app1, nil)
+	net.EXPECT().CreateApplication(gomock.Any(), gomock.Any()).Return(app2, nil)
 	app1.EXPECT().Start()
 	app1.EXPECT().Stop()
 	app2.EXPECT().Start()

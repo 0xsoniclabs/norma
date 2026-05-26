@@ -42,8 +42,11 @@ type AppController struct {
 	rpcClient   rpc.Client
 }
 
-func NewAppController(application app.Application, shaper shaper.Shaper, numUsers int, context app.AppContext, network driver.Network) (*AppController, error) {
+func NewAppController(ctx context.Context, application app.Application, shaper shaper.Shaper, numUsers int, context app.AppContext, network driver.Network) (*AppController, error) {
 	trigger := make(chan struct{}, 100)
+	if ctx.Err() != nil { // check context before starting to create app users
+		return nil, ctx.Err()
+	}
 
 	// create users for this application
 	log.Printf("starting initialization of %d users\n", numUsers)

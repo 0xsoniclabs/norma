@@ -343,7 +343,7 @@ func (a *localApplication) GetReceivedTransactions() (uint64, error) {
 	return a.controller.GetReceivedTransactions()
 }
 
-func (n *LocalNetwork) CreateApplication(config *driver.ApplicationConfig) (driver.Application, error) {
+func (n *LocalNetwork) CreateApplication(ctx context.Context, config *driver.ApplicationConfig) (driver.Application, error) {
 	rpcClient, err := n.DialRandomRpc()
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to RPC to initialize the application; %v", err)
@@ -361,7 +361,7 @@ func (n *LocalNetwork) CreateApplication(config *driver.ApplicationConfig) (driv
 		return nil, fmt.Errorf("failed to parse shaper; %v", err)
 	}
 
-	appController, err := controller.NewAppController(application, sh, config.Users, n.appContext, n)
+	appController, err := controller.NewAppController(ctx, application, sh, config.Users, n.appContext, n)
 	if err != nil {
 		return nil, err
 	}

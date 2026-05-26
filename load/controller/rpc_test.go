@@ -57,7 +57,7 @@ func TestTrafficGenerating(t *testing.T) {
 	constantShaper := shaper.NewConstantShaper(30.0) // 30 txs/sec
 
 	numGenerators := 5 // 5 parallel workers
-	app, err := controller.NewAppController(application, constantShaper, numGenerators, appContext, net)
+	app, err := controller.NewAppController(t.Context(), application, constantShaper, numGenerators, appContext, net)
 	if err != nil {
 		t.Fatal(err)
 	}

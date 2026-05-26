@@ -17,6 +17,7 @@
 package driver
 
 import (
+	"context"
 	"time"
 
 	"github.com/0xsoniclabs/carmen/go/common"
@@ -53,7 +54,7 @@ type Network interface {
 
 	// CreateApplication creates a new application in this network, ready to
 	// produce load as defined by its configuration.
-	CreateApplication(config *ApplicationConfig) (Application, error)
+	CreateApplication(ctx context.Context, config *ApplicationConfig) (Application, error)
 
 	// GetActiveNodes obtains a list of active nodes in the network.
 	GetActiveNodes() []Node

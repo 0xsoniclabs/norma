@@ -545,11 +545,11 @@ func scheduleApplicationEvents(ctx context.Context, source *parser.Application, 
 	}
 
 	for i := 0; i < instances; i++ {
-		if ctx.Err() != nil {
+		if ctx.Err() != nil { // check context before starting to create app
 			return ctx.Err()
 		}
 		name := fmt.Sprintf("%s-%d", source.Name, i)
-		newApp, err := net.CreateApplication(&driver.ApplicationConfig{
+		newApp, err := net.CreateApplication(ctx, &driver.ApplicationConfig{
 			Name:  name,
 			Type:  source.Type,
 			Rate:  &source.Rate,
