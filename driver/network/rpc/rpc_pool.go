@@ -62,7 +62,7 @@ func (p *RpcWorkerPool) AfterNodeCreation(newNode driver.Node) {
 	}
 	wg := workerGroup{}
 	p.workers[newNode] = &wg
-	for i := 0; i < 150; i++ {
+	for range 150 {
 		wg.add(*rpcUrl, p.txs)
 	}
 }
@@ -103,12 +103,9 @@ func (wg *workerGroup) add(rpcUrl driver.URL, txs chan *types.Transaction) {
 func (wg *workerGroup) close() {
 	var done sync.WaitGroup
 	for _, w := range *wg {
-		w := w
-		done.Add(1)
-		go func() {
-			defer done.Done()
+		done.Go(func() {
 			w.close()
-		}()
+		})
 	}
 	done.Wait()
 }

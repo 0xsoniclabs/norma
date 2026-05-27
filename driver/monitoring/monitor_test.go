@@ -19,6 +19,7 @@ package monitoring
 import (
 	"bytes"
 	"os"
+	"slices"
 	"sync"
 	"testing"
 
@@ -26,7 +27,6 @@ import (
 	"github.com/0xsoniclabs/norma/driver/docker"
 	opera "github.com/0xsoniclabs/norma/driver/node"
 	"go.uber.org/mock/gomock"
-	"golang.org/x/exp/slices"
 )
 
 func TestMonitor_CreateAndShutdown(t *testing.T) {

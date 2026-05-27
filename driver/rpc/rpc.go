@@ -78,7 +78,7 @@ type ethRpcClient interface {
 
 // rpcClient is a subset of the RPC client interface that is used by the application.
 type rpcClient interface {
-	Call(result interface{}, method string, args ...interface{}) error
+	Call(result any, method string, args ...any) error
 }
 
 type Impl struct {
@@ -87,7 +87,7 @@ type Impl struct {
 	txReceiptTimeout time.Duration
 }
 
-func (r Impl) Call(result interface{}, method string, args ...interface{}) error {
+func (r Impl) Call(result any, method string, args ...any) error {
 	return r.rpcClient.Call(result, method, args...)
 }
 
@@ -100,10 +100,7 @@ func (r Impl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
 		receipt, err := r.transactionReceipt(txHash)
 		if errors.Is(err, ethereum.NotFound) {
 			time.Sleep(delay)
-			delay = 2 * delay
-			if delay > maxDelay {
-				delay = maxDelay
-			}
+			delay = min(2*delay, maxDelay)
 			continue
 		}
 		if err != nil {

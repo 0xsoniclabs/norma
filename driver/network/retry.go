@@ -23,7 +23,7 @@ var ErrPermanent = errors.New("permanent")
 func RetryReturn[Out any](ctx context.Context, numAttempts int, delay time.Duration, do func() (Out, error)) (Out, error) {
 	var out Out
 	var err error
-	for i := 0; i < numAttempts; i++ {
+	for range numAttempts {
 		if ctx.Err() != nil {
 			return out, ctx.Err()
 		}

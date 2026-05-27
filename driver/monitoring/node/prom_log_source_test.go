@@ -18,7 +18,7 @@ package nodemon
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"testing"
 	"time"
 
@@ -27,7 +27,6 @@ import (
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	opera "github.com/0xsoniclabs/norma/driver/node"
 	"go.uber.org/mock/gomock"
-	"golang.org/x/exp/slices"
 )
 
 func TestLogsAddedToSeries(t *testing.T) {
@@ -48,7 +47,7 @@ func TestLogsAddedToSeries(t *testing.T) {
 	expectedTimes := make([]monitoring.Time, 0, requestedItems)
 	expectedValues := make([]float64, 0, requestedItems)
 
-	for i := 0; i < requestedItems; i++ {
+	for i := range requestedItems {
 		expectedTimes = append(expectedTimes, monitoring.Time(i))
 		expectedValues = append(expectedValues, float64(i))
 		source.OnLog("A", monitoring.Time(i), float64(i))
@@ -58,7 +57,7 @@ func TestLogsAddedToSeries(t *testing.T) {
 	// test subjects
 	want := []monitoring.Node{"A", "B"}
 	subjects := source.GetSubjects()
-	sort.Slice(subjects, func(i, j int) bool { return subjects[i] < subjects[j] })
+	slices.Sort(subjects)
 	if !slices.Equal(subjects, want) {
 		t.Errorf("invalid list of subjects, wanted %v, got %v", want, subjects)
 	}
@@ -130,7 +129,7 @@ func TestLogsIntegrationGetRealMetric(t *testing.T) {
 		// wait for the metric to arrive for some time
 		source := NewPromLogSource(monitor, metricKeys)
 		var found bool
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			series, exists := source.GetData("test")
 			if exists {
 				datapoint := series.GetLatest()

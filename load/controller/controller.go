@@ -69,12 +69,9 @@ func (ac *AppController) Run(ctx context.Context) error {
 	// start generators for each user
 	var done sync.WaitGroup
 	for _, user := range ac.users {
-		user := user
-		done.Add(1)
-		go func() {
-			defer done.Done()
+		done.Go(func() {
 			runGeneratorLoop(user, ac.trigger, ac.network)
-		}()
+		})
 	}
 
 	var pending float64

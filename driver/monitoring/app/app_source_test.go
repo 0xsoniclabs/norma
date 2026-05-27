@@ -18,7 +18,7 @@ package appmon
 
 import (
 	"math"
-	"sort"
+	"slices"
 	"testing"
 	"time"
 
@@ -26,7 +26,6 @@ import (
 	mon "github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
 	"go.uber.org/mock/gomock"
-	"golang.org/x/exp/slices"
 )
 
 // Unfortunatley, gomock can not (yet) create mocks for generic interfaces.
@@ -83,7 +82,7 @@ func TestAppSourceRetrievesSensorData(t *testing.T) {
 
 	// Check that existing apps are tracked.
 	subjects := source.GetSubjects()
-	sort.Slice(subjects, func(i, j int) bool { return subjects[i] < subjects[j] })
+	slices.Sort(subjects)
 	want := []mon.App{mon.App("A"), mon.App("B")}
 	if !slices.Equal(subjects, want) {
 		t.Errorf("invalid list of subjects, wanted %v, got %v", want, subjects)
@@ -94,7 +93,7 @@ func TestAppSourceRetrievesSensorData(t *testing.T) {
 
 	// Check that subject list has updated.
 	subjects = source.GetSubjects()
-	sort.Slice(subjects, func(i, j int) bool { return subjects[i] < subjects[j] })
+	slices.Sort(subjects)
 	want = append(want, mon.App("C"))
 	if !slices.Equal(subjects, want) {
 		t.Errorf("invalid list of subjects, wanted %v, got %v", want, subjects)
@@ -107,7 +106,7 @@ func TestAppSourceRetrievesSensorData(t *testing.T) {
 
 	// Check that subject are still all there.
 	subjects = source.GetSubjects()
-	sort.Slice(subjects, func(i, j int) bool { return subjects[i] < subjects[j] })
+	slices.Sort(subjects)
 	if !slices.Equal(subjects, want) {
 		t.Errorf("invalid list of subjects, wanted %v, got %v", want, subjects)
 	}

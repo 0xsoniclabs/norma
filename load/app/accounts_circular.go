@@ -15,7 +15,7 @@ type AccountsCircularPool struct {
 // NewAccountsCircularPool constructs a new circular pool of accounts.
 func NewAccountsCircularPool(accountFactory *AccountFactory, rpcClient rpc.Client, size int) (*AccountsCircularPool, error) {
 	accounts := make([]*Account, 0, size)
-	for i := 0; i < size; i++ {
+	for range size {
 		acc, err := accountFactory.CreateAccount(rpcClient)
 		if err != nil {
 			return nil, err

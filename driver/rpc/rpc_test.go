@@ -39,7 +39,7 @@ func TestRpcClientImpl_WaitTransactionReceipt_Success(t *testing.T) {
 
 	mock.EXPECT().
 		Call(gomock.Any(), "eth_getTransactionReceipt", gomock.Any()).
-		DoAndReturn(func(result interface{}, method string, args ...interface{}) error {
+		DoAndReturn(func(result any, method string, args ...any) error {
 			resultPtr, ok := result.(*map[string]any)
 			if !ok {
 				t.Fatalf("result type is not *map[string]any")
@@ -70,7 +70,7 @@ func TestRpcClientImpl_WaitTransactionReceipt_Timeout(t *testing.T) {
 
 	mock.EXPECT().
 		Call(gomock.Any(), "eth_getTransactionReceipt", gomock.Any()).
-		DoAndReturn(func(result interface{}, method string, args ...interface{}) error {
+		DoAndReturn(func(result any, method string, args ...any) error {
 			resultPtr, ok := result.(*map[string]any)
 			if !ok {
 				t.Fatalf("result type is not *map[string]any")

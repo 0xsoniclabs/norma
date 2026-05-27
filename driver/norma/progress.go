@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
@@ -145,7 +145,7 @@ func getLastValAllSubjects[K constraints.Ordered, T any, X monitoring.Series[K, 
 	activeNodes *activeNodes) []string {
 
 	nodes := monitoring.GetSubjects(monitor, metric)
-	sort.Slice(nodes, func(i, j int) bool { return nodes[i] < nodes[j] })
+	slices.Sort(nodes)
 
 	res := make([]string, 0, len(nodes))
 	for _, node := range nodes {

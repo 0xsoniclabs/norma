@@ -44,7 +44,6 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 	for _, N := range []int{1, 3} {
-		N := N
 		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
 			t.Parallel()
 			net, err := NewLocalNetwork(t.Context(), &config)
@@ -56,7 +55,7 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 			})
 
 			nodes := []driver.Node{}
-			for i := 0; i < N; i++ {
+			for i := range N {
 				node, err := net.CreateNode(&driver.NodeConfig{
 					Image: driver.DefaultClientDockerImageName,
 					Name:  fmt.Sprintf("T-%d", i),
@@ -85,7 +84,6 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 func TestLocalNetwork_CanEnforceNetworkLatency(t *testing.T) {
 	t.Parallel()
 	for _, rtt := range []time.Duration{0, 100 * time.Millisecond, 200 * time.Millisecond} {
-		rtt := rtt
 		t.Run(fmt.Sprintf("rtt=%v", rtt), func(t *testing.T) {
 			t.Parallel()
 			config := driver.NetworkConfig{
@@ -123,7 +121,6 @@ func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
 	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 	for _, N := range []int{1, 3} {
-		N := N
 		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
 			t.Parallel()
 
@@ -136,7 +133,7 @@ func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
 			})
 
 			apps := []driver.Application{}
-			for i := 0; i < N; i++ {
+			for i := range N {
 				app, err := net.CreateApplication(&driver.ApplicationConfig{
 					Name: fmt.Sprintf("T-%d", i),
 				})
@@ -179,7 +176,7 @@ func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 		_ = net.Shutdown()
 	})
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		_, err := net.CreateNode(&driver.NodeConfig{
 			Name:  fmt.Sprintf("T-%d", i),
 			Image: driver.DefaultClientDockerImageName,
@@ -189,7 +186,7 @@ func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 		}
 	}
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		_, err := net.CreateApplication(&driver.ApplicationConfig{
 			Name: fmt.Sprintf("T-%d", i),
 		})
@@ -243,7 +240,7 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 	}).Times(N)
 	net.RegisterListener(listener)
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		_, err := net.CreateNode(&driver.NodeConfig{
 			Name:  fmt.Sprintf("T-%d", i),
 			Image: driver.DefaultClientDockerImageName,
@@ -258,7 +255,7 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 	}
 
 	// N containers must stop gracefully
-	for i := 0; i < N; i++ {
+	for range N {
 		select {
 		case <-done:
 			// one container done successfully
@@ -271,7 +268,6 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 func TestLocalNetwork_CanRunWithMultipleValidators(t *testing.T) {
 	t.Parallel()
 	for _, N := range []int{1, 3} {
-		N := N
 		config := driver.NetworkConfig{Validators: driver.NewDefaultValidators(N)}
 		t.Run(fmt.Sprintf("num_validators=%d", N), func(t *testing.T) {
 			t.Parallel()
@@ -399,7 +395,6 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 	for _, N := range []int{1, 3} {
-		N := N
 		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
 			t.Parallel()
 			net, err := NewLocalNetwork(t.Context(), &config)
@@ -417,7 +412,7 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 			net.RegisterListener(listener)
 
 			nodes := make([]driver.Node, 0, N)
-			for i := 0; i < N; i++ {
+			for i := range N {
 				node, err := net.CreateNode(&driver.NodeConfig{
 					Name:  fmt.Sprintf("T-%d", i),
 					Image: driver.DefaultClientDockerImageName,

@@ -73,7 +73,7 @@ type SelfDestructOldContractApplication struct {
 func (f *SelfDestructOldContractApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
 	users := make([]User, numUsers)
 	addresses := make([]common.Address, numUsers)
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		workerAccount, err := f.accountFactory.CreateAccount(appContext.GetClient())
 		if err != nil {
 			return nil, err

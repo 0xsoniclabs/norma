@@ -63,7 +63,7 @@ func NewUniswapApplication(context AppContext, feederId, appId uint32) (Applicat
 	deployments := []*types.Transaction{tx}
 
 	// Deploy tokens
-	for i := 0; i < TokensInChain; i++ {
+	for i := range TokensInChain {
 		txOpts.Nonce = new(big.Int).Add(txOpts.Nonce, big.NewInt(1))
 		name := fmt.Sprintf("Testing token %d", i)
 		symbol := fmt.Sprintf("TOK%d", i)
@@ -75,7 +75,7 @@ func NewUniswapApplication(context AppContext, feederId, appId uint32) (Applicat
 	}
 
 	// Deploy pairs
-	for i := 0; i < PairsInChain; i++ {
+	for i := range PairsInChain {
 		txOpts.Nonce = new(big.Int).Add(txOpts.Nonce, big.NewInt(1))
 		pairsAddresses[i], tx, pairsContracts[i], err = contract.DeployUniswapV2Pair(txOpts, rpcClient)
 		if err != nil {
@@ -97,7 +97,7 @@ func NewUniswapApplication(context AppContext, feederId, appId uint32) (Applicat
 
 	// Mint tokens into pairs
 	configSteps := []*types.Transaction{}
-	for i := 0; i < PairsInChain; i++ {
+	for i := range PairsInChain {
 		tokenA, tokenB := tokenContracts[i], tokenContracts[i+1]
 		tokenAAddress, tokenBAddress := tokenAddresses[i], tokenAddresses[i+1]
 		txOpts.Nonce = new(big.Int).Add(txOpts.Nonce, big.NewInt(1))
@@ -126,7 +126,7 @@ func NewUniswapApplication(context AppContext, feederId, appId uint32) (Applicat
 	}
 
 	// Whitelist Uniswap router in the token (skip setting allowance by every user)
-	for i := 0; i < TokensInChain; i++ {
+	for i := range TokensInChain {
 		txOpts.Nonce = new(big.Int).Add(txOpts.Nonce, big.NewInt(1))
 		tx, err = tokenContracts[i].WhitelistSpender(txOpts, routerAddress)
 		if err != nil {
@@ -182,7 +182,7 @@ func (f *UniswapApplication) CreateUsers(appContext AppContext, numUsers int) ([
 	// Create a list of users.
 	users := make([]User, numUsers)
 	addresses := make([]common.Address, numUsers)
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		// Generate a new account for each worker - avoid account nonces related bottlenecks
 		workerAccount, err := f.accountFactory.CreateAccount(appContext.GetClient())
 		if err != nil {

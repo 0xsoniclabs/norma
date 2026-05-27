@@ -18,6 +18,7 @@ package user
 
 import (
 	"math"
+	"slices"
 	"sort"
 	"testing"
 	"time"
@@ -26,7 +27,6 @@ import (
 	mon "github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
 	"go.uber.org/mock/gomock"
-	"golang.org/x/exp/slices"
 )
 
 // Unfortunatley, gomock can not (yet) create mocks for generic interfaces.

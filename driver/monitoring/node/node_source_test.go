@@ -19,7 +19,7 @@ package nodemon
 import (
 	"io"
 	"math"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +28,6 @@ import (
 	mon "github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
 	"go.uber.org/mock/gomock"
-	"golang.org/x/exp/slices"
 )
 
 // Unfortunatley, gomock can not (yet) create mocks for generic interfaces.
@@ -95,7 +94,7 @@ func TestNodeSourceRetrievesSensorData(t *testing.T) {
 
 	// Check that existing nodes are tracked.
 	subjects := source.GetSubjects()
-	sort.Slice(subjects, func(i, j int) bool { return subjects[i] < subjects[j] })
+	slices.Sort(subjects)
 	want := []mon.Node{mon.Node(node1Id), mon.Node(node2Id)}
 	if !slices.Equal(subjects, want) {
 		t.Errorf("invalid list of subjects, wanted %v, got %v", want, subjects)
@@ -106,7 +105,7 @@ func TestNodeSourceRetrievesSensorData(t *testing.T) {
 
 	// Check that subject list has updated.
 	subjects = source.GetSubjects()
-	sort.Slice(subjects, func(i, j int) bool { return subjects[i] < subjects[j] })
+	slices.Sort(subjects)
 	want = append(want, mon.Node(node3Id))
 	if !slices.Equal(subjects, want) {
 		t.Errorf("invalid list of subjects, wanted %v, got %v", want, subjects)
@@ -119,7 +118,7 @@ func TestNodeSourceRetrievesSensorData(t *testing.T) {
 
 	// Check that subject are still all there.
 	subjects = source.GetSubjects()
-	sort.Slice(subjects, func(i, j int) bool { return subjects[i] < subjects[j] })
+	slices.Sort(subjects)
 	if !slices.Equal(subjects, want) {
 		t.Errorf("invalid list of subjects, wanted %v, got %v", want, subjects)
 	}

@@ -36,7 +36,7 @@ func TestAutoShaper_GrowsAdditive(t *testing.T) {
 	start := time.Now()
 	shaper.Start(start, info)
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		want := float64(i * 10)
 		if got := shaper.GetNumMessagesInInterval(start, time.Second); math.Abs(got-want) > 1e-6 {
 			t.Errorf("invalid number of messages, wanted %f, got %f", want, got)
@@ -59,7 +59,7 @@ func TestAutoShaper_ShrinksMultiplicative(t *testing.T) {
 	start := time.Now()
 	shaper.Start(start, info)
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		want := float64(rate)
 		if got := shaper.GetNumMessagesInInterval(start, time.Second); math.Abs(got-want) > 1e-6 {
 			t.Errorf("invalid number of messages, wanted %f, got %f", want, got)

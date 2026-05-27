@@ -78,7 +78,7 @@ func NewERC20Application(ctxt AppContext, feederId, appId uint32) (Application, 
 
 func generateRecipientsAddresses() ([]common.Address, error) {
 	recipients := make([]common.Address, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		_, err := crand.Read(recipients[i][:])
 		if err != nil {
 			return nil, err
@@ -102,7 +102,7 @@ func (f *ERC20Application) CreateUsers(appContext AppContext, numUsers int) ([]U
 	// Create a list of users.
 	users := make([]User, numUsers)
 	addresses := make([]common.Address, numUsers)
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		// Generate a new account for each worker - avoid account nonces related bottlenecks
 		workerAccount, err := f.accountFactory.CreateAccount(appContext.GetClient())
 		if err != nil {

@@ -143,7 +143,7 @@ func bindSFC(address common.Address, caller bind.ContractCaller, transactor bind
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_SFC *SFCRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
+func (_SFC *SFCRaw) Call(opts *bind.CallOpts, result *[]any, method string, params ...any) error {
 	return _SFC.Contract.SFCCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -154,7 +154,7 @@ func (_SFC *SFCRaw) Transfer(opts *bind.TransactOpts) (*types.Transaction, error
 }
 
 // Transact invokes the (paid) contract method with params as input values.
-func (_SFC *SFCRaw) Transact(opts *bind.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
+func (_SFC *SFCRaw) Transact(opts *bind.TransactOpts, method string, params ...any) (*types.Transaction, error) {
 	return _SFC.Contract.SFCTransactor.contract.Transact(opts, method, params...)
 }
 
@@ -162,7 +162,7 @@ func (_SFC *SFCRaw) Transact(opts *bind.TransactOpts, method string, params ...i
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_SFC *SFCCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
+func (_SFC *SFCCallerRaw) Call(opts *bind.CallOpts, result *[]any, method string, params ...any) error {
 	return _SFC.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -173,7 +173,7 @@ func (_SFC *SFCTransactorRaw) Transfer(opts *bind.TransactOpts) (*types.Transact
 }
 
 // Transact invokes the (paid) contract method with params as input values.
-func (_SFC *SFCTransactorRaw) Transact(opts *bind.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
+func (_SFC *SFCTransactorRaw) Transact(opts *bind.TransactOpts, method string, params ...any) (*types.Transaction, error) {
 	return _SFC.Contract.contract.Transact(opts, method, params...)
 }
 
@@ -181,7 +181,7 @@ func (_SFC *SFCTransactorRaw) Transact(opts *bind.TransactOpts, method string, p
 //
 // Solidity: function lastValidatorID() view returns(uint256)
 func (_SFC *SFCCaller) LastValidatorID(opts *bind.CallOpts) (*big.Int, error) {
-	var out []interface{}
+	var out []any
 	err := _SFC.contract.Call(opts, &out, "lastValidatorID")
 
 	if err != nil {
@@ -206,7 +206,7 @@ func (_SFC *SFCCaller) GetValidator(opts *bind.CallOpts, arg0 *big.Int) (struct 
 	CreatedTime      *big.Int
 	Auth             common.Address
 }, error) {
-	var out []interface{}
+	var out []any
 	err := _SFC.contract.Call(opts, &out, "getValidator", arg0)
 
 	outstruct := new(struct {
@@ -238,7 +238,7 @@ func (_SFC *SFCCaller) GetValidator(opts *bind.CallOpts, arg0 *big.Int) (struct 
 //
 // Solidity: function getEpochValidatorIDs(uint256 epoch) view returns(uint256[])
 func (_SFC *SFCCaller) GetEpochValidatorIDs(opts *bind.CallOpts, epoch *big.Int) ([]*big.Int, error) {
-	var out []interface{}
+	var out []any
 	err := _SFC.contract.Call(opts, &out, "getEpochValidatorIDs", epoch)
 
 	if err != nil {
@@ -344,11 +344,11 @@ type SFCApproval struct {
 // Solidity: event Approval(address indexed owner, address indexed spender, uint256 value)
 func (_SFC *SFCFilterer) FilterApproval(opts *bind.FilterOpts, owner []common.Address, spender []common.Address) (*SFCApprovalIterator, error) {
 
-	var ownerRule []interface{}
+	var ownerRule []any
 	for _, ownerItem := range owner {
 		ownerRule = append(ownerRule, ownerItem)
 	}
-	var spenderRule []interface{}
+	var spenderRule []any
 	for _, spenderItem := range spender {
 		spenderRule = append(spenderRule, spenderItem)
 	}
@@ -365,11 +365,11 @@ func (_SFC *SFCFilterer) FilterApproval(opts *bind.FilterOpts, owner []common.Ad
 // Solidity: event Approval(address indexed owner, address indexed spender, uint256 value)
 func (_SFC *SFCFilterer) WatchApproval(opts *bind.WatchOpts, sink chan<- *SFCApproval, owner []common.Address, spender []common.Address) (event.Subscription, error) {
 
-	var ownerRule []interface{}
+	var ownerRule []any
 	for _, ownerItem := range owner {
 		ownerRule = append(ownerRule, ownerItem)
 	}
-	var spenderRule []interface{}
+	var spenderRule []any
 	for _, spenderItem := range spender {
 		spenderRule = append(spenderRule, spenderItem)
 	}
@@ -498,11 +498,11 @@ type SFCTransfer struct {
 // Solidity: event Transfer(address indexed from, address indexed to, uint256 value)
 func (_SFC *SFCFilterer) FilterTransfer(opts *bind.FilterOpts, from []common.Address, to []common.Address) (*SFCTransferIterator, error) {
 
-	var fromRule []interface{}
+	var fromRule []any
 	for _, fromItem := range from {
 		fromRule = append(fromRule, fromItem)
 	}
-	var toRule []interface{}
+	var toRule []any
 	for _, toItem := range to {
 		toRule = append(toRule, toItem)
 	}
@@ -519,11 +519,11 @@ func (_SFC *SFCFilterer) FilterTransfer(opts *bind.FilterOpts, from []common.Add
 // Solidity: event Transfer(address indexed from, address indexed to, uint256 value)
 func (_SFC *SFCFilterer) WatchTransfer(opts *bind.WatchOpts, sink chan<- *SFCTransfer, from []common.Address, to []common.Address) (event.Subscription, error) {
 
-	var fromRule []interface{}
+	var fromRule []any
 	for _, fromItem := range from {
 		fromRule = append(fromRule, fromItem)
 	}
-	var toRule []interface{}
+	var toRule []any
 	for _, toItem := range to {
 		toRule = append(toRule, toItem)
 	}

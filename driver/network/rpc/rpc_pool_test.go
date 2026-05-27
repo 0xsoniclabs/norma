@@ -56,7 +56,7 @@ func TestClosePool(t *testing.T) {
 	}()
 
 	var tx types.Transaction
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 		pool.SendTransaction(&tx)
 	}
@@ -88,7 +88,7 @@ func TestCloseWorkerStartStop(t *testing.T) {
 func TestCloseWorkerGroupStartStop(t *testing.T) {
 	txs := make(chan *types.Transaction)
 	wg := workerGroup{}
-	for i := 0; i < 150; i++ {
+	for range 150 {
 		wg.add("wrong", txs)
 	}
 	wg.close()

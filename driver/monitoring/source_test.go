@@ -17,10 +17,8 @@
 package monitoring
 
 import (
-	"sort"
+	"slices"
 	"testing"
-
-	"golang.org/x/exp/slices"
 )
 
 var (
@@ -46,7 +44,7 @@ func (s *TestSource) GetSubjects() []Node {
 	for node := range s.data {
 		res = append(res, node)
 	}
-	sort.Slice(res, func(i, j int) bool { return res[i] < res[j] })
+	slices.Sort(res)
 	return res
 }
 

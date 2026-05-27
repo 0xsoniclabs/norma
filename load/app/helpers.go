@@ -85,7 +85,7 @@ func createSetCodeTx(from *Account, toAddress common.Address, value *uint256.Int
 
 func reverseAddresses(in []common.Address) []common.Address {
 	out := make([]common.Address, len(in))
-	for i := 0; i < len(in); i++ {
+	for i := range in {
 		out[i] = in[len(in)-1-i]
 	}
 	return out

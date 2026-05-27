@@ -17,13 +17,13 @@ func TestAccount_CreateAccount_AccountsUniq(t *testing.T) {
 	rpcClient.EXPECT().NonceAt(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(uint64(0), nil)
 
 	accounts := make(map[common.Address]struct{}, loops)
-	for i := 0; i < loops; i++ {
+	for i := range loops {
 		gen, err := NewAccountFactory(chainId, 0, uint32(i))
 		if err != nil {
 			t.Fatalf("cannot create account factory: %v", err)
 		}
 
-		for j := 0; j < loops; j++ {
+		for range loops {
 			account, err := gen.CreateAccount(rpcClient)
 			if err != nil {
 				t.Fatalf("cannot create account: %v", err)

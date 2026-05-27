@@ -1,10 +1,10 @@
 package driver
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver/parser"
-	"golang.org/x/exp/slices"
 )
 
 var one int = 1

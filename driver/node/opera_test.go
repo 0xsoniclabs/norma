@@ -161,7 +161,7 @@ func TestOperaNode_MetricsExposed(t *testing.T) {
 	url := node.GetServiceUrl(&OperaDebugService)
 
 	var apiWorks bool
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		resp, err := http.Get(fmt.Sprintf("%s/debug/metrics/prometheus", string(*url)))
 		if err == nil {
 			bodyBytes, err := io.ReadAll(resp.Body)

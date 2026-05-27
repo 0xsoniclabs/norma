@@ -52,7 +52,7 @@ func TestTransactionsThroughputSource(t *testing.T) {
 		timeGrow := rand.Intn(10) + 1
 		expectedTxsList := make([]float32, 0, loops)
 		// insert certain transactions in the same controlled delay between each
-		for i := 0; i < loops; i++ {
+		for i := range loops {
 			// progressively growing time
 			timeStamp := time.Unix(seconds+int64(i*timeGrow), 0)
 			txs := rand.Intn(1000)
