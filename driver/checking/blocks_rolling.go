@@ -68,6 +68,7 @@ func (c *blocksRollingChecker) Check() error {
 		last := series.GetLatest()
 		if last == nil {
 			nodeFunctional = false //node produced no blocks
+			networkFunctional = networkFunctional || nodeFunctional
 			continue
 		}
 

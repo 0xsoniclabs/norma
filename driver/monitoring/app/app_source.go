@@ -84,5 +84,7 @@ func (s *periodicAppDataSource[T]) AfterApplicationCreation(app driver.Applicati
 		log.Printf("failed to create sensor for metric %v / app %s: %v", s.GetMetric().Name, label, err)
 		return
 	}
-	s.AddSubject(mon.App(label), sensor)
+	if err := s.AddSubject(mon.App(label), sensor); err != nil {
+		log.Printf("failed to add subject for metric %v / app %s: %v", s.GetMetric().Name, label, err)
+	}
 }

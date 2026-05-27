@@ -17,6 +17,7 @@
 package nodemon
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,14 +26,13 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
-	mon "github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
 	opera "github.com/0xsoniclabs/norma/driver/node"
 )
 
 type PprofData []byte
 
-func GetPprofData(node driver.Node, duration time.Duration) (PprofData, error) {
+func GetPprofData(node driver.Node, duration time.Duration) (profData PprofData, err error) {
 	url := node.GetServiceUrl(&opera.OperaDebugService)
 	if url == nil {
 		return nil, fmt.Errorf("node does not offer the pprof service")
@@ -41,7 +41,9 @@ func GetPprofData(node driver.Node, duration time.Duration) (PprofData, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err = errors.Join(err, resp.Body.Close())
+	}()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch result: %v", resp)
 	}
@@ -49,20 +51,20 @@ func GetPprofData(node driver.Node, duration time.Duration) (PprofData, error) {
 }
 
 // NodeCpuProfile periodically collects CPU profiles from individual nodes.
-var NodeCpuProfile = mon.Metric[mon.Node, mon.Series[mon.Time, string]]{
+var NodeCpuProfile = monitoring.Metric[monitoring.Node, monitoring.Series[monitoring.Time, string]]{
 	Name:        "NodeCpuProfile",
 	Description: "CpuProfile samples of a node at various times.",
 }
 
 func init() {
-	if err := mon.RegisterSource(NodeCpuProfile, NewNodeCpuProfileSource); err != nil {
+	if err := monitoring.RegisterSource(NodeCpuProfile, NewNodeCpuProfileSource); err != nil {
 		panic(fmt.Sprintf("failed to register metric source: %v", err))
 	}
 }
 
 // NewNodeCpuProfileSource creates a new data source periodically collecting
 // CPU profiling data at configured sampling periods.
-func NewNodeCpuProfileSource(monitor *monitoring.Monitor) mon.Source[mon.Node, mon.Series[mon.Time, string]] {
+func NewNodeCpuProfileSource(monitor *monitoring.Monitor) monitoring.Source[monitoring.Node, monitoring.Series[monitoring.Time, string]] {
 	return newPeriodicNodeDataSource[string](
 		NodeCpuProfile,
 		monitor,

@@ -32,7 +32,9 @@ func TestGetFreePort(t *testing.T) {
 	if err != nil {
 		t.Errorf("provided port %d is not free", port)
 	}
-	listener.Close()
+	if err := listener.Close(); err != nil {
+		t.Errorf("failed to release the port %d: %v", port, err)
+	}
 }
 
 func TestGetFreePorts(t *testing.T) {

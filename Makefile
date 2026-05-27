@@ -125,6 +125,11 @@ norma:
 test: pull-hello-world-image pull-alpine-image pull-prometheus-image build-r-renderer-image build-sonic-docker-image-main
 	go test ./... -v
 
+.PHONY: lint
+lint: 
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.1
+	@golangci-lint run ./...
+
 clean:
 	rm -rvf $(CURDIR)/build
 	docker image rm -f sonic sonic:local

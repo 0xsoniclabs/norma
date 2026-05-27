@@ -18,6 +18,7 @@ package local
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -567,7 +568,7 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T
 
 // getChecksum creates a node of the provided image type on the provided network
 // and extract the checksum.
-func getChecksum(net *LocalNetwork, image string) (string, error) {
+func getChecksum(net *LocalNetwork, image string) (checksum string, err error) {
 	node, err := net.CreateNode(&driver.NodeConfig{
 		Name:  fmt.Sprintf("T-%s", image),
 		Image: image,
@@ -578,9 +579,11 @@ func getChecksum(net *LocalNetwork, image string) (string, error) {
 
 	reader, err := node.StreamLog()
 	if err != nil {
-		return "", fmt.Errorf("cannot read node logs: %e", err)
+		return "", fmt.Errorf("cannot read node logs: %w", err)
 	}
-	defer reader.Close()
+	defer func() {
+		err = errors.Join(err, reader.Close())
+	}()
 
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
@@ -670,7 +673,7 @@ func TestLocalNetworkAdvanceEpoch_Success(t *testing.T) {
 		t.Fatalf("failed to get current epoch: %v", err)
 	}
 
-	var epochIncrement int = 3 // takes ~5-6 seconds per increment
+	epochIncrement := 3 // takes ~5-6 seconds per increment
 	if err := net.AdvanceEpoch(epochIncrement); err != nil {
 		t.Errorf("failed to advance epoch: %v", err)
 	}
@@ -727,7 +730,7 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 		t.Fatalf("failed to create temporary directory: %v", err)
 	}
 	defer func() {
-		os.RemoveAll(temp)
+		_ = os.RemoveAll(temp)
 	}()
 
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators, OutputDir: temp}
@@ -796,7 +799,7 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	}
 
 	// the database lock should have been updated
-	currModTime, visitedDirs, err := getModificationTime()
+	currModTime, _, err := getModificationTime()
 	if err != nil {
 		t.Fatalf("failed to get modification time: %v", err)
 	}

@@ -156,14 +156,22 @@ func (n *NodeLogDispatcher) runLogCollector(node driver.Node) {
 		log.Printf("failed to obtain logs of node %v, log is not captured: %v", label, err)
 		return
 	}
-	defer in.Close()
+	defer func() {
+		if err := in.Close(); err != nil {
+			log.Printf("failed to close log stream of node %v: %v", label, err)
+		}
+	}()
 	file := n.logDir + "/" + label + ".log"
 	out, err := os.Create(file)
 	if err != nil {
 		log.Printf("failed to create log file %v for node %v, log is not captured: %v", file, label, err)
 		return
 	}
-	defer out.Close()
+	defer func() {
+		if err := out.Close(); err != nil {
+			log.Printf("failed to close log file %v for node %v: %v", file, label, err)
+		}
+	}()
 	_, err = io.Copy(out, in)
 	if err != nil {
 		log.Printf("failed to capture log for node %v: %v", label, err)

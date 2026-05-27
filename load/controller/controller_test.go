@@ -98,7 +98,9 @@ func TestLoadGeneration_CanRealizeConstantTrafficShape(t *testing.T) {
 			done := make(chan bool)
 			go func() {
 				defer close(done)
-				controller.Run(ctx)
+				if err := controller.Run(ctx); err != nil {
+					t.Errorf("failed to run the controller: %v", err)
+				}
 			}()
 
 			time.Sleep(time.Second)

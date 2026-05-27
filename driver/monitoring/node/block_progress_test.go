@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"net"
 	"net/http"
@@ -186,7 +187,9 @@ func StartTestRpcServer() (*TestRpcServer, error) {
 }
 
 func (s *TestRpcServer) Shutdown() {
-	s.server.Shutdown(context.Background())
+	if err := s.server.Shutdown(context.Background()); err != nil {
+		slog.Error("failed to shutdown server", "error", err)
+	}
 	<-s.done
 }
 
@@ -204,5 +207,8 @@ func getBlockHeight(w http.ResponseWriter, r *http.Request) {
 			"number": "0x12"
 		}
 	}`
-	io.WriteString(w, response)
+	_, err := io.WriteString(w, response)
+	if err != nil {
+		slog.Error("failed to write response", "error", err)
+	}
 }

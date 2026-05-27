@@ -7,10 +7,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-var one int = 1
-var two int = 2
-var three int = 3
-var defaultStake uint64 = 5_000_000
+const defaultStake uint64 = 5_000_000
 
 func TestNewValidator(t *testing.T) {
 
@@ -48,7 +45,7 @@ func TestNewValidator(t *testing.T) {
 			name: "Custom instances",
 			input: parser.Validator{
 				Name:      "validator3",
-				Instances: &three,
+				Instances: new(3),
 			},
 			expected: Validator{
 				Name:      "validator3",
@@ -75,7 +72,7 @@ func TestNewValidator(t *testing.T) {
 			name: "Custom stake and extra arguments",
 			input: parser.Validator{
 				Name:           "validator4",
-				Stake:          &defaultStake,
+				Stake:          new(defaultStake),
 				ExtraArguments: "--arg1 value1 --arg2 value2",
 			},
 			expected: Validator{
@@ -123,7 +120,7 @@ func TestNewValidators(t *testing.T) {
 		{
 			name: "Multiple validators with custom values",
 			input: []parser.Validator{
-				{Name: "validator1", Instances: &two, ImageName: "custom-image1"},
+				{Name: "validator1", Instances: new(2), ImageName: "custom-image1"},
 				{Name: "validator2", ImageName: "custom-image2"},
 			},
 			expected: []Validator{
@@ -163,8 +160,8 @@ func TestGetNumValidators(t *testing.T) {
 		{
 			name: "Multiple validators with custom instances",
 			input: NewValidators([]parser.Validator{
-				{Name: "validator1", Instances: &two},
-				{Name: "validator2", Instances: &three},
+				{Name: "validator1", Instances: new(2)},
+				{Name: "validator2", Instances: new(3)},
 			}),
 			expected: 5,
 		},

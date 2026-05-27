@@ -23,37 +23,37 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
-	mon "github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
 	opera "github.com/0xsoniclabs/norma/driver/node"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // NodeBlockStatus collects a per-node time series of its current block height.
-var NodeBlockStatus = mon.Metric[mon.Node, mon.Series[mon.Time, mon.BlockStatus]]{
+var NodeBlockStatus = monitoring.Metric[monitoring.Node, monitoring.Series[monitoring.Time, monitoring.BlockStatus]]{
 	Name:        "NodeBlockStatus",
 	Description: "The epoch number and block height of nodes at various times.",
 }
 
 func init() {
-	if err := mon.RegisterSource(NodeBlockStatus, NewNodeBlockStatusSource); err != nil {
+	if err := monitoring.RegisterSource(NodeBlockStatus, NewNodeBlockStatusSource); err != nil {
 		panic(fmt.Sprintf("failed to register metric source: %v", err))
 	}
 }
 
 // NewNodeBlockStatusSource creates a new data source periodically collecting data on
 // the block height at various nodes over time.
-func NewNodeBlockStatusSource(monitor *mon.Monitor) mon.Source[mon.Node, mon.Series[mon.Time, mon.BlockStatus]] {
+func NewNodeBlockStatusSource(monitor *monitoring.Monitor) monitoring.Source[monitoring.Node, monitoring.Series[monitoring.Time, monitoring.BlockStatus]] {
 	return newNodeBlockStatusSource(monitor, time.Second)
 }
 
-func newNodeBlockStatusSource(monitor *mon.Monitor, period time.Duration) mon.Source[mon.Node, mon.Series[mon.Time, mon.BlockStatus]] {
-	return newPeriodicNodeDataSource[mon.BlockStatus](NodeBlockStatus, monitor, period, &blockProgressSensorFactory{})
+func newNodeBlockStatusSource(monitor *monitoring.Monitor, period time.Duration) monitoring.Source[monitoring.Node, monitoring.Series[monitoring.Time, monitoring.BlockStatus]] {
+	return newPeriodicNodeDataSource[monitoring.BlockStatus](NodeBlockStatus, monitor, period, &blockProgressSensorFactory{})
 }
 
 type blockProgressSensorFactory struct{}
 
-func (f *blockProgressSensorFactory) CreateSensor(node driver.Node) (utils.Sensor[mon.BlockStatus], error) {
+func (f *blockProgressSensorFactory) CreateSensor(node driver.Node) (utils.Sensor[monitoring.BlockStatus], error) {
 	url := node.GetServiceUrl(&opera.OperaRpcService)
 	if url == nil {
 		return nil, fmt.Errorf("node does not export an RPC server")
@@ -70,22 +70,25 @@ type blockProgressSensor struct {
 	rpcClient *rpc.Client
 }
 
-func (s *blockProgressSensor) ReadValue() (mon.BlockStatus, error) {
+func (s *blockProgressSensor) ReadValue() (monitoring.BlockStatus, error) {
 	var raw map[string]interface{}
 	err := s.rpcClient.Call(&raw, "eth_getBlockByNumber", "latest", false)
 	if err != nil {
-		return mon.BlockStatus{}, err
+		return monitoring.BlockStatus{}, err
 	}
 
 	epoch, err := strconv.ParseUint(raw["epoch"].(string), 0, 64)
 	if err != nil {
-		return mon.BlockStatus{}, err
+		return monitoring.BlockStatus{}, err
 	}
 
 	number, err := strconv.ParseUint(raw["number"].(string), 0, 64)
 	if err != nil {
-		return mon.BlockStatus{}, err
+		return monitoring.BlockStatus{}, err
 	}
 
-	return mon.BlockStatus{epoch, number}, nil
+	return monitoring.BlockStatus{
+		Epoch:       epoch,
+		BlockHeight: number,
+	}, nil
 }

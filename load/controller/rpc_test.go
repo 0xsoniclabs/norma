@@ -37,7 +37,11 @@ func TestTrafficGenerating(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
-	t.Cleanup(func() { net.Shutdown() })
+	t.Cleanup(func() {
+		if err := net.Shutdown(); err != nil {
+			t.Fatalf("failed to shutdown the network: %v", err)
+		}
+	})
 
 	primaryAccount, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
 	if err != nil {

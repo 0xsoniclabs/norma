@@ -49,7 +49,7 @@ type PrometheusLogKey struct {
 
 func (p PrometheusLogKey) String() string {
 	if p.Quantile == QuantileEmpty {
-		return fmt.Sprintf("%s", p.Name)
+		return p.Name
 	} else {
 		return fmt.Sprintf("%s (q: %s)", p.Name, p.Quantile)
 	}
@@ -60,10 +60,10 @@ type Quantile string
 
 const (
 	Quantile05    Quantile = "0.5"
-	Quantile09             = "0.9"
-	Quantile099            = "0.99"
-	Quantile0999           = "0.999"
-	QuantileEmpty          = ""
+	Quantile09    Quantile = "0.9"
+	Quantile099   Quantile = "0.99"
+	Quantile0999  Quantile = "0.999"
+	QuantileEmpty Quantile = ""
 )
 
 // NewPrometheusKey composes the key using the name of the metric and quantile

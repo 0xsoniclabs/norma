@@ -79,7 +79,9 @@ func TestMonitor_RegisterAndRetrievalOfDataWorks(t *testing.T) {
 		TestNodeMetric,
 		func(*Monitor) Source[Node, Series[BlockNumber, int]] { return &source },
 	}
-	InstallSource[Node, Series[BlockNumber, int]](monitor, factory)
+	if err := InstallSource[Node, Series[BlockNumber, int]](monitor, factory); err != nil {
+		t.Fatalf("failed to install source: %v", err)
+	}
 
 	if !IsSupported(monitor, metric) {
 		t.Errorf("registered metric is not supported")
@@ -121,12 +123,16 @@ func TestMonitor_CsvExport(t *testing.T) {
 		t.Fatalf("failed to create monitor instance: %v", err)
 	}
 
-	_ = monitor.Shutdown()
+	if err = monitor.Shutdown(); err != nil {
+		t.Fatalf("failed to shutdown monitor: %v", err)
+	}
 
 	content, _ := os.ReadFile(monitor.GetMeasurementFileName())
 
 	buffer := new(bytes.Buffer)
-	WriteCsvHeader(buffer)
+	if err := WriteCsvHeader(buffer); err != nil {
+		t.Fatalf("failed to write csv header: %v", err)
+	}
 	if got, want := string(content), buffer.String(); got != want {
 		t.Errorf("unexpected export: %v != %v", got, want)
 	}

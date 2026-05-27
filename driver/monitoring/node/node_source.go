@@ -24,7 +24,6 @@ import (
 	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
 
 	"github.com/0xsoniclabs/norma/driver"
-	mon "github.com/0xsoniclabs/norma/driver/monitoring"
 )
 
 // SensorFactory is a factory for sensors targeting selected nodes.
@@ -42,21 +41,21 @@ type periodicNodeDataSource[T any] struct {
 // NewPeriodicNodeDataSource creates a new data source managing per-node sensor
 // instances for a given metric and periodically collecting data from those.
 func NewPeriodicNodeDataSource[T any](
-	metric mon.Metric[mon.Node, mon.Series[mon.Time, T]],
-	monitor *mon.Monitor,
+	metric monitoring.Metric[monitoring.Node, monitoring.Series[monitoring.Time, T]],
+	monitor *monitoring.Monitor,
 	factory SensorFactory[T],
-) mon.Source[mon.Node, mon.Series[mon.Time, T]] {
+) monitoring.Source[monitoring.Node, monitoring.Series[monitoring.Time, T]] {
 	return newPeriodicNodeDataSource(metric, monitor, time.Second, factory)
 }
 
 // newPeriodicNodeDataSource is the same as NewPeriodicNodeDataSource but with
 // a customizable sampling periode.
 func newPeriodicNodeDataSource[T any](
-	metric mon.Metric[mon.Node, mon.Series[mon.Time, T]],
-	monitor *mon.Monitor,
+	metric monitoring.Metric[monitoring.Node, monitoring.Series[monitoring.Time, T]],
+	monitor *monitoring.Monitor,
 	period time.Duration,
 	factory SensorFactory[T],
-) mon.Source[mon.Node, mon.Series[mon.Time, T]] {
+) monitoring.Source[monitoring.Node, monitoring.Series[monitoring.Time, T]] {
 	res := &periodicNodeDataSource[T]{
 		PeriodicDataSource: utils.NewPeriodicDataSourceWithPeriod(metric, monitor, period),
 		factory:            factory,
@@ -76,12 +75,16 @@ func (s *periodicNodeDataSource[T]) AfterNodeCreation(node driver.Node) {
 	if err != nil {
 		log.Printf("failed to create sensor for metric %v / node %s: %v", s.GetMetric().Name, label, err)
 	}
-	s.AddSubject(mon.Node(label), sensor)
+	if err := s.AddSubject(monitoring.Node(label), sensor); err != nil {
+		log.Printf("failed to add subject for metric %v / node %s: %v", s.GetMetric().Name, label, err)
+	}
 }
 
 func (s *periodicNodeDataSource[T]) BeforeNodeRemoval(node driver.Node) {
 	label := node.GetLabel()
-	s.RemoveSubject(mon.Node(label))
+	if err := s.RemoveSubject(monitoring.Node(label)); err != nil {
+		log.Printf("failed to remove subject for metric %v / node %s: %v", s.GetMetric().Name, label, err)
+	}
 }
 
 func (s *periodicNodeDataSource[T]) AfterApplicationCreation(driver.Application) {
