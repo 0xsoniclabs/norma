@@ -188,6 +188,7 @@ func (c *Client) Start(config *ContainerConfig) (*Container, error) {
 	if config.Network != nil {
 		err = c.cli.NetworkConnect(context.Background(), config.Network.id, resp.ID, nil)
 		if err != nil {
+			_ = c.cli.ContainerRemove(context.Background(), resp.ID, container.RemoveOptions{Force: true})
 			return nil, err
 		}
 	}
@@ -195,6 +196,7 @@ func (c *Client) Start(config *ContainerConfig) (*Container, error) {
 	if err := network.Retry(context.Background(), network.DefaultRetryAttempts, 1*time.Second, func() error {
 		return c.cli.ContainerStart(context.Background(), resp.ID, container.StartOptions{})
 	}); err != nil {
+		_ = c.cli.ContainerRemove(context.Background(), resp.ID, container.RemoveOptions{Force: true})
 		return nil, err
 	}
 
@@ -256,10 +258,13 @@ func (c *Container) Stop() error {
 	if c.stopped {
 		return nil
 	}
-	c.stopped = true
 	timeout := int(c.config.ShutdownTimeout.Seconds())
-	return c.client.cli.ContainerStop(context.Background(), c.id, container.StopOptions{
-		Signal: string(SigInt), Timeout: &timeout})
+	if err := c.client.cli.ContainerStop(context.Background(), c.id, container.StopOptions{
+		Signal: string(SigInt), Timeout: &timeout}); err != nil {
+		return err
+	}
+	c.stopped = true
+	return nil
 }
 
 // Cleanup stops the container (unless it is already stopped) and frees any
@@ -272,8 +277,11 @@ func (c *Container) Cleanup() error {
 	if err := c.Stop(); err != nil {
 		return err
 	}
+	if err := c.client.cli.ContainerRemove(context.Background(), c.id, container.RemoveOptions{}); err != nil {
+		return err
+	}
 	c.cleaned = true
-	return c.client.cli.ContainerRemove(context.Background(), c.id, container.RemoveOptions{})
+	return nil
 }
 
 // GetAddressForService retrieves the Address of a service running in this
@@ -407,9 +415,12 @@ func (n *Network) Cleanup() error {
 			}
 		}
 	}
-	n.cleaned = true
 	// remove the network
-	return n.client.cli.NetworkRemove(context.Background(), n.id)
+	if err := n.client.cli.NetworkRemove(context.Background(), n.id); err != nil {
+		return err
+	}
+	n.cleaned = true
+	return nil
 }
 
 // listNetworks returns a list of all networks on the Docker host filtered by label.
@@ -421,7 +432,10 @@ func (c *Client) listNetworks() ([]types.NetworkResource, error) {
 
 // listContainers returns a list of all containers on the Docker host filtered by label.
 func (c *Client) listContainers() ([]types.Container, error) {
-	return c.cli.ContainerList(context.Background(), container.ListOptions{})
+	return c.cli.ContainerList(context.Background(), container.ListOptions{
+		All:     true,                                     // stopped containers as well.
+		Filters: filters.NewArgs(getObjectsLabelFilter()), // only containers with norma label
+	})
 }
 
 // getObjectsLabelFilter returns a filter for the objects label.
