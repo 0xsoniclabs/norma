@@ -73,6 +73,7 @@ type Container struct {
 // ContainerConfig defines parameters for running Docker Containers.
 type ContainerConfig struct {
 	ImageName       string
+	ContainerName   string // Optional Docker container name; empty lets Docker auto-generate.
 	ShutdownTimeout *time.Duration
 	PortForwarding  map[network.Port]network.Port // Container Port => Host Port
 	Environment     map[string]string
@@ -175,7 +176,7 @@ func (c *Client) Start(config *ContainerConfig) (*Container, error) {
 		Init:         &init,
 		CapAdd:       []string{"NET_ADMIN"},
 		Binds:        binds,
-	}, nil, nil, "")
+	}, nil, nil, config.ContainerName)
 	if err != nil {
 		return nil, err
 	}

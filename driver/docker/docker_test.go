@@ -290,6 +290,38 @@ func TestContainerCanJoinNetwork(t *testing.T) {
 	t.Fatalf("container is not connected to network: %s", net.id)
 }
 
+func TestContainer_UsesConfiguredName(t *testing.T) {
+	cli, err := NewClient()
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	timeout := time.Second
+	name := "norma-test-container-" + strings.ToLower(strings.ReplaceAll(t.Name(), "/", "-"))
+	cont, err := cli.Start(&ContainerConfig{
+		ImageName:       "hello-world",
+		ContainerName:   name,
+		ShutdownTimeout: &timeout,
+	})
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_ = cont.Cleanup()
+		_ = cli.Close()
+	})
+
+	inspect, err := cli.cli.ContainerInspect(t.Context(), cont.id)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	if got, want := strings.TrimPrefix(inspect.Name, "/"), name; got != want {
+		t.Errorf("unexpected container name: %q != %q", got, want)
+	}
+}
+
 func containerExists(t *testing.T, cli *Client, id string) bool {
 	// test the container exists
 	var exists bool

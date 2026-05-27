@@ -164,6 +164,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 
 		return client.Start(&docker.ContainerConfig{
 			ImageName:       config.Image,
+			ContainerName:   fmt.Sprintf("norma-node-%s", config.Label),
 			ShutdownTimeout: &shutdownTimeout,
 			PortForwarding:  portForwarding,
 			Environment:     envs,
