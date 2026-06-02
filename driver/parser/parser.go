@@ -18,11 +18,11 @@ package parser
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"time"
 
-	"github.com/0xsoniclabs/sonic/utils/caution"
 	"gopkg.in/yaml.v3"
 )
 
@@ -217,6 +217,6 @@ func ParseFile(path string) (scenario Scenario, err error) {
 	if err != nil {
 		return Scenario{}, err
 	}
-	defer caution.CloseAndReportError(&err, reader, "failed to close scenario file")
+	defer func() { err = errors.Join(err, reader.Close()) }()
 	return Parse(reader)
 }

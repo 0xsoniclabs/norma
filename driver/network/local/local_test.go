@@ -18,6 +18,7 @@ package local
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -28,7 +29,6 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver/network"
 	"github.com/0xsoniclabs/norma/driver/parser"
-	"github.com/0xsoniclabs/sonic/utils/caution"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/node"
@@ -581,9 +581,7 @@ func getChecksum(net *LocalNetwork, image string) (checksum string, err error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot read node logs: %e", err)
 	}
-	defer func() {
-		caution.CloseAndReportError(&err, reader, "cannot close log reader")
-	}()
+	defer func() { err = errors.Join(err, reader.Close()) }()
 
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {

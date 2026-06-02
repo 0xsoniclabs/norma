@@ -17,11 +17,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/0xsoniclabs/norma/analysis/report"
-	"github.com/0xsoniclabs/sonic/utils/caution"
 	"github.com/urfave/cli/v2"
 )
 
@@ -44,7 +44,7 @@ func diff(ctx *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	defer caution.CloseAndReportError(&err, file, "failed to close temporary file")
+	defer func() { err = errors.Join(err, file.Close()) }()
 	for _, src := range args.Slice() {
 		content, err := os.ReadFile(src)
 		if err != nil {
@@ -58,11 +58,7 @@ func diff(ctx *cli.Context) (err error) {
 	if err := file.Close(); err != nil {
 		return err
 	}
-	defer caution.ExecuteAndReportError(
-		&err,
-		func() error { return os.Remove(file.Name()) },
-		"failed to remove temporary file",
-	)
+	defer func() { err = errors.Join(err, os.Remove(file.Name())) }()
 
 	currentDir, err := os.Getwd()
 	if err != nil {

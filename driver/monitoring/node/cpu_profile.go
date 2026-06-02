@@ -17,6 +17,7 @@
 package nodemon
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -28,7 +29,6 @@ import (
 	mon "github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
 	opera "github.com/0xsoniclabs/norma/driver/node"
-	"github.com/0xsoniclabs/sonic/utils/caution"
 )
 
 type PprofData []byte
@@ -42,7 +42,7 @@ func GetPprofData(node driver.Node, duration time.Duration) (data PprofData, err
 	if err != nil {
 		return nil, err
 	}
-	defer caution.CloseAndReportError(&err, resp.Body, "failed to close response body")
+	defer func() { err = errors.Join(err, resp.Body.Close()) }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch result: %v", resp)
 	}

@@ -19,11 +19,10 @@ package report
 import (
 	"bytes"
 	_ "embed"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
-
-	"github.com/0xsoniclabs/sonic/utils/caution"
 )
 
 // Report is a template for a report to be produced from monitoring data
@@ -66,21 +65,13 @@ func (r *Report) Render(datafile, outputdir string) (outputfile string, err erro
 	if err != nil {
 		return "", err
 	}
-	defer caution.ExecuteAndReportError(
-		&err,
-		func() error { return os.Remove(script) },
-		"failed to remove temporary file",
-	)
+	defer func() { err = errors.Join(err, os.Remove(script)) }()
 
 	template, err := createTempFile(r.template, ".Rmd")
 	if err != nil {
 		return "", err
 	}
-	defer caution.ExecuteAndReportError(
-		&err,
-		func() error { return os.Remove(template) },
-		"failed to remove temporary file",
-	)
+	defer func() { err = errors.Join(err, os.Remove(template)) }()
 
 	outputfile = r.name + ".html"
 
@@ -109,7 +100,7 @@ func createTempFile(content []byte, suffix string) (filename string, err error) 
 	if err != nil {
 		return "", err
 	}
-	defer caution.CloseAndReportError(&err, file, "failed to close temporary file")
+	defer func() { err = errors.Join(err, file.Close()) }()
 	if _, err := file.Write(content); err != nil {
 		return "", err
 	}

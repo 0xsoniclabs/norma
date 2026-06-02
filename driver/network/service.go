@@ -17,13 +17,12 @@
 package network
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"strconv"
 	"strings"
-
-	"github.com/0xsoniclabs/sonic/utils/caution"
 )
 
 // ServiceDescription is
@@ -83,7 +82,7 @@ func GetFreePorts(num int) (ports []Port, err error) {
 				continue
 			}
 			// make sure to close the listener in case of an error
-			defer caution.CloseAndReportError(&err, listener, "failed to close listener")
+			defer func() { err = errors.Join(err, listener.Close()) }()
 
 			port := listener.Addr().String()
 			columnPos := strings.LastIndex(port, ":")
