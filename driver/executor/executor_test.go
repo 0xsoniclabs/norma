@@ -19,10 +19,11 @@ package executor
 import (
 	"context"
 	"fmt"
-	"github.com/0xsoniclabs/norma/driver/checking"
-	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"reflect"
 	"testing"
+
+	"github.com/0xsoniclabs/norma/driver/checking"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/parser"
@@ -440,10 +441,10 @@ func TestExecutor_scheduleAdvanceEpochEvents(t *testing.T) {
 		Name:     "Test",
 		Duration: 10,
 		AdvanceEpoch: []parser.AdvanceEpoch{
-			parser.AdvanceEpoch{Time: 1, Epochs: &one},
-			parser.AdvanceEpoch{Time: 3, Epochs: &three},
-			parser.AdvanceEpoch{Time: 7, Epochs: &seven},
-			parser.AdvanceEpoch{Time: 5, Epochs: &five},
+			{Time: 1, Epochs: &one},
+			{Time: 3, Epochs: &three},
+			{Time: 7, Epochs: &seven},
+			{Time: 5, Epochs: &five},
 		},
 	}
 
