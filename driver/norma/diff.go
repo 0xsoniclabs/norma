@@ -21,6 +21,7 @@ import (
 	"os"
 
 	"github.com/0xsoniclabs/norma/analysis/report"
+	"github.com/0xsoniclabs/sonic/utils/caution"
 	"github.com/urfave/cli/v2"
 )
 
@@ -32,7 +33,7 @@ var diffCommand = cli.Command{
 	Usage:  "renders a report comparing the monitoring data of multiple evaluations",
 }
 
-func diff(ctx *cli.Context) error {
+func diff(ctx *cli.Context) (err error) {
 	args := ctx.Args()
 	if args.Len() < 1 {
 		return fmt.Errorf("requires at least one measurment file path as argument")
@@ -43,7 +44,7 @@ func diff(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer caution.CloseAndReportError(&err, file, "failed to close temporary file")
 	for _, src := range args.Slice() {
 		content, err := os.ReadFile(src)
 		if err != nil {
@@ -57,7 +58,11 @@ func diff(ctx *cli.Context) error {
 	if err := file.Close(); err != nil {
 		return err
 	}
-	defer os.Remove(file.Name())
+	defer caution.ExecuteAndReportError(
+		&err,
+		func() error { return os.Remove(file.Name()) },
+		"failed to remove temporary file",
+	)
 
 	currentDir, err := os.Getwd()
 	if err != nil {

@@ -28,6 +28,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver/network"
 	"github.com/0xsoniclabs/norma/driver/parser"
+	"github.com/0xsoniclabs/sonic/utils/caution"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/node"
@@ -567,7 +568,7 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T
 
 // getChecksum creates a node of the provided image type on the provided network
 // and extract the checksum.
-func getChecksum(net *LocalNetwork, image string) (string, error) {
+func getChecksum(net *LocalNetwork, image string) (checksum string, err error) {
 	node, err := net.CreateNode(&driver.NodeConfig{
 		Name:  fmt.Sprintf("T-%s", image),
 		Image: image,
@@ -580,7 +581,9 @@ func getChecksum(net *LocalNetwork, image string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot read node logs: %e", err)
 	}
-	defer reader.Close()
+	defer func() {
+		caution.CloseAndReportError(&err, reader, "cannot close log reader")
+	}()
 
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {

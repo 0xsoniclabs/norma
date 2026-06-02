@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+
+	"github.com/0xsoniclabs/sonic/utils/caution"
 )
 
 // Report is a template for a report to be produced from monitoring data
@@ -59,20 +61,28 @@ var renderScript []byte
 
 // Render renders this report using the given input data file (in CSV format)
 // and places its results into the defined output directory.
-func (r *Report) Render(datafile, outputdir string) (string, error) {
+func (r *Report) Render(datafile, outputdir string) (outputfile string, err error) {
 	script, err := createTempFile(renderScript, ".R")
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(script)
+	defer caution.ExecuteAndReportError(
+		&err,
+		func() error { return os.Remove(script) },
+		"failed to remove temporary file",
+	)
 
 	template, err := createTempFile(r.template, ".Rmd")
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(template)
+	defer caution.ExecuteAndReportError(
+		&err,
+		func() error { return os.Remove(template) },
+		"failed to remove temporary file",
+	)
 
-	outputfile := r.name + ".html"
+	outputfile = r.name + ".html"
 
 	cmd := exec.Command("docker", "run", "--rm",
 		"--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
@@ -94,12 +104,12 @@ func (r *Report) Render(datafile, outputdir string) (string, error) {
 	return outputfile, nil
 }
 
-func createTempFile(content []byte, suffix string) (string, error) {
+func createTempFile(content []byte, suffix string) (filename string, err error) {
 	file, err := os.CreateTemp("", "tmp_*"+suffix)
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
+	defer caution.CloseAndReportError(&err, file, "failed to close temporary file")
 	if _, err := file.Write(content); err != nil {
 		return "", err
 	}

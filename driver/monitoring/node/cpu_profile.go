@@ -28,11 +28,12 @@ import (
 	mon "github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
 	opera "github.com/0xsoniclabs/norma/driver/node"
+	"github.com/0xsoniclabs/sonic/utils/caution"
 )
 
 type PprofData []byte
 
-func GetPprofData(node driver.Node, duration time.Duration) (PprofData, error) {
+func GetPprofData(node driver.Node, duration time.Duration) (data PprofData, err error) {
 	url := node.GetServiceUrl(&opera.OperaDebugService)
 	if url == nil {
 		return nil, fmt.Errorf("node does not offer the pprof service")
@@ -41,7 +42,7 @@ func GetPprofData(node driver.Node, duration time.Duration) (PprofData, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer caution.CloseAndReportError(&err, resp.Body, "failed to close response body")
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch result: %v", resp)
 	}
