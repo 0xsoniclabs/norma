@@ -87,5 +87,8 @@ func (s *blockProgressSensor) ReadValue() (mon.BlockStatus, error) {
 		return mon.BlockStatus{}, err
 	}
 
-	return mon.BlockStatus{epoch, number}, nil
+	return mon.BlockStatus{
+		Epoch:       epoch,
+		BlockHeight: number,
+	}, nil
 }
