@@ -17,6 +17,7 @@
 package nodemon
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,7 +33,7 @@ import (
 
 type PprofData []byte
 
-func GetPprofData(node driver.Node, duration time.Duration) (PprofData, error) {
+func GetPprofData(node driver.Node, duration time.Duration) (data PprofData, err error) {
 	url := node.GetServiceUrl(&opera.OperaDebugService)
 	if url == nil {
 		return nil, fmt.Errorf("node does not offer the pprof service")
@@ -41,7 +42,7 @@ func GetPprofData(node driver.Node, duration time.Duration) (PprofData, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { err = errors.Join(err, resp.Body.Close()) }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch result: %v", resp)
 	}

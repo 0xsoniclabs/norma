@@ -18,6 +18,7 @@ package parser
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"time"
@@ -211,11 +212,11 @@ func ParseBytes(data []byte) (Scenario, error) {
 }
 
 // ParseFile parses the YAML encoded scenario in the given file.
-func ParseFile(path string) (Scenario, error) {
-	if reader, err := os.Open(path); err == nil {
-		defer reader.Close()
-		return Parse(reader)
-	} else {
+func ParseFile(path string) (scenario Scenario, err error) {
+	reader, err := os.Open(path)
+	if err != nil {
 		return Scenario{}, err
 	}
+	defer func() { err = errors.Join(err, reader.Close()) }()
+	return Parse(reader)
 }

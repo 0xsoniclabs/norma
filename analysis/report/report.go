@@ -19,6 +19,7 @@ package report
 import (
 	"bytes"
 	_ "embed"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -59,20 +60,20 @@ var renderScript []byte
 
 // Render renders this report using the given input data file (in CSV format)
 // and places its results into the defined output directory.
-func (r *Report) Render(datafile, outputdir string) (string, error) {
+func (r *Report) Render(datafile, outputdir string) (outputfile string, err error) {
 	script, err := createTempFile(renderScript, ".R")
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(script)
+	defer func() { err = errors.Join(err, os.Remove(script)) }()
 
 	template, err := createTempFile(r.template, ".Rmd")
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(template)
+	defer func() { err = errors.Join(err, os.Remove(template)) }()
 
-	outputfile := r.name + ".html"
+	outputfile = r.name + ".html"
 
 	cmd := exec.Command("docker", "run", "--rm",
 		"--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
@@ -94,12 +95,12 @@ func (r *Report) Render(datafile, outputdir string) (string, error) {
 	return outputfile, nil
 }
 
-func createTempFile(content []byte, suffix string) (string, error) {
+func createTempFile(content []byte, suffix string) (filename string, err error) {
 	file, err := os.CreateTemp("", "tmp_*"+suffix)
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
+	defer func() { err = errors.Join(err, file.Close()) }()
 	if _, err := file.Write(content); err != nil {
 		return "", err
 	}

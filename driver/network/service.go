@@ -17,6 +17,7 @@
 package network
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -70,8 +71,8 @@ func GetFreePort() (Port, error) {
 // GetFreePorts obtains a list of free TCP ports on the local system.  Note
 // that after this call the ports are not reserved. Thus, consecutive calls may
 // produce the same free ports until it is actually bound to some application.
-func GetFreePorts(num int) ([]Port, error) {
-	ports := make([]Port, 0, num)
+func GetFreePorts(num int) (ports []Port, err error) {
+	ports = make([]Port, 0, num)
 	for len(ports) < num {
 		found := false
 		for i := 0; !found && i < 10; i++ {
@@ -81,7 +82,7 @@ func GetFreePorts(num int) ([]Port, error) {
 				continue
 			}
 			// make sure to close the listener in case of an error
-			defer listener.Close()
+			defer func() { err = errors.Join(err, listener.Close()) }()
 
 			port := listener.Addr().String()
 			columnPos := strings.LastIndex(port, ":")
