@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -768,12 +769,12 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	}
 
 	// save modification time of the database lock
-	prevModTime, visitedDirs, err := getModificationTime()
+	prevModTime, prevVisitedDirs, err := getModificationTime()
 	if err != nil {
 		t.Fatalf("failed to get modification time: %v", err)
 	}
 	if prevModTime == nil {
-		t.Fatalf("directory does not contain database files: %v", visitedDirs)
+		t.Fatalf("directory does not contain database files: %v", prevVisitedDirs)
 	}
 
 	// stop the node
@@ -797,12 +798,15 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	}
 
 	// the database lock should have been updated
-	currModTime, visitedDirs, err := getModificationTime()
+	currModTime, currVisitedDirs, err := getModificationTime()
 	if err != nil {
 		t.Fatalf("failed to get modification time: %v", err)
 	}
 	if got, want := *currModTime, *prevModTime; got.Equal(want) {
 		t.Errorf("got modification time %v, wanted modification time %v", got, want)
+	}
+	if got, want := currVisitedDirs, prevVisitedDirs; !slices.Equal(got, want) {
+		t.Errorf("got visited dirs %v, wanted visited dirs %v", got, want)
 	}
 
 }
