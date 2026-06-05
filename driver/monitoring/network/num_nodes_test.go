@@ -58,7 +58,7 @@ func TestNumNodeRetrievesNodeCount(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 	if err := source.Shutdown(); err != nil {
-		t.Errorf("failed to shutdown source: %v", err)
+		t.Fatalf("failed to shutdown source: %v", err)
 	}
 
 	series, exists := source.GetData(monitoring.Network{})

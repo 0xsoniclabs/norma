@@ -80,7 +80,7 @@ func TestMonitor_RegisterAndRetrievalOfDataWorks(t *testing.T) {
 		func(*Monitor) Source[Node, Series[BlockNumber, int]] { return &source },
 	}
 	if err = InstallSource[Node, Series[BlockNumber, int]](monitor, factory); err != nil {
-		t.Fatalf("failed to install source: %v", err)
+		t.Errorf("failed to install source: %v", err)
 	}
 
 	if !IsSupported(monitor, metric) {
