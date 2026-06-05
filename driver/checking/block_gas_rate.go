@@ -58,7 +58,7 @@ func (c *blockGasRateChecker) Configure(config CheckerConfig) Checker {
 	return &blockGasRateChecker{monitor: c.monitor, ceiling: ceiling}
 }
 
-// Check retreive current BlockGasRate and see that each block has gas rate below ceiling.
+// Check retrieve current BlockGasRate and see that each block has gas rate below ceiling.
 func (c *blockGasRateChecker) Check() error {
 	series := c.monitor.GetBlockGasRate()
 	last := series.GetLatest()

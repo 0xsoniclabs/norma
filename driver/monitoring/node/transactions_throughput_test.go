@@ -75,7 +75,7 @@ func TestTransactionsThroughputSource(t *testing.T) {
 			// skip first block which is off
 			for i := 1; i < loops; i++ {
 				if got, want := series.GetRange(monitoring.BlockNumber(i), monitoring.BlockNumber(i+1))[0].Value, txs[i]; got != want {
-					t.Errorf("transaction througput incorect: %3.2f != %3.2f", got, want)
+					t.Errorf("transaction throughput incorrect: %3.2f != %3.2f", got, want)
 				}
 			}
 		})
@@ -110,7 +110,7 @@ func TestTransactionsTimeDiffBelowSec(t *testing.T) {
 	}
 
 	if got, want := series.GetLatest().Value, float32(10)/float32(secDif); got != want {
-		t.Errorf("transaction througput incorect: %3.2f != %3.2f", got, want)
+		t.Errorf("transaction throughput incorrect: %3.2f != %3.2f", got, want)
 	}
 }
 

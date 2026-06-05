@@ -51,7 +51,7 @@ type NodeLogProvider interface {
 // Every time a node is added to the network, the internal list is extended.
 // Log streams of all the nodes maintained in this registry are read and parsed,
 // while the parsed blocks from the logs are distributed to all registered listeners.
-// Furthermore, all collected logs are writen to a configurable output directory.
+// Furthermore, all collected logs are written to a configurable output directory.
 type NodeLogDispatcher struct {
 	listeners     map[LogListener]bool
 	listenersLock sync.Mutex
@@ -111,7 +111,7 @@ func (n *NodeLogDispatcher) AfterNodeCreation(node driver.Node) {
 
 	n.wg.Add(1)
 
-	// Start a goroutine collecting the log and writting it into a file.
+	// Start a goroutine collecting the log and writing it into a file.
 	go n.runLogCollector(node)
 
 	// Start a goroutine parsing the log and dispatching block information.
