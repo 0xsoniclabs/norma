@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -154,7 +153,6 @@ type FailingBundleUser struct {
 	signer          types.Signer
 	client          rpc.Client
 	sentTxs         atomic.Uint64
-	gasOnce         sync.Once
 }
 
 func (u *FailingBundleUser) GenerateTx() (*types.Transaction, error) {

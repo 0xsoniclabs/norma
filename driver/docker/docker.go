@@ -29,6 +29,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	dockerNetwork "github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 )
@@ -206,7 +207,7 @@ func (c *Client) CreateBridgeNetwork() (*Network, error) {
 	name := fmt.Sprintf("norma_network_%d", rand.Int())
 
 	// create new network
-	resp, err := c.cli.NetworkCreate(context.Background(), name, types.NetworkCreate{
+	resp, err := c.cli.NetworkCreate(context.Background(), name, dockerNetwork.CreateOptions{
 		Labels: map[string]string{
 			objectsLabel: "true",
 		},
@@ -343,7 +344,7 @@ func (c *Container) SendSignal(signal Signal) error {
 // The command is required to be tokenized and interpreted in shell's exec form.
 func (c *Container) Exec(cmd []string) (string, error) {
 	// Create a container exec instance
-	execConfig := types.ExecConfig{
+	execConfig := container.ExecOptions{
 		Tty:          true,
 		Cmd:          cmd,
 		AttachStdout: true,
@@ -360,7 +361,7 @@ func (c *Container) Exec(cmd []string) (string, error) {
 	}
 
 	// Attach to the exec instance
-	resp, err := c.client.cli.ContainerExecAttach(context.Background(), execResp.ID, types.ExecStartCheck{})
+	resp, err := c.client.cli.ContainerExecAttach(context.Background(), execResp.ID, container.ExecStartOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to attach to exec instance: %s", err)
 	}
@@ -412,8 +413,8 @@ func (n *Network) Cleanup() error {
 }
 
 // listNetworks returns a list of all networks on the Docker host filtered by label.
-func (c *Client) listNetworks() ([]types.NetworkResource, error) {
-	return c.cli.NetworkList(context.Background(), types.NetworkListOptions{
+func (c *Client) listNetworks() ([]dockerNetwork.Inspect, error) {
+	return c.cli.NetworkList(context.Background(), dockerNetwork.ListOptions{
 		Filters: filters.NewArgs(getObjectsLabelFilter()),
 	})
 }

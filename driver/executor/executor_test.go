@@ -128,7 +128,7 @@ func TestExecutor_RunMultipleNodeScenario(t *testing.T) {
 }
 
 func TestExecutor_Validator_StartEndRejoinLeave(t *testing.T) {
-	var two, three int = 2, 3
+	var two, three = 2, 3
 	clock := NewSimClock()
 	scenario := parser.Scenario{
 		Name:       "Test",

@@ -176,7 +176,7 @@ type Wave struct {
 	Period float32  // seconds
 }
 
-// A load pattern automatically maxing out throughput.
+// Auto is a load pattern automatically maxing out throughput.
 type Auto struct {
 	Increase *float32 `yaml:",omitempty"` // increase in non-overload case per second in Tx/s, nil = 1
 	Decrease *float32 `yaml:",omitempty"` // decrease in overload case in percent, nil = 0.2 (=20%)

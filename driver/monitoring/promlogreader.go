@@ -52,8 +52,8 @@ type PrometheusMetricType string
 
 const (
 	counterPrometheusMetricType PrometheusMetricType = "counter" // a counter can be increased or decreased
-	gaugePrometheusMetricType                        = "gauge"   // a gauge works as the counter, but can be also set to a direct value
-	summaryPrometheusMetricType                      = "summary" // summary measure throughput split into quantiles
+	gaugePrometheusMetricType   PrometheusMetricType = "gauge"   // a gauge works as the counter, but can be also set to a direct value
+	summaryPrometheusMetricType PrometheusMetricType = "summary" // summary measure throughput split into quantiles
 )
 
 // ParsePrometheusLogReader reads text logs from the input reader, and produces the output slice of parsed representation of the log.
@@ -110,8 +110,7 @@ var (
 // fillValue returns 1. bool indiciating if the log value should be skipped,
 //  2. error indicating that log value failed
 func fillValue(tokens []string, dest *PrometheusLogValue) (bool, error) {
-	var skip bool = isBlacklistedValue(tokens)
-	if skip {
+	if isBlacklistedValue(tokens) {
 		return true, nil // without setting dest.value
 	}
 

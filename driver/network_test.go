@@ -7,7 +7,6 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-var one int = 1
 var two int = 2
 var three int = 3
 var defaultStake uint64 = 5_000_000

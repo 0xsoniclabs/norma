@@ -35,7 +35,7 @@ func TestRetryRpcReturnGracefully(t *testing.T) {
 	time.Sleep(6 * time.Second)
 	w.close()
 
-	if got, want := time.Now().Sub(start).Seconds(), float64(5); got < want {
+	if got, want := time.Since(start).Seconds(), float64(5); got < want {
 		t.Errorf("RPC should be attempted around 6s, was: %f < %f", got, want)
 	}
 }

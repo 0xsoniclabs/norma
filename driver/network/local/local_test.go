@@ -672,7 +672,7 @@ func TestLocalNetworkAdvanceEpoch_Success(t *testing.T) {
 		t.Fatalf("failed to get current epoch: %v", err)
 	}
 
-	var epochIncrement int = 3 // takes ~5-6 seconds per increment
+	epochIncrement := 3 // takes ~5-6 seconds per increment
 	if err := net.AdvanceEpoch(epochIncrement); err != nil {
 		t.Errorf("failed to advance epoch: %v", err)
 	}

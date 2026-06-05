@@ -45,12 +45,8 @@ func TestLogsAddedToSeries(t *testing.T) {
 	source := NewPromLogSource(monitor, monitoring.NewPrometheusNameKey("metric_name_a"))
 
 	requestedItems := 1000
-	expectedTimes := make([]monitoring.Time, 0, requestedItems)
-	expectedValues := make([]float64, 0, requestedItems)
 
 	for i := 0; i < requestedItems; i++ {
-		expectedTimes = append(expectedTimes, monitoring.Time(i))
-		expectedValues = append(expectedValues, float64(i))
 		source.OnLog("A", monitoring.Time(i), float64(i))
 		source.OnLog("B", monitoring.Time(2*i), float64(2*i))
 	}
