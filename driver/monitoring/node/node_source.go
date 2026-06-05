@@ -20,7 +20,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -35,7 +34,7 @@ type SensorFactory[T any] interface {
 // periodicNodeDataSource is a generic data source periodically querying
 // node-associated sensors for data.
 type periodicNodeDataSource[T any] struct {
-	*utils.PeriodicDataSource[monitoring.Node, T]
+	*utils.PeriodicDataSource[mon.Node, T]
 	factory SensorFactory[T]
 }
 

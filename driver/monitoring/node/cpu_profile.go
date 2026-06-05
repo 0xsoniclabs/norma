@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
-	"github.com/0xsoniclabs/norma/driver/monitoring"
 	mon "github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
 	opera "github.com/0xsoniclabs/norma/driver/node"
@@ -63,7 +62,7 @@ func init() {
 
 // NewNodeCpuProfileSource creates a new data source periodically collecting
 // CPU profiling data at configured sampling periods.
-func NewNodeCpuProfileSource(monitor *monitoring.Monitor) mon.Source[mon.Node, mon.Series[mon.Time, string]] {
+func NewNodeCpuProfileSource(monitor *mon.Monitor) mon.Source[mon.Node, mon.Series[mon.Time, string]] {
 	return newPeriodicNodeDataSource[string](
 		NodeCpuProfile,
 		monitor,

@@ -42,7 +42,7 @@ func (r *Record) SetSubject(subject any) *Record {
 		r.App = string(value)
 	case User:
 		r.App = string(value.App)
-		var worker int64 = int64(value.Id)
+		worker := int64(value.Id)
 		r.Worker = &worker
 	default:
 		panic(fmt.Sprintf("unsupported subject value encountered: %v (type: %v)", subject, reflect.TypeOf(subject)))
