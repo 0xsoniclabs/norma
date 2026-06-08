@@ -73,7 +73,9 @@ type Network interface {
 	// any potential other resources.
 	Shutdown() error
 
-	SendTransaction(tx *types.Transaction)
+	// SendTransaction sends a transaction to the network.
+	// The source parameter is used for logging and debugging purposes.
+	SendTransaction(tx *types.Transaction, source string)
 
 	// Create a connection to a random node on the network. May fail if there
 	// is no node on the network with a ErrorEmptyNetwork error.
