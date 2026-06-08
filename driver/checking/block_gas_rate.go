@@ -58,7 +58,7 @@ func (c *blockGasRateChecker) Configure(config CheckerConfig) Checker {
 	return &blockGasRateChecker{monitor: c.monitor, ceiling: ceiling}
 }
 
-// Check retreive current BlockGasRate and see that each block has gas rate below ceiling.
+// Check retrieve current BlockGasRate and see that each block has gas rate below ceiling.
 func (c *blockGasRateChecker) Check() error {
 	series := c.monitor.GetBlockGasRate()
 	last := series.GetLatest()
@@ -69,7 +69,7 @@ func (c *blockGasRateChecker) Check() error {
 	items := series.GetRange(0, last.Position+1)
 	for _, point := range items {
 		if point.Value > c.ceiling {
-			return fmt.Errorf("Exceeded gas ceiling; Block %d has gas rate of %f > %f", point.Position, point.Value, c.ceiling)
+			return fmt.Errorf("exceeded gas ceiling; Block %d has gas rate of %f > %f", point.Position, point.Value, c.ceiling)
 		}
 	}
 

@@ -49,14 +49,14 @@ func (s *SlopeShaper) GetNumMessagesInInterval(start time.Time, duration time.Du
 	//
 	//   f(t) := startFrequency + increment * t = d + k * t
 	//
-	// The area is equal to the definit integral over the given time range [a,b]
+	// The area is equal to the definite integral over the given time range [a,b]
 	// which can be computed as
 	//
 	//   m(a,b) := \int_{a}^{b} k * t + d
 	//           = (k*b^2/2 + d*b + c) - (k*a^2/2 + d*a + c)
 	//           = k*b^2/2 + d*b - k*a^2/2 - d*a
 	//           = k/2 * (b^2-a^2) + d * (b-a)
-	//           = incrment/2 * (b^2-a^2) + startFrequency * (b-a)
+	//           = increment/2 * (b^2-a^2) + startFrequency * (b-a)
 	//
 	// assuming the frequency is always positive in the range [a,b]. Otherwise,
 	// the interval needs to be limited to the positive part.

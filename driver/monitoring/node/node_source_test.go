@@ -31,7 +31,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-// Unfortunatley, gomock can not (yet) create mocks for generic interfaces.
+// Unfortunately, gomock can not (yet) create mocks for generic interfaces.
 // So we need to write our own fake sensors for this test.
 
 var (

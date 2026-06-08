@@ -89,9 +89,9 @@ type Validator struct {
 }
 
 // Node is a configuration for a group of nodes with similar properties.
-// Each node has a name, a set of features (e.g. 'validator', 'archve'),
+// Each node has a name, a set of features (e.g. 'validator', 'archive'),
 // and a start and end time. Furthermore, nodes may be instantiated multiple
-// times to create larger, homogenious groups easier.
+// times to create larger, homogeneous groups easier.
 type Node struct {
 	Name      string
 	Failing   bool

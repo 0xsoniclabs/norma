@@ -83,7 +83,7 @@ func RegisterSource[S any, T any](metric Metric[S, T], factory func(*Monitor) So
 
 // InstallAllRegisteredSources installs one instance of every registered source
 // in the given monitor. The resulting error represents the union of all
-// errors that occured during the source creation and installation.
+// errors that occurred during the source creation and installation.
 func InstallAllRegisteredSources(monitor *Monitor) error {
 	var errs []error
 	for _, installer := range sourceInstallers {
