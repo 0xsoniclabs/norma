@@ -29,7 +29,7 @@ func TestRetryRpcReturnGracefully(t *testing.T) {
 	t.Parallel()
 
 	start := time.Now()
-	txs := make(chan *types.Transaction)
+	txs := make(chan transactionWithSource)
 	w := newWorker("wrong", txs)
 
 	time.Sleep(6 * time.Second)
@@ -58,7 +58,7 @@ func TestClosePool(t *testing.T) {
 	var tx types.Transaction
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
-		pool.SendTransaction(&tx)
+		pool.SendTransaction(&tx, "test")
 	}
 
 	wg.Wait()
@@ -80,13 +80,13 @@ func TestClosePool(t *testing.T) {
 }
 
 func TestCloseWorkerStartStop(t *testing.T) {
-	txs := make(chan *types.Transaction)
+	txs := make(chan transactionWithSource)
 	w := newWorker("wrong", txs)
 	w.close()
 }
 
 func TestCloseWorkerGroupStartStop(t *testing.T) {
-	txs := make(chan *types.Transaction)
+	txs := make(chan transactionWithSource)
 	wg := workerGroup{}
 	for i := 0; i < 150; i++ {
 		wg.add("wrong", txs)

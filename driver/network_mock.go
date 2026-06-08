@@ -169,15 +169,15 @@ func (mr *MockNetworkMockRecorder) RemoveNode(arg0 any) *gomock.Call {
 }
 
 // SendTransaction mocks base method.
-func (m *MockNetwork) SendTransaction(tx *types.Transaction) {
+func (m *MockNetwork) SendTransaction(tx *types.Transaction, source string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SendTransaction", tx)
+	m.ctrl.Call(m, "SendTransaction", tx, source)
 }
 
 // SendTransaction indicates an expected call of SendTransaction.
-func (mr *MockNetworkMockRecorder) SendTransaction(tx any) *gomock.Call {
+func (mr *MockNetworkMockRecorder) SendTransaction(tx, source any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTransaction", reflect.TypeOf((*MockNetwork)(nil).SendTransaction), tx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTransaction", reflect.TypeOf((*MockNetwork)(nil).SendTransaction), tx, source)
 }
 
 // Shutdown mocks base method.
