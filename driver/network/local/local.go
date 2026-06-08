@@ -198,6 +198,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 			NetworkConfig:  &n.config,
 			ValidatorId:    config.ValidatorId,
 			ExtraArguments: config.ExtraArguments,
+			NonRootUser:    config.NonRootUser,
 		})
 		if err != nil {
 			return nil, err
@@ -218,6 +219,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 		ValidatorId:    config.ValidatorId,
 		MountDataDir:   datadir,
 		ExtraArguments: config.ExtraArguments,
+		NonRootUser:    config.NonRootUser,
 	})
 }
 

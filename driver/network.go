@@ -122,6 +122,7 @@ type NodeConfig struct {
 	Image          string
 	DataVolume     *string
 	ExtraArguments string
+	NonRootUser    bool
 }
 
 type ApplicationConfig struct {

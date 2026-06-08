@@ -96,6 +96,8 @@ type OperaNodeConfig struct {
 	MountDataDir *string
 	// ExtraArguments are additional command line arguments to pass to the node.
 	ExtraArguments string
+	// NonRootUser indicates whether the node should run as a non-root user.
+	NonRootUser bool
 }
 
 // labelPattern restricts labels for nodes to non-empty alpha-numerical strings
@@ -146,7 +148,10 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 			"EXTRA_ARGUMENTS":   config.ExtraArguments,
 		}
 
-		const dataDir = "/datadir"
+		// in case the docker runs with a non-root user, the datadir needs
+		// to be in a location where the user has write permissions.
+		// chosen path is workdir of Dockerfile
+		const dataDir = "/sonic-client/datadir"
 		envs["STATE_DB_DATADIR"] = dataDir
 
 		// when configured, mount the datadir to the host
@@ -169,6 +174,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 			Environment:     envs,
 			Network:         dn,
 			DataDirBinding:  dataDirBinding,
+			NonRootUser:     config.NonRootUser,
 		})
 	})
 

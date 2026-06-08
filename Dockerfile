@@ -62,6 +62,8 @@ RUN --mount=type=cache,target=/root/.cache/go-build make genesistools
 #
 FROM debian:trixie
 
+WORKDIR /sonic-client
+
 RUN apt-get update && \
     apt-get install iproute2 iputils-ping -y
 
@@ -84,5 +86,7 @@ COPY scripts/run_sonic.sh ./run_sonic.sh
 RUN ./sonictool --version
 RUN ./sonicd version
 
+# in case this docker runs with a non-root user, we need to make the binaries and datadir writable
+RUN chmod 777 /sonic-client
 
 CMD ["./run_sonic.sh"]

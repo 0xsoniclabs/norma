@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail # fail if anything fails
 
-echo "Sonic binary checksum: $(sha256sum   /sonicd | cut -d ' ' -f 1 )"
+echo "Sonic binary checksum: $(sha256sum   ./sonicd | cut -d ' ' -f 1 )"
 
 # Get the local node's IP, waiting for the network interface to be ready.
 until external_ip=$(hostname -I | awk '{print $1}') && [[ -n "$external_ip" ]]; do
@@ -18,8 +18,7 @@ echo "genesis validator count=${VALIDATORS_COUNT}"
 datadir=$STATE_DB_DATADIR
 # Initialize datadir
 if [[ ! -d "${datadir}/chaindata" ]]; then
-  mkdir -p "${datadir}"
-  ./sonictool --datadir "${datadir}" genesis json --experimental /genesis.json
+  ./sonictool --datadir "${datadir}" genesis json --experimental ./genesis.json
 fi
 
 ##

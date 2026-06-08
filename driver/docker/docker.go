@@ -80,6 +80,7 @@ type ContainerConfig struct {
 	Entrypoint      []string // Entrypoint to run when starting the container. Optional.
 	Network         *Network // Docker network to join, nil to join bridge network
 	DataDirBinding  *string  // mount client datadir to this path on host
+	NonRootUser     bool
 }
 
 // NewClient creates a new client facilitating the creation of Docker
@@ -162,7 +163,8 @@ func (c *Client) Start(config *ContainerConfig) (*Container, error) {
 
 	init := true
 	stopTimeout := int(config.ShutdownTimeout.Seconds())
-	resp, err := c.cli.ContainerCreate(context.Background(), &container.Config{
+
+	containerConfig := container.Config{
 		Image:      config.ImageName,
 		Tty:        false,
 		Env:        envVars,
@@ -171,12 +173,20 @@ func (c *Client) Start(config *ContainerConfig) (*Container, error) {
 			objectsLabel: "true",
 		},
 		StopTimeout: &stopTimeout,
-	}, &container.HostConfig{
-		PortBindings: portMapping,
-		Init:         &init,
-		CapAdd:       []string{"NET_ADMIN"},
-		Binds:        binds,
-	}, nil, nil, "")
+	}
+	if config.NonRootUser {
+		containerConfig.User = fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid())
+	}
+
+	resp, err := c.cli.ContainerCreate(
+		context.Background(),
+		&containerConfig,
+		&container.HostConfig{
+			PortBindings: portMapping,
+			Init:         &init,
+			CapAdd:       []string{"NET_ADMIN"},
+			Binds:        binds,
+		}, nil, nil, "")
 	if err != nil {
 		return nil, err
 	}
