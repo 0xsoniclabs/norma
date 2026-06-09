@@ -29,7 +29,7 @@ func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera
 	validatorsCount := len(validatorStakes)
 	jsonGenesis := makefakegenesis.GenesisJson{
 		Rules:         *rules,
-		BlockZeroTime: time.Unix(100, 0), // genesis files in each container must have the same timestamp
+		BlockZeroTime: time.Unix(100, 0), // Genesis files must have the same timestamp across all nodes.
 	}
 
 	// Create infrastructure contracts.
@@ -72,7 +72,7 @@ func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera
 		},
 	}
 
-	// Create the validator account and provide tokens, pre-init a maximal limit of validators.
+	// Create validator accounts and distribute initial supply.
 	const maxValidators = 100
 	totalSupply := utils.ToFtm(1000_000_000)
 	validators := makefakegenesis.GetFakeValidators(idx.Validator(maxValidators))
@@ -85,9 +85,9 @@ func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera
 		})
 	}
 
-	// set genesis validators only for the configured number of validators
+	// Configure genesis validators only for the configured number of validators.
 	validators = validators[0:validatorsCount]
-	delegations := make([]drivercall.Delegation, 0)
+	delegations := make([]drivercall.Delegation, 0, validatorsCount)
 	for i, stake := range validatorStakes {
 		val := validators[i]
 		delegations = append(delegations, drivercall.Delegation{
@@ -103,7 +103,7 @@ func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera
 		})
 	}
 
-	// Create the genesis transactions.
+	// Create genesis transactions.
 	genesisTxs := makefakegenesis.GetGenesisTxs(0, validators, totalSupply, delegations, validators[0].Address)
 	for i, tx := range genesisTxs {
 		jsonGenesis.Txs = append(jsonGenesis.Txs, makefakegenesis.Transaction{

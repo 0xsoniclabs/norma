@@ -379,7 +379,7 @@ func scheduleNodeEvents(
 					// When generating ID for multiple instances, assume the
 					// sequence starting at the assigned id, e.g. node with
 					// instances = 3, client.validatorId = 10 will get 10, 11, 12.
-					var vid int
+					var validatorID *int
 					if nodeIsValidator {
 						id, err := registry.registerNewValidator()
 						if err != nil {
@@ -392,7 +392,7 @@ func scheduleNodeEvents(
 								return fmt.Errorf("validator ID mismatch: expected %d, got %d", want, got)
 							}
 						}
-						vid = id
+						validatorID = &id
 					}
 
 					newNode, err := net.CreateNode(&driver.NodeConfig{
@@ -400,7 +400,7 @@ func scheduleNodeEvents(
 						Failing:        node.Failing,
 						Image:          image,
 						Validator:      nodeIsValidator,
-						ValidatorId:    &vid,
+						ValidatorId:    validatorID,
 						Cheater:        nodeIsCheater,
 						DataVolume:     node.Client.DataVolume,
 						ExtraArguments: node.Client.ExtraArgs,
@@ -417,12 +417,17 @@ func scheduleNodeEvents(
 				Seconds(*node.Rejoin),
 				fmt.Sprintf("[%s] Creating rejoining node", name),
 				func() error {
+					var validatorID *int
+					if nodeIsValidator {
+						validatorID = node.Client.ValidatorId
+					}
+
 					newNode, err := net.CreateNode(&driver.NodeConfig{
 						Name:           name,
 						Failing:        node.Failing,
 						Image:          image,
 						Validator:      nodeIsValidator,
-						ValidatorId:    node.Client.ValidatorId,
+						ValidatorId:    validatorID,
 						Cheater:        nodeIsCheater,
 						DataVolume:     node.Client.DataVolume,
 						ExtraArguments: node.Client.ExtraArgs,
