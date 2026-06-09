@@ -69,7 +69,7 @@ func RegisterValidatorNode(backend ContractBackend) (int, error) {
 }
 
 func UnregisterValidatorNode(client rpc.Client, validatorId int) error {
-	slog.Info("Start unregistering validator node", "validator_id", validatorId)
+	slog.Info("start unregistering validator node", "validator_id", validatorId)
 
 	// get a representation of the deployed contract
 	sfc, err := sfc100.NewContract(sfc.ContractAddress, client)

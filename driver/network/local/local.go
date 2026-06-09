@@ -310,7 +310,7 @@ func (a *localApplication) Start() error {
 		defer a.done.Done()
 		err := a.controller.Run(ctx)
 		if err != nil {
-			slog.Error("Failed to run load app", "error", err)
+			slog.Error("failed to run load app", "error", err)
 		}
 	}()
 	return nil

@@ -98,8 +98,8 @@ func logState(monitor *monitoring.Monitor, nodes *activeNodes) {
 	gas := getGasUsed(monitor)
 	processingTimes := getBlockProcessingTimes(monitor, nodes)
 
-	slog.Info("State",
-		"Nodes", numNodes,
+	slog.Info("progress update",
+		"nodes", numNodes,
 		"epc/blk heights", blockStatuses,
 		"tx/s", txPers,
 		"txs", txs,

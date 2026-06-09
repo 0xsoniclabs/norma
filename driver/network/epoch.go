@@ -30,6 +30,7 @@ func AdvanceEpoch(client rpc.Client, epochIncrement int) error {
 	if err != nil {
 		return fmt.Errorf("failed to get current epoch: %w", err)
 	}
+	slog.Info("advancing epoch", "current", uint64(currentEpoch), "increment", epochIncrement)
 
 	originalRules := opera.FakeNetRules(opera.GetSonicUpgrades())
 
@@ -84,19 +85,19 @@ func logEpochSummary(client rpc.Client) {
 	// get a representation of the deployed contract
 	sfc, err := sfc100.NewContract(sfc.ContractAddress, client)
 	if err != nil {
-		slog.Error("Failed to get SFC contract representation", "error", err)
+		slog.Error("failed to get SFC contract representation", "error", err)
 		return
 	}
 
 	epoch, err := sfc.CurrentEpoch(nil)
 	if err != nil {
-		slog.Error("Failed to get current epoch", "error", err)
+		slog.Error("failed to get current epoch", "error", err)
 		return
 	}
 
 	validators, err := sfc.GetEpochValidatorIDs(nil, epoch)
 	if err != nil {
-		slog.Error("Failed to get epoch validator IDs", "epoch", epoch, "error", err)
+		slog.Error("failed to get epoch validator IDs", "epoch", epoch, "error", err)
 		return
 	}
 
@@ -105,7 +106,7 @@ func logEpochSummary(client rpc.Client) {
 		validatorIds = append(validatorIds, int(id.Int64()))
 	}
 
-	slog.Info("Epoch summary",
+	slog.Info("epoch summary",
 		"current_epoch", epoch,
 		"active_validators", validatorIds,
 	)
