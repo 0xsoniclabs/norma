@@ -35,7 +35,6 @@ func TestAdvanceEpoch_Success(t *testing.T) {
 	)
 
 	client.EXPECT().HeaderByNumber(gomock.Any(), gomock.Any()).Return(&header, nil)
-	client.EXPECT().SuggestGasTipCap(gomock.Any()).Return(&baseFee, nil)
 	client.EXPECT().PendingCodeAt(gomock.Any(), gomock.Any()).Return(bytecode, nil)
 	client.EXPECT().EstimateGas(gomock.Any(), gomock.Any()).Return(uint64(123), nil)
 	client.EXPECT().PendingNonceAt(gomock.Any(), gomock.Any()).Return(uint64(0), nil)

@@ -26,7 +26,6 @@ func TestApplyNetworkRules_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	backend := NewMockContractBackend(ctrl)
 	backend.EXPECT().HeaderByNumber(gomock.Any(), gomock.Any()).Return(&header, nil)
-	backend.EXPECT().SuggestGasTipCap(gomock.Any()).Return(&baseFee, nil)
 	backend.EXPECT().PendingCodeAt(gomock.Any(), gomock.Any()).Return(bytecode, nil)
 	backend.EXPECT().EstimateGas(gomock.Any(), gomock.Any()).Return(uint64(123), nil)
 	backend.EXPECT().PendingNonceAt(gomock.Any(), gomock.Any()).Return(uint64(0), nil)
