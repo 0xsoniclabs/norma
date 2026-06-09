@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"sync"
 	"time"
 
@@ -42,16 +43,29 @@ type AppController struct {
 	rpcClient   rpc.Client
 }
 
-func NewAppController(application app.Application, shaper shaper.Shaper, numUsers int, context app.AppContext, network driver.Network) (*AppController, error) {
+func NewAppController(
+	application app.Application,
+	shaper shaper.Shaper,
+	numUsers int,
+	context app.AppContext,
+	network driver.Network,
+) (*AppController, error) {
 	trigger := make(chan struct{}, 100)
 
+	start := time.Now()
+
 	// create users for this application
-	slog.Info("starting initialization of users", "num_users", numUsers)
+	slog.Info("starting App initialization",
+		"app", reflect.TypeOf(application).Elem().Name(),
+		"numUsers", numUsers)
 	users, err := application.CreateUsers(context, numUsers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create users for app; %v", err)
 	}
-	slog.Info("completed initialization of users", "num_users", numUsers)
+	slog.Info("completed App initialization",
+		"app", reflect.TypeOf(application).Elem().Name(),
+		"numUsers", numUsers,
+		"duration", time.Since(start))
 
 	return &AppController{
 		shaper:      shaper,

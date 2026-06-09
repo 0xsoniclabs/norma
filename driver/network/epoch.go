@@ -30,6 +30,7 @@ func AdvanceEpoch(client rpc.Client, epochIncrement int) error {
 	if err != nil {
 		return fmt.Errorf("failed to get current epoch: %w", err)
 	}
+	slog.Info("Advancing epoch", "current", uint64(currentEpoch), "increment", epochIncrement)
 
 	originalRules := opera.FakeNetRules(opera.GetSonicUpgrades())
 
