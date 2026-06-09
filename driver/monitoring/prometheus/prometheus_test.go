@@ -30,7 +30,6 @@ import (
 )
 
 func TestPrometheusCanBeRun(t *testing.T) {
-	t.Parallel()
 	net := createLocalNetwork(t)
 	prom := startPrometheus(t, net)
 
@@ -45,7 +44,6 @@ func TestPrometheusCanBeRun(t *testing.T) {
 }
 
 func TestPrometheusCanBeShutdown(t *testing.T) {
-	t.Parallel()
 	net := createLocalNetwork(t)
 	prom := startPrometheus(t, net)
 
@@ -62,7 +60,6 @@ func TestPrometheusCanBeShutdown(t *testing.T) {
 }
 
 func TestNodeCanBeAdded(t *testing.T) {
-	t.Parallel()
 	net := createLocalNetwork(t)
 	prom := startPrometheus(t, net)
 
