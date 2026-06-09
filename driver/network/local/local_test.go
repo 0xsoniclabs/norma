@@ -43,12 +43,10 @@ func TestLocalNetworkIsNetwork(t *testing.T) {
 }
 
 func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
-	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 	for _, N := range []int{1, 3} {
 		N := N
 		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
-			t.Parallel()
 			net, err := NewLocalNetwork(t.Context(), &config)
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
@@ -85,11 +83,9 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 }
 
 func TestLocalNetwork_CanEnforceNetworkLatency(t *testing.T) {
-	t.Parallel()
 	for _, rtt := range []time.Duration{0, 100 * time.Millisecond, 200 * time.Millisecond} {
 		rtt := rtt
 		t.Run(fmt.Sprintf("rtt=%v", rtt), func(t *testing.T) {
-			t.Parallel()
 			config := driver.NetworkConfig{
 				Validators:    driver.NewDefaultValidators(2),
 				RoundTripTime: rtt,
@@ -122,12 +118,10 @@ func TestLocalNetwork_CanEnforceNetworkLatency(t *testing.T) {
 }
 
 func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
-	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 	for _, N := range []int{1, 3} {
 		N := N
 		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
-			t.Parallel()
 
 			net, err := NewLocalNetwork(t.Context(), &config)
 			if err != nil {
@@ -169,7 +163,6 @@ func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
 }
 
 func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
-	t.Parallel()
 	N := 2
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 
@@ -206,7 +199,6 @@ func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 }
 
 func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
-	t.Parallel()
 	N := 3
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 
@@ -271,12 +263,10 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 }
 
 func TestLocalNetwork_CanRunWithMultipleValidators(t *testing.T) {
-	t.Parallel()
 	for _, N := range []int{1, 3} {
 		N := N
 		config := driver.NetworkConfig{Validators: driver.NewDefaultValidators(N)}
 		t.Run(fmt.Sprintf("num_validators=%d", N), func(t *testing.T) {
-			t.Parallel()
 			net, err := NewLocalNetwork(t.Context(), &config)
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
@@ -304,8 +294,6 @@ func TestLocalNetwork_CanRunWithMultipleValidators(t *testing.T) {
 }
 
 func TestLocalNetwork_CanRunWithVariousValidators(t *testing.T) {
-	t.Parallel()
-
 	var one = 1
 	var two = 2
 	var three = 3
@@ -336,7 +324,6 @@ func TestLocalNetwork_CanRunWithVariousValidators(t *testing.T) {
 }
 
 func TestLocalNetwork_NotifiesListenersOnNodeStartup(t *testing.T) {
-	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.NewDefaultValidators(2)}
 	ctrl := gomock.NewController(t)
 	listener := driver.NewMockNetworkListener(ctrl)
@@ -373,7 +360,6 @@ func TestLocalNetwork_NotifiesListenersOnNodeStartup(t *testing.T) {
 }
 
 func TestLocalNetwork_NotifiesListenersOnAppStartup(t *testing.T) {
-	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 	ctrl := gomock.NewController(t)
 	listener := driver.NewMockNetworkListener(ctrl)
@@ -398,7 +384,6 @@ func TestLocalNetwork_NotifiesListenersOnAppStartup(t *testing.T) {
 }
 
 func TestLocalNetwork_CanRemoveNode(t *testing.T) {
-	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 	for _, N := range []int{1, 3} {
 		N := N
@@ -461,11 +446,9 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 }
 
 func TestLocalNetwork_Num_Validators_Started(t *testing.T) {
-	t.Parallel()
 	for i := 1; i < 3; i++ {
 		i := i
 		t.Run(fmt.Sprintf("num_validators=%d", i), func(t *testing.T) {
-			t.Parallel()
 			config := driver.NetworkConfig{Validators: driver.NewDefaultValidators(i)}
 			net, err := NewLocalNetwork(t.Context(), &config)
 			if err != nil {
@@ -487,7 +470,6 @@ func TestLocalNetwork_Num_Validators_Started(t *testing.T) {
 // TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions checks if
 // docker can create client through images called "sonic" and "sonic:local"
 func TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions(t *testing.T) {
-	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 
 	net, err := NewLocalNetwork(t.Context(), &config)
@@ -529,7 +511,6 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions(t *testing.T
 // docker can create client through images called "sonic:<versions>"
 // The checksum of each version must be unique.
 func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T) {
-	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 
 	net, err := NewLocalNetwork(t.Context(), &config)
@@ -599,7 +580,6 @@ func getChecksum(net *LocalNetwork, image string) (checksum string, err error) {
 }
 
 func TestLocalNetworkApplyNetworkRules_Success(t *testing.T) {
-	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
@@ -648,7 +628,6 @@ func TestLocalNetworkApplyNetworkRules_Success(t *testing.T) {
 }
 
 func TestLocalNetworkAdvanceEpoch_Success(t *testing.T) {
-	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
@@ -688,7 +667,6 @@ func TestLocalNetworkAdvanceEpoch_Success(t *testing.T) {
 }
 
 func TestLocalNetwork_FailingFlagPropagated(t *testing.T) {
-	t.Parallel()
 	config := driver.NetworkConfig{Validators: []driver.Validator{
 		{Name: "validator", Failing: true, Instances: 1, ImageName: driver.DefaultClientDockerImageName}},
 	}
@@ -719,8 +697,6 @@ func TestLocalNetwork_FailingFlagPropagated(t *testing.T) {
 }
 
 func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
-	t.Parallel()
-
 	temp := t.TempDir()
 
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators, OutputDir: temp}
@@ -810,5 +786,4 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 			"expected at least one visited directory to contain %s, but visited %v",
 			temp, currVisitedDirs)
 	}
-
 }
