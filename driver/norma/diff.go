@@ -36,7 +36,7 @@ var diffCommand = cli.Command{
 func diff(ctx *cli.Context) (err error) {
 	args := ctx.Args()
 	if args.Len() < 1 {
-		return fmt.Errorf("requires at least one measurment file path as argument")
+		return fmt.Errorf("requires at least one measurement file path as argument")
 	}
 
 	// Merge input files into a temporary file.
@@ -64,7 +64,7 @@ func diff(ctx *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	result, err := report.MultiEvalReport.Render(file.Name(), currentDir)
+	result, err := report.MultiEvalReport.Render(file.Name(), currentDir, "")
 	if err != nil {
 		return err
 	}

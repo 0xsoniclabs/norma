@@ -35,7 +35,7 @@ var renderCommand = cli.Command{
 func render(ctx *cli.Context) error {
 	args := ctx.Args()
 	if args.Len() < 1 {
-		return fmt.Errorf("requires measurment file path as argument")
+		return fmt.Errorf("requires measurement file path as argument")
 	}
 
 	input := args.First()
@@ -43,7 +43,7 @@ func render(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := report.SingleEvalReport.Render(input, currentDir)
+	result, err := report.SingleEvalReport.Render(input, currentDir, "")
 	if err != nil {
 		return err
 	}

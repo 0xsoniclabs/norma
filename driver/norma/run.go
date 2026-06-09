@@ -234,7 +234,7 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 
 		if !skipReportRendering && ctx.Err() == nil {
 			fmt.Printf("Rendering summary report (may take a few minutes the first time if R packages need to be installed) ...\n")
-			if file, err := report.SingleEvalReport.Render(monitor.GetMeasurementFileName(), outputDir); err != nil {
+			if file, err := report.SingleEvalReport.Render(monitor.GetMeasurementFileName(), outputDir, filepath.Base(path)); err != nil {
 				fmt.Printf("Report generation failed:\n%v\n", err)
 			} else {
 				fmt.Printf("Summary report was exported to file://%s/%s\n", outputDir, file)
