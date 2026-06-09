@@ -18,7 +18,7 @@ package rpc
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -80,11 +80,11 @@ func (p *RpcWorkerPool) Close() error {
 		return nil
 	}
 	p.cancel()
-	log.Printf("waiting for worker pool to close")
+	slog.Info("waiting for worker pool to close")
 	for _, wg := range p.workers {
 		wg.close()
 	}
-	log.Printf("worker pool has closed")
+	slog.Info("worker pool has closed")
 	close(p.txs)
 	return nil
 }
@@ -140,7 +140,7 @@ func newWorker(rpcUrl driver.URL, txs chan *types.Transaction) *worker {
 
 	go func() {
 		if err := w.runRpcSenderLoop(); err != nil {
-			log.Printf("failed to open RPC connection; %v", err)
+			slog.Error("failed to open RPC connection", "error", err)
 			return
 		}
 	}()
@@ -172,7 +172,7 @@ func (p *worker) runRpcSenderLoop() error {
 		case tx := <-p.txs:
 			err := rpcClient.SendTransaction(context.Background(), tx)
 			if err != nil {
-				log.Printf("failed to send tx; %v", err)
+				slog.Error("failed to send tx", "error", err)
 			}
 		case <-p.ctx.Done():
 			return nil

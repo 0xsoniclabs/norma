@@ -18,7 +18,7 @@ package nodemon
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring"
@@ -82,7 +82,7 @@ func (s *TransactionsThroughputSource) OnBlock(node monitoring.Node, block monit
 		txs := float64(block.Txs) * 1e9 / float64(timeDiff)
 		series := s.GetOrAddSubject(node)
 		if err := series.Append(monitoring.BlockNumber(block.Height), float32(txs)); err != nil {
-			log.Printf("error to add to the series: %s", err)
+			slog.Error("error to add to the series", "error", err)
 		}
 	}
 }

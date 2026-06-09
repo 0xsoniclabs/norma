@@ -19,7 +19,7 @@ package monitoring
 import (
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"sync"
 
@@ -117,7 +117,9 @@ func (n *NodeLogDispatcher) AfterNodeCreation(node driver.Node) {
 	// Start a goroutine parsing the log and dispatching block information.
 	logStream, err := node.StreamLog()
 	if err != nil {
-		log.Printf("failed to obtain logs of node, will not be able to track blocks: %v", err)
+		slog.Error(
+			"failed to obtain logs of node, will not be able to track blocks",
+			"error", err)
 		return // do not start dispatch on error
 	}
 	n.wg.Add(1)
@@ -153,27 +155,34 @@ func (n *NodeLogDispatcher) runLogCollector(node driver.Node) {
 	label := node.GetLabel()
 	in, err := node.StreamLog()
 	if err != nil {
-		log.Printf("failed to obtain logs of node %v, log is not captured: %v", label, err)
+		slog.Error("failed to obtain logs of node, log is not captured",
+			"node", label,
+			"error", err)
 		return
 	}
 	defer func() {
 		if err := in.Close(); err != nil {
-			log.Printf("failed to close log stream for node %v: %v", label, err)
+			slog.Error("failed to close log stream for node",
+				"node", label,
+				"error", err)
 		}
 	}()
 	file := n.logDir + "/" + label + ".log"
 	out, err := os.Create(file)
 	if err != nil {
-		log.Printf("failed to create log file %v for node %v, log is not captured: %v", file, label, err)
+		slog.Error("failed to create log file for node, log is not captured",
+			"file", file,
+			"node", label,
+			"error", err)
 		return
 	}
 	defer func() {
 		if err := out.Close(); err != nil {
-			log.Printf("failed to close log file for node %v: %v", label, err)
+			slog.Error("failed to close log file for node", "node", label, "error", err)
 		}
 	}()
 	_, err = io.Copy(out, in)
 	if err != nil {
-		log.Printf("failed to capture log for node %v: %v", label, err)
+		slog.Error("failed to capture log for node", "node", label, "error", err)
 	}
 }

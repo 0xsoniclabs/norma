@@ -17,7 +17,7 @@
 package nodemon
 
 import (
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
@@ -73,7 +73,10 @@ func (s *periodicNodeDataSource[T]) AfterNodeCreation(node driver.Node) {
 	label := node.GetLabel()
 	sensor, err := s.factory.CreateSensor(node)
 	if err != nil {
-		log.Printf("failed to create sensor for metric %v / node %s: %v", s.GetMetric().Name, label, err)
+		slog.Error("failed to create sensor for metric",
+			"metric", s.GetMetric().Name,
+			"node", label,
+			"error", err)
 	}
 	s.AddSubject(mon.Node(label), sensor)
 }

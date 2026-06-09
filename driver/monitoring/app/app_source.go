@@ -17,7 +17,7 @@
 package appmon
 
 import (
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
@@ -81,7 +81,10 @@ func (s *periodicAppDataSource[T]) AfterApplicationCreation(app driver.Applicati
 	label := app.Config().Name
 	sensor, err := s.factory.CreateSensor(app)
 	if err != nil {
-		log.Printf("failed to create sensor for metric %v / app %s: %v", s.GetMetric().Name, label, err)
+		slog.Error("failed to create sensor for metric",
+			"metric", s.GetMetric().Name,
+			"app", label,
+			"error", err)
 		return
 	}
 	s.AddSubject(mon.App(label), sensor)

@@ -19,7 +19,6 @@ package docker
 import (
 	"bufio"
 	"io"
-	"log"
 	"os"
 	"strings"
 	"testing"
@@ -112,7 +111,7 @@ func TestContainer_SaveLogTo(t *testing.T) {
 
 	files, err := os.ReadDir(tmp)
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	var numOfFiles int

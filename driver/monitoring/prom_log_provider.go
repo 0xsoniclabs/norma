@@ -18,7 +18,7 @@ package monitoring
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -170,12 +170,12 @@ func (n *PrometheusLogDispatcher) Shutdown() {
 	if n.stopped {
 		return
 	}
-	log.Printf("closing prometheus log parser")
+	slog.Info("closing prometheus log parser")
 	n.stopped = true
 	n.ticker.Stop()
 	close(n.done)
 	n.wg.Wait()
-	log.Printf("prometheus log parser closed")
+	slog.Info("prometheus log parser closed")
 }
 
 func (n *PrometheusLogDispatcher) RegisterLogListener(key PrometheusLogKey, listener TimeLogListener) {
@@ -283,7 +283,7 @@ func (n *PrometheusLogDispatcher) startNodeLogsDispatch(nodeId Node, url *driver
 				n.nodesLock.Lock()
 				// report only errors occurred before shutdown
 				if _, exists := n.nodes[node]; exists {
-					log.Printf("monitoring: failed to parse log: %s", err)
+					slog.Error("monitoring: failed to parse log", "error", err)
 				}
 				n.nodesLock.Unlock()
 			}

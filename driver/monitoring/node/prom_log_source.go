@@ -18,7 +18,7 @@ package nodemon
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
@@ -83,7 +83,7 @@ func NewPromLogSource(monitor *monitoring.Monitor, prometheusMetric monitoring.P
 func (p *PromLogSource) OnLog(node monitoring.Node, time monitoring.Time, value float64) {
 	series := p.GetOrAddSubject(node)
 	if err := series.Append(time, value); err != nil {
-		log.Printf("cannot add to series: %s", err)
+		slog.Error("cannot add to series", "error", err)
 	}
 }
 

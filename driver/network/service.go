@@ -19,7 +19,7 @@ package network
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"strconv"
 	"strings"
@@ -78,7 +78,7 @@ func GetFreePorts(num int) (ports []Port, err error) {
 		for i := 0; !found && i < 10; i++ {
 			listener, err := net.Listen("tcp", "")
 			if err != nil {
-				log.Printf("failed to create a new listening port")
+				slog.Error("failed to create a new listening port", "error", err)
 				continue
 			}
 			// make sure to close the listener in case of an error
@@ -87,21 +87,21 @@ func GetFreePorts(num int) (ports []Port, err error) {
 			port := listener.Addr().String()
 			columnPos := strings.LastIndex(port, ":")
 			if columnPos < 0 {
-				log.Printf("invalid port format: %s", port)
+				slog.Error("invalid port format", "port", port)
 				continue
 			}
 			port = port[columnPos+1:]
 
 			res, err := strconv.ParseUint(port, 10, 16)
 			if err != nil {
-				log.Printf("invalid port format: %s, err: %v", port, err)
+				slog.Error("invalid port format", "port", port, "error", err)
 				continue
 			}
 
 			// close the listener, if it fails, we will not be able to use the port,
 			// because it is bound
 			if err := listener.Close(); err != nil {
-				log.Printf("failed to close listener: %v", err)
+				slog.Error("failed to close listener", "error", err)
 				continue
 			}
 

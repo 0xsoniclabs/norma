@@ -19,7 +19,7 @@ package prometheusmon
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -90,7 +90,7 @@ func Start(net driver.Network, dn *docker.Network) (*Prometheus, error) {
 		}
 		return err
 	}); err == nil {
-		log.Printf("started Prometheus on %s", prometheus.GetUrl())
+		slog.Info("started Prometheus", "url", prometheus.GetUrl())
 
 		// listen for new Nodes
 		net.RegisterListener(prometheus)
@@ -136,7 +136,9 @@ func (p *Prometheus) GetUrl() string {
 
 func (p *Prometheus) AfterNodeCreation(node driver.Node) {
 	if err := p.AddNode(node); err != nil {
-		log.Printf("failed to add node %s to Prometheus: %s", node.Hostname(), err)
+		slog.Error("failed to add node to Prometheus",
+			"node", node.Hostname(),
+			"error", err)
 	}
 }
 
