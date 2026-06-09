@@ -166,5 +166,11 @@ func getLastValAsString[K constraints.Ordered, T any](exists bool, series monito
 	if point == nil {
 		return "N/A"
 	}
+	// if the value is a duration less than a millisecond, format it in
+	// milliseconds with 3 decimal places, this is because printing mu for
+	// micro seconds messes with the logger.
+	if d, ok := any(point.Value).(time.Duration); ok && d < time.Millisecond {
+		return fmt.Sprintf("%.3fms", float64(d)/float64(time.Millisecond))
+	}
 	return fmt.Sprintf("%v", point.Value)
 }
