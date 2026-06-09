@@ -80,6 +80,8 @@ type ContainerConfig struct {
 	Entrypoint      []string // Entrypoint to run when starting the container. Optional.
 	Network         *Network // Docker network to join, nil to join bridge network
 	DataDirBinding  *string  // mount client datadir to this path on host
+	GenesisFileBind *string  // mount genesis file on host to /genesis.json:ro in container
+	KeystoreBinding *string  // mount keystore dir on host to /datadir/keystore:ro in container
 }
 
 // NewClient creates a new client facilitating the creation of Docker
@@ -158,6 +160,12 @@ func (c *Client) Start(config *ContainerConfig) (*Container, error) {
 	var binds []string
 	if config.DataDirBinding != nil {
 		binds = append(binds, *config.DataDirBinding)
+	}
+	if config.GenesisFileBind != nil {
+		binds = append(binds, *config.GenesisFileBind)
+	}
+	if config.KeystoreBinding != nil {
+		binds = append(binds, *config.KeystoreBinding)
 	}
 
 	init := true

@@ -17,31 +17,19 @@ import (
 // NetworkRules defines a set of network rules as a key value mapping.
 type NetworkRules map[string]string
 
-// ruleUpdater is a function that updates a rule in the network rules configuration using the given value.
 type ruleUpdater func(value string, rules *opera.Rules) error
-
-// registry is a map of network rules configuration functions.
 type registry map[string]ruleUpdater
 
-// supportedNetworkRulesConfigurations is a map of currently configured network rules.
 var supportedNetworkRulesConfigurations = make(registry)
 
-// init registers all currently supported network rules.
 func init() {
-	// Blocks
 	register("MAX_BLOCK_GAS", maxBlockGas)
 	register("MAX_EMPTY_BLOCK_SKIP_PERIOD", maxEmptyBlockSkipPeriod)
-
-	// Epochs
 	register("MAX_EPOCH_GAS", maxEpochGas)
 	register("MAX_EPOCH_DURATION", maxEpochDuration)
-
-	// Emitter
 	register("EMITTER_INTERVAL", emitterInterval)
 	register("EMITTER_STALL_THRESHOLD", emitterStallThreshold)
 	register("EMITTER_STALLED_INTERVAL", emitterStallInterval)
-
-	// Upgrades
 	register("UPGRADES_BERLIN", upgradesBerlin)
 	register("UPGRADES_LONDON", upgradesLondon)
 	register("UPGRADES_LLR", upgradesLlr)
@@ -51,8 +39,6 @@ func init() {
 	register("UPGRADES_SINGLE_PROPOSER", upgradesSingleProposer)
 	register("UPGRADES_GAS_SUBSIDIES", upgradesGasSubsidies)
 	register("UPGRADES_TRANSACTION_BUNDLES", upgradesTransactionBundles)
-
-	// Economy
 	register("MIN_GAS_PRICE", minGasPrice)
 	register("MIN_BASE_FEE", minBaseFee)
 	register("BLOCK_MISSED_SLACK", blockMissedSlack)
@@ -64,45 +50,35 @@ func init() {
 	register("BLOCK_VOTE_GAS", blockVoteGas)
 	register("EPOCH_VOTE_GAS", epochVoteGas)
 	register("MISBEHAVIOUR_PROOF_GAS", misbehaviourProofGas)
-
 	register("SHORT_ALLOC_PER_SEC", shortAllocPerSec)
 	register("SHORT_MAX_ALLOC_PERIOD", shortMaxAllocPeriod)
 	register("SHORT_STARTUP_ALLOC_PERIOD", shortStartupAllocPeriod)
 	register("SHORT_MIN_STARTUP_GAS", shortMinStartupGas)
-
 	register("LONG_ALLOC_PER_SEC", longAllocPerSec)
 	register("LONG_MAX_ALLOC_PERIOD", longMaxAllocPeriod)
 	register("LONG_STARTUP_ALLOC_PERIOD", longStartupAllocPeriod)
 	register("LONG_MIN_STARTUP_GAS", longMinStartupGas)
-
-	// DAG rules
 	register("MAX_PARENTS", maxParents)
 	register("MAX_FREE_PARENTS", maxFreeParents)
 	register("MAX_EXTRA_DATA", maxExtraData)
 }
 
-// IsSupportedNetworkRule returns true if the given key is a supported network rule configuration.
 func IsSupportedNetworkRule(key string) bool {
 	_, ok := supportedNetworkRulesConfigurations[key]
 	return ok
 }
 
-// ConfigureNetworkRulesEnv configures the network rules based on the environment variables
-// applying all registered rules.
 func ConfigureNetworkRulesEnv(rules *opera.Rules) error {
 	var errs []error
 	for k, v := range supportedNetworkRulesConfigurations {
 		property := os.Getenv(k)
-		// apply only non-empty values
 		if property != "" {
 			errs = append(errs, v(property, rules))
 		}
 	}
-
 	return errors.Join(errs...)
 }
 
-// ConfigureNetworkRulesMap configures the network rules based on the given map of updates.
 func ConfigureNetworkRulesMap(rules *opera.Rules, updates map[string]string) error {
 	var errs []error
 	for k, v := range supportedNetworkRulesConfigurations {
@@ -111,21 +87,15 @@ func ConfigureNetworkRulesMap(rules *opera.Rules, updates map[string]string) err
 			errs = append(errs, v(property, rules))
 		}
 	}
-
 	return errors.Join(errs...)
 }
 
-// GenerateJsonNetworkRulesUpdates generates a JSON string with the differences between the original network rules
-// and the updated network rules configuration, provided on the input.
 func GenerateJsonNetworkRulesUpdates(rules opera.Rules, updates NetworkRules) (string, error) {
 	original := rules.String()
-
-	// apply the rules configuration
 	if err := ConfigureNetworkRulesMap(&rules, updates); err != nil {
 		return "", fmt.Errorf("failed to configure network rules: %w", err)
 	}
 
-	// Parse JSON into maps
 	var objA, objB map[string]any
 	if err := json.Unmarshal([]byte(original), &objA); err != nil {
 		return "", err
@@ -139,41 +109,28 @@ func GenerateJsonNetworkRulesUpdates(rules opera.Rules, updates NetworkRules) (s
 	if err != nil {
 		return "", err
 	}
-
 	return string(b), nil
 }
 
-// diffMapsSameStructure identifies and returns the differences between two maps that share the same structure.
-// This simplified diff function compares values only for matching keys in both maps.
-// It assumes that the two maps do not contain unique or additional keys.
-// The result is a map consisting of only the key-value pairs where the values differ between the two input maps.
-// Nested maps are fully supported and will be compared recursively.
 func diffMapsSameStructure(map1, map2 map[string]any) map[string]any {
 	result := make(map[string]any)
-
-	// Iterate over keys in map1
 	for key, value1 := range map1 {
 		if value2, exists := map2[key]; exists {
-			// Check if both values are maps
 			nestedMap1, ok1 := value1.(map[string]any)
 			nestedMap2, ok2 := value2.(map[string]any)
 			if ok1 && ok2 {
-				// Recurse on nested maps
 				nestedDiff := diffMapsSameStructure(nestedMap1, nestedMap2)
-				if len(nestedDiff) > 0 { // Add only non-empty differences
+				if len(nestedDiff) > 0 {
 					result[key] = nestedDiff
 				}
 			} else if value1 != value2 {
-				// Add differing values
 				result[key] = value2
 			}
 		}
 	}
-
 	return result
 }
 
-// register registers a new network rule configuration.
 func register(key string, apply ruleUpdater) {
 	supportedNetworkRulesConfigurations[key] = func(value string, rules *opera.Rules) error {
 		return apply(value, rules)
@@ -196,7 +153,7 @@ var maxEmptyBlockSkipPeriod = func(value string, rules *opera.Rules) error {
 		return err
 	}
 	rules.Blocks.MaxEmptyBlockSkipPeriod = inter.Timestamp(duration)
-	return err
+	return nil
 }
 
 var maxEpochDuration = func(value string, rules *opera.Rules) error {
@@ -205,7 +162,7 @@ var maxEpochDuration = func(value string, rules *opera.Rules) error {
 		return err
 	}
 	rules.Epochs.MaxEpochDuration = inter.Timestamp(duration)
-	return err
+	return nil
 }
 
 var emitterInterval = func(value string, rules *opera.Rules) error {
@@ -214,7 +171,7 @@ var emitterInterval = func(value string, rules *opera.Rules) error {
 		return err
 	}
 	rules.Emitter.Interval = inter.Timestamp(duration)
-	return err
+	return nil
 }
 
 var emitterStallThreshold = func(value string, rules *opera.Rules) error {
@@ -223,7 +180,7 @@ var emitterStallThreshold = func(value string, rules *opera.Rules) error {
 		return err
 	}
 	rules.Emitter.StallThreshold = inter.Timestamp(duration)
-	return err
+	return nil
 }
 
 var emitterStallInterval = func(value string, rules *opera.Rules) error {
@@ -232,7 +189,7 @@ var emitterStallInterval = func(value string, rules *opera.Rules) error {
 		return err
 	}
 	rules.Emitter.StalledInterval = inter.Timestamp(duration)
-	return err
+	return nil
 }
 
 var upgradesBerlin = func(value string, rules *opera.Rules) error {
@@ -282,24 +239,22 @@ var upgradesTransactionBundles = func(value string, rules *opera.Rules) error {
 
 var minGasPrice = func(value string, rules *opera.Rules) error {
 	var ok bool
-	var err error
 	number := new(big.Int)
 	rules.Economy.MinGasPrice, ok = number.SetString(value, 10)
 	if !ok {
-		err = fmt.Errorf("cannot parse %s as a number", value)
+		return fmt.Errorf("cannot parse %s as a number", value)
 	}
-	return err
+	return nil
 }
 
 var minBaseFee = func(value string, rules *opera.Rules) error {
 	var ok bool
-	var err error
 	number := new(big.Int)
 	rules.Economy.MinBaseFee, ok = number.SetString(value, 10)
 	if !ok {
-		err = fmt.Errorf("cannot parse %s as a number", value)
+		return fmt.Errorf("cannot parse %s as a number", value)
 	}
-	return err
+	return nil
 }
 
 var blockMissedSlack = func(value string, rules *opera.Rules) error {

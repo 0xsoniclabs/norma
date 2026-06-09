@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/0xsoniclabs/norma/genesistools/genesis"
+	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/0xsoniclabs/sonic/gossip/contract/driverauth100"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/mock/gomock"

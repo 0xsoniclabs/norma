@@ -22,20 +22,22 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 
-	"github.com/0xsoniclabs/norma/driver/network"
-	"github.com/0xsoniclabs/norma/genesistools/genesis"
-
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
+	"github.com/0xsoniclabs/norma/driver/network"
 	"github.com/0xsoniclabs/norma/driver/network/rpc"
 	"github.com/0xsoniclabs/norma/driver/node"
 	rpcdriver "github.com/0xsoniclabs/norma/driver/rpc"
+	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/0xsoniclabs/norma/load/app"
 	"github.com/0xsoniclabs/norma/load/controller"
 	"github.com/0xsoniclabs/norma/load/shaper"
+	"github.com/0xsoniclabs/sonic/opera"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -73,6 +75,9 @@ type LocalNetwork struct {
 
 	// a context for app management operations on the network
 	appContext app.AppContext
+
+	genesisTmpDir   string
+	genesisJsonPath string
 }
 
 func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalNetwork, error) {
@@ -104,6 +109,10 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 		rpcWorkerPool:  rpc.NewRpcWorkerPool(),
 	}
 
+	if err := net.prepareGenesis(); err != nil {
+		return nil, errors.Join(fmt.Errorf("failed to prepare genesis: %w", err), net.Shutdown())
+	}
+
 	// Let the RPC pool to start RPC workers when a node start.
 	net.RegisterListener(net.rpcWorkerPool)
 
@@ -120,12 +129,13 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 				defer wg.Done()
 				validatorId := idx + 1
 				nodeConfig := node.OperaNodeConfig{
-					ValidatorId:    &validatorId,
-					Failing:        validator.Failing,
-					Image:          image,
-					NetworkConfig:  config,
-					Label:          label,
-					ExtraArguments: validator.ExtraArguments,
+					ValidatorId:     &validatorId,
+					Failing:         validator.Failing,
+					Image:           image,
+					NetworkConfig:   config,
+					Label:           label,
+					GenesisJsonPath: &net.genesisJsonPath,
+					ExtraArguments:  validator.ExtraArguments,
 				}
 				_, errs[idx] = net.createNode(ctx, &nodeConfig)
 			}(idx)
@@ -211,14 +221,51 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 	}
 
 	return n.createNode(context.Background(), &node.OperaNodeConfig{
-		Label:          config.Name,
-		Failing:        config.Failing,
-		Image:          config.Image,
-		NetworkConfig:  &n.config,
-		ValidatorId:    config.ValidatorId,
-		MountDataDir:   datadir,
-		ExtraArguments: config.ExtraArguments,
+		Label:           config.Name,
+		Failing:         config.Failing,
+		Image:           config.Image,
+		NetworkConfig:   &n.config,
+		ValidatorId:     config.ValidatorId,
+		GenesisJsonPath: &n.genesisJsonPath,
+		MountDataDir:    datadir,
+		ExtraArguments:  config.ExtraArguments,
 	})
+}
+
+func (n *LocalNetwork) prepareGenesis() error {
+	tmpDir, err := os.MkdirTemp("", "norma-genesis-*")
+	if err != nil {
+		return fmt.Errorf("failed to create genesis temp dir: %w", err)
+	}
+
+	rules := opera.FakeNetRules(opera.GetSonicUpgrades())
+	if err := genesis.ConfigureNetworkRulesMap(&rules, n.config.NetworkRules); err != nil {
+		return errors.Join(fmt.Errorf("failed to apply network rules to genesis: %w", err), os.RemoveAll(tmpDir))
+	}
+
+	genesisPath := filepath.Join(tmpDir, "genesis.json")
+	if err := genesis.GenerateJsonGenesis(genesisPath, getValidatorStakes(n.config.Validators), &rules); err != nil {
+		return errors.Join(fmt.Errorf("failed to generate genesis file: %w", err), os.RemoveAll(tmpDir))
+	}
+
+	n.genesisTmpDir = tmpDir
+	n.genesisJsonPath = genesisPath
+	return nil
+}
+
+func getValidatorStakes(validators driver.Validators) []uint64 {
+	stakes := make([]uint64, 0, validators.GetNumValidators())
+	for _, val := range validators {
+		instances := max(val.Instances, 1)
+		for range instances {
+			if val.Stake == 0 {
+				stakes = append(stakes, 5_000_000)
+				continue
+			}
+			stakes = append(stakes, val.Stake)
+		}
+	}
+	return stakes
 }
 
 func (n *LocalNetwork) RemoveNode(node driver.Node) error {
@@ -452,6 +499,11 @@ func (n *LocalNetwork) Shutdown() error {
 	}
 
 	errs = append(errs, n.rpcWorkerPool.Close())
+	if n.genesisTmpDir != "" {
+		errs = append(errs, os.RemoveAll(n.genesisTmpDir))
+		n.genesisTmpDir = ""
+		n.genesisJsonPath = ""
+	}
 
 	return errors.Join(errs...)
 }
