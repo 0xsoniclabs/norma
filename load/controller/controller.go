@@ -46,12 +46,12 @@ func NewAppController(application app.Application, shaper shaper.Shaper, numUser
 	trigger := make(chan struct{}, 100)
 
 	// create users for this application
-	slog.Info("starting initialization of users", "numUsers", numUsers)
+	slog.Info("starting initialization of users", "num_users", numUsers)
 	users, err := application.CreateUsers(context, numUsers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create users for app; %v", err)
 	}
-	slog.Info("completed initialization of users", "numUsers", numUsers)
+	slog.Info("completed initialization of users", "num_users", numUsers)
 
 	return &AppController{
 		shaper:      shaper,

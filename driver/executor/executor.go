@@ -226,7 +226,7 @@ func (q *eventQueue) addAll(events []event) {
 func (q *eventQueue) getNext() event {
 	res, err := q.queue.Pop()
 	if err != nil {
-		slog.Warn("event queue error encountered", "warning", err)
+		slog.Warn("event queue error encountered", "error", err)
 		return nil
 	}
 	return res.(event)
