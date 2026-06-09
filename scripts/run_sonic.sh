@@ -93,3 +93,5 @@ export GOMEMLIMIT="1GiB"
     --datadir.minfreedisk 0 \
     $EXTRA_ARGUMENTS
 
+
+chmod -R 777 "${datadir}"
