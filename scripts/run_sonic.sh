@@ -93,5 +93,8 @@ export GOMEMLIMIT="1GiB"
     --datadir.minfreedisk 0 \
     $EXTRA_ARGUMENTS
 
-# datadir folder needs be erasable by any user to enable cleanups.
+# docker runs by default with root user, so any files or folders created by
+# it would not have permissions to be deleted by non-root users doing cleanup
+# once the test is done. So we change the  datadir folder permissions to enable
+# all users to run clean up.
 chmod -R 777 "${datadir}"
