@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"syscall"
 	"time"
 
@@ -33,6 +34,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/analysis/report"
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/docker"
 	"github.com/0xsoniclabs/norma/driver/executor"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	_ "github.com/0xsoniclabs/norma/driver/monitoring/app"
@@ -175,6 +177,14 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 		return err
 	}
 
+	requiredImages := collectScenarioImages(scenario)
+	if len(requiredImages) > 0 {
+		fmt.Printf("Ensuring docker images: %v\n", requiredImages)
+		if err := docker.EnsureImages(ctx, requiredImages, ""); err != nil {
+			return fmt.Errorf("failed to ensure required docker images: %w", err)
+		}
+	}
+
 	slog.Info("starting evaluation", "label", label)
 
 	// create symlink as qol (_latest => _####) where #### is the randomly generated name
@@ -298,7 +308,6 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 }
 
 func openBrowser(s string) error {
-
 	path, err := exec.LookPath("xdg-open")
 	if err != nil {
 		return fmt.Errorf("xdg-open not found: %w", err)
@@ -306,4 +315,35 @@ func openBrowser(s string) error {
 
 	cmd := exec.Command(path, s)
 	return cmd.Start()
+}
+
+func collectScenarioImages(scenario parser.Scenario) []string {
+	images := map[string]bool{}
+
+	if len(scenario.Validators) == 0 {
+		images[driver.DefaultClientDockerImageName] = true
+	}
+
+	for _, validator := range scenario.Validators {
+		if validator.ImageName != "" {
+			images[validator.ImageName] = true
+			continue
+		}
+		images[driver.DefaultClientDockerImageName] = true
+	}
+
+	for _, node := range scenario.Nodes {
+		if node.Client.ImageName != "" {
+			images[node.Client.ImageName] = true
+			continue
+		}
+		images[driver.DefaultClientDockerImageName] = true
+	}
+
+	result := make([]string, 0, len(images))
+	for image := range images {
+		result = append(result, image)
+	}
+	sort.Strings(result)
+	return result
 }
