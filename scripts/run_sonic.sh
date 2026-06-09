@@ -93,5 +93,5 @@ export GOMEMLIMIT="1GiB"
     --datadir.minfreedisk 0 \
     $EXTRA_ARGUMENTS
 
-
+# datadir folder needs be erasable by any user to enable cleanups.
 chmod -R 777 "${datadir}"
