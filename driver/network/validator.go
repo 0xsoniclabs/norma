@@ -34,6 +34,7 @@ func RegisterValidatorNode(backend ContractBackend) (int, error) {
 
 	privateKeyECDSA := evmcore.FakeKey(uint32(newValId))
 	txOpts, err := bind.NewKeyedTransactorWithChainID(privateKeyECDSA, big.NewInt(int64(opera.FakeNetRules(opera.GetSonicUpgrades()).NetworkID)))
+	txOpts.GasTipCap = big.NewInt(100) // tip shall facilitate emission of the transaction, bypassing other pooled txs
 	if err != nil {
 		return 0, fmt.Errorf("failed to create txOpts; %v", err)
 	}
@@ -78,6 +79,7 @@ func UnregisterValidatorNode(client rpc.Client, validatorId int) error {
 
 	key := evmcore.FakeKey(uint32(validatorId))
 	txOpts, err := bind.NewKeyedTransactorWithChainID(key, big.NewInt(int64(opera.FakeNetRules(opera.GetSonicUpgrades()).NetworkID)))
+	txOpts.GasTipCap = big.NewInt(100) // tip shall facilitate emission of the transaction, bypassing other pooled txs
 	if err != nil {
 		return fmt.Errorf("failed to create txOpts; %v", err)
 	}

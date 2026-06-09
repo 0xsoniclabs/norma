@@ -36,6 +36,7 @@ func AdvanceEpoch(client rpc.Client, epochIncrement int) error {
 	// Use Fake ID for the network
 	// Driver owner is the first validator from the list i.e., index 1 (defined in genesis export in genesis.GenerateJsonGenesis)
 	txOpts, err := bind.NewKeyedTransactorWithChainID(evmcore.FakeKey(1), big.NewInt(int64(originalRules.NetworkID)))
+	txOpts.GasTipCap = big.NewInt(100) // tip shall facilitate emission of the transaction, bypassing other pooled txs
 	if err != nil {
 		return fmt.Errorf("failed to create txOpts; %v", err)
 	}

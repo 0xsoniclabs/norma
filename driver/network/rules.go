@@ -2,6 +2,8 @@ package network
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/0xsoniclabs/norma/genesistools/genesis"
 	"github.com/0xsoniclabs/sonic/evmcore"
 	"github.com/0xsoniclabs/sonic/gossip/contract/driverauth100"
@@ -9,7 +11,6 @@ import (
 	"github.com/0xsoniclabs/sonic/opera/contracts/driverauth"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/core/types"
-	"math/big"
 )
 
 // ApplyNetworkRules updates the network rules on the network.
@@ -29,6 +30,7 @@ func ApplyNetworkRules(backend ContractBackend, rules genesis.NetworkRules) erro
 	// Use Fake ID for the network
 	// Driver owner is the first validator from the list i.e., index 1 (defined in genesis export in genesis.GenerateJsonGenesis)
 	txOpts, err := bind.NewKeyedTransactorWithChainID(evmcore.FakeKey(1), big.NewInt(int64(originalRules.NetworkID)))
+	txOpts.GasTipCap = big.NewInt(100) // tip shall facilitate emission of the transaction, bypassing other pooled txs
 	if err != nil {
 		return fmt.Errorf("failed to create txOpts; %v", err)
 	}

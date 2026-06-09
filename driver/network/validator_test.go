@@ -2,12 +2,13 @@ package network
 
 import (
 	"fmt"
+	"math/big"
+	"testing"
+
 	"github.com/0xsoniclabs/sonic/gossip/contract/sfc100"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/mock/gomock"
-	"math/big"
-	"testing"
 )
 
 func TestRegisterValidatorNode_Success(t *testing.T) {
@@ -80,7 +81,6 @@ func mockBackendForCreateValidator(t *testing.T, test func(backend *MockContract
 
 	backend.EXPECT().CallContract(gomock.Any(), gomock.Any(), gomock.Any()).Return(lastValIdPacked, nil)
 	backend.EXPECT().HeaderByNumber(gomock.Any(), gomock.Any()).Return(&header, nil)
-	backend.EXPECT().SuggestGasTipCap(gomock.Any()).Return(&baseFee, nil)
 	backend.EXPECT().PendingCodeAt(gomock.Any(), gomock.Any()).Return(bytecode, nil)
 	backend.EXPECT().EstimateGas(gomock.Any(), gomock.Any()).Return(uint64(123), nil)
 	backend.EXPECT().PendingNonceAt(gomock.Any(), gomock.Any()).Return(uint64(0), nil)
