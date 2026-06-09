@@ -18,7 +18,7 @@ package netmon
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	mon "github.com/0xsoniclabs/norma/driver/monitoring"
@@ -74,7 +74,9 @@ func newNumNodesSource(monitor *mon.Monitor, period time.Duration) mon.Source[mo
 			case now := <-ticker.C:
 				numNodes := len(monitor.Network().GetActiveNodes())
 				if err := res.data.Append(mon.NewTime(now), numNodes); err != nil {
-					log.Printf("failed to append number of nodes data: %v", err)
+					slog.Error("failed to append number of nodes data",
+						"metric", NumberOfNodes.Name,
+						"error", err)
 				}
 			case <-stop:
 				return

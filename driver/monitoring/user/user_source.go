@@ -94,7 +94,11 @@ func (s *periodicUserDataSource[T]) AfterApplicationCreation(app driver.Applicat
 			Id:  i,
 		}, sensor)
 		if err != nil {
-			log.Printf("failed to add subject for metric %v / app %s / user %d: %v", s.GetMetric().Name, label, i, err)
+			slog.Error("failed to add subject for metric",
+				"metric", s.GetMetric().Name,
+				"app", label,
+				"user", i,
+				"error", err)
 			return
 		}
 	}
