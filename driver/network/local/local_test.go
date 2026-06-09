@@ -721,9 +721,6 @@ func TestLocalNetwork_FailingFlagPropagated(t *testing.T) {
 func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	t.Parallel()
 
-	// jenkins uses different access privileges for docker
-	// i.e. we need to create a temporary directory in /tmp for docker mount
-	// as the test cleanup cannot delete the directory if the mount is in the subdirectory of this test.
 	temp := t.TempDir()
 
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators, OutputDir: temp}
