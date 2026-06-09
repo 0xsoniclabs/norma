@@ -17,7 +17,7 @@
 package user
 
 import (
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
@@ -82,7 +82,11 @@ func (s *periodicUserDataSource[T]) AfterApplicationCreation(app driver.Applicat
 	for i := 0; i < app.Config().Users; i++ {
 		sensor, err := s.factory.CreateSensor(app, i)
 		if err != nil {
-			log.Printf("failed to create sensor for metric %v / app %s / user %d: %v", s.GetMetric().Name, label, i, err)
+			slog.Error("failed to create sensor for metric",
+				"metric", s.GetMetric().Name,
+				"app", label,
+				"user", i,
+				"error", err)
 			return
 		}
 		s.AddSubject(mon.User{

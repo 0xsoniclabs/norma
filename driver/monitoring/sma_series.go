@@ -17,7 +17,7 @@
 package monitoring
 
 import (
-	"log"
+	"log/slog"
 
 	"golang.org/x/exp/constraints"
 )
@@ -78,7 +78,7 @@ func (s *SmaSeries[K, T]) calculate() {
 				avr := sum / count
 				s.endKey = point.Position
 				if err := s.output.Append(s.endKey, avr); err != nil {
-					log.Printf("err: %v", err)
+					slog.Error("failed to append SMA value", "error", err)
 				}
 			}
 		}

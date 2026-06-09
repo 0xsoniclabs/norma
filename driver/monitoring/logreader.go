@@ -20,7 +20,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"regexp"
 	"strconv"
 	"strings"
@@ -45,7 +45,7 @@ func NewLogReader(reader io.Reader) <-chan Block {
 	go func() {
 		defer close(ch)
 		if err := readBlocks(reader, ch); err != nil {
-			log.Printf("error: %s", err)
+			slog.Error("error reading blocks", "error", err)
 		}
 	}()
 

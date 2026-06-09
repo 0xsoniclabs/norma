@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"sort"
 	"sync"
 	"time"
@@ -98,7 +98,13 @@ func logState(monitor *monitoring.Monitor, nodes *activeNodes) {
 	gas := getGasUsed(monitor)
 	processingTimes := getBlockProcessingTimes(monitor, nodes)
 
-	log.Printf("Nodes: %s, epc/blk heights: %v, tx/s: %v, txs: %v, gas: %s, blk processing: %v", numNodes, blockStatuses, txPers, txs, gas, processingTimes)
+	slog.Info("State",
+		"Nodes", numNodes,
+		"epc/blk heights", blockStatuses,
+		"tx/s", txPers,
+		"txs", txs,
+		"gas", gas,
+		"blk processing", processingTimes)
 }
 
 func getNumNodes(monitor *monitoring.Monitor) string {

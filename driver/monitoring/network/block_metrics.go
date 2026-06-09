@@ -18,7 +18,7 @@ package netmon
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
@@ -154,7 +154,7 @@ func (s *BlockNetworkMetricSource[T]) Shutdown() error {
 func (s *BlockNetworkMetricSource[T]) OnBlock(_ monitoring.Node, block monitoring.Block) {
 	if block.Height > s.lastBlock {
 		if err := s.series.Append(monitoring.BlockNumber(block.Height), s.getBlockProperty(block)); err != nil {
-			log.Printf("error to add to the series: %s", err)
+			slog.Error("error to add to the series", "error", err)
 		}
 		s.lastBlock = block.Height
 	}

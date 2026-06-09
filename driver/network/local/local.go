@@ -20,7 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -310,7 +310,7 @@ func (a *localApplication) Start() error {
 		defer a.done.Done()
 		err := a.controller.Run(ctx)
 		if err != nil {
-			log.Printf("Failed to run load app: %v", err)
+			slog.Error("Failed to run load app", "error", err)
 		}
 	}()
 	return nil
@@ -321,9 +321,9 @@ func (a *localApplication) Stop() error {
 		a.cancel()
 	}
 	a.cancel = nil
-	log.Printf("waiting for application to stop: %s", a.name)
+	slog.Info("waiting for application to stop", "app", a.name)
 	a.done.Wait()
-	log.Printf("application has stopped: %s", a.name)
+	slog.Info("application has stopped", "app", a.name)
 	return nil
 }
 

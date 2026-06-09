@@ -17,7 +17,7 @@
 package shaper
 
 import (
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -75,12 +75,14 @@ func (s *autoShaper) GetNumMessagesInInterval(start time.Time, duration time.Dur
 func getProcessingGap(info LoadInfoSource) uint64 {
 	sent, err := info.GetSentTransactions()
 	if err != nil {
-		log.Printf("autoShaper: failed to fetch number of sent transactions: %v", err)
+		slog.Error("autoShaper: failed to fetch number of sent transactions",
+			"error", err)
 		return 0
 	}
 	received, err := info.GetReceivedTransactions()
 	if err != nil {
-		log.Printf("autoShaper: failed to fetch number of received transactions: %v", err)
+		slog.Error("autoShaper: failed to fetch number of received transactions",
+			"error", err)
 		return 0
 	}
 	return sent - received

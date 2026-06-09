@@ -17,7 +17,7 @@
 package controller
 
 import (
-	"log"
+	"log/slog"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/load/app"
@@ -27,7 +27,7 @@ func runGeneratorLoop(user app.User, trigger <-chan struct{}, network driver.Net
 	for range trigger {
 		tx, err := user.GenerateTx()
 		if err != nil {
-			log.Printf("failed to generate tx; %v", err)
+			slog.Error("failed to generate tx", "error", err)
 		} else {
 			network.SendTransaction(tx)
 		}

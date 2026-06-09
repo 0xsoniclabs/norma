@@ -19,7 +19,6 @@ package executor
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"time"
 
@@ -71,7 +70,7 @@ func run(
 			scheduleAdvanceEpochEvents(scenario.Duration+1, 2, queue, network)
 			// Schedule default consistency checks 2 seconds after the scenario end (after the epoch sealing).
 			queue.add(toSingleEvent(Seconds(scenario.Duration+2), "consistency check", func() error {
-				log.Printf("Checking network consistency ...\n")
+				slog.Info("Checking network consistency ...")
 				return checks.Check()
 			}))
 		} else {
@@ -227,7 +226,7 @@ func (q *eventQueue) addAll(events []event) {
 func (q *eventQueue) getNext() event {
 	res, err := q.queue.Pop()
 	if err != nil {
-		log.Printf("Warning: event queue error encountered: %v", err)
+		slog.Warn("event queue error encountered", "warning", err)
 		return nil
 	}
 	return res.(event)
