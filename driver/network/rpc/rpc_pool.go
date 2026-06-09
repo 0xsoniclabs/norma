@@ -63,7 +63,7 @@ func (p *RpcWorkerPool) AfterNodeCreation(newNode driver.Node) {
 	wg := workerGroup{}
 	p.workers[newNode] = &wg
 	for i := 0; i < 150; i++ {
-		wg.add(*rpcUrl, p.txs)
+		wg.add(newNode.GetLabel(), *rpcUrl, p.txs)
 	}
 }
 
@@ -95,8 +95,8 @@ func (p *RpcWorkerPool) Close() error {
 // When the group is closed, it should not be re-used and should be forgotten.
 type workerGroup []*worker
 
-func (wg *workerGroup) add(rpcUrl driver.URL, txs chan transactionWithSource) {
-	w := newWorker(rpcUrl, txs)
+func (wg *workerGroup) add(nodeName string, rpcUrl driver.URL, txs chan transactionWithSource) {
+	w := newWorker(nodeName, rpcUrl, txs)
 	*wg = append(*wg, w)
 }
 
@@ -120,22 +120,24 @@ func (wg *workerGroup) close() {
 // it starts dispatching asynchronously. This process can be interrupted by
 // closing the worker before it starts dispatching.
 type worker struct {
-	rpcUrl driver.URL
-	done   chan bool
-	txs    chan transactionWithSource
-	ctx    context.Context
-	cancel context.CancelFunc
+	nodeName string
+	rpcUrl   driver.URL
+	done     chan bool
+	txs      chan transactionWithSource
+	ctx      context.Context
+	cancel   context.CancelFunc
 }
 
-func newWorker(rpcUrl driver.URL, txs chan transactionWithSource) *worker {
+func newWorker(nodeName string, rpcUrl driver.URL, txs chan transactionWithSource) *worker {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	w := &worker{
-		rpcUrl: rpcUrl,
-		done:   make(chan bool),
-		txs:    txs,
-		ctx:    ctx,
-		cancel: cancel,
+		nodeName: nodeName,
+		rpcUrl:   rpcUrl,
+		done:     make(chan bool),
+		txs:      txs,
+		ctx:      ctx,
+		cancel:   cancel,
 	}
 
 	go func() {
@@ -176,7 +178,7 @@ func (p *worker) runRpcSenderLoop() error {
 		case tx := <-p.txs:
 			err := rpcClient.SendTransaction(context.Background(), tx.tx)
 			if err != nil {
-				slog.Error("failed to send tx", "source", tx.source, "error", err)
+				slog.Warn("failed to send tx", "node", p.nodeName, "source", tx.source, "error", err)
 			}
 		case <-p.ctx.Done():
 			return nil
