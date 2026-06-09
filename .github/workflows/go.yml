@@ -1,0 +1,52 @@
+# Copyright 2024 Fantom Foundation
+# This file is part of Norma System Testing Infrastructure for Sonic.
+#
+# Norma is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Norma is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with Norma. If not, see <http://www.gnu.org/licenses/>.
+
+
+name: Go
+
+permissions:
+  contents: read
+  checks: write
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    paths:
+     - '.github/workflows/go.yaml'
+     - '.golangci.yml'
+     - '*.go'
+     - 'go.mod'
+    branches: [ "**" ]
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v4
+    - name: setup go
+      uses: actions/setup-go@v5 # Use actions/setup-go to specify the Go version
+      with:
+        go-version: "1.26.0"
+        cache-dependency-path: go/go.sum
+    - name: golangci-lint go
+      uses: golangci/golangci-lint-action@v9
+      with:
+        version: v2.12.2
+        working-directory: .
