@@ -186,7 +186,9 @@ func StartTestRpcServer() (*TestRpcServer, error) {
 }
 
 func (s *TestRpcServer) Shutdown() {
-	s.server.Shutdown(context.Background())
+	if err := s.server.Shutdown(context.Background()); err != nil {
+		fmt.Printf("failed to shutdown test RPC server: %v\n", err)
+	}
 	<-s.done
 }
 
@@ -204,5 +206,5 @@ func getBlockHeight(w http.ResponseWriter, r *http.Request) {
 			"number": "0x12"
 		}
 	}`
-	io.WriteString(w, response)
+	_, _ = io.WriteString(w, response)
 }

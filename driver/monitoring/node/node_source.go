@@ -78,12 +78,22 @@ func (s *periodicNodeDataSource[T]) AfterNodeCreation(node driver.Node) {
 			"node", label,
 			"error", err)
 	}
-	s.AddSubject(mon.Node(label), sensor)
+	if err := s.AddSubject(mon.Node(label), sensor); err != nil {
+		slog.Error("failed to add subject for metric",
+			"metric", s.GetMetric().Name,
+			"node", label,
+			"error", err)
+	}
 }
 
 func (s *periodicNodeDataSource[T]) BeforeNodeRemoval(node driver.Node) {
 	label := node.GetLabel()
-	s.RemoveSubject(mon.Node(label))
+	if err := s.RemoveSubject(mon.Node(label)); err != nil {
+		slog.Error("failed to remove subject for metric",
+			"metric", s.GetMetric().Name,
+			"node", label,
+			"error", err)
+	}
 }
 
 func (s *periodicNodeDataSource[T]) AfterApplicationCreation(driver.Application) {

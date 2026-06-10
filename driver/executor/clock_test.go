@@ -53,7 +53,9 @@ func TestClock_SleepSkipsTimeAccurately(t *testing.T) {
 			clock := test.clock
 			start := clock.Now()
 			time := Seconds(0.5)
-			clock.SleepUntil(time)
+			if err := clock.SleepUntil(time); err != nil {
+				t.Fatalf("sleep failed: %v", err)
+			}
 			end := clock.Now()
 
 			offset := end - (start + time)
