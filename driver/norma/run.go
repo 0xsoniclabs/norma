@@ -254,7 +254,6 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 			}
 		} else {
 			slog.Info("report rendering skipped")
-			slog.Info(fmt.Sprintf("To render report run `norma render %s`", monitor.GetMeasurementFileName()))
 		}
 	}()
 
