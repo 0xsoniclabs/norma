@@ -22,6 +22,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"syscall"
@@ -55,6 +56,7 @@ var runCommand = cli.Command{
 		&skipChecks,
 		&skipReportRendering,
 		&outputDirectory,
+		&openReport,
 	},
 }
 
@@ -87,6 +89,10 @@ var (
 		Name:  "skip-report-rendering",
 		Usage: "disables the rendering of the final summary report",
 	}
+	openReport = cli.BoolFlag{
+		Name:  "open-report",
+		Usage: "automatically open the rendered report in the default browser after rendering",
+	}
 )
 
 func run(ctx *cli.Context) (err error) {
@@ -99,6 +105,7 @@ func run(ctx *cli.Context) (err error) {
 	keepPrometheusRunning := ctx.Bool(keepPrometheusRunning.Name)
 	skipChecks := ctx.Bool(skipChecks.Name)
 	skipReportRendering := ctx.Bool(skipReportRendering.Name)
+	openReport := ctx.Bool(openReport.Name)
 
 	path := args.First()
 
@@ -131,7 +138,7 @@ func run(ctx *cli.Context) (err error) {
 			if !d.IsDir() && (filepath.Ext(d.Name()) == ".yaml" || filepath.Ext(d.Name()) == ".yml") {
 				// Call runScenario for each YAML file
 				label := fmt.Sprintf("eval_%d", time.Now().Unix())
-				if err := runScenario(stoppableCtx, p, outputDir, label, keepPrometheusRunning, skipChecks, skipReportRendering); err != nil {
+				if err := runScenario(stoppableCtx, p, outputDir, label, keepPrometheusRunning, skipChecks, skipReportRendering, openReport); err != nil {
 					return fmt.Errorf("failed to run: %s: %w", p, err)
 				}
 			}
@@ -144,11 +151,11 @@ func run(ctx *cli.Context) (err error) {
 			label = fmt.Sprintf("eval_%d", time.Now().Unix())
 		}
 
-		return runScenario(stoppableCtx, path, outputDir, label, keepPrometheusRunning, skipChecks, skipReportRendering)
+		return runScenario(stoppableCtx, path, outputDir, label, keepPrometheusRunning, skipChecks, skipReportRendering, openReport)
 	}
 }
 
-func runScenario(ctx context.Context, path, outputDir, label string, keepPrometheusRunning, skipChecks, skipReportRendering bool) error {
+func runScenario(ctx context.Context, path, outputDir, label string, keepPrometheusRunning, skipChecks, skipReportRendering, openReport bool) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -239,6 +246,11 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 				slog.Error("report generation failed", "error", err)
 			} else {
 				slog.Info("summary report was exported", "file", fmt.Sprintf("file://%s/%s", outputDir, file))
+				if openReport {
+					if err := openBrowser(filepath.Join(outputDir, file)); err != nil {
+						slog.Warn("failed to open report in browser", "error", err)
+					}
+				}
 			}
 		} else {
 			slog.Info("report rendering skipped")
@@ -283,4 +295,15 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 	slog.Info("execution completed successfully")
 
 	return nil
+}
+
+func openBrowser(s string) error {
+
+	path, err := exec.LookPath("xdg-open")
+	if err != nil {
+		return fmt.Errorf("xdg-open not found: %w", err)
+	}
+
+	cmd := exec.Command(path, s)
+	return cmd.Start()
 }
