@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/urfave/cli/v2"
@@ -39,7 +40,7 @@ func check(ctx *cli.Context) (err error) {
 	}
 
 	path := args.First()
-	fmt.Printf("Trying to parse '%s' ...\n", path)
+	slog.Info("Trying to parse", "path", path)
 
 	scenario, err := parser.ParseFile(path)
 	if err != nil {
@@ -50,6 +51,6 @@ func check(ctx *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("All checks passed!\n")
+	slog.Info("All checks passed!", "path", path)
 	return nil
 }

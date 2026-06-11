@@ -19,6 +19,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/0xsoniclabs/norma/analysis/report"
@@ -69,6 +70,6 @@ func diff(ctx *cli.Context) (err error) {
 		return err
 	}
 
-	fmt.Printf("Generated report at file://%s/%s\n", currentDir, result)
+	slog.Info("Generated diff report at", "path", fmt.Sprintf("file://%s/%s", currentDir, result))
 	return nil
 }

@@ -97,7 +97,7 @@ func testBundleGenerator(t *testing.T, application app.Application, ctxt app.App
 			// DuplicatedBundle intentionally re-sends the same plan after it has been
 			// committed, so ErrBundleAlreadyProcessed is expected in that case.
 			if strings.Contains(err.Error(), "already been processed") {
-				fmt.Printf("bundle %d: plan already processed, skipping wait\n", i)
+				t.Logf("bundle already processed, skipping wait (bundle %d)", i)
 				continue
 			}
 			t.Fatal(err)
@@ -108,7 +108,7 @@ func testBundleGenerator(t *testing.T, application app.Application, ctxt app.App
 			t.Fatalf("failed to open bundle envelope: %v", err)
 		}
 		planHash := txBundle.Plan.Hash()
-		fmt.Printf("Sent bundle %d (plan %s)\n", i, planHash)
+		t.Log("Sent bundle", "bundle", i, "plan", planHash)
 
 		// Wait for this bundle to execute before sending the next one so that
 		// the pending nonce of the inner-transaction accounts is up to date.
@@ -118,7 +118,12 @@ func testBundleGenerator(t *testing.T, application app.Application, ctxt app.App
 		if err != nil {
 			t.Fatalf("bundle %d (plan %s) not executed: %v", i, planHash, err)
 		}
-		fmt.Printf("bundle %d (plan %s) executed: block=%d position=%d count=%d\n", i, planHash, info.Block, info.Position, info.Count)
+		t.Log("Bundle executed",
+			"bundle", i,
+			"plan", planHash,
+			"block", info.Block,
+			"position", info.Position,
+			"count", info.Count)
 	}
 
 	err = network.Retry(t.Context(), network.DefaultRetryAttempts, 1*time.Second, func() error {
@@ -160,10 +165,10 @@ func testRpcNonceBundleGenerator(t *testing.T, application app.Application, ctxt
 		}
 
 		if err := rpcClient.SendTransaction(t.Context(), tx); err != nil {
-			fmt.Printf("eth_sendRawTransaction failed for randomly failing bundle (expected): %v\n", err)
+			t.Logf("eth_sendRawTransaction failed for randomly failing bundle (expected): %v\n", err)
 			continue
 		}
-		fmt.Printf("Sent bundle %d\n", i)
+		t.Logf("Sent bundle %d\n", i)
 
 		// wait for tx to be processed (necessary because of nonce loading in GenerateTx())
 		_ = network.Retry(t.Context(), 5, 1*time.Second, func() error {
@@ -172,7 +177,7 @@ func testRpcNonceBundleGenerator(t *testing.T, application app.Application, ctxt
 				return fmt.Errorf("unable to get amount of received txs; %v", err)
 			}
 			if received <= lastReceived {
-				fmt.Printf("Waiting for received txs increase before sending next tx (received %d)\n", received)
+				t.Logf("Waiting for received txs increase before sending next tx (received %d)\n", received)
 				return fmt.Errorf("not enough bundled txs received, received %d", received)
 			}
 			lastReceived = received
