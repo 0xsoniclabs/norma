@@ -131,10 +131,11 @@ func generateValidatorFrom(ctx *cli.Context) (err error) {
 
 	// Print it out for user
 	// <pubkey> <pub address> <path-to-secret>
-	slog.Info("Generated validator key",
-		"pubkey", publicKey.String(),
-		"address", crypto.PubkeyToAddress(privateKeyECDSA.PublicKey),
-		"secretFile", pathSecretFile)
+	fmt.Printf("%s %s %s",
+		publicKey.String(),
+		crypto.PubkeyToAddress(privateKeyECDSA.PublicKey),
+		pathSecretFile,
+	)
 
 	return nil
 }
