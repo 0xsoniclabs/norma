@@ -210,7 +210,9 @@ func TestBuildImage_Builds_SonicLocal(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to remove image sonic:testlocal: %v", err)
 		}
-		if len(imgResponse[0].Deleted) == 0 && len(imgResponse[0].Untagged) == 0 {
+		if len(imgResponse) == 0 {
+			t.Errorf("failed to remove image sonic:testlocal: empty response")
+		} else if len(imgResponse[0].Deleted) == 0 && len(imgResponse[0].Untagged) == 0 {
 			t.Errorf("failed to remove image sonic:testlocal: %v", imgResponse)
 		}
 		_ = cli.Close()
