@@ -68,6 +68,8 @@ func getFactory(appType string) appFactoryFunc {
 		return NewFailingBundleApplication
 	case "duplicatedbundle":
 		return NewDuplicatedBundleApplication
+	case "bls12add":
+		return NewBls12AddApplication
 	case "mix":
 		return NewMixApplication
 	}
