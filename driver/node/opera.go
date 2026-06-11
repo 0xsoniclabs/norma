@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"regexp"
 	"slices"
@@ -218,7 +217,7 @@ func printLog(node *OperaNode) error {
 	}
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
-		slog.Info("[Opera Node]", "label", node.GetLabel(), "message", scanner.Text())
+		fmt.Printf("[Opera Node %s] %s\n", node.GetLabel(), scanner.Text())
 	}
 	return reader.Close()
 }
