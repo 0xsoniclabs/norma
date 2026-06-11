@@ -20,6 +20,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path"
 
 	"github.com/0xsoniclabs/sonic/evmcore"
@@ -75,7 +76,7 @@ var validatorCommand = cli.Command{
 func generateValidatorFrom(ctx *cli.Context) (err error) {
 	datadir := ctx.String("data-directory")
 	if datadir == "" {
-		fmt.Println("--data-directory unset; skipping secret file generation.")
+		slog.Info("--data-directory unset; skipping secret file generation.")
 	}
 
 	id := ctx.Int("validator-id")
@@ -130,11 +131,10 @@ func generateValidatorFrom(ctx *cli.Context) (err error) {
 
 	// Print it out for user
 	// <pubkey> <pub address> <path-to-secret>
-	fmt.Printf("%s %s %s",
-		publicKey.String(),
-		crypto.PubkeyToAddress(privateKeyECDSA.PublicKey),
-		pathSecretFile,
-	)
+	slog.Info("Generated validator key",
+		"pubkey", publicKey.String(),
+		"address", crypto.PubkeyToAddress(privateKeyECDSA.PublicKey),
+		"secretFile", pathSecretFile)
 
 	return nil
 }

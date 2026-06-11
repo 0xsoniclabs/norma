@@ -91,7 +91,7 @@ func run(
 			}
 		}
 	} else {
-		fmt.Printf("Network checks skipped\n")
+		slog.Info("Network checks skipped")
 	}
 
 	// Schedule all operations listed in the scenario.

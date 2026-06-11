@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/0xsoniclabs/norma/analysis/report"
@@ -48,6 +49,6 @@ func render(ctx *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("Generated report at file://%s/%s\n", currentDir, result)
+	slog.Info("Rendered report at", "path", fmt.Sprintf("file://%s/%s", currentDir, result))
 	return nil
 }

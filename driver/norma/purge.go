@@ -17,7 +17,7 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
 
 	"github.com/0xsoniclabs/norma/driver/docker"
 	"github.com/urfave/cli/v2"
@@ -32,11 +32,11 @@ var purgeCommand = cli.Command{
 }
 
 func purge(_ *cli.Context) error {
-	fmt.Printf("Purging all resources...\n")
+	slog.Info("Purging all resources...")
 	err := docker.Purge()
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Done.\n")
+	slog.Info("Done.")
 	return nil
 }

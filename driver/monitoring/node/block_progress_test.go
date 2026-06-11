@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"net"
 	"net/http"
@@ -176,7 +177,7 @@ func StartTestRpcServer() (*TestRpcServer, error) {
 		}
 		ready <- nil
 		if err := server.Serve(ln); err != http.ErrServerClosed {
-			fmt.Printf("server failed: %v\n", err)
+			slog.Error("server failed", "error", err)
 		}
 	}()
 	if err := <-ready; err != nil {
@@ -187,7 +188,7 @@ func StartTestRpcServer() (*TestRpcServer, error) {
 
 func (s *TestRpcServer) Shutdown() {
 	if err := s.server.Shutdown(context.Background()); err != nil {
-		fmt.Printf("failed to shutdown test RPC server: %v\n", err)
+		slog.Error("failed to shutdown test RPC server", "error", err)
 	}
 	<-s.done
 }
