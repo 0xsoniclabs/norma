@@ -1,0 +1,48 @@
+# This scenario validates that a low-stake v2.1.6 validator forks after Brio activation,
+# drops from consensus, and the remaining local validators maintain supermajority and liveness.
+# Expectations:
+# - Network starts with 4 validators (3x sonic:local, 1x sonic:v2.1.6).
+# - Brio is disabled at genesis and enabled mid-scenario.
+# - The v2.1.6 validator is expected to fail after Brio activation.
+# - The 3 local validators have asymmetric stakes and keep >2/3 stake online.
+# - Blocks keep rolling after the fork and non-failing validators stay coherent.
+name: Supermajority Continues After Fork
+
+duration: 120
+
+validators:
+  - name: local-majority-a
+    imagename: "sonic:local"
+    stake: 500
+
+  - name: local-majority-b
+    imagename: "sonic:local"
+    stake: 300
+
+  - name: local-majority-c
+    imagename: "sonic:local"
+    stake: 220
+
+  - name: validator-v216
+    imagename: "sonic:v2.1.6"
+    stake: 80
+    failing: true
+
+network_rules:
+  genesis:
+    UPGRADES_ALLEGRO: true
+    UPGRADES_BRIO: false
+    MAX_EPOCH_DURATION: 5s
+  updates:
+    - time: 40
+      rules:
+        UPGRADES_BRIO: true
+
+applications:
+  - name: steady-load
+    type: counter
+    start: 10
+    end: 110
+    users: 30
+    rate:
+      constant: 8

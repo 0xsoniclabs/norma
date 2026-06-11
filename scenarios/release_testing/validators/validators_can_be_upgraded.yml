@@ -1,0 +1,45 @@
+# This scenario validates validator replacement without persistent volumes.
+# Expectations:
+# - One background validator stays online for the whole run.
+# - One validator is introduced as node using sonic:v2.1.6.
+# - The node validator is restarted once using sonic:local and the same val_id.
+# - No failures are expected and block production continues throughout.
+name: Replace Validators Without Persistent Volumes
+
+duration: 140
+
+validators:
+  - name: background-local
+    imagename: "sonic:local"
+    instances: 3
+    # very large stake represents a network with supermajority, the validator 
+    # under test will not stall the network when it leaves.
+    # stake: 500000 
+
+nodes:
+  - name: validator-4-v216
+    start: 10
+    leave: 60
+    client:
+      type: validator
+      imagename: "sonic:v2.1.6"
+      val_id: 4
+
+  - name: validator-4-local
+    rejoin: 90
+    client:
+      type: validator
+      imagename: "sonic:local"
+      val_id: 4
+
+advance_epoch:
+  - time: 30  # Advance epoch after validator-2-v216 starts (~20s gap)
+  - time: 80  # Advance epoch after validator-2-v216 leaves (~20s gap)
+  - time: 110 # Advance epoch after validator-2-local rejoins
+
+applications:
+  - name: steady-load
+    type: counter
+    users: 20
+    rate:
+      constant: 4

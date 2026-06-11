@@ -1,0 +1,47 @@
+# This scenario validates that enabling Brio rules with mixed validator versions
+# (so far sonic:local) does not stall the network.
+# Expectations:
+# - Brio is disabled at genesis.
+# - Brio is enabled at update.
+# - Test shall use mixed versions supporting the Brio hard fork (currently sonic:local).
+# NOTE: This test must be updated with each release to use the latest released version.
+name: Brio Upgrade Does Not Stall Mixed Versions
+
+duration: 90
+
+validators:
+  - name: validator-local
+    imagename: "sonic:local"
+    instances: 3
+
+  - name: validator-v216
+    imagename: "sonic:v2.1.6"
+    failing: true
+
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: true
+    UPGRADES_BRIO: false
+  updates:
+    - time: 30
+      rules:
+        UPGRADES_BRIO: true
+
+advance_epoch:
+  - time: 45  # after Brio rules are enabled
+
+applications:
+  - name: steady-load
+    type: counter
+    users: 40
+    rate:
+      constant: 8
+
+  - name: largecontract
+    type: largecontract
+    start: 40
+    users: 10
+    rate:
+      constant: 8
+

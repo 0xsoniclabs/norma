@@ -1,0 +1,51 @@
+# This scenario validates a validator set with heterogeneous stakes and
+# heterogeneous event-throttler arguments.
+# Expectations:
+# - Validators run with different stake weights and throttler configurations.
+# - The network remains live during both load and no-load windows.
+# - Final fork-consistency checks are implicit (default end-of-scenario checks).
+name: event throttler mixed flags
+
+duration: 120
+
+validators:
+  - name: validator-large-throttled
+    imagename: "sonic:local"
+    stake: 700000000
+    extraarguments: "--event-throttler=true --event-throttler.dominant-threshold=0.85 --event-throttler.dominating-timeout=5 --event-throttler.non-dominating-timeout=20"
+
+  - name: validator-medium-relaxed
+    imagename: "sonic:local"
+    stake: 250000000
+    extraarguments: "--event-throttler=true --event-throttler.dominant-threshold=0.70 --event-throttler.dominating-timeout=3 --event-throttler.non-dominating-timeout=12"
+
+  - name: validator-small-disabled
+    imagename: "sonic:local"
+    stake: 50000000
+    extraarguments: "--event-throttler=false"
+
+  - name: validator-tiny-aggressive
+    imagename: "sonic:local"
+    stake: 10000000
+    extraarguments: "--event-throttler=true --event-throttler.dominant-threshold=0.92 --event-throttler.dominating-timeout=8 --event-throttler.non-dominating-timeout=30"
+
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: true
+    UPGRADES_BRIO: true
+
+applications:
+  - name: load-phase-1
+    type: counter
+    end: 50
+    users: 40
+    rate:
+      constant: 25
+
+  - name: load-phase-2
+    type: counter
+    start: 70
+    users: 30
+    rate:
+      constant: 15

@@ -1,0 +1,40 @@
+# This scenario validates that a network with mixed validator stakes remains live,
+# and all nodes continue progressing on block production.
+# Expectations:
+# - The network starts with 5 validators with asymmetric stake weights.
+# - Constant transaction load runs through most of the scenario.
+# - Block production remains active throughout the run.
+# - Node heights remain coherent and node views agree on block hashes.
+name: Mixed Stake Validators Progress
+
+duration: 110
+
+validators:
+  - name: whale
+    imagename: "sonic:local"
+    stake: 500
+
+  - name: dolphin
+    imagename: "sonic:local"
+    stake: 220
+
+  - name: turtle
+    imagename: "sonic:local"
+    stake: 120
+
+  - name: crab
+    imagename: "sonic:local"
+    stake: 80
+
+  - name: shrimp
+    imagename: "sonic:local"
+    stake: 40
+
+applications:
+  - name: steady-load
+    type: counter
+    start: 10
+    end: 100
+    users: 40
+    rate:
+      constant: 8
