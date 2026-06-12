@@ -38,6 +38,7 @@ func AdvanceEpoch(client rpc.Client, epochIncrement int) error {
 	// Driver owner is the first validator from the list i.e., index 1 (defined in genesis export in genesis.GenerateJsonGenesis)
 	txOpts, err := bind.NewKeyedTransactorWithChainID(evmcore.FakeKey(1), big.NewInt(int64(originalRules.NetworkID)))
 	txOpts.GasTipCap = big.NewInt(100) // tip shall facilitate emission of the transaction, bypassing other pooled txs
+	txOpts.NoSend = true               // broadcasting (with retry) is handled by SendTxWithRetry
 	if err != nil {
 		return fmt.Errorf("failed to create txOpts; %v", err)
 	}
@@ -47,7 +48,7 @@ func AdvanceEpoch(client rpc.Client, epochIncrement int) error {
 		return fmt.Errorf("failed to advance epoch; %v", err)
 	}
 
-	rec, err := client.WaitTransactionReceipt(tx.Hash())
+	rec, err := client.SendTxWithRetry(tx)
 	if err != nil {
 		return fmt.Errorf("failed to get receipt; %v", err)
 	}

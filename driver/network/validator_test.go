@@ -13,7 +13,7 @@ import (
 
 func TestRegisterValidatorNode_Success(t *testing.T) {
 	mockBackendForCreateValidator(t, func(backend *MockContractBackend) {
-		backend.EXPECT().WaitTransactionReceipt(gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil)
+		backend.EXPECT().SendTxWithRetry(gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil)
 
 		valId, err := RegisterValidatorNode(backend)
 		if err != nil {
@@ -27,7 +27,7 @@ func TestRegisterValidatorNode_Success(t *testing.T) {
 
 func TestRegisterValidatorNode_Failure(t *testing.T) {
 	mockBackendForCreateValidator(t, func(backend *MockContractBackend) {
-		backend.EXPECT().WaitTransactionReceipt(gomock.Any()).Return(nil, fmt.Errorf("failed to get receipt")).AnyTimes()
+		backend.EXPECT().SendTxWithRetry(gomock.Any()).Return(nil, fmt.Errorf("failed to get receipt")).AnyTimes()
 
 		if _, err := RegisterValidatorNode(backend); err == nil {
 			t.Errorf("expected error, got %v", err)
@@ -37,7 +37,7 @@ func TestRegisterValidatorNode_Failure(t *testing.T) {
 
 func TestRegisterValidatorNode_Failure_TransactionReverted(t *testing.T) {
 	mockBackendForCreateValidator(t, func(backend *MockContractBackend) {
-		backend.EXPECT().WaitTransactionReceipt(gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusFailed}, nil).AnyTimes()
+		backend.EXPECT().SendTxWithRetry(gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusFailed}, nil).AnyTimes()
 
 		if _, err := RegisterValidatorNode(backend); err == nil {
 			t.Errorf("expected error, got %v", err)
@@ -84,7 +84,6 @@ func mockBackendForCreateValidator(t *testing.T, test func(backend *MockContract
 	backend.EXPECT().PendingCodeAt(gomock.Any(), gomock.Any()).Return(bytecode, nil)
 	backend.EXPECT().EstimateGas(gomock.Any(), gomock.Any()).Return(uint64(123), nil)
 	backend.EXPECT().PendingNonceAt(gomock.Any(), gomock.Any()).Return(uint64(0), nil)
-	backend.EXPECT().SendTransaction(gomock.Any(), gomock.Any()).Return(nil)
 
 	test(backend)
 }

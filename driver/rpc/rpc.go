@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"time"
 
@@ -47,6 +48,14 @@ type Client interface {
 	//  until a certain timeout is reached.
 	WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
 
+	// SendTxWithRetry broadcasts the given transaction and waits for its receipt.
+	// While waiting it periodically re-broadcasts the transaction to recover from it
+	// being dropped from the txpool (e.g. under load), which would otherwise make the
+	// receipt never appear and the wait time out. Callers should create the
+	// transaction with bind.TransactOpts.NoSend set to true and leave broadcasting to
+	// this method. Re-sending an already known or already mined transaction is harmless.
+	SendTxWithRetry(tx *types.Transaction) (*types.Receipt, error)
+
 	// GetBundleInfo calls sonic_getBundleInfo with the given execution plan hash.
 	// Returns nil, nil if the bundle has not been executed yet.
 	GetBundleInfo(planHash common.Hash) (*sonicapi.RPCBundleInfo, error)
@@ -62,6 +71,7 @@ func WrapRpcClient(rpcClient *rpc.Client) *Impl {
 		ethRpcClient:     ethclient.NewClient(rpcClient),
 		rpcClient:        rpcClient,
 		txReceiptTimeout: 600 * time.Second,
+		txResendInterval: 30 * time.Second,
 	}
 }
 
@@ -85,18 +95,58 @@ type Impl struct {
 	ethRpcClient
 	rpcClient
 	txReceiptTimeout time.Duration
+	// txResendInterval is how often a transaction is re-broadcast while waiting for
+	// its receipt in SendTxWithRetry.
+	txResendInterval time.Duration
 }
 
 func (r Impl) Call(result interface{}, method string, args ...interface{}) error {
 	return r.rpcClient.Call(result, method, args...)
 }
 
+// WaitTransactionReceipt polls for the receipt of txHash with exponential backoff
+// until txReceiptTimeout is reached.
 func (r Impl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error) {
 	// Wait for the response with some exponential backoff.
 	const maxDelay = 5 * time.Second
 	begin := time.Now()
 	delay := time.Millisecond
 	for time.Since(begin) < r.txReceiptTimeout {
+		receipt, err := r.transactionReceipt(txHash)
+		if errors.Is(err, ethereum.NotFound) {
+			time.Sleep(delay)
+			delay = 2 * delay
+			if delay > maxDelay {
+				delay = maxDelay
+			}
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to get transaction receipt: %w", err)
+		}
+		return receipt, nil
+	}
+	return nil, fmt.Errorf("failed to get transaction receipt: timeout")
+}
+
+// SendTxWithRetry broadcasts tx and then polls for its receipt, just like
+// WaitTransactionReceipt, but periodically re-broadcasts tx while waiting. This
+// recovers from the transaction being dropped from the txpool, which would
+// otherwise make the receipt never appear and the wait time out.
+func (r Impl) SendTxWithRetry(tx *types.Transaction) (*types.Receipt, error) {
+	txHash := tx.Hash()
+	const maxDelay = 5 * time.Second
+	begin := time.Now()
+	delay := time.Millisecond
+	var lastSend time.Time
+	for time.Since(begin) < r.txReceiptTimeout {
+		if time.Since(lastSend) >= r.txResendInterval {
+			if err := r.SendTransaction(context.Background(), tx); err != nil {
+				slog.Debug("re-broadcasting transaction failed", "tx", txHash, "error", err)
+			}
+			lastSend = time.Now()
+		}
+
 		receipt, err := r.transactionReceipt(txHash)
 		if errors.Is(err, ethereum.NotFound) {
 			time.Sleep(delay)

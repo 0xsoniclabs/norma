@@ -29,8 +29,7 @@ func TestApplyNetworkRules_Success(t *testing.T) {
 	backend.EXPECT().PendingCodeAt(gomock.Any(), gomock.Any()).Return(bytecode, nil)
 	backend.EXPECT().EstimateGas(gomock.Any(), gomock.Any()).Return(uint64(123), nil)
 	backend.EXPECT().PendingNonceAt(gomock.Any(), gomock.Any()).Return(uint64(0), nil)
-	backend.EXPECT().SendTransaction(gomock.Any(), gomock.Any()).Return(nil)
-	backend.EXPECT().WaitTransactionReceipt(gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil)
+	backend.EXPECT().SendTxWithRetry(gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil)
 
 	const fee = 456
 	rules := genesis.NetworkRules{}
