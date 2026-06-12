@@ -124,7 +124,9 @@ func createLocalNetwork(t *testing.T) *local.LocalNetwork {
 		t.Fatalf("error: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = net.Shutdown()
+		if err := net.Shutdown(); err != nil {
+			t.Fatalf("failed to shutdown local network: %v", err)
+		}
 	})
 	return net
 }

@@ -42,6 +42,15 @@ func TestLocalNetworkIsNetwork(t *testing.T) {
 	var _ driver.Network = &net
 }
 
+func cleanupNetwork(t *testing.T, net *LocalNetwork) {
+	t.Helper()
+	t.Cleanup(func() {
+		if err := net.Shutdown(); err != nil {
+			t.Fatalf("failed to shut down network: %v", err)
+		}
+	})
+}
+
 func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
 	for _, N := range []int{1, 3} {
@@ -51,9 +60,7 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
 			}
-			t.Cleanup(func() {
-				_ = net.Shutdown()
-			})
+			cleanupNetwork(t, net)
 
 			nodes := []driver.Node{}
 			for i := 0; i < N; i++ {
@@ -94,9 +101,7 @@ func TestLocalNetwork_CanEnforceNetworkLatency(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
 			}
-			t.Cleanup(func() {
-				_ = net.Shutdown()
-			})
+			cleanupNetwork(t, net)
 
 			// measure latency between nodes
 			nodes := net.GetActiveNodes()
@@ -127,9 +132,7 @@ func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
 			}
-			t.Cleanup(func() {
-				_ = net.Shutdown()
-			})
+			cleanupNetwork(t, net)
 
 			apps := []driver.Application{}
 			for i := 0; i < N; i++ {
@@ -170,9 +173,7 @@ func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = net.Shutdown()
-	})
+	cleanupNetwork(t, net)
 
 	for i := 0; i < N; i++ {
 		_, err := net.CreateNode(&driver.NodeConfig{
@@ -206,9 +207,7 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = net.Shutdown()
-	})
+	cleanupNetwork(t, net)
 
 	done := make(chan bool, N)
 
@@ -271,9 +270,7 @@ func TestLocalNetwork_CanRunWithMultipleValidators(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
 			}
-			t.Cleanup(func() {
-				_ = net.Shutdown()
-			})
+			cleanupNetwork(t, net)
 
 			app, err := net.CreateApplication(&driver.ApplicationConfig{
 				Name: "TestApp",
@@ -332,9 +329,7 @@ func TestLocalNetwork_NotifiesListenersOnNodeStartup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = net.Shutdown()
-	})
+	cleanupNetwork(t, net)
 
 	activeNodes := net.GetActiveNodes()
 	if got, want := len(activeNodes), config.Validators.GetNumValidators(); got != want {
@@ -368,9 +363,7 @@ func TestLocalNetwork_NotifiesListenersOnAppStartup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = net.Shutdown()
-	})
+	cleanupNetwork(t, net)
 
 	net.RegisterListener(listener)
 	listener.EXPECT().AfterApplicationCreation(gomock.Any())
@@ -393,9 +386,7 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
 			}
-			t.Cleanup(func() {
-				_ = net.Shutdown()
-			})
+			cleanupNetwork(t, net)
 
 			ctrl := gomock.NewController(t)
 			listener := driver.NewMockNetworkListener(ctrl)
@@ -476,9 +467,7 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions(t *testing.T
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = net.Shutdown()
-	})
+	cleanupNetwork(t, net)
 
 	images := []string{"sonic", "sonic:local"}
 	checksum := make(chan string)
@@ -517,9 +506,7 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = net.Shutdown()
-	})
+	cleanupNetwork(t, net)
 
 	images := []string{"sonic:v2.0.3", "sonic:v2.0.2", "sonic:v2.0.1", "sonic:v2.0.0"}
 	checksum := make(chan string)
