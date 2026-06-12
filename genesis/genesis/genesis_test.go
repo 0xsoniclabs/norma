@@ -76,7 +76,7 @@ func TestGenerateJsonGenesis(t *testing.T) {
 
 			// add validators to expected accounts
 			validators := makefakegenesis.GetFakeValidators(MaxValidatorsCount)
-			totalSupply := utils.ToFtm(1000_000_000)
+			totalSupply := utils.ToFtm(1_000_000_000_000_000)
 			supplyEach := new(big.Int).Div(totalSupply, big.NewInt(int64(len(validators))))
 			for _, validator := range validators {
 				expectedAccounts = append(expectedAccounts, makefakegenesis.Account{
