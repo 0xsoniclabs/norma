@@ -33,6 +33,15 @@ const DefaultClientDockerImageName = "sonic"
 // DefaultValidators is a default configuration for a single validator.
 var DefaultValidators = NewDefaultValidators(1)
 
+// ResolveClientImageName returns imageName if set, otherwise the default client
+// image name.
+func ResolveClientImageName(imageName string) string {
+	if imageName != "" {
+		return imageName
+	}
+	return DefaultClientDockerImageName
+}
+
 const (
 	// ErrEmptyNetwork is returned when trying to connect to an empty network.
 	ErrEmptyNetwork = common.ConstError("network is empty")
@@ -156,10 +165,7 @@ func NewValidator(v parser.Validator) Validator {
 	if v.Instances != nil {
 		instances = *v.Instances
 	}
-	imageName := DefaultClientDockerImageName
-	if v.ImageName != "" {
-		imageName = v.ImageName
-	}
+	imageName := ResolveClientImageName(v.ImageName)
 
 	stake := uint64(5_000_000)
 	if v.Stake != nil {
