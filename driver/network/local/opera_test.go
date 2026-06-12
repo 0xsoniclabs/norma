@@ -7,7 +7,7 @@
 // (at your option) any later version.
 //
 // Norma is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// but WITHOUT ANY WARRANTY; without even the implied warranty of	 
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU lesser General Public License for more details.
 //
@@ -27,6 +27,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
+	opera "github.com/0xsoniclabs/norma/driver/node"
 )
 
 func TestImplements(t *testing.T) {
@@ -158,7 +159,7 @@ func TestOperaNode_MetricsExposed(t *testing.T) {
 		_ = node.Cleanup()
 	})
 
-	url := node.GetServiceUrl(&OperaDebugService)
+	url := node.GetServiceUrl(&opera.OperaDebugService)
 
 	var apiWorks bool
 	for i := 0; i < 100; i++ {

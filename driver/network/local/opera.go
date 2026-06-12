@@ -29,6 +29,7 @@ import (
 
 	"golang.org/x/exp/maps"
 
+	"github.com/0xsoniclabs/norma/driver/node"
 	rpcdriver "github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/norma/genesistools/genesis"
 
@@ -37,38 +38,6 @@ import (
 	"github.com/0xsoniclabs/norma/driver/network"
 	"github.com/ethereum/go-ethereum/rpc"
 )
-
-var OperaRpcService = network.ServiceDescription{
-	Name:     "OperaRPC",
-	Port:     18545,
-	Protocol: "http",
-}
-
-var OperaWsService = network.ServiceDescription{
-	Name:     "OperaWs",
-	Port:     18546,
-	Protocol: "ws",
-}
-
-var OperaDebugService = network.ServiceDescription{
-	Name:     "OperaPprof",
-	Port:     6060,
-	Protocol: "http",
-}
-
-var operaServices = network.ServiceGroup{}
-
-func init() {
-	if err := operaServices.RegisterService(&OperaRpcService); err != nil {
-		panic(err)
-	}
-	if err := operaServices.RegisterService(&OperaWsService); err != nil {
-		panic(err)
-	}
-	if err := operaServices.RegisterService(&OperaDebugService); err != nil {
-		panic(err)
-	}
-}
 
 // operaNode implements the driver's Node interface by running a go-opera
 // client on a generic host.
@@ -116,13 +85,13 @@ func startOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 	}
 
 	host, err := network.RetryReturn(ctx, network.DefaultRetryAttempts, 1*time.Second, func() (*docker.Container, error) {
-		ports, err := network.GetFreePorts(len(operaServices.Services()))
+		ports, err := network.GetFreePorts(len(node.OperaServices.Services()))
 		if err != nil {
 			return nil, err
 		}
 
 		portForwarding := make(map[network.Port]network.Port, len(ports))
-		for i, service := range operaServices.Services() {
+		for i, service := range node.OperaServices.Services() {
 			portForwarding[service.Port] = ports[i]
 		}
 
@@ -256,7 +225,7 @@ func (n *operaNode) GetServiceUrl(service *network.ServiceDescription) *driver.U
 }
 
 func (n *operaNode) GetNodeID() (driver.NodeID, error) {
-	url := n.GetServiceUrl(&OperaRpcService)
+	url := n.GetServiceUrl(&node.OperaRpcService)
 	if url == nil {
 		return "", fmt.Errorf("node does not export an RPC server")
 	}
@@ -291,7 +260,7 @@ func (n *operaNode) Cleanup() error {
 }
 
 func (n *operaNode) DialRpc() (rpcdriver.Client, error) {
-	url := n.GetServiceUrl(&OperaRpcService)
+	url := n.GetServiceUrl(&node.OperaRpcService)
 	if url == nil {
 		return nil, fmt.Errorf("node %s does not export an RPC server", n.GetLabel())
 	}
