@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Norma. If not, see <http://www.gnu.org/licenses/>.
 
-package node
+package local
 
 import (
 	"bufio"
@@ -30,7 +30,7 @@ import (
 )
 
 func TestImplements(t *testing.T) {
-	var inst OperaNode
+	var inst operaNode
 	var _ driver.Node = &inst
 
 }
@@ -43,7 +43,7 @@ func TestOperaNode_StartAndStop(t *testing.T) {
 	t.Cleanup(func() {
 		_ = docker.Close()
 	})
-	node, err := StartOperaDockerNode(t.Context(), docker, nil, &OperaNodeConfig{
+	node, err := startOperaDockerNode(t.Context(), docker, nil, &operaNodeConfig{
 		Label:         "test",
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
@@ -67,7 +67,7 @@ func TestOperaNode_RpcServiceIsReadyAfterStartup(t *testing.T) {
 	t.Cleanup(func() {
 		_ = docker.Close()
 	})
-	node, err := StartOperaDockerNode(t.Context(), docker, nil, &OperaNodeConfig{
+	node, err := startOperaDockerNode(t.Context(), docker, nil, &operaNodeConfig{
 		Label:         "test",
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
@@ -92,7 +92,7 @@ func TestOperaNode_StreamLog(t *testing.T) {
 		_ = docker.Close()
 	})
 
-	node, err := StartOperaDockerNode(t.Context(), docker, nil, &OperaNodeConfig{
+	node, err := startOperaDockerNode(t.Context(), docker, nil, &operaNodeConfig{
 		Label:         "test",
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
@@ -146,7 +146,7 @@ func TestOperaNode_MetricsExposed(t *testing.T) {
 		_ = docker.Close()
 	})
 
-	node, err := StartOperaDockerNode(t.Context(), docker, nil, &OperaNodeConfig{
+	node, err := startOperaDockerNode(t.Context(), docker, nil, &operaNodeConfig{
 		Label:         "test",
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
@@ -192,7 +192,7 @@ func TestClient_Stop_Graceful(t *testing.T) {
 		}
 	}()
 
-	node, err := StartOperaDockerNode(t.Context(), client, nil, &OperaNodeConfig{
+	node, err := startOperaDockerNode(t.Context(), client, nil, &operaNodeConfig{
 		Label:         "test",
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},

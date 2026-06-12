@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Norma. If not, see <http://www.gnu.org/licenses/>.
 
-package node
+package local
 
 import (
 	"bufio"
@@ -70,15 +70,15 @@ func init() {
 	}
 }
 
-// OperaNode implements the driver's Node interface by running a go-opera
+// operaNode implements the driver's Node interface by running a go-opera
 // client on a generic host.
-type OperaNode struct {
+type operaNode struct {
 	host      network.Host
 	container *docker.Container
-	config    *OperaNodeConfig
+	config    *operaNodeConfig
 }
 
-type OperaNodeConfig struct {
+type operaNodeConfig struct {
 	// The label to be used to name this node. The label should not be empty.
 	Label string
 	// Failing if true, the node is expected to fail at some point of execution.
@@ -102,8 +102,8 @@ type OperaNodeConfig struct {
 // with underscores and hyphens.
 var labelPattern = regexp.MustCompile("[A-Za-z0-9_-]+")
 
-// StartOperaDockerNode creates a new OperaNode running in a Docker container.
-func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker.Network, config *OperaNodeConfig) (*OperaNode, error) {
+// startOperaDockerNode creates a new operaNode running in a Docker container.
+func startOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker.Network, config *operaNodeConfig) (*operaNode, error) {
 	if !labelPattern.Match([]byte(config.Label)) {
 		return nil, fmt.Errorf("invalid label for node: '%v'", config.Label)
 	}
@@ -182,13 +182,13 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		nodeConfig.ValidatorId = new(int)
 		*nodeConfig.ValidatorId = *config.ValidatorId
 	}
-	node := &OperaNode{
+	node := &operaNode{
 		host:      host,
 		container: host,
 		config:    &nodeConfig,
 	}
 
-	// Wait until the OperaNode inside the Container is ready.
+	// Wait until the operaNode inside the Container is ready.
 	err = network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second, func() error {
 		if err := node.host.CheckRunning(); err != nil {
 			return fmt.Errorf("%w: %w", err, network.ErrPermanent)
@@ -208,9 +208,9 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 	)
 }
 
-// printLog streams and prints the logs of the given OperaNode, to debug cause of
+// printLog streams and prints the logs of the given operaNode, to debug cause of
 // startup failure.
-func printLog(node *OperaNode) error {
+func printLog(node *operaNode) error {
 	reader, err := node.StreamLog()
 	if err != nil {
 		return fmt.Errorf("cannot read node logs: %w", err)
@@ -222,31 +222,31 @@ func printLog(node *OperaNode) error {
 	return reader.Close()
 }
 
-func (n *OperaNode) GetLabel() string {
+func (n *operaNode) GetLabel() string {
 	return n.config.Label
 }
 
-func (n *OperaNode) IsExpectedFailure() bool {
+func (n *operaNode) IsExpectedFailure() bool {
 	return n.config.Failing
 }
 
 // Hostname returns the hostname of the node.
 // The hostname is accessible only inside the Docker network.
-func (n *OperaNode) Hostname() string {
+func (n *operaNode) Hostname() string {
 	return n.host.Hostname()
 }
 
 // MetricsPort returns the port on which the node exports its metrics.
 // The port is accessible only inside the Docker network.
-func (n *OperaNode) MetricsPort() int {
+func (n *operaNode) MetricsPort() int {
 	return 6060
 }
 
-func (n *OperaNode) IsRunning() bool {
+func (n *operaNode) IsRunning() bool {
 	return n.host.IsRunning()
 }
 
-func (n *OperaNode) GetServiceUrl(service *network.ServiceDescription) *driver.URL {
+func (n *operaNode) GetServiceUrl(service *network.ServiceDescription) *driver.URL {
 	addr := n.host.GetAddressForService(service)
 	if addr == nil {
 		return nil
@@ -255,7 +255,7 @@ func (n *OperaNode) GetServiceUrl(service *network.ServiceDescription) *driver.U
 	return &url
 }
 
-func (n *OperaNode) GetNodeID() (driver.NodeID, error) {
+func (n *operaNode) GetNodeID() (driver.NodeID, error) {
 	url := n.GetServiceUrl(&OperaRpcService)
 	if url == nil {
 		return "", fmt.Errorf("node does not export an RPC server")
@@ -274,23 +274,23 @@ func (n *OperaNode) GetNodeID() (driver.NodeID, error) {
 	return driver.NodeID(result.Enode), nil
 }
 
-func (n *OperaNode) GetValidatorId() *int {
+func (n *operaNode) GetValidatorId() *int {
 	return n.config.ValidatorId
 }
 
-func (n *OperaNode) StreamLog() (io.ReadCloser, error) {
+func (n *operaNode) StreamLog() (io.ReadCloser, error) {
 	return n.host.StreamLog()
 }
 
-func (n *OperaNode) Stop() error {
+func (n *operaNode) Stop() error {
 	return n.host.Stop()
 }
 
-func (n *OperaNode) Cleanup() error {
+func (n *operaNode) Cleanup() error {
 	return n.host.Cleanup()
 }
 
-func (n *OperaNode) DialRpc() (rpcdriver.Client, error) {
+func (n *operaNode) DialRpc() (rpcdriver.Client, error) {
 	url := n.GetServiceUrl(&OperaRpcService)
 	if url == nil {
 		return nil, fmt.Errorf("node %s does not export an RPC server", n.GetLabel())
@@ -305,9 +305,9 @@ func (n *OperaNode) DialRpc() (rpcdriver.Client, error) {
 	return rpcdriver.WrapRpcClient(rpcClient), nil
 }
 
-// AddPeer informs the client instance represented by the OperaNode about the
+// AddPeer informs the client instance represented by the operaNode about the
 // existence of another node, to which it may establish a connection.
-func (n *OperaNode) AddPeer(id driver.NodeID) error {
+func (n *operaNode) AddPeer(id driver.NodeID) error {
 	rpcClient, err := n.DialRpc()
 	if err != nil {
 		return err
@@ -317,9 +317,9 @@ func (n *OperaNode) AddPeer(id driver.NodeID) error {
 	})
 }
 
-// RemovePeer informs the client instance represented by the OperaNode
+// RemovePeer informs the client instance represented by the operaNode
 // that the input node is no more available in the network.
-func (n *OperaNode) RemovePeer(id driver.NodeID) error {
+func (n *operaNode) RemovePeer(id driver.NodeID) error {
 	rpcClient, err := n.DialRpc()
 	if err != nil {
 		return err
@@ -330,12 +330,12 @@ func (n *OperaNode) RemovePeer(id driver.NodeID) error {
 }
 
 // Kill sends a SigKill singal to node.
-func (n *OperaNode) Kill() error {
+func (n *operaNode) Kill() error {
 	return n.container.SendSignal(docker.SigKill)
 }
 
 // GetRoundTripTime returns the median network round-trip time to the given host.
-func (n *OperaNode) GetRoundTripTime(host string) (time.Duration, error) {
+func (n *operaNode) GetRoundTripTime(host string) (time.Duration, error) {
 	output, err := n.container.Exec([]string{"ping", "-c", "5", host})
 	if err != nil {
 		return 0, err

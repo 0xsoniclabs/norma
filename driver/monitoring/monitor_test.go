@@ -162,9 +162,11 @@ func TestMonitorPrometheusLogProviderConfigured(t *testing.T) {
 func TestMonitorIntegrationPrometheusLogReceived(t *testing.T) {
 	t.Parallel()
 	ctrl := gomock.NewController(t)
-	mockNet := driver.NewMockNetwork(ctrl)
+	net := driver.NewMockNetwork(ctrl)
 
-	localNet, err := local.NewLocalNetwork(t.Context(), &driver.NetworkConfig{Validators: driver.DefaultValidators})
+	localNet, err := local.NewLocalNetwork(
+		t.Context(),
+		&driver.NetworkConfig{Validators: driver.DefaultValidators})
 	if err != nil {
 		t.Fatalf("failed to create local network: %v", err)
 	}
@@ -182,11 +184,11 @@ func TestMonitorIntegrationPrometheusLogReceived(t *testing.T) {
 	}
 
 	// simulate existing nodes
-	mockNet.EXPECT().RegisterListener(gomock.Any()).AnyTimes()
-	mockNet.EXPECT().GetActiveNodes().AnyTimes().Return([]driver.Node{node})
+	net.EXPECT().RegisterListener(gomock.Any()).AnyTimes()
+	net.EXPECT().GetActiveNodes().AnyTimes().Return([]driver.Node{node})
 
 	outDir := t.TempDir()
-	monitor, err := NewMonitor(mockNet, MonitorConfig{OutputDir: outDir})
+	monitor, err := NewMonitor(net, MonitorConfig{OutputDir: outDir})
 	if err != nil {
 		t.Fatalf("failed to create monitor instance: %v", err)
 	}
@@ -199,10 +201,12 @@ func TestMonitorIntegrationPrometheusLogReceived(t *testing.T) {
 	done := make(chan bool)
 	listener := NewMockTimeLogListener(ctrl)
 	// expected to be called
-	listener.EXPECT().OnLog(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Do(func(Node, Time, float64) {
-		once.Do(func() { close(done) })
-	})
-	monitor.PrometheusLogProvider().RegisterLogListener(NewPrometheusNameKey("chain_block_age"), listener)
+	listener.EXPECT().OnLog(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().
+		Do(func(Node, Time, float64) {
+			once.Do(func() { close(done) })
+		})
+	monitor.PrometheusLogProvider().
+		RegisterLogListener(NewPrometheusNameKey("chain_block_age"), listener)
 
 	<-done
 }

@@ -21,29 +21,28 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
-	"github.com/0xsoniclabs/norma/driver/docker"
-	opera "github.com/0xsoniclabs/norma/driver/node"
+	"github.com/0xsoniclabs/norma/driver/network/local"
 )
 
 func TestCanCollectCpuProfileDateFromOperaNode(t *testing.T) {
-	docker, err := docker.NewClient()
+	net, err := local.NewLocalNetwork(
+		t.Context(),
+		&driver.NetworkConfig{Validators: driver.DefaultValidators})
 	if err != nil {
-		t.Fatalf("failed to create a docker client: %v", err)
+		t.Fatalf("failed to create local network: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = docker.Close()
+		if err := net.Shutdown(); err != nil {
+			t.Fatalf("failed to shut down network: %v", err)
+		}
 	})
-	node, err := opera.StartOperaDockerNode(t.Context(), docker, nil, &opera.OperaNodeConfig{
-		Label:         "test",
-		Image:         driver.DefaultClientDockerImageName,
-		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
+	node, err := net.CreateNode(&driver.NodeConfig{
+		Name:  "test",
+		Image: driver.DefaultClientDockerImageName,
 	})
 	if err != nil {
-		t.Fatalf("failed to create an Opera node on Docker: %v", err)
+		t.Fatalf("failed to create node: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = node.Cleanup()
-	})
 	data, err := GetPprofData(node, time.Second)
 	if err != nil {
 		t.Errorf("failed to collect pprof data from node: %v", err)

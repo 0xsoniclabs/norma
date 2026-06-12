@@ -32,7 +32,6 @@ import (
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
 	"github.com/0xsoniclabs/norma/driver/network/rpc"
-	"github.com/0xsoniclabs/norma/driver/node"
 	rpcdriver "github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/norma/load/app"
 	"github.com/0xsoniclabs/norma/load/controller"
@@ -50,7 +49,7 @@ type LocalNetwork struct {
 
 	// nodes provide a register for all nodes in the network, including
 	// validator nodes created during startup.
-	nodes map[driver.NodeID]*node.OperaNode
+	nodes map[driver.NodeID]*operaNode
 
 	// nodesMutex synchronizes access to the list of nodes.
 	nodesMutex sync.Mutex
@@ -103,7 +102,7 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 		network:        dn,
 		config:         *config,
 		primaryAccount: primaryAccount,
-		nodes:          map[driver.NodeID]*node.OperaNode{},
+		nodes:          map[driver.NodeID]*operaNode{},
 		apps:           []driver.Application{},
 		listeners:      map[driver.NetworkListener]bool{},
 		rpcWorkerPool:  rpc.NewRpcWorkerPool(),
@@ -124,7 +123,7 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 			go func(idx int) {
 				defer wg.Done()
 				validatorId := idx + 1
-				nodeConfig := node.OperaNodeConfig{
+				nodeConfig := operaNodeConfig{
 					ValidatorId:    &validatorId,
 					Failing:        validator.Failing,
 					Image:          image,
@@ -158,7 +157,7 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 }
 
 // addNodeIntoNetwork connects the node with other nodes in the network, adds it into the list of nodes.
-func (n *LocalNetwork) addNodeIntoNetwork(node *node.OperaNode) error {
+func (n *LocalNetwork) addNodeIntoNetwork(node *operaNode) error {
 	n.nodesMutex.Lock()
 	defer n.nodesMutex.Unlock()
 
@@ -177,8 +176,8 @@ func (n *LocalNetwork) addNodeIntoNetwork(node *node.OperaNode) error {
 
 // createNode is an internal version of CreateNode enabling the creation
 // of validator and non-validator nodes in the network.
-func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNodeConfig) (*node.OperaNode, error) {
-	node, err := node.StartOperaDockerNode(ctx, n.docker, n.network, nodeConfig)
+func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *operaNodeConfig) (*operaNode, error) {
+	node, err := startOperaDockerNode(ctx, n.docker, n.network, nodeConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start opera docker; %v", err)
 	}
@@ -204,7 +203,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 	}
 
 	if config.Cheater {
-		_, err := n.createNode(context.Background(), &node.OperaNodeConfig{
+		_, err := n.createNode(context.Background(), &operaNodeConfig{
 			Label:          "cheater-" + config.Name,
 			Failing:        config.Failing,
 			Image:          image,
@@ -223,7 +222,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 		*datadir = fmt.Sprintf("%s/%s", n.config.OutputDir, *config.DataVolume)
 	}
 
-	return n.createNode(context.Background(), &node.OperaNodeConfig{
+	return n.createNode(context.Background(), &operaNodeConfig{
 		Label:          config.Name,
 		Failing:        config.Failing,
 		Image:          image,
@@ -473,7 +472,7 @@ func (n *LocalNetwork) Shutdown() error {
 			errs = append(errs, err)
 		}
 	}
-	n.nodes = map[driver.NodeID]*node.OperaNode{}
+	n.nodes = map[driver.NodeID]*operaNode{}
 
 	// Third, shut down the docker network.
 	if n.network != nil {

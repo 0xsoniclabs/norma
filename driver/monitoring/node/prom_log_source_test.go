@@ -23,9 +23,8 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
-	"github.com/0xsoniclabs/norma/driver/docker"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
-	opera "github.com/0xsoniclabs/norma/driver/node"
+	"github.com/0xsoniclabs/norma/driver/network/local"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/exp/slices"
 )
@@ -87,24 +86,24 @@ func TestLogsIntegrationGetRealMetric(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 
-	client, err := docker.NewClient()
+	localNet, err := local.NewLocalNetwork(
+		t.Context(),
+		&driver.NetworkConfig{Validators: driver.DefaultValidators})
 	if err != nil {
-		t.Fatalf("failed to create a docker client: %v", err)
+		t.Fatalf("failed to create local network: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = client.Close()
+		if err := localNet.Shutdown(); err != nil {
+			t.Fatalf("failed to shut down local network: %v", err)
+		}
 	})
-	node, err := opera.StartOperaDockerNode(t.Context(), client, nil, &opera.OperaNodeConfig{
-		Label:         "test",
-		Image:         driver.DefaultClientDockerImageName,
-		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
+	node, err := localNet.CreateNode(&driver.NodeConfig{
+		Name:  "test",
+		Image: driver.DefaultClientDockerImageName,
 	})
 	if err != nil {
-		t.Fatalf("failed to create an Opera node on Docker: %v", err)
+		t.Fatalf("failed to create node on local network: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = node.Cleanup()
-	})
 
 	// simulate existing nodes
 	net.EXPECT().RegisterListener(gomock.Any()).AnyTimes()

@@ -32,7 +32,6 @@ import (
 	"github.com/0xsoniclabs/norma/driver/parser"
 
 	"github.com/0xsoniclabs/norma/driver"
-	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/mock/gomock"
 )
@@ -108,7 +107,7 @@ func TestLocalNetwork_CanEnforceNetworkLatency(t *testing.T) {
 			if got, want := len(nodes), 2; got != want {
 				t.Fatalf("invalid number of active nodes, got %d, want %d", got, want)
 			}
-			got, err := nodes[0].(*node.OperaNode).GetRoundTripTime(nodes[1].Hostname())
+			got, err := nodes[0].(*operaNode).GetRoundTripTime(nodes[1].Hostname())
 			if err != nil {
 				t.Errorf("failed to measure network delay: %v", err)
 			}
