@@ -2,13 +2,14 @@ package rpc
 
 import (
 	"errors"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"go.uber.org/mock/gomock"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"go.uber.org/mock/gomock"
 )
 
 func TestRpcClientImpl_WaitTransactionReceipt_Success(t *testing.T) {
@@ -80,7 +81,27 @@ func TestRpcClientImpl_WaitTransactionReceipt_Timeout(t *testing.T) {
 		}).
 		AnyTimes()
 
-	if _, err := client.WaitTransactionReceipt(common.Hash{}); err == nil || err.Error() != "failed to get transaction receipt: timeout" {
+	mock.EXPECT().
+		Call(gomock.Any(), "txpool_content").
+		DoAndReturn(func(result interface{}, method string, args ...interface{}) error {
+			resultPtr, ok := result.(*map[string]any)
+			if !ok {
+				t.Fatalf("result type is not *map[string]any")
+			}
+			*resultPtr = map[string]any{
+				"pending": map[string]any{
+					"0x0000000000000000000000000000000000000001": map[string]any{
+						"0x1": map[string]any{
+							"hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+						},
+					},
+				},
+			}
+			return nil
+		}).
+		Times(1)
+
+	if _, err := client.WaitTransactionReceipt(common.Hash{}); err == nil || err.Error() != "failed to get transaction receipt: timeout (tx still pending in pool)" {
 		t.Fatalf("expected timeout error, got %v", err)
 	}
 }
