@@ -58,6 +58,7 @@ func build(ctx *cli.Context) error {
 	}
 	runDry := ctx.Bool(dryRun.Name)
 
+	// Collect scenario files from the selected path.
 	files, err := collectScenarioFiles(targetPath)
 	if err != nil {
 		return err
@@ -66,6 +67,7 @@ func build(ctx *cli.Context) error {
 		return fmt.Errorf("no scenario files found in %q", targetPath)
 	}
 
+	// Parse scenarios and gather client image refs that EnsureImages would build.
 	images, err := collectBuildableImages(files)
 	if err != nil {
 		return err
@@ -79,11 +81,13 @@ func build(ctx *cli.Context) error {
 		fmt.Printf("Dry run enabled: no images will be built.\n")
 	}
 
+	// Resolve repository root for docker build contexts.
 	repoRoot, err := docker.ResolveBuildRoot(".")
 	if err != nil {
 		return err
 	}
 
+	// Ensure client images (or print dry-run plan).
 	if len(images) == 0 {
 		fmt.Printf("No buildable client images were found in the selected scenarios.\n")
 	} else if runDry {
@@ -93,6 +97,8 @@ func build(ctx *cli.Context) error {
 			return err
 		}
 	}
+
+	// Build the report renderer image (or print dry-run command).
 	rCmdArgs := rRendererBuildCommandArgs()
 	if runDry {
 		fmt.Printf("Would run: docker %s\n", strings.Join(rCmdArgs, " "))
@@ -143,6 +149,11 @@ func collectScenarioFiles(path string) ([]string, error) {
 	return files, nil
 }
 
+// collectBuildableImages parses scenarios and returns the unique image refs
+// that are expected to be built by docker.EnsureImages.
+//
+// The helper applies scenario defaults (e.g. default client image for empty
+// node image entries) so build behavior matches runtime node startup behavior.
 func collectBuildableImages(paths []string) ([]string, error) {
 	images := map[string]struct{}{}
 	for _, path := range paths {
@@ -176,10 +187,14 @@ func collectBuildableImages(paths []string) ([]string, error) {
 	return docker.NormalizeImageRefs(result), nil
 }
 
+// rRendererBuildCommandArgs returns docker CLI arguments for building the R
+// report renderer image used by summary report generation.
 func rRendererBuildCommandArgs() []string {
 	return []string{"build", "analysis/report/", "-t", "norma-r-renderer"}
 }
 
+// runDockerCommand executes a docker CLI command in the given working
+// directory with BuildKit enabled and inherited stdio.
 func runDockerCommand(ctx context.Context, dir string, args ...string) error {
 	cmd := execCommandContext(ctx, "docker", args...)
 	cmd.Dir = dir
