@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/0xsoniclabs/norma/driver/docker"
 )
 
 func TestCollectScenarioFiles_Recursive(t *testing.T) {
@@ -37,7 +39,7 @@ func TestCollectScenarioFiles_Recursive(t *testing.T) {
 	}
 }
 
-func TestCollectSonicImages(t *testing.T) {
+func TestCollectBuildableImages(t *testing.T) {
 	tmp := t.TempDir()
 
 	scenarioA := `
@@ -67,9 +69,9 @@ nodes:
 		t.Fatalf("failed to write scenario B: %v", err)
 	}
 
-	got, err := collectSonicImages([]string{pathA, pathB})
+	got, err := collectBuildableImages([]string{pathA, pathB})
 	if err != nil {
-		t.Fatalf("collectSonicImages() failed: %v", err)
+		t.Fatalf("collectBuildableImages() failed: %v", err)
 	}
 
 	want := []string{"sonic", "sonic:local", "sonic:v2.1.2"}
@@ -78,46 +80,38 @@ nodes:
 	}
 }
 
-func TestSonicBuildContext(t *testing.T) {
+func TestWillBuildImage(t *testing.T) {
 	tests := []struct {
 		name      string
 		image     string
-		want      string
-		wantError bool
+		wantBuild bool
 	}{
 		{
 			name:  "default sonic",
 			image: "sonic",
-			want:  "https://github.com/0xsoniclabs/sonic.git",
+			wantBuild: true,
 		},
 		{
 			name:  "local",
 			image: "sonic:local",
-			want:  "sonic",
+			wantBuild: true,
 		},
 		{
 			name:  "version tag",
 			image: "sonic:v2.1.1",
-			want:  "https://github.com/0xsoniclabs/sonic.git#v2.1.1",
+			wantBuild: true,
 		},
 		{
-			name:      "invalid",
+			name:      "non sonic",
 			image:     "alpine:latest",
-			wantError: true,
+			wantBuild: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := sonicBuildContext(tt.image)
-			if (err != nil) != tt.wantError {
-				t.Fatalf("unexpected error state: %v", err)
-			}
-			if tt.wantError {
-				return
-			}
-			if got != tt.want {
-				t.Fatalf("invalid build context\ngot:  %q\nwant: %q", got, tt.want)
+			if got := docker.WillBuildImage(tt.image); got != tt.wantBuild {
+				t.Fatalf("invalid build classification\ngot:  %v\nwant: %v", got, tt.wantBuild)
 			}
 		})
 	}

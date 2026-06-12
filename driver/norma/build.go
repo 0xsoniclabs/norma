@@ -26,11 +26,11 @@ import (
 	"strings"
 
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/docker"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/urfave/cli/v2"
 )
 
-const sonicClientSource = "https://github.com/0xsoniclabs/sonic.git"
 const defaultScenarioPath = "scenarios"
 
 var execCommandContext = exec.CommandContext
@@ -66,15 +66,12 @@ func build(ctx *cli.Context) error {
 		return fmt.Errorf("no scenario files found in %q", targetPath)
 	}
 
-	images, err := collectSonicImages(files)
+	images, err := collectBuildableImages(files)
 	if err != nil {
 		return err
 	}
-	if len(images) == 0 {
-		images = []string{driver.DefaultClientDockerImageName}
-	}
 
-	fmt.Printf("Found %d scenario file(s) and %d Sonic image(s) to build:\n", len(files), len(images))
+	fmt.Printf("Found %d scenario file(s) and %d image(s) to build:\n", len(files), len(images))
 	for _, image := range images {
 		fmt.Printf("  - %s\n", image)
 	}
@@ -82,24 +79,17 @@ func build(ctx *cli.Context) error {
 		fmt.Printf("Dry run enabled: no images will be built.\n")
 	}
 
-	repoRoot, err := findRepoRoot()
+	repoRoot, err := docker.ResolveBuildRoot(".")
 	if err != nil {
 		return err
 	}
 
-	for _, image := range images {
-		cmdArgs, err := sonicBuildCommandArgs(image)
-		if err != nil {
-			return err
-		}
-
-		if runDry {
-			fmt.Printf("Would run: docker %s\n", strings.Join(cmdArgs, " "))
-			continue
-		}
-
-		fmt.Printf("Building %s ...\n", image)
-		if err := runDockerCommand(ctx.Context, repoRoot, cmdArgs...); err != nil {
+	if len(images) == 0 {
+		fmt.Printf("No buildable client images were found in the selected scenarios.\n")
+	} else if runDry {
+		fmt.Printf("Would ensure images (build/pull via EnsureImages): %s\n", strings.Join(images, ", "))
+	} else {
+		if err := docker.EnsureImages(ctx.Context, images, repoRoot); err != nil {
 			return err
 		}
 	}
@@ -153,7 +143,7 @@ func collectScenarioFiles(path string) ([]string, error) {
 	return files, nil
 }
 
-func collectSonicImages(paths []string) ([]string, error) {
+func collectBuildableImages(paths []string) ([]string, error) {
 	images := map[string]struct{}{}
 	for _, path := range paths {
 		scenario, err := parser.ParseFile(path)
@@ -161,22 +151,19 @@ func collectSonicImages(paths []string) ([]string, error) {
 			return nil, fmt.Errorf("failed to parse scenario %q: %w", path, err)
 		}
 
-		for _, validator := range scenario.Validators {
-			image := validator.ImageName
-			if image == "" {
-				image = driver.DefaultClientDockerImageName
-			}
-			if isSonicImage(image) {
-				images[image] = struct{}{}
+		if err := scenario.Check(); err != nil {
+			return nil, err
+		}
+
+		for _, validator := range driver.NewValidators(scenario.Validators) {
+			if docker.WillBuildImage(validator.ImageName) {
+				images[validator.ImageName] = struct{}{}
 			}
 		}
 
 		for _, node := range scenario.Nodes {
-			image := node.Client.ImageName
-			if image == "" {
-				image = driver.DefaultClientDockerImageName
-			}
-			if isSonicImage(image) {
+			image := driver.ResolveClientImageName(node.Client.ImageName)
+			if docker.WillBuildImage(image) {
 				images[image] = struct{}{}
 			}
 		}
@@ -186,41 +173,7 @@ func collectSonicImages(paths []string) ([]string, error) {
 	for image := range images {
 		result = append(result, image)
 	}
-	sort.Strings(result)
-	return result, nil
-}
-
-func findRepoRoot() (string, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-
-	dir := cwd
-	for {
-		if fileExists(filepath.Join(dir, "go.mod")) && fileExists(filepath.Join(dir, "analysis", "report", "Dockerfile")) {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("failed to locate repository root from %q", cwd)
-		}
-		dir = parent
-	}
-}
-
-func sonicBuildCommandArgs(image string) ([]string, error) {
-	buildContext, err := sonicBuildContext(image)
-	if err != nil {
-		return nil, err
-	}
-
-	return []string{
-		"build",
-		"--build-context", fmt.Sprintf("client-src=%s", buildContext),
-		".",
-		"-t", image,
-	}, nil
+	return docker.NormalizeImageRefs(result), nil
 }
 
 func rRendererBuildCommandArgs() []string {
@@ -239,34 +192,7 @@ func runDockerCommand(ctx context.Context, dir string, args ...string) error {
 	return nil
 }
 
-func sonicBuildContext(image string) (string, error) {
-	switch {
-	case image == driver.DefaultClientDockerImageName:
-		return sonicClientSource, nil
-	case strings.HasPrefix(image, driver.DefaultClientDockerImageName+":"):
-		tag := strings.TrimPrefix(image, driver.DefaultClientDockerImageName+":")
-		if tag == "" {
-			return "", fmt.Errorf("invalid image tag %q", image)
-		}
-		if tag == "local" {
-			return "sonic", nil
-		}
-		return fmt.Sprintf("%s#%s", sonicClientSource, tag), nil
-	default:
-		return "", fmt.Errorf("unsupported Sonic image %q", image)
-	}
-}
-
-func isSonicImage(image string) bool {
-	return image == driver.DefaultClientDockerImageName || strings.HasPrefix(image, driver.DefaultClientDockerImageName+":")
-}
-
 func isYAML(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
 	return ext == ".yml" || ext == ".yaml"
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }
