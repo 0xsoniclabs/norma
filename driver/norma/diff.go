@@ -70,6 +70,6 @@ func diff(ctx *cli.Context) (err error) {
 		return err
 	}
 
-	slog.Info("Generated diff report", "path", fmt.Sprintf("file://%s/%s", currentDir, result))
+	slog.Info("generated diff report", "path", fmt.Sprintf("file://%s/%s", currentDir, result))
 	return nil
 }

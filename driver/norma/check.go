@@ -40,7 +40,7 @@ func check(ctx *cli.Context) (err error) {
 	}
 
 	path := args.First()
-	slog.Info("Trying to parse", "path", path)
+	slog.Info("trying to parse", "path", path)
 
 	scenario, err := parser.ParseFile(path)
 	if err != nil {
@@ -51,6 +51,6 @@ func check(ctx *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	slog.Info("All checks passed!", "path", path)
+	slog.Info("all checks passed!", "path", path)
 	return nil
 }

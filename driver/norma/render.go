@@ -36,7 +36,7 @@ var renderCommand = cli.Command{
 func render(ctx *cli.Context) error {
 	args := ctx.Args()
 	if args.Len() < 1 {
-		return fmt.Errorf("requires measurment file path as argument")
+		return fmt.Errorf("requires measurement file path as argument")
 	}
 
 	input := args.First()
@@ -49,6 +49,6 @@ func render(ctx *cli.Context) error {
 		return err
 	}
 
-	slog.Info("Rendered report at", "path", fmt.Sprintf("file://%s/%s", currentDir, result))
+	slog.Info("rendered report at", "path", fmt.Sprintf("file://%s/%s", currentDir, result))
 	return nil
 }

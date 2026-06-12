@@ -91,7 +91,7 @@ func run(
 			}
 		}
 	} else {
-		slog.Warn("Network checks skipped")
+		slog.Warn("network checks skipped")
 	}
 
 	// Schedule all operations listed in the scenario.

@@ -32,11 +32,11 @@ var purgeCommand = cli.Command{
 }
 
 func purge(_ *cli.Context) error {
-	slog.Info("Purging all resources...")
+	slog.Info("purging all resources...")
 	err := docker.Purge()
 	if err != nil {
 		return err
 	}
-	slog.Info("Done.")
+	slog.Info("done.")
 	return nil
 }
