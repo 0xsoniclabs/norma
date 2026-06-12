@@ -118,7 +118,7 @@ func (r Impl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
 func (r Impl) describeTxStatusAfterTimeout(txHash common.Hash) string {
 	var pool map[string]any
 	if err := r.Call(&pool, "txpool_content"); err != nil {
-		return "tx status unknown"
+		return fmt.Sprintf("tx status unknown: %v", err)
 	}
 	pending, ok := pool["pending"]
 	if ok && txHashInTxPoolMap(txHash, pending) {
