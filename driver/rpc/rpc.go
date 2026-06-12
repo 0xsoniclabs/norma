@@ -135,11 +135,23 @@ func (r Impl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
 // otherwise make the receipt never appear and the wait time out.
 func (r Impl) SendTxWithRetry(tx *types.Transaction) (*types.Receipt, error) {
 	txHash := tx.Hash()
+
+	// Broadcast the transaction. A failure of the initial submission is
+	// authoritative (e.g. the transaction was rejected as underpriced or with a
+	// wrong nonce), so it is reported to the caller rather than polling for a
+	// receipt that will never arrive.
+	if err := r.SendTransaction(context.Background(), tx); err != nil {
+		return nil, fmt.Errorf("failed to send transaction: %w", err)
+	}
+
 	const maxDelay = 5 * time.Second
 	begin := time.Now()
+	lastSend := begin
 	delay := time.Millisecond
-	var lastSend time.Time
 	for time.Since(begin) < r.txReceiptTimeout {
+		// Re-broadcast periodically in case the transaction was dropped from the
+		// txpool. Re-sending an already known or already mined transaction is
+		// harmless, so re-send errors are only logged.
 		if time.Since(lastSend) >= r.txResendInterval {
 			if err := r.SendTransaction(context.Background(), tx); err != nil {
 				slog.Debug("re-broadcasting transaction failed", "tx", txHash, "error", err)
