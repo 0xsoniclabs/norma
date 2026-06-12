@@ -23,8 +23,7 @@ import (
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver"
-	"github.com/0xsoniclabs/norma/driver/docker"
-	opera "github.com/0xsoniclabs/norma/driver/node"
+	"github.com/0xsoniclabs/norma/driver/network/local"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/exp/slices"
 )
@@ -163,33 +162,31 @@ func TestMonitorPrometheusLogProviderConfigured(t *testing.T) {
 func TestMonitorIntegrationPrometheusLogReceived(t *testing.T) {
 	t.Parallel()
 	ctrl := gomock.NewController(t)
-	net := driver.NewMockNetwork(ctrl)
+	mockNet := driver.NewMockNetwork(ctrl)
 
-	client, err := docker.NewClient()
+	localNet, err := local.NewLocalNetwork(t.Context(), &driver.NetworkConfig{Validators: driver.DefaultValidators})
 	if err != nil {
-		t.Fatalf("failed to create a docker client: %v", err)
+		t.Fatalf("failed to create local network: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = client.Close()
+		if err := localNet.Shutdown(); err != nil {
+			t.Fatalf("failed to shutdown local network: %v", err)
+		}
 	})
-	node, err := opera.StartOperaDockerNode(t.Context(), client, nil, &opera.OperaNodeConfig{
-		Label:         "test",
-		Image:         driver.DefaultClientDockerImageName,
-		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
+	node, err := localNet.CreateNode(&driver.NodeConfig{
+		Name:  "test",
+		Image: driver.DefaultClientDockerImageName,
 	})
 	if err != nil {
-		t.Fatalf("failed to create an Opera node on Docker: %v", err)
+		t.Fatalf("failed to create a node on local network: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = node.Cleanup()
-	})
 
 	// simulate existing nodes
-	net.EXPECT().RegisterListener(gomock.Any()).AnyTimes()
-	net.EXPECT().GetActiveNodes().AnyTimes().Return([]driver.Node{node})
+	mockNet.EXPECT().RegisterListener(gomock.Any()).AnyTimes()
+	mockNet.EXPECT().GetActiveNodes().AnyTimes().Return([]driver.Node{node})
 
 	outDir := t.TempDir()
-	monitor, err := NewMonitor(net, MonitorConfig{OutputDir: outDir})
+	monitor, err := NewMonitor(mockNet, MonitorConfig{OutputDir: outDir})
 	if err != nil {
 		t.Fatalf("failed to create monitor instance: %v", err)
 	}
