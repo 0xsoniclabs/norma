@@ -104,12 +104,12 @@ func logState(monitor *monitoring.Monitor, nodes *activeNodes) {
 
 	slog.Info("progress update",
 		"nodes", numNodes,
-		"epc/blk heights", blockStatuses,
+		"epc/blk", blockStatuses,
 		"tx/s", txPers,
 		"txs", txs,
 		"gas", gas,
-		"stakes", stakes,
-		"blk time", processingTimes)
+		"stake", stakes,
+		"blk t", processingTimes)
 }
 
 func getNumNodes(monitor *monitoring.Monitor) string {
