@@ -18,21 +18,12 @@ BUILD_DIR := $(CURDIR)/build
 
 .PHONY: all test clean
 
-# Define a list of client versions
-CLIENT_VERSIONS := \
-	v2.0 v2.0.0 v2.0.1 v2.0.2 v2.0.3 \
-	v2.1 v2.1.0 v2.1.1 v2.1.2 v2.1.6
-CLIENT_URL=https://github.com/0xsoniclabs/sonic.git
-
 all: \
     norma \
     pull-hello-world-image \
     pull-alpine-image \
     pull-prometheus-image \
-    build-r-renderer-image \
-    build-sonic-docker-image-main \
-    build-sonic-docker-image-local \
-    $(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)) \
+	build-r-renderer-image
 
 pull-hello-world-image:
 	DOCKER_BUILDKIT=1 docker image pull hello-world
@@ -45,16 +36,6 @@ pull-prometheus-image:
 
 build-r-renderer-image:
 	DOCKER_BUILDKIT=1 docker build analysis/report/ -t norma-r-renderer
-
-build-sonic-docker-image-main:
-	DOCKER_BUILDKIT=1 docker build --build-context client-src=$(CLIENT_URL) . -t sonic
-
-build-sonic-docker-image-local:
-	DOCKER_BUILDKIT=1 docker build --build-context client-src=sonic . -t sonic:local
-
-# Build various client versions
-$(foreach version, $(CLIENT_VERSIONS), build-sonic-docker-image-$(version)):
-	DOCKER_BUILDKIT=1 docker build --build-context client-src=$(CLIENT_URL)\#$(subst build-sonic-docker-image-,,$@) . -t sonic:$(subst build-sonic-docker-image-,,$@)
 
 generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi load/contracts/abi/SmartAccount.abi load/contracts/abi/EntryPoint.abi load/contracts/abi/TransientCounter.abi load/contracts/abi/SelfDestructOldContract.abi load/contracts/abi/SelfDestructNewContract.abi load/contracts/abi/EcdsaCounter.abi load/contracts/abi/LargeContract.abi load/contracts/abi/ProbabilisticFailing.abi # requires installed solc and Ethereum abigen - check README.md
 
@@ -122,9 +103,8 @@ generate-mocks: # requires installed mockgen
 norma:
 	go build -o $(BUILD_DIR)/norma ./driver/norma
 
-test: pull-hello-world-image pull-alpine-image pull-prometheus-image build-r-renderer-image build-sonic-docker-image-main
+test: pull-hello-world-image pull-alpine-image pull-prometheus-image build-r-renderer-image
 	go test ./... -v
 
 clean:
 	rm -rvf $(CURDIR)/build
-	docker image rm -f sonic sonic:local
