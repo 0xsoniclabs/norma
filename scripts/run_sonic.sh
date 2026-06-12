@@ -73,8 +73,8 @@ export GOMEMLIMIT="1GiB"
 ./sonicd \
     --datadir="${datadir}" \
     ${val_flag} \
-    --http --http.addr 0.0.0.0 --http.port 18545 --http.api admin,eth,sonic \
-    --ws --ws.addr 0.0.0.0 --ws.port 18546 --ws.api admin,eth,sonic \
+    --http --http.addr 0.0.0.0 --http.port 18545 --http.api admin,eth,sonic,txpool \
+    --ws --ws.addr 0.0.0.0 --ws.port 18546 --ws.api admin,eth,sonic,txpool \
     --pprof --pprof.addr 0.0.0.0 \
     --nat="extip:${external_ip}" \
     --metrics \
