@@ -3,7 +3,10 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"math/big"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -96,6 +99,7 @@ func logState(monitor *monitoring.Monitor, nodes *activeNodes) {
 	txPers := getTxPerSec(monitor, nodes)
 	txs := getNumTxs(monitor)
 	gas := getGasUsed(monitor)
+	stakes := getValidatorStakes(monitor)
 	processingTimes := getBlockProcessingTimes(monitor, nodes)
 
 	slog.Info("progress update",
@@ -104,7 +108,8 @@ func logState(monitor *monitoring.Monitor, nodes *activeNodes) {
 		"tx/s", txPers,
 		"txs", txs,
 		"gas", gas,
-		"blk processing", processingTimes)
+		"stakes", stakes,
+		"blk time", processingTimes)
 }
 
 func getNumNodes(monitor *monitoring.Monitor) string {
@@ -143,6 +148,68 @@ func getBlockProcessingTimes(monitor *monitoring.Monitor, nodes *activeNodes) []
 		time.Duration,
 		monitoring.Series[monitoring.BlockNumber, time.Duration]](
 		monitor, metric, nodes)
+}
+
+func getValidatorStakes(monitor *monitoring.Monitor) []string {
+	metric := netmon.ValidatorStake
+	subjects := monitoring.GetSubjects(monitor, metric)
+	sort.Slice(subjects, func(i, j int) bool {
+		iID, iOK := validatorIDFromMetricSubject(subjects[i])
+		jID, jOK := validatorIDFromMetricSubject(subjects[j])
+		if iOK && jOK {
+			return iID < jID
+		}
+		return subjects[i] < subjects[j]
+	})
+
+	stakes := make([]*big.Int, 0, len(subjects))
+	totalStake := big.NewInt(0)
+	for _, subject := range subjects {
+		data, exists := monitoring.GetData(monitor, subject, metric)
+		stakeStr := getLastValAsString[monitoring.Time, string](exists, data)
+		stake, ok := new(big.Int).SetString(stakeStr, 10)
+		if !ok {
+			stakes = append(stakes, nil)
+			continue
+		}
+		stakes = append(stakes, stake)
+		totalStake.Add(totalStake, stake)
+	}
+
+	res := make([]string, 0, len(stakes))
+	if totalStake.Sign() == 0 {
+		for range stakes {
+			res = append(res, "N/A")
+		}
+		return res
+	}
+
+	for _, stake := range stakes {
+		if stake == nil {
+			res = append(res, "N/A")
+			continue
+		}
+		// Rounded integer percentage: (stake*100 + total/2) / total.
+		numerator := new(big.Int).Mul(stake, big.NewInt(100))
+		halfTotal := new(big.Int).Div(new(big.Int).Set(totalStake), big.NewInt(2))
+		numerator.Add(numerator, halfTotal)
+		percent := new(big.Int).Div(numerator, totalStake)
+		res = append(res, percent.String()+"%")
+	}
+	return res
+}
+
+func validatorIDFromMetricSubject(subject monitoring.Node) (int, bool) {
+	prefix := "validator-"
+	name := string(subject)
+	if !strings.HasPrefix(name, prefix) {
+		return 0, false
+	}
+	id, err := strconv.Atoi(strings.TrimPrefix(name, prefix))
+	if err != nil {
+		return 0, false
+	}
+	return id, true
 }
 
 func getLastValAllSubjects[K constraints.Ordered, T any, X monitoring.Series[K, T]](
