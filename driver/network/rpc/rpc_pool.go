@@ -116,7 +116,7 @@ func (wg *workerGroup) close() {
 // worker maintains one worker that sends transactions to an RPC client.
 // It listens to incoming transactions and sends them to the client.
 // The worker can be closed, and it stops listening and sending the transactions.
-// The worker is initialised (i.e. the RPC connection is established) before
+// The worker is initialized (i.e. the RPC connection is established) before
 // it starts dispatching asynchronously. This process can be interrupted by
 // closing the worker before it starts dispatching.
 type worker struct {

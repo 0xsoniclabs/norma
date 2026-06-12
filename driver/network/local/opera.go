@@ -298,7 +298,7 @@ func (n *operaNode) RemovePeer(id driver.NodeID) error {
 	})
 }
 
-// Kill sends a SigKill singal to node.
+// Kill sends a SigKill signal to node.
 func (n *operaNode) Kill() error {
 	return n.container.SendSignal(docker.SigKill)
 }
