@@ -327,7 +327,7 @@ func TestExecutor_TestUserAbort(t *testing.T) {
 
 	// In this scenario, a node is created, after which the context is cancelled.
 	net.EXPECT().CreateNode(gomock.Any()).Do(func(_ any) {
-		fmt.Printf("Cancelling context to simulate user abort ..\n")
+		t.Log("Cancelling context to simulate user abort ..")
 		cancel()
 	}).Return(node, nil)
 

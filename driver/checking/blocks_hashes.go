@@ -18,12 +18,14 @@ package checking
 
 import (
 	"fmt"
+	"log/slog"
+	"maps"
+
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"maps"
 )
 
 func init() {
@@ -44,7 +46,7 @@ func (c *blocksHashesChecker) Configure(config CheckerConfig) Checker {
 
 func (c *blocksHashesChecker) Check() (err error) {
 	nodes := c.net.GetActiveNodes()
-	fmt.Printf("checking hashes for %d nodes\n", len(nodes))
+	slog.Info("checking hashes for nodes", "count", len(nodes))
 
 	rpcClients := make([]rpc.Client, len(nodes))
 	defer func() {

@@ -213,7 +213,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 func printLog(node *OperaNode) error {
 	reader, err := node.StreamLog()
 	if err != nil {
-		return fmt.Errorf("cannot read node logs: %e", err)
+		return fmt.Errorf("cannot read node logs: %w", err)
 	}
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {

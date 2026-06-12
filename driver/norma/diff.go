@@ -19,6 +19,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/0xsoniclabs/norma/analysis/report"
@@ -36,7 +37,7 @@ var diffCommand = cli.Command{
 func diff(ctx *cli.Context) (err error) {
 	args := ctx.Args()
 	if args.Len() < 1 {
-		return fmt.Errorf("requires at least one measurment file path as argument")
+		return fmt.Errorf("requires at least one measurement file path as argument")
 	}
 
 	// Merge input files into a temporary file.
@@ -69,6 +70,6 @@ func diff(ctx *cli.Context) (err error) {
 		return err
 	}
 
-	fmt.Printf("Generated report at file://%s/%s\n", currentDir, result)
+	slog.Info("generated diff report", "path", fmt.Sprintf("file://%s/%s", currentDir, result))
 	return nil
 }

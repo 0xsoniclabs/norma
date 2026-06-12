@@ -18,11 +18,13 @@ package checking
 
 import (
 	"fmt"
-	"github.com/0xsoniclabs/norma/driver"
-	"github.com/0xsoniclabs/norma/driver/monitoring"
+	"log/slog"
 	"maps"
 	"strconv"
 	"strings"
+
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/monitoring"
 )
 
 // allow block height to fall short by this amount
@@ -60,7 +62,7 @@ func (c *blockHeightChecker) Configure(config CheckerConfig) Checker {
 
 func (c *blockHeightChecker) Check() error {
 	nodes := c.net.GetActiveNodes()
-	fmt.Printf("checking block heights for %d nodes\n", len(nodes))
+	slog.Info("checking block heights for nodes", "count", len(nodes))
 	heights := make([]int64, len(nodes))
 	maxHeight := int64(0)
 	expectedFailures := make(map[string]struct{})

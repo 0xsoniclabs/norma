@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -108,7 +109,7 @@ func run(ctx *cli.Context) (err error) {
 	defer stop()
 	go func() {
 		<-stoppableCtx.Done()
-		fmt.Printf("Stopping...\n")
+		slog.Info("stopping...")
 		stop() // second Ctrl+C will force-kill
 	}()
 
@@ -157,7 +158,7 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 		return fmt.Errorf("couldn't create temp dir for output; %w", err)
 	}
 
-	fmt.Printf("Reading '%s' ...\n", path)
+	slog.Info("reading scenario file", "path", path)
 	scenario, err := parser.ParseFile(path)
 	if err != nil {
 		return err
@@ -167,7 +168,7 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 		return err
 	}
 
-	fmt.Printf("Starting evaluation %s\n", label)
+	slog.Info("starting evaluation", "label", label)
 
 	// create symlink as qol (_latest => _####) where #### is the randomly generated name
 	symlink := filepath.Join(filepath.Dir(outputDir), fmt.Sprintf("norma_data_%s_latest", label))
@@ -180,7 +181,7 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 		return fmt.Errorf("failed to create _latest symlink: %w", err)
 	}
 
-	fmt.Printf("Monitoring data is written to %v\n", outputDir)
+	slog.Info("monitoring data is written", "output", outputDir)
 
 	// Copy scenario yml to outputDir as well to provide context
 	data, err := os.ReadFile(path)
@@ -195,9 +196,9 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 	clock := executor.NewWallTimeClock()
 
 	// Startup network.
-	fmt.Printf("Network RoundTripTime: %v\n", scenario.GetRoundTripTime())
+	slog.Info("network RoundTripTime", "value", scenario.GetRoundTripTime())
 	for k, v := range scenario.NetworkRules.Genesis {
-		fmt.Printf("Network Rule: %s: %s\n", k, v)
+		slog.Info("network Rule", "key", k, "value", v)
 	}
 
 	net, err := local.NewLocalNetwork(ctx, &driver.NetworkConfig{
@@ -210,9 +211,9 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 		return err
 	}
 	defer func() {
-		fmt.Printf("Shutting down network ...\n")
+		slog.Info("shutting down network ...")
 		if err := net.Shutdown(); err != nil {
-			fmt.Printf("error during network shutdown:\n%v", err)
+			slog.Error("error during network shutdown", "error", err)
 		}
 	}()
 
@@ -225,23 +226,23 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 		return err
 	}
 	defer func() {
-		fmt.Printf("Shutting down data monitor ...\n")
+		slog.Info("shutting down data monitor ...")
 		if err := monitor.Shutdown(); err != nil {
-			fmt.Printf("error during monitor shutdown:\n%v\n", err)
+			slog.Error("error during monitor shutdown", "error", err)
 		}
-		fmt.Printf("Monitoring data was written to %v\n", outputDir)
-		fmt.Printf("Raw data was exported to %s\n", monitor.GetMeasurementFileName())
+		slog.Info("monitoring data was written", "output", outputDir)
+		slog.Info("raw data was exported", "file", monitor.GetMeasurementFileName())
 
 		if !skipReportRendering && ctx.Err() == nil {
-			fmt.Printf("Rendering summary report (may take a few minutes the first time if R packages need to be installed) ...\n")
+			slog.Info("rendering summary report (may take a few minutes the first time if R packages need to be installed) ...")
 			if file, err := report.SingleEvalReport.Render(monitor.GetMeasurementFileName(), outputDir); err != nil {
-				fmt.Printf("Report generation failed:\n%v\n", err)
+				slog.Error("report generation failed", "error", err)
 			} else {
-				fmt.Printf("Summary report was exported to file://%s/%s\n", outputDir, file)
+				slog.Info("summary report was exported", "file", fmt.Sprintf("file://%s/%s", outputDir, file))
 			}
 		} else {
-			fmt.Printf("Report rendering skipped\n")
-			fmt.Printf("To render report run `norma render %s`\n", monitor.GetMeasurementFileName())
+			slog.Info("report rendering skipped")
+			slog.Info(fmt.Sprintf("To render report run `norma render %s`", monitor.GetMeasurementFileName()))
 		}
 	}()
 
@@ -251,16 +252,16 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 	}
 
 	// Run prometheus.
-	fmt.Printf("Starting Prometheus ...\n")
+	slog.Info("starting Prometheus ...")
 	prom, err := prometheusmon.Start(net, net.GetDockerNetwork())
 	if err != nil {
-		fmt.Printf("error starting Prometheus:\n%v", err)
+		slog.Error("error starting Prometheus", "error", err)
 	}
 	defer func() {
 		if !keepPrometheusRunning && prom != nil {
-			fmt.Printf("Shutting down Prometheus ...\n")
+			slog.Info("shutting down Prometheus ...")
 			if err := prom.Shutdown(); err != nil {
-				fmt.Printf("error during Prometheus shutdown:\n%v", err)
+				slog.Error("error during Prometheus shutdown", "error", err)
 			}
 		}
 	}()
@@ -272,14 +273,14 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 	}
 
 	// Run scenario.
-	fmt.Printf("Running '%s' ...\n", path)
+	slog.Info("running scenario", "path", path)
 	logger := startProgressLogger(monitor, net)
 	defer logger.shutdown()
 	err = executor.Run(ctx, clock, net, &scenario, checks)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Execution completed successfully!\n")
+	slog.Info("execution completed successfully")
 
 	return nil
 }
