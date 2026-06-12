@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types/image"
 )
@@ -99,10 +100,10 @@ func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) err
 	if err != nil {
 		return err
 	}
-	slog.Info("Resolved build root", "path", buildRoot)
+	slog.Info("resolved build root", "path", buildRoot)
 
 	refs := deduplicateAndSort(imageRefs)
-	slog.Info("Checking images", "refs", refs)
+	slog.Info("checking images", "refs", refs)
 	cli, err := NewClient()
 	if err != nil {
 		return fmt.Errorf("failed to create docker client: %w", err)
@@ -114,20 +115,22 @@ func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) err
 	for _, ref := range refs {
 
 		plan := planImage(ref)
+		start := time.Now()
 		switch plan.kind {
 		case imageBuildSonicRemote, imageBuildSonicLocal:
-			slog.Info("Building image", "ref", ref, "clientSrc", plan.clientSrc)
+			slog.Info("building image", "ref", ref, "clientSrc", plan.clientSrc)
 			if err := buildImage(ctx, buildRoot, ref, plan.clientSrc); err != nil {
 				return err
 			}
 		case imageBuildNone:
-			slog.Info("Pulling image", "ref", ref)
+			slog.Info("pulling image", "ref", ref)
 			if err := pullImage(ctx, cli, ref); err != nil {
 				return err
 			}
 		default:
 			return fmt.Errorf("unsupported image plan for %q", ref)
 		}
+		slog.Info("image ready", "ref", ref, "took", time.Since(start))
 	}
 
 	return nil
