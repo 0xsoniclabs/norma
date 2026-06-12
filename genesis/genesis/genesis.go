@@ -74,7 +74,7 @@ func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera
 
 	// Create the validator account and provide tokens, pre-init a maximal limit of validators.
 	const maxValidators = 100
-	totalSupply := utils.ToFtm(1000_000_000)
+	totalSupply := utils.ToFtm(1_000_000_000_000_000)
 	validators := makefakegenesis.GetFakeValidators(idx.Validator(maxValidators))
 	supplyEach := new(big.Int).Div(totalSupply, big.NewInt(int64(len(validators))))
 	for _, validator := range validators {
