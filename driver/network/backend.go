@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -30,9 +29,10 @@ import (
 // ContractBackend is an interface for a client to interact with the network.
 type ContractBackend interface {
 	bind.ContractBackend
-	// WaitTransactionReceipt waits for the receipt of the given transaction hash to be available.
-	// The function times out after 10 seconds.
-	WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
+	// SendTxWithRetry broadcasts the given transaction and waits for its receipt,
+	// periodically re-broadcasting it while waiting to recover from the transaction
+	// being dropped from the txpool.
+	SendTxWithRetry(tx *types.Transaction) (*types.Receipt, error)
 }
 
 // convertContractBytecode converts a contract hex string to bytecode.

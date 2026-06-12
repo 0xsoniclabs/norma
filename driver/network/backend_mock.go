@@ -163,6 +163,21 @@ func (mr *MockContractBackendMockRecorder) SendTransaction(ctx, tx any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTransaction", reflect.TypeOf((*MockContractBackend)(nil).SendTransaction), ctx, tx)
 }
 
+// SendTxWithRetry mocks base method.
+func (m *MockContractBackend) SendTxWithRetry(tx *types.Transaction) (*types.Receipt, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendTxWithRetry", tx)
+	ret0, _ := ret[0].(*types.Receipt)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SendTxWithRetry indicates an expected call of SendTxWithRetry.
+func (mr *MockContractBackendMockRecorder) SendTxWithRetry(tx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTxWithRetry", reflect.TypeOf((*MockContractBackend)(nil).SendTxWithRetry), tx)
+}
+
 // SubscribeFilterLogs mocks base method.
 func (m *MockContractBackend) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error) {
 	m.ctrl.T.Helper()
@@ -206,19 +221,4 @@ func (m *MockContractBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, e
 func (mr *MockContractBackendMockRecorder) SuggestGasTipCap(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SuggestGasTipCap", reflect.TypeOf((*MockContractBackend)(nil).SuggestGasTipCap), ctx)
-}
-
-// WaitTransactionReceipt mocks base method.
-func (m *MockContractBackend) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WaitTransactionReceipt", txHash)
-	ret0, _ := ret[0].(*types.Receipt)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// WaitTransactionReceipt indicates an expected call of WaitTransactionReceipt.
-func (mr *MockContractBackendMockRecorder) WaitTransactionReceipt(txHash any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitTransactionReceipt", reflect.TypeOf((*MockContractBackend)(nil).WaitTransactionReceipt), txHash)
 }

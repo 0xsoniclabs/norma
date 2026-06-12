@@ -35,6 +35,7 @@ func RegisterValidatorNode(backend ContractBackend) (int, error) {
 	privateKeyECDSA := evmcore.FakeKey(uint32(newValId))
 	txOpts, err := bind.NewKeyedTransactorWithChainID(privateKeyECDSA, big.NewInt(int64(opera.FakeNetRules(opera.GetSonicUpgrades()).NetworkID)))
 	txOpts.GasTipCap = big.NewInt(100) // tip shall facilitate emission of the transaction, bypassing other pooled txs
+	txOpts.NoSend = true               // broadcasting (with retry) is handled by SendTxWithRetry
 	if err != nil {
 		return 0, fmt.Errorf("failed to create txOpts; %v", err)
 	}
@@ -51,7 +52,7 @@ func RegisterValidatorNode(backend ContractBackend) (int, error) {
 		return 0, fmt.Errorf("failed to create validator; %v", err)
 	}
 
-	receipt, err := backend.WaitTransactionReceipt(tx.Hash())
+	receipt, err := backend.SendTxWithRetry(tx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create validator, receipt error: %v", err)
 	}
@@ -80,6 +81,7 @@ func UnregisterValidatorNode(client rpc.Client, validatorId int) error {
 	key := evmcore.FakeKey(uint32(validatorId))
 	txOpts, err := bind.NewKeyedTransactorWithChainID(key, big.NewInt(int64(opera.FakeNetRules(opera.GetSonicUpgrades()).NetworkID)))
 	txOpts.GasTipCap = big.NewInt(100) // tip shall facilitate emission of the transaction, bypassing other pooled txs
+	txOpts.NoSend = true               // broadcasting (with retry) is handled by SendTxWithRetry
 	if err != nil {
 		return fmt.Errorf("failed to create txOpts; %v", err)
 	}
@@ -93,7 +95,7 @@ func UnregisterValidatorNode(client rpc.Client, validatorId int) error {
 		return fmt.Errorf("failed to undelegate validator stake; %v", err)
 	}
 
-	receipt, err := client.WaitTransactionReceipt(tx.Hash())
+	receipt, err := client.SendTxWithRetry(tx)
 	if err != nil {
 		return fmt.Errorf("failed to unregister validator, receipt error: %v", err)
 	}

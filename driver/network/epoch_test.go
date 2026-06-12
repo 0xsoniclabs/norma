@@ -38,8 +38,7 @@ func TestAdvanceEpoch_Success(t *testing.T) {
 	client.EXPECT().PendingCodeAt(gomock.Any(), gomock.Any()).Return(bytecode, nil)
 	client.EXPECT().EstimateGas(gomock.Any(), gomock.Any()).Return(uint64(123), nil)
 	client.EXPECT().PendingNonceAt(gomock.Any(), gomock.Any()).Return(uint64(0), nil)
-	client.EXPECT().SendTransaction(gomock.Any(), gomock.Any()).Return(nil)
-	client.EXPECT().WaitTransactionReceipt(gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil)
+	client.EXPECT().SendTxWithRetry(gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil)
 
 	// Report the updated epoch after advancing.
 	client.EXPECT().Call(gomock.Any(), "eth_currentEpoch").DoAndReturn(
