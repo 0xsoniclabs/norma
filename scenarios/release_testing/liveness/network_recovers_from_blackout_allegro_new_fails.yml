@@ -1,0 +1,66 @@
+# This test scenario checks that the network can stall and recover from
+# a temporary loss of supermajority.
+# Expectations:
+# - Network stalls when a supermajority of validators go offline.
+# - Network recovers when a validator rejoins with the same key and data directory.
+# - Block production continues after recovery.
+# - Load applications can continue to operate after recovery.
+name: Liveness Blackout Allegro
+
+duration: 120
+
+validators:
+  - name: base-local
+    imagename: "sonic:local"
+  - name: base-v216
+    imagename: "sonic:v2.1.6"
+
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: true
+
+nodes:
+  - name: validator-going-offline
+    start: 1
+    leave: 30
+    client:
+      imagename: "sonic:local"
+      type: validator
+      val_id: 3
+  
+  - name: validator-rejoining
+    rejoin: 60
+    client:
+      imagename: "sonic:local"
+      type: validator
+      val_id: 3
+
+checks:
+  - time: 60
+    check: blocks_rolling
+    config:
+      failing: true
+      start: 31
+
+  - time: 120
+    check: blocks_rolling
+    config:
+      start: 90
+
+applications:
+  # Pre-blackout activity.
+  - name: pre-blackout-load
+    type: counter
+    end: 25
+    users: 20
+    rate:
+      constant: 10
+
+  # Resume activity only after recovery to avoid blackout log spam.
+  - name: post-blackout-load
+    type: counter
+    start: 70
+    users: 20
+    rate:
+      constant: 10

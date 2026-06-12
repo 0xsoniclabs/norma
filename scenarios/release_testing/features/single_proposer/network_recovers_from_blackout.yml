@@ -1,0 +1,102 @@
+# This scenario validates liveness behavior with one blackout in each hardfork phase.
+# Expectations:
+# - Sonic phase blackout stalls block production until validator rejoins.
+# - Allegro phase blackout stalls block production until validator rejoins.
+# - Brio phase blackout stalls block production until validator rejoins.
+# - After the third recovery, the network resumes rolling blocks and passes consistency checks.
+name: Liveness Blackout On Sonic Allegro Brio
+
+duration: 360
+
+network_rules:
+  genesis:
+    UPGRADES_SINGLE_PROPOSER: true
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: false
+    UPGRADES_BRIO: false
+  updates:
+    - time: 115
+      rules:
+        UPGRADES_ALLEGRO: true
+    - time: 220
+      rules:
+        UPGRADES_BRIO: true
+
+validators:
+  - name: local-base
+    imagename: "sonic:local"
+
+nodes:
+  # Sonic phase participant.
+  - name: local-peer-sonic
+    start: 10
+    leave: 40
+    client:
+      type: validator
+      imagename: "sonic:local"
+      val_id: 2
+
+  - name: local-peer-sonic-rejoin
+    rejoin: 85
+    leave: 145
+    client:
+      type: validator
+      imagename: "sonic:local"
+      val_id: 2
+
+  - name: local-peer-allegro-rejoin
+    rejoin: 190
+    leave: 250
+    client:
+      type: validator
+      imagename: "sonic:local"
+      val_id: 2
+
+  - name: local-peer-brio-rejoin
+    rejoin: 295
+    client:
+      type: validator
+      imagename: "sonic:local"
+      val_id: 2
+
+advance_epoch:
+  - time: 25
+  - time: 100
+  - time: 130
+  - time: 205
+  - time: 235
+  - time: 310
+
+checks:
+  # Sonic blackout: expect stalled rolling blocks.
+  - time: 70
+    check: blocks_rolling
+    config:
+      failing: true
+      start: 41
+
+  # Allegro blackout: expect stalled rolling blocks.
+  - time: 175
+    check: blocks_rolling
+    config:
+      failing: true
+      start: 146
+
+  # Brio blackout: expect stalled rolling blocks.
+  - time: 280
+    check: blocks_rolling
+    config:
+      failing: true
+      start: 251
+
+  # Final recovery after Brio blackout.
+  - time: 325
+    check: blocks_rolling
+    config:
+      start: 296
+
+  - time: 340
+    check: block_height
+
+  - time: 355
+    check: blocks_hashes

@@ -1,0 +1,47 @@
+name: test subsidies flag switching
+
+# This scenario demonstrates switching the gas subsidies flag mid-scenario
+
+duration: 90
+
+network_rules:
+  genesis:
+    UPGRADES_ALLEGRO: true
+    UPGRADES_GAS_SUBSIDIES: false
+  updates:
+    - time: 30
+      rules:
+        UPGRADES_GAS_SUBSIDIES: true
+
+advance_epoch:
+  - time: 45
+
+validators:
+
+  - name: sonic-latest 
+    imagename: "sonic:local"
+    instances: 2
+
+  - name: sonic-v2.1.6
+    imagename: "sonic:v2.1.6" # supported version with gas subsidies
+
+  - name: sonic-v2.1.5
+    imagename: "sonic:v2.1.5" # before 2.1.6 fork
+    failing: true
+
+applications:
+  - name: counter 
+    type: counter
+    users: 1
+    rate:
+      constant: 1    # Tx/s
+
+  - name: subsidies 
+    type: subsidies
+    start: 35
+    users: 45
+    rate:
+      constant: 20    # Tx/s
+
+
+
