@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand"
+	"sort"
 	"sync"
 	"sync/atomic"
 
@@ -76,6 +77,10 @@ type LocalNetwork struct {
 }
 
 func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalNetwork, error) {
+	if err := docker.EnsureImages(ctx, collectValidatorImages(config.Validators), ""); err != nil {
+		return nil, fmt.Errorf("failed to ensure validator images: %w", err)
+	}
+
 	client, err := docker.NewClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client; %v", err)
@@ -190,11 +195,19 @@ func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNod
 
 // CreateNode creates nodes in the network during run.
 func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error) {
+	image := config.Image
+	if image == "" {
+		image = driver.DefaultClientDockerImageName
+	}
+	if err := docker.EnsureImages(context.Background(), []string{image}, ""); err != nil {
+		return nil, fmt.Errorf("failed to ensure image %q: %w", image, err)
+	}
+
 	if config.Cheater {
 		_, err := n.createNode(context.Background(), &node.OperaNodeConfig{
 			Label:          "cheater-" + config.Name,
 			Failing:        config.Failing,
-			Image:          config.Image,
+			Image:          image,
 			NetworkConfig:  &n.config,
 			ValidatorId:    config.ValidatorId,
 			ExtraArguments: config.ExtraArguments,
@@ -213,12 +226,30 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 	return n.createNode(context.Background(), &node.OperaNodeConfig{
 		Label:          config.Name,
 		Failing:        config.Failing,
-		Image:          config.Image,
+		Image:          image,
 		NetworkConfig:  &n.config,
 		ValidatorId:    config.ValidatorId,
 		MountDataDir:   datadir,
 		ExtraArguments: config.ExtraArguments,
 	})
+}
+
+func collectValidatorImages(validators driver.Validators) []string {
+	images := map[string]bool{}
+	for _, validator := range validators {
+		image := validator.ImageName
+		if image == "" {
+			image = driver.DefaultClientDockerImageName
+		}
+		images[image] = true
+	}
+
+	result := make([]string, 0, len(images))
+	for image := range images {
+		result = append(result, image)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func (n *LocalNetwork) RemoveNode(node driver.Node) error {
