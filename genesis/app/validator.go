@@ -76,7 +76,7 @@ var validatorCommand = cli.Command{
 func generateValidatorFrom(ctx *cli.Context) (err error) {
 	datadir := ctx.String("data-directory")
 	if datadir == "" {
-		slog.Info("--data-directory unset; skipping secret file generation.")
+		slog.Warn("skipping secret file generation.", "reason", "--data-directory unset")
 	}
 
 	id := ctx.Int("validator-id")
