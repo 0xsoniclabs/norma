@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -73,12 +74,12 @@ func build(ctx *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("Found %d scenario file(s) and %d image(s) to build:\n", len(files), len(images))
+	slog.Info("build plan", "scenarioFiles", len(files), "images", len(images))
 	for _, image := range images {
-		fmt.Printf("  - %s\n", image)
+		slog.Info("build image", "image", image)
 	}
 	if runDry {
-		fmt.Printf("Dry run enabled: no images will be built.\n")
+		slog.Info("dry run enabled; no images will be built")
 	}
 
 	// Resolve repository root for docker build contexts.
@@ -89,9 +90,9 @@ func build(ctx *cli.Context) error {
 
 	// Ensure client images (or print dry-run plan).
 	if len(images) == 0 {
-		fmt.Printf("No buildable client images were found in the selected scenarios.\n")
+		slog.Info("no buildable client images found in selected scenarios")
 	} else if runDry {
-		fmt.Printf("Would ensure images (build/pull via EnsureImages): %s\n", strings.Join(images, ", "))
+		slog.Info("would ensure images (build/pull via EnsureImages)", "images", strings.Join(images, ", "))
 	} else {
 		if err := docker.EnsureImages(ctx.Context, images, repoRoot); err != nil {
 			return err
@@ -101,17 +102,17 @@ func build(ctx *cli.Context) error {
 	// Build the report renderer image (or print dry-run command).
 	rCmdArgs := rRendererBuildCommandArgs()
 	if runDry {
-		fmt.Printf("Would run: docker %s\n", strings.Join(rCmdArgs, " "))
-		fmt.Printf("Done.\n")
+		slog.Info("would run docker command", "command", "docker "+strings.Join(rCmdArgs, " "))
+		slog.Info("done")
 		return nil
 	}
 
-	fmt.Printf("Building norma-r-renderer ...\n")
+	slog.Info("building norma-r-renderer")
 	if err := runDockerCommand(ctx.Context, repoRoot, rCmdArgs...); err != nil {
 		return err
 	}
 
-	fmt.Printf("Done.\n")
+	slog.Info("done")
 	return nil
 }
 
