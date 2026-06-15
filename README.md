@@ -45,6 +45,12 @@ make test
 ```
 To clean up a build, use `make clean`.
 
+Norma also counts with a native build command
+```
+go run ./driver/norma build
+```
+which build all the docker images needed by the scenarios in `./scenarios`. One can alternatively provide a specific path for the scenarios.
+
 ## Running
 
 To run Norma, you can run the `norma` executable created by the build process:
@@ -54,6 +60,10 @@ build/norma <cmd> <args...>
 To list the available commands, run
 ```
 build/norma
+```
+Alternatively use 
+```
+go run ./driver/norma
 ```
 
 
@@ -93,7 +103,11 @@ alternatively
 The experiments use the docker image that wraps the Sonic client. The image is built as part of
 the build process, and can be explicitly triggered:
 ```
-make build-docker-image
+make build-docker
+```
+or
+```
+go run ./driver/norma build
 ```
 
 ### Commands

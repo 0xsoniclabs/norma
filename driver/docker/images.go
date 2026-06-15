@@ -96,13 +96,13 @@ func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) err
 		buildRoot = cwd
 	}
 
-	buildRoot, err := resolveBuildRoot(buildRoot)
+	buildRoot, err := ResolveBuildRoot(buildRoot)
 	if err != nil {
 		return err
 	}
 	slog.Info("resolved build root", "path", buildRoot)
 
-	refs := deduplicateAndSort(imageRefs)
+	refs := NormalizeImageRefs(imageRefs)
 	slog.Info("checking images", "refs", refs)
 	cli, err := NewClient()
 	if err != nil {
@@ -134,6 +134,24 @@ func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) err
 	}
 
 	return nil
+}
+
+// NormalizeImageRefs removes empty refs, deduplicates, and returns image refs
+// in lexical order.
+func NormalizeImageRefs(in []string) []string {
+	set := map[string]bool{}
+	for _, imageRef := range in {
+		if strings.TrimSpace(imageRef) == "" {
+			continue
+		}
+		set[imageRef] = true
+	}
+	out := make([]string, 0, len(set))
+	for imageRef := range set {
+		out = append(out, imageRef)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // pullImage pulls imageRef from the configured registry and consumes the entire
@@ -195,6 +213,10 @@ func planImage(imageRef string) imageBuildPlan {
 	if imageRef == "sonic:local" {
 		return imageBuildPlan{kind: imageBuildSonicLocal, clientSrc: "sonic"}
 	}
+	if imageRef == "sonic:latest" {
+		// "latest" is a Docker tag convention, not a git ref; build from repo HEAD.
+		return imageBuildPlan{kind: imageBuildSonicRemote, clientSrc: sonicRepositoryURL}
+	}
 	if strings.HasPrefix(imageRef, "sonic:") {
 		tag := strings.TrimPrefix(imageRef, "sonic:")
 		if tag != "" {
@@ -207,24 +229,23 @@ func planImage(imageRef string) imageBuildPlan {
 	return imageBuildPlan{kind: imageBuildNone}
 }
 
+// WillBuildImage reports whether EnsureImages will build (not pull) the given
+// image reference.
+//
+// This is true for Sonic image refs handled via local or remote source build
+// contexts (e.g. sonic, sonic:local, sonic:<tag-or-commit>). For all other
+// refs, EnsureImages will pull instead.
+func WillBuildImage(imageRef string) bool {
+	plan := planImage(imageRef)
+	return plan.kind == imageBuildSonicRemote || plan.kind == imageBuildSonicLocal
+}
+
 // deduplicateAndSort removes blank entries, deduplicates refs, and returns
 // them in lexical order.
 //
 // Sorting keeps execution deterministic and log output stable across runs.
 func deduplicateAndSort(in []string) []string {
-	set := map[string]bool{}
-	for _, imageRef := range in {
-		if strings.TrimSpace(imageRef) == "" {
-			continue
-		}
-		set[imageRef] = true
-	}
-	out := make([]string, 0, len(set))
-	for imageRef := range set {
-		out = append(out, imageRef)
-	}
-	sort.Strings(out)
-	return out
+	return NormalizeImageRefs(in)
 }
 
 // resolveBuildRoot finds the Norma repository root to execute docker builds.
@@ -237,6 +258,19 @@ func deduplicateAndSort(in []string) []string {
 // This guards against running docker build in unrelated directories while
 // keeping call sites simple.
 func resolveBuildRoot(startDir string) (string, error) {
+	return ResolveBuildRoot(startDir)
+}
+
+// ResolveBuildRoot finds the Norma repository root to execute docker builds.
+//
+// Starting from startDir, it walks up parent directories until it finds a
+// directory containing both:
+//   - Dockerfile
+//   - scripts/run_sonic.sh
+//
+// This guards against running docker build in unrelated directories while
+// keeping call sites simple.
+func ResolveBuildRoot(startDir string) (string, error) {
 	dir, err := filepath.Abs(startDir)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve build root: %w", err)

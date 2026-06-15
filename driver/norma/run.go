@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -120,39 +119,24 @@ func run(ctx *cli.Context) (err error) {
 		stop() // second Ctrl+C will force-kill
 	}()
 
-	// Check if the path is a directory
-	fileInfo, err := os.Stat(path)
+	files, err := collectScenarioFiles(path)
 	if err != nil {
-		return fmt.Errorf("failed to stat path: %w", err)
+		return fmt.Errorf("failed to collect scenario files: %w", err)
 	}
-
-	if fileInfo.IsDir() {
-		// List all YAML files in the directory and run each
-		return filepath.WalkDir(path, func(p string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if stoppableCtx.Err() != nil {
-				return stoppableCtx.Err()
-			}
-			if !d.IsDir() && (filepath.Ext(d.Name()) == ".yaml" || filepath.Ext(d.Name()) == ".yml") {
-				// Call runScenario for each YAML file
-				label := fmt.Sprintf("eval_%d", time.Now().Unix())
-				if err := runScenario(stoppableCtx, p, outputDir, label, keepPrometheusRunning, skipChecks, skipReportRendering, openReport); err != nil {
-					return fmt.Errorf("failed to run: %s: %w", p, err)
-				}
-			}
-			return nil
-		})
-	} else {
-		// Call runScenario for the single file
+	for _, file := range files {
+		if stoppableCtx.Err() != nil {
+			return stoppableCtx.Err()
+		}
 		label := ctx.String(evalLabel.Name)
 		if label == "" {
 			label = fmt.Sprintf("eval_%d", time.Now().Unix())
 		}
-
-		return runScenario(stoppableCtx, path, outputDir, label, keepPrometheusRunning, skipChecks, skipReportRendering, openReport)
+		if err := runScenario(stoppableCtx, file, outputDir, label, keepPrometheusRunning, skipChecks, skipReportRendering, openReport); err != nil {
+			return fmt.Errorf("failed to run scenario %q: %w", file, err)
+		}
 	}
+
+	return nil
 }
 
 func runScenario(ctx context.Context, path, outputDir, label string, keepPrometheusRunning, skipChecks, skipReportRendering, openReport bool) error {
