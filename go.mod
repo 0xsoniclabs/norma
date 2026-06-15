@@ -4,8 +4,8 @@ go 1.26.0
 
 require (
 	github.com/0xsoniclabs/carmen/go v0.0.0-20260427113009-ed285bc2e427
-	github.com/0xsoniclabs/norma/genesistools v0.0.0-20250218144827-28263a9a85f9
 	github.com/0xsoniclabs/sonic v0.0.0-20260505152818-400acf397f1a
+	github.com/Fantom-foundation/lachesis-base v0.0.0-20240116072301-a75735c4ef00
 	github.com/docker/docker v27.3.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/ethereum/go-ethereum v1.17.1
@@ -21,7 +21,6 @@ require (
 	github.com/0xsoniclabs/tosca v0.0.0-20260429071638-3f4119284c42 // indirect
 	github.com/0xsoniclabs/tracy v0.0.0-20251027125423-00a5ab7968fb // indirect
 	github.com/DataDog/zstd v1.5.6 // indirect
-	github.com/Fantom-foundation/lachesis-base v0.0.0-20240116072301-a75735c4ef00 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20251001021608-1fe7b43fc4d6 // indirect
 	github.com/VictoriaMetrics/fastcache v1.13.0 // indirect
@@ -115,8 +114,6 @@ require (
 	gotest.tools/v3 v3.5.1 // indirect
 	pgregory.net/rand v1.0.2 // indirect
 )
-
-replace github.com/0xsoniclabs/norma/genesistools => ./genesis
 
 replace github.com/ethereum/go-ethereum => github.com/0xsoniclabs/go-ethereum v0.0.0-20260424113012-971561538c58
 
