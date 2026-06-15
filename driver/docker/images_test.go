@@ -21,8 +21,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
-
-	"github.com/docker/docker/api/types/image"
 )
 
 func TestPlanImage(t *testing.T) {
@@ -204,19 +202,6 @@ func TestBuildImage_Builds_SonicLocal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create docker client: %v", err)
 	}
-	defer func() {
-		// clean the image after test to avoid side effects
-		imgResponse, err := cli.cli.ImageRemove(t.Context(), "sonic:testlocal", image.RemoveOptions{})
-		if err != nil {
-			t.Errorf("failed to remove image sonic:testlocal: %v", err)
-		}
-		if len(imgResponse) == 0 {
-			t.Errorf("failed to remove image sonic:testlocal: empty response")
-		} else if len(imgResponse[0].Deleted) == 0 && len(imgResponse[0].Untagged) == 0 {
-			t.Errorf("failed to remove image sonic:testlocal: %v", imgResponse)
-		}
-		_ = cli.Close()
-	}()
 
 	if _, _, err := cli.cli.ImageInspectWithRaw(t.Context(), "sonic:testlocal"); err != nil {
 		t.Fatalf("image sonic:testlocal not found after build: %v", err)
