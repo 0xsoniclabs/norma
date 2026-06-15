@@ -1,0 +1,76 @@
+# This scenario simulates a mid-run stoppage of 50% of the validators.
+#
+# It is an "Allegro" network, with enabled single proposer flag.
+# Initially it has 1 genesis validator. A second validator registers at start
+# and becomes active after the first natural epoch seal (~15s, MaxEpochDuration).
+#
+# At time 25, the second validator leaves (simulating a crash/blackout).
+# Since 50% of stake is offline (below 2/3 quorum), block production halts.
+#
+# At time 80, the validator rejoins (fresh, no data_volume). It syncs the
+# finalized chain via dagstream and resumes consensus with the genesis validator.
+# The network should resume block production.
+name: Single Proposer Blackout
+
+# Duration increased to 180s to allow time for:
+# - epoch seal (~15s), leave at 25s, verify halt at 55s,
+# - rejoin at 80s, node sync (~30s), verify recovery at 150s.
+duration: 180
+
+# Initial validator nodes in the network.
+validators:
+  - name: validator
+    instances: 1
+    imagename: sonic:local
+
+# Network rules to be applied to the network.
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: true
+    UPGRADES_SINGLE_PROPOSER: true
+
+checks:
+  # Verify block production has halted after the leave.
+  # At time 55, the validator has been offline for 30s. The blocks_halted check
+  # confirms no node's block height increased in the last 10 samples.
+  - time: 55
+    check: blocks_halted
+
+  # Verify blocks are rolling after recovery (after rejoin at time 80).
+  # The check runs at time 150, giving 70s for the node to sync and resume.
+  - time: 150
+    check: blocks_rolling
+
+nodes:
+  # This validator registers at start. MaxEpochDuration=15s means it becomes
+  # active in the consensus set after the first natural epoch seal (~15-20s).
+  # It leaves at 25s, halting the network (50% stake offline = below 2/3 quorum).
+  - name: validator-before
+    start: 0
+    leave: 25
+    client:
+      type: validator
+      imagename: sonic:local
+      val_id: 2
+
+  # This validator rejoins at time 80 to restore the network.
+  # No data_volume: the node syncs all epoch events from the genesis validator
+  # via the dagstream protocol, then resumes consensus.
+  - name: validator-after
+    rejoin: 80
+    client:
+      type: validator
+      imagename: sonic:local
+      val_id: 2
+
+
+# In the network there is a single application producing constant load.
+applications:
+  - name: load
+    type: counter
+    start: 5
+    end: 180
+    users: 50
+    rate:
+      constant: 50    # Tx/s
