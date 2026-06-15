@@ -25,6 +25,7 @@ import (
 	"os"
 	"regexp"
 	"slices"
+	"sync"
 	"time"
 
 	"golang.org/x/exp/maps"
@@ -102,10 +103,66 @@ type OperaNodeConfig struct {
 // with underscores and hyphens.
 var labelPattern = regexp.MustCompile("[A-Za-z0-9_-]+")
 
+// imageEnsureState stores the completion signal and final error for one
+// in-flight image provisioning operation.
+type imageEnsureState struct {
+	done chan struct{}
+	err  error
+}
+
+var (
+	imageEnsureMutex sync.Mutex
+	// imageEnsureInFlight tracks in-progress image provisioning by image tag.
+	//
+	// This allows concurrent node startups using the same image to share one
+	// EnsureImages call instead of triggering duplicate pull/build operations.
+	imageEnsureInFlight = map[string]*imageEnsureState{}
+)
+
+// ensureImageAvailable ensures the given image is locally available and
+// deduplicates concurrent ensure calls for the same image.
+//
+// If another goroutine is already provisioning the same image, this function
+// waits for that operation to complete and returns its result.
+func ensureImageAvailable(ctx context.Context, image string) error {
+	imageEnsureMutex.Lock()
+	if state, found := imageEnsureInFlight[image]; found {
+		imageEnsureMutex.Unlock()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-state.done:
+			return state.err
+		}
+	}
+
+	state := &imageEnsureState{done: make(chan struct{})}
+	imageEnsureInFlight[image] = state
+	imageEnsureMutex.Unlock()
+
+	err := docker.EnsureImages(ctx, []string{image}, "")
+
+	imageEnsureMutex.Lock()
+	state.err = err
+	close(state.done)
+	delete(imageEnsureInFlight, image)
+	imageEnsureMutex.Unlock()
+
+	return err
+}
+
 // StartOperaDockerNode creates a new OperaNode running in a Docker container.
 func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker.Network, config *OperaNodeConfig) (*OperaNode, error) {
 	if !labelPattern.Match([]byte(config.Label)) {
 		return nil, fmt.Errorf("invalid label for node: '%v'", config.Label)
+	}
+
+	image := config.Image
+	if image == "" {
+		image = driver.DefaultClientDockerImageName
+	}
+	if err := ensureImageAvailable(ctx, image); err != nil {
+		return nil, fmt.Errorf("failed to ensure image %q: %w", image, err)
 	}
 
 	shutdownTimeout := 180 * time.Second
@@ -163,7 +220,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		maps.Copy(envs, config.NetworkConfig.NetworkRules) // put in the network rules
 
 		return client.Start(&docker.ContainerConfig{
-			ImageName:       config.Image,
+			ImageName:       image,
 			ShutdownTimeout: &shutdownTimeout,
 			PortForwarding:  portForwarding,
 			Environment:     envs,
@@ -178,6 +235,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 
 	// Use a private copy of the config to avoid modifying the original.
 	nodeConfig := *config
+	nodeConfig.Image = image
 	if config.ValidatorId != nil {
 		nodeConfig.ValidatorId = new(int)
 		*nodeConfig.ValidatorId = *config.ValidatorId
@@ -329,7 +387,7 @@ func (n *OperaNode) RemovePeer(id driver.NodeID) error {
 	})
 }
 
-// Kill sends a SigKill singal to node.
+// Kill sends a SigKill signal to node.
 func (n *OperaNode) Kill() error {
 	return n.container.SendSignal(docker.SigKill)
 }
