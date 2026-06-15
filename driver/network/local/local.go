@@ -76,9 +76,9 @@ type LocalNetwork struct {
 	// a context for app management operations on the network
 	appContext app.AppContext
 
-	// mount keystore dir on host to /datadir/keystore:ro in container
+	// temporary host directory used while preparing genesis artifacts
 	genesisTmpDir string
-	// mount genesis file on host to /genesis.json:ro in container
+	// host path to the generated genesis.json file
 	genesisJsonPath string
 }
 
