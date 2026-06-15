@@ -322,7 +322,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 	return nil, errors.Join(
 		printLog(node),
 		fmt.Errorf("failed to get node online, %w", err),
-		node.host.Cleanup(),
+		node.Cleanup(),
 	)
 }
 
