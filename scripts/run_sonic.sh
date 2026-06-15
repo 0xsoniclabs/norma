@@ -20,7 +20,7 @@ if [[ ! -d "${datadir}/chaindata" ]]; then
 fi
 
 # Create password file for validator keystore decryption.
-echo password >> password.txt
+echo password > password.txt
 VALIDATOR_PASSWORD="password.txt"
 
 # If validator, initialize here
