@@ -232,6 +232,64 @@ func TestExecutor_Validator_StartEndRejoinLeave(t *testing.T) {
 	}
 }
 
+func TestExecutor_ObserverNodes_HaveNilValidatorID(t *testing.T) {
+	clock := NewSimClock()
+	scenario := parser.Scenario{
+		Name:       "Test",
+		Duration:   10,
+		Validators: []parser.Validator{{Name: "validator"}},
+		Nodes: []parser.Node{
+			{
+				Name:  "observer-start",
+				Start: New[float32](1),
+				End:   New[float32](2),
+				Client: parser.ClientType{
+					Type: "observer",
+				},
+			},
+			{
+				Name:   "observer-rejoin",
+				Rejoin: New[float32](3),
+				Leave:  New[float32](4),
+				Client: parser.ClientType{
+					Type: "observer",
+				},
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+
+	node1 := driver.NewMockNode(ctrl)
+	node2 := driver.NewMockNode(ctrl)
+
+	net.EXPECT().CreateNode(gomock.AssignableToTypeOf(&driver.NodeConfig{})).DoAndReturn(func(cfg *driver.NodeConfig) (driver.Node, error) {
+		if cfg.ValidatorId != nil {
+			t.Fatalf("start observer node should have nil validator id, got %d", *cfg.ValidatorId)
+		}
+		return node1, nil
+	})
+	net.EXPECT().RemoveNode(node1)
+	node1.EXPECT().Stop()
+	node1.EXPECT().Cleanup()
+
+	net.EXPECT().CreateNode(gomock.AssignableToTypeOf(&driver.NodeConfig{})).DoAndReturn(func(cfg *driver.NodeConfig) (driver.Node, error) {
+		if cfg.ValidatorId != nil {
+			t.Fatalf("rejoin observer node should have nil validator id, got %d", *cfg.ValidatorId)
+		}
+		return node2, nil
+	})
+	net.EXPECT().RemoveNode(node2)
+	node2.EXPECT().Stop()
+	node2.EXPECT().Cleanup()
+
+	if err := run(t.Context(), clock, net, &scenario, nil, registry); err != nil {
+		t.Errorf("failed to run scenario: %v", err)
+	}
+}
+
 func TestExecutor_RunSingleApplicationScenario(t *testing.T) {
 
 	clock := NewSimClock()

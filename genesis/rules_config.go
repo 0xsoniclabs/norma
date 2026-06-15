@@ -196,7 +196,7 @@ var maxEmptyBlockSkipPeriod = func(value string, rules *opera.Rules) error {
 		return err
 	}
 	rules.Blocks.MaxEmptyBlockSkipPeriod = inter.Timestamp(duration)
-	return err
+	return nil
 }
 
 var maxEpochDuration = func(value string, rules *opera.Rules) error {
@@ -205,7 +205,7 @@ var maxEpochDuration = func(value string, rules *opera.Rules) error {
 		return err
 	}
 	rules.Epochs.MaxEpochDuration = inter.Timestamp(duration)
-	return err
+	return nil
 }
 
 var emitterInterval = func(value string, rules *opera.Rules) error {
@@ -214,7 +214,7 @@ var emitterInterval = func(value string, rules *opera.Rules) error {
 		return err
 	}
 	rules.Emitter.Interval = inter.Timestamp(duration)
-	return err
+	return nil
 }
 
 var emitterStallThreshold = func(value string, rules *opera.Rules) error {
@@ -223,7 +223,7 @@ var emitterStallThreshold = func(value string, rules *opera.Rules) error {
 		return err
 	}
 	rules.Emitter.StallThreshold = inter.Timestamp(duration)
-	return err
+	return nil
 }
 
 var emitterStallInterval = func(value string, rules *opera.Rules) error {
@@ -232,7 +232,7 @@ var emitterStallInterval = func(value string, rules *opera.Rules) error {
 		return err
 	}
 	rules.Emitter.StalledInterval = inter.Timestamp(duration)
-	return err
+	return nil
 }
 
 var upgradesBerlin = func(value string, rules *opera.Rules) error {
@@ -282,24 +282,22 @@ var upgradesTransactionBundles = func(value string, rules *opera.Rules) error {
 
 var minGasPrice = func(value string, rules *opera.Rules) error {
 	var ok bool
-	var err error
 	number := new(big.Int)
 	rules.Economy.MinGasPrice, ok = number.SetString(value, 10)
 	if !ok {
-		err = fmt.Errorf("cannot parse %s as a number", value)
+		return fmt.Errorf("cannot parse %s as a number", value)
 	}
-	return err
+	return nil
 }
 
 var minBaseFee = func(value string, rules *opera.Rules) error {
 	var ok bool
-	var err error
 	number := new(big.Int)
 	rules.Economy.MinBaseFee, ok = number.SetString(value, 10)
 	if !ok {
-		err = fmt.Errorf("cannot parse %s as a number", value)
+		return fmt.Errorf("cannot parse %s as a number", value)
 	}
-	return err
+	return nil
 }
 
 var blockMissedSlack = func(value string, rules *opera.Rules) error {

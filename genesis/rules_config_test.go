@@ -3,10 +3,11 @@ package genesis
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/0xsoniclabs/sonic/opera"
 	"maps"
 	"os"
 	"testing"
+
+	"github.com/0xsoniclabs/sonic/opera"
 )
 
 func TestIsSupportedNetworkRule(t *testing.T) {
