@@ -175,6 +175,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 	validatorId := "0"
 	isValidator := config.ValidatorId != nil && *config.ValidatorId > 0
 	tempDirs := make([]string, 0)
+	genesisJSONPath := ""
 	if config.ValidatorId != nil {
 		validatorId = fmt.Sprintf("%d", *config.ValidatorId)
 	}
@@ -199,7 +200,9 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 			return nil, fmt.Errorf("failed to generate temporary genesis: %w", err)
 		}
 
-		config.GenesisJsonPath = &genesisPath
+		genesisJSONPath = genesisPath
+	} else {
+		genesisJSONPath = *config.GenesisJsonPath
 	}
 
 	host, err := network.RetryReturn(ctx, network.DefaultRetryAttempts, 1*time.Second, func() (*docker.Container, error) {
@@ -234,7 +237,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 			*dataDirBinding = fmt.Sprintf("%s:%s", *config.MountDataDir, dataDir)
 		}
 
-		genesisBind := fmt.Sprintf("%s:/genesis.json:ro", *config.GenesisJsonPath)
+		genesisBind := fmt.Sprintf("%s:/genesis.json:ro", genesisJSONPath)
 
 		var keystoreBinding *string
 		if isValidator {
@@ -287,6 +290,11 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 	// Use a private copy of the config to avoid modifying the original.
 	nodeConfig := *config
 	nodeConfig.Image = image
+	nodeConfig.GenesisJsonPath = nil
+	if genesisJSONPath != "" {
+		nodeConfig.GenesisJsonPath = new(string)
+		*nodeConfig.GenesisJsonPath = genesisJSONPath
+	}
 	if config.ValidatorId != nil {
 		nodeConfig.ValidatorId = new(int)
 		*nodeConfig.ValidatorId = *config.ValidatorId
