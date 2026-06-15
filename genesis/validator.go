@@ -4,7 +4,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"path"
+	"path/filepath"
 
 	"github.com/0xsoniclabs/sonic/evmcore"
 	"github.com/0xsoniclabs/sonic/inter/validatorpk"
@@ -60,7 +60,7 @@ func WriteValidatorKeystore(privKeyHex, datastoreDir string) error {
 		Type: validatorpk.Types.Secp256k1,
 	}
 
-	valKeystore := valkeystore.NewDefaultFileRawKeystore(path.Join(datastoreDir, "keystore", "validator"))
+	valKeystore := valkeystore.NewDefaultFileRawKeystore(filepath.Join(datastoreDir, "keystore", "validator"))
 	if err = valKeystore.Add(publicKey, privateKey, "password"); err != nil && !errors.Is(err, valkeystore.ErrAlreadyExists) {
 		return fmt.Errorf("failed to create account: %w", err)
 	}
