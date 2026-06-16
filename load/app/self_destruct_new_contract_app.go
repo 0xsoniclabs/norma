@@ -69,24 +69,23 @@ type SelfDestructNewContractApplication struct {
 }
 
 func (f *SelfDestructNewContractApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
+	fundsPerUser := new(big.Int).Mul(big.NewInt(1_000), big.NewInt(1e18))
+	workerAccounts, err := appContext.AllocateAccounts(numUsers, fundsPerUser)
+	if err != nil {
+		return nil, err
+	}
+
 	users := make([]User, numUsers)
-	addresses := make([]common.Address, numUsers)
 	for i := 0; i < numUsers; i++ {
-		workerAccount, err := f.accountFactory.CreateAccount(appContext.GetClient())
-		if err != nil {
-			return nil, err
-		}
+		workerAccount := workerAccounts[i]
 		users[i] = &SelfDestructNewContractUser{
 			abi:      f.abi,
 			sender:   workerAccount,
 			contract: f.contractAddress,
 		}
-		addresses[i] = workerAccount.address
 	}
 
-	fundsPerUser := new(big.Int).Mul(big.NewInt(1_000), big.NewInt(1e18))
-	err := appContext.FundAccounts(addresses, fundsPerUser)
-	return users, err
+	return users, nil
 }
 
 func (f *SelfDestructNewContractApplication) GetReceivedTransactions(rpcClient rpc.Client) (uint64, error) {

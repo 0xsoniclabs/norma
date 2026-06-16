@@ -80,10 +80,11 @@ func NewDuplicatedBundleApplication(appContext AppContext, feederId, appId uint3
 		return nil, errors.Join(fmt.Errorf("ERC20 deploy transaction failed"), err)
 	}
 
-	target, err := accountFactory.CreateAccount(rpcClient)
+	targetAccounts, err := appContext.AllocateAccounts(1, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create target account: %w", err)
 	}
+	target := targetAccounts[0]
 
 	return &DuplicatedBundleApplication{
 		erc20Contract:  erc20Contract,
@@ -97,19 +98,19 @@ func NewDuplicatedBundleApplication(appContext AppContext, feederId, appId uint3
 // CreateUsers creates numUsers (senderA, senderB) pairs. All users share the
 // single target address created during application initialisation.
 func (a *DuplicatedBundleApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
+	fundsPerAccount := new(big.Int).Mul(big.NewInt(1_000), big.NewInt(1e18))
+	allocatedAccounts, err := appContext.AllocateAccounts(numUsers*2, fundsPerAccount)
+	if err != nil {
+		return nil, err
+	}
+
 	users := make([]User, numUsers)
 	senderAAddresses := make([]common.Address, numUsers)
 	senderBAddresses := make([]common.Address, numUsers)
 
 	for i := range users {
-		senderA, err := a.accountFactory.CreateAccount(appContext.GetClient())
-		if err != nil {
-			return nil, err
-		}
-		senderB, err := a.accountFactory.CreateAccount(appContext.GetClient())
-		if err != nil {
-			return nil, err
-		}
+		senderA := allocatedAccounts[2*i]
+		senderB := allocatedAccounts[2*i+1]
 		users[i] = &DuplicatedBundleUser{
 			erc20Address:  a.erc20Address,
 			erc20Abi:      a.erc20Abi,
@@ -122,12 +123,7 @@ func (a *DuplicatedBundleApplication) CreateUsers(appContext AppContext, numUser
 		senderAAddresses[i] = senderA.address
 		senderBAddresses[i] = senderB.address
 	}
-
-	fundsPerAccount := new(big.Int).Mul(big.NewInt(1_000), big.NewInt(1e18))
 	allAddresses := append(senderAAddresses, senderBAddresses...)
-	if err := appContext.FundAccounts(allAddresses, fundsPerAccount); err != nil {
-		return nil, fmt.Errorf("failed to fund accounts: %w", err)
-	}
 
 	tokenAmount := new(big.Int).Mul(big.NewInt(1_000_000), big.NewInt(1e18))
 	receipt, err := appContext.Run(func(opts *bind.TransactOpts) (*types.Transaction, error) {

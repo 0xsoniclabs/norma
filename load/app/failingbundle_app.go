@@ -90,18 +90,18 @@ func NewFailingBundleApplication(appContext AppContext, feederId, appId uint32) 
 // CreateUsers creates numUsers sender pairs. Each pair shares the single
 // ProbabilisticFailing contract deployed during application initialisation.
 func (a *FailingBundleApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
+	fundsPerAccount := new(big.Int).Mul(big.NewInt(1_000), big.NewInt(1e18))
+	allocatedAccounts, err := appContext.AllocateAccounts(numUsers*2, fundsPerAccount)
+	if err != nil {
+		return nil, err
+	}
+
 	users := make([]User, numUsers)
 	senderAddresses := make([]common.Address, 0, numUsers*2)
 
 	for i := range users {
-		senderA, err := a.accountFactory.CreateAccount(appContext.GetClient())
-		if err != nil {
-			return nil, err
-		}
-		senderB, err := a.accountFactory.CreateAccount(appContext.GetClient())
-		if err != nil {
-			return nil, err
-		}
+		senderA := allocatedAccounts[2*i]
+		senderB := allocatedAccounts[2*i+1]
 		users[i] = &FailingBundleUser{
 			contractAddress: a.contractAddress,
 			contractAbi:     a.contractAbi,
@@ -111,11 +111,6 @@ func (a *FailingBundleApplication) CreateUsers(appContext AppContext, numUsers i
 			client:          appContext.GetClient(),
 		}
 		senderAddresses = append(senderAddresses, senderA.address, senderB.address)
-	}
-
-	fundsPerAccount := new(big.Int).Mul(big.NewInt(1_000), big.NewInt(1e18))
-	if err := appContext.FundAccounts(senderAddresses, fundsPerAccount); err != nil {
-		return nil, fmt.Errorf("failed to fund accounts: %w", err)
 	}
 
 	return users, nil

@@ -86,19 +86,19 @@ func NewAllOfBundleApplication(appContext AppContext, feederId, appId uint32) (A
 // Each triple shares one AllOfBundleUser that generates one bundle envelope per
 // GenerateTx call.
 func (a *AllOfBundleApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
+	fundsPerAccount := new(big.Int).Mul(big.NewInt(1_000), big.NewInt(1e18))
+	allocatedAccounts, err := appContext.AllocateAccounts(numUsers*2, fundsPerAccount)
+	if err != nil {
+		return nil, err
+	}
+
 	users := make([]User, numUsers)
 	approverAddresses := make([]common.Address, numUsers)
 	spenderAddresses := make([]common.Address, numUsers)
 
 	for i := range users {
-		approver, err := a.accountFactory.CreateAccount(appContext.GetClient())
-		if err != nil {
-			return nil, err
-		}
-		spender, err := a.accountFactory.CreateAccount(appContext.GetClient())
-		if err != nil {
-			return nil, err
-		}
+		approver := allocatedAccounts[2*i]
+		spender := allocatedAccounts[2*i+1]
 		users[i] = &AllOfBundleUser{
 			erc20Address:   a.erc20Address,
 			erc20Abi:       a.erc20Abi,
@@ -110,13 +110,6 @@ func (a *AllOfBundleApplication) CreateUsers(appContext AppContext, numUsers int
 		}
 		approverAddresses[i] = approver.address
 		spenderAddresses[i] = spender.address
-	}
-
-	// Fund all accounts with native currency for gas.
-	fundsPerAccount := new(big.Int).Mul(big.NewInt(1_000), big.NewInt(1e18))
-	allAddresses := append(approverAddresses, spenderAddresses...)
-	if err := appContext.FundAccounts(allAddresses, fundsPerAccount); err != nil {
-		return nil, fmt.Errorf("failed to fund accounts: %w", err)
 	}
 
 	// Mint ERC-20 tokens to approver accounts so they can grant allowances.

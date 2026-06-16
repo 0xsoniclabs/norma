@@ -71,10 +71,11 @@ func NewOneOfBundleApplication(appContext AppContext, feederId, appId uint32) (A
 		return nil, errors.Join(fmt.Errorf("ERC20 deploy transaction failed"), err)
 	}
 
-	target, err := accountFactory.CreateAccount(rpcClient)
+	targetAccounts, err := appContext.AllocateAccounts(1, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create target account: %w", err)
 	}
+	target := targetAccounts[0]
 
 	return &OneOfBundleApplication{
 		erc20Contract:  erc20Contract,
@@ -88,14 +89,17 @@ func NewOneOfBundleApplication(appContext AppContext, feederId, appId uint32) (A
 // CreateUsers creates numUsers users. All users share the single target address
 // created during application initialisation.
 func (a *OneOfBundleApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
+	fundsPerAccount := new(big.Int).Mul(big.NewInt(1_000), big.NewInt(1e18))
+	allocatedAccounts, err := appContext.AllocateAccounts(numUsers, fundsPerAccount)
+	if err != nil {
+		return nil, err
+	}
+
 	users := make([]User, numUsers)
 	senderAddresses := make([]common.Address, numUsers)
 
 	for i := range users {
-		sender, err := a.accountFactory.CreateAccount(appContext.GetClient())
-		if err != nil {
-			return nil, err
-		}
+		sender := allocatedAccounts[i]
 		users[i] = &OneOfBundleUser{
 			erc20Address:   a.erc20Address,
 			erc20Abi:       a.erc20Abi,
@@ -106,12 +110,6 @@ func (a *OneOfBundleApplication) CreateUsers(appContext AppContext, numUsers int
 			client:         appContext.GetClient(),
 		}
 		senderAddresses[i] = sender.address
-	}
-
-	// Fund all tx sending accounts with native currency for gas.
-	fundsPerAccount := new(big.Int).Mul(big.NewInt(1_000), big.NewInt(1e18))
-	if err := appContext.FundAccounts(senderAddresses, fundsPerAccount); err != nil {
-		return nil, fmt.Errorf("failed to fund accounts: %w", err)
 	}
 
 	// Mint ERC-20 tokens to sender accounts.

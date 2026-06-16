@@ -61,14 +61,17 @@ type Bls12AddApplication struct {
 // CreateUsers creates the specified number of users, each with a unique funded
 // account, to send BLS12 addition transactions concurrently.
 func (app *Bls12AddApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
+	fundsPerUser := big.NewInt(1_000)
+	fundsPerUser = new(big.Int).Mul(fundsPerUser, big.NewInt(1_000_000_000_000_000_000)) // to wei
+	workerAccounts, err := appContext.AllocateAccounts(numUsers, fundsPerUser)
+	if err != nil {
+		return nil, err
+	}
+
 	users := make([]User, numUsers)
 	addresses := make([]common.Address, numUsers)
 	for i := 0; i < numUsers; i++ {
-		// Generate a new account for each worker - avoid account nonces related bottlenecks
-		workerAccount, err := app.accountFactory.CreateAccount(appContext.GetClient())
-		if err != nil {
-			return nil, err
-		}
+		workerAccount := workerAccounts[i]
 		users[i] = &Bls12AddUser{
 			sender:   workerAccount,
 			contract: app.contractAddress,
@@ -76,15 +79,11 @@ func (app *Bls12AddApplication) CreateUsers(appContext AppContext, numUsers int)
 		addresses[i] = workerAccount.address
 	}
 
-	fundsPerUser := big.NewInt(1_000)
-	fundsPerUser = new(big.Int).Mul(fundsPerUser, big.NewInt(1_000_000_000_000_000_000)) // to wei
-	err := appContext.FundAccounts(addresses, fundsPerUser)
-
 	app.mu.Lock()
 	app.userAddresses = append(app.userAddresses, addresses...)
 	app.mu.Unlock()
 
-	return users, err
+	return users, nil
 }
 
 // GetReceivedTransactions returns the total number of transactions processed

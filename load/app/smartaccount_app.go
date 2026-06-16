@@ -2,14 +2,15 @@ package app
 
 import (
 	"fmt"
+	"math/big"
+	"sync/atomic"
+
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
-	"math/big"
-	"sync/atomic"
 )
 
 // NewSmartAccountApplication deploys a new SmartAccount dapp to the chain.
@@ -100,16 +101,17 @@ type SmartAccountApplication struct {
 
 // CreateUsers creates a list of new users for the app.
 func (f *SmartAccountApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
+	fundsPerUser := big.NewInt(1_000)
+	fundsPerUser = new(big.Int).Mul(fundsPerUser, big.NewInt(1_000_000_000_000_000_000)) // to wei
+	workerAccounts, err := appContext.AllocateAccounts(numUsers, fundsPerUser)
+	if err != nil {
+		return nil, err
+	}
 
 	// Create a list of users.
 	users := make([]User, numUsers)
-	addresses := make([]common.Address, numUsers)
 	for i := 0; i < numUsers; i++ {
-		// Generate a new account for each worker - avoid account nonces related bottlenecks
-		workerAccount, err := f.accountFactory.CreateAccount(appContext.GetClient())
-		if err != nil {
-			return nil, err
-		}
+		workerAccount := workerAccounts[i]
 		accountsCircular, err := NewAccountsCircularPool(f.accountFactory, appContext.GetClient(), 1000)
 		if err != nil {
 			return nil, err
@@ -124,16 +126,8 @@ func (f *SmartAccountApplication) CreateUsers(appContext AppContext, numUsers in
 			codeAddr:         f.smartAccountImplAddress,
 			accountsCircular: accountsCircular,
 		}
-		addresses[i] = workerAccount.address
 	}
 
-	// Provide native currency to each user.
-	fundsPerUser := big.NewInt(1_000)
-	fundsPerUser = new(big.Int).Mul(fundsPerUser, big.NewInt(1_000_000_000_000_000_000)) // to wei
-	err := appContext.FundAccounts(addresses, fundsPerUser)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fund accounts; %w", err)
-	}
 	return users, nil
 }
 

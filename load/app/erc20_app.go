@@ -98,16 +98,18 @@ type ERC20Application struct {
 
 // CreateUsers creates a list of new users for the app.
 func (f *ERC20Application) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
+	fundsPerUser := big.NewInt(1_000)
+	fundsPerUser = new(big.Int).Mul(fundsPerUser, big.NewInt(1_000_000_000_000_000_000)) // to wei
+	workerAccounts, err := appContext.AllocateAccounts(numUsers, fundsPerUser)
+	if err != nil {
+		return nil, err
+	}
 
 	// Create a list of users.
 	users := make([]User, numUsers)
 	addresses := make([]common.Address, numUsers)
 	for i := 0; i < numUsers; i++ {
-		// Generate a new account for each worker - avoid account nonces related bottlenecks
-		workerAccount, err := f.accountFactory.CreateAccount(appContext.GetClient())
-		if err != nil {
-			return nil, err
-		}
+		workerAccount := workerAccounts[i]
 		users[i] = &ERC20User{
 			abi:        f.abi,
 			sender:     workerAccount,
@@ -115,14 +117,6 @@ func (f *ERC20Application) CreateUsers(appContext AppContext, numUsers int) ([]U
 			recipients: f.recipients,
 		}
 		addresses[i] = workerAccount.address
-	}
-
-	// Provide native currency to each user.
-	fundsPerUser := big.NewInt(1_000)
-	fundsPerUser = new(big.Int).Mul(fundsPerUser, big.NewInt(1_000_000_000_000_000_000)) // to wei
-	err := appContext.FundAccounts(addresses, fundsPerUser)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fund accounts; %w", err)
 	}
 
 	// Provide ERC-20 tokens to each user.

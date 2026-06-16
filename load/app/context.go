@@ -20,12 +20,15 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
+	"github.com/0xsoniclabs/norma/load/accounts"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 //go:generate mockgen -source context.go -destination context_mock.go -package app
@@ -42,6 +45,7 @@ type AppContext interface {
 	GetTransactOptions(account *Account) (*bind.TransactOpts, error)
 	GetReceipt(txHash common.Hash) (*types.Receipt, error)
 	Run(operation func(*bind.TransactOpts) (*types.Transaction, error)) (*types.Receipt, error)
+	AllocateAccounts(numUsers int, minBalance *big.Int) ([]*Account, error)
 	FundAccounts(accounts []common.Address, value *big.Int) error
 	Close()
 }
@@ -79,6 +83,7 @@ type appContext struct {
 	treasury     *Account         // < the account paying for management tasks
 	helper       *contract.Helper // < a contract used for on-chain operations
 	networkRules map[string]string
+	nextAccount  atomic.Uint64
 }
 
 func (c *appContext) Close() {
@@ -157,6 +162,63 @@ func (c *appContext) Run(
 		return receipt, fmt.Errorf("transaction reverted")
 	}
 	return receipt, nil
+}
+
+// AllocateAccounts allocates user accounts from the deterministic prefunded account pool.
+// If minBalance is set, accounts below that balance are topped up via FundAccounts.
+func (c *appContext) AllocateAccounts(numUsers int, minBalance *big.Int) ([]*Account, error) {
+	if numUsers < 0 {
+		return nil, fmt.Errorf("invalid number of users: %d", numUsers)
+	}
+	if numUsers == 0 {
+		return nil, nil
+	}
+
+	res := make([]*Account, numUsers)
+	missingFunds := make([]common.Address, 0, numUsers)
+
+	for i := range numUsers {
+		index := c.nextAccount.Add(1) - 1
+		if index >= accounts.PrefundedAccountsCount {
+			return nil, fmt.Errorf("prefunded account pool exhausted: requested account %d, max %d", index, accounts.PrefundedAccountsCount)
+		}
+
+		privateKey, err := accounts.DerivePrivateKey(index)
+		if err != nil {
+			return nil, err
+		}
+		address := crypto.PubkeyToAddress(privateKey.PublicKey)
+
+		nonce, err := c.rpcClient.NonceAt(context.Background(), address, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get nonce for account %s: %w", address, err)
+		}
+
+		res[i] = &Account{
+			privateKey: privateKey,
+			address:    address,
+			chainID:    c.treasury.chainID,
+			nonce:      nonce,
+		}
+
+		if minBalance != nil && minBalance.Sign() > 0 {
+			balance, err := c.rpcClient.BalanceAt(context.Background(), address, nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get balance for account %s: %w", address, err)
+			}
+			if balance.Cmp(minBalance) < 0 {
+				missingFunds = append(missingFunds, address)
+			}
+		}
+	}
+
+	if len(missingFunds) > 0 && minBalance != nil && minBalance.Sign() > 0 {
+		if err := c.FundAccounts(missingFunds, minBalance); err != nil {
+			return nil, fmt.Errorf("failed to top-up accounts missing genesis funds: %w", err)
+		}
+	}
+
+	return res, nil
 }
 
 // FundAccounts transfers the given amount of funds from the treasure to each of the

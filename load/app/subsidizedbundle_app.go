@@ -100,6 +100,16 @@ func NewSubsidizedBundleApplication(appContext AppContext, feederId, appId uint3
 // tokens and submits subsidized approve txs; the sponsor funds the subsidies and
 // collects tokens via transferFrom.
 func (a *SubsidizedBundleApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
+	fundsPerSponsor := new(big.Int).Mul(big.NewInt(100_000), big.NewInt(1e18))
+	usersAllocated, err := appContext.AllocateAccounts(numUsers, nil)
+	if err != nil {
+		return nil, err
+	}
+	sponsorsAllocated, err := appContext.AllocateAccounts(numUsers, fundsPerSponsor)
+	if err != nil {
+		return nil, err
+	}
+
 	users := make([]User, numUsers)
 	userAddresses := make([]common.Address, numUsers)
 	sponsorAddresses := make([]common.Address, numUsers)
@@ -110,14 +120,8 @@ func (a *SubsidizedBundleApplication) CreateUsers(appContext AppContext, numUser
 	}
 
 	for i := range users {
-		user, err := a.accountFactory.CreateAccount(appContext.GetClient())
-		if err != nil {
-			return nil, err
-		}
-		sponsor, err := a.accountFactory.CreateAccount(appContext.GetClient())
-		if err != nil {
-			return nil, err
-		}
+		user := usersAllocated[i]
+		sponsor := sponsorsAllocated[i]
 
 		// Compute approve(sponsor, 1) calldata to derive the approval fund ID.
 		fundIdApproveData, err := a.erc20Abi.Pack("approve", sponsor.address, big.NewInt(1))
@@ -147,12 +151,6 @@ func (a *SubsidizedBundleApplication) CreateUsers(appContext AppContext, numUser
 		}
 		userAddresses[i] = user.address
 		sponsorAddresses[i] = sponsor.address
-	}
-
-	// Sponsors pay gas for two txs per bundle plus the subsidy value itself.
-	fundsPerSponsor := new(big.Int).Mul(big.NewInt(100_000), big.NewInt(1e18))
-	if err := appContext.FundAccounts(sponsorAddresses, fundsPerSponsor); err != nil {
-		return nil, fmt.Errorf("failed to fund sponsor accounts: %w", err)
 	}
 
 	// Mint ERC-20 tokens to user accounts so they can be transferred later.

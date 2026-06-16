@@ -3,10 +3,12 @@ package genesis
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"os"
 	"time"
 
+	"github.com/0xsoniclabs/norma/load/accounts"
 	gas_subsidies_registry "github.com/0xsoniclabs/sonic/gossip/blockproc/subsidies/registry"
 	"github.com/0xsoniclabs/sonic/integration/makefakegenesis"
 	"github.com/0xsoniclabs/sonic/opera"
@@ -26,6 +28,12 @@ import (
 // and network rules configurations.
 // The file is written to the given path.
 func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera.Rules) error {
+
+	start := time.Now()
+	defer func() {
+		slog.Info("Genesis generation completed", "duration", time.Since(start))
+	}()
+
 	validatorsCount := len(validatorStakes)
 	jsonGenesis := makefakegenesis.GenesisJson{
 		Rules:         *rules,
@@ -82,6 +90,19 @@ func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera
 			Name:    fmt.Sprintf("validator_%d", validator.ID),
 			Address: validator.Address,
 			Balance: supplyEach,
+		})
+	}
+
+	// Add prefunded load-testing accounts used by load applications.
+	for i := uint64(0); i < accounts.PrefundedAccountsCount; i++ {
+		address, err := accounts.DeriveAddress(i)
+		if err != nil {
+			return fmt.Errorf("failed to derive prefunded account %d: %w", i, err)
+		}
+		jsonGenesis.Accounts = append(jsonGenesis.Accounts, makefakegenesis.Account{
+			Name:    fmt.Sprintf("load_user_%d", i),
+			Address: address,
+			Balance: new(big.Int).Set(accounts.PrefundedAccountBalanceWei),
 		})
 	}
 

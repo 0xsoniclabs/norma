@@ -75,27 +75,24 @@ type StoreApplication struct {
 
 // CreateUsers creates a list of new users for the app.
 func (f *StoreApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
+	fundsPerUser := big.NewInt(1_000)
+	fundsPerUser = new(big.Int).Mul(fundsPerUser, big.NewInt(1_000_000_000_000_000_000)) // to wei
+	workerAccounts, err := appContext.AllocateAccounts(numUsers, fundsPerUser)
+	if err != nil {
+		return nil, err
+	}
 
 	users := make([]User, numUsers)
-	addresses := make([]common.Address, numUsers)
 	for i := 0; i < numUsers; i++ {
-		// Generate a new account for each worker - avoid account nonces related bottlenecks
-		workerAccount, err := f.accountFactory.CreateAccount(appContext.GetClient())
-		if err != nil {
-			return nil, err
-		}
+		workerAccount := workerAccounts[i]
 		users[i] = &StoreUser{
 			abi:      f.abi,
 			sender:   workerAccount,
 			contract: f.contractAddress,
 		}
-		addresses[i] = workerAccount.address
 	}
 
-	fundsPerUser := big.NewInt(1_000)
-	fundsPerUser = new(big.Int).Mul(fundsPerUser, big.NewInt(1_000_000_000_000_000_000)) // to wei
-	err := appContext.FundAccounts(addresses, fundsPerUser)
-	return users, err
+	return users, nil
 }
 
 func (f *StoreApplication) GetReceivedTransactions(rpcClient rpc.Client) (uint64, error) {

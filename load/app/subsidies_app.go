@@ -27,7 +27,6 @@ import (
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
 	"github.com/0xsoniclabs/sonic/gossip/blockproc/subsidies/registry"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -50,17 +49,12 @@ func NewSubsidiesApplication(appContext AppContext, feederId, appId uint32) (App
 		return nil, err
 	}
 
-	// Create an  account paying for all subsidies
-	sponsorAccount, err := accountFactory.CreateAccount(appContext.GetClient())
+	subsidiesFund := new(big.Int).Mul(big.NewInt(10_000), big.NewInt(1e18))
+	sponsorAccounts, err := appContext.AllocateAccounts(1, subsidiesFund)
 	if err != nil {
 		return nil, err
 	}
-
-	subsidiesFund := new(big.Int).Mul(big.NewInt(10_000), big.NewInt(1e18))
-	err = appContext.FundAccounts([]common.Address{sponsorAccount.address}, subsidiesFund)
-	if err != nil {
-		return nil, fmt.Errorf("failed to sponsor account; %w", err)
-	}
+	sponsorAccount := sponsorAccounts[0]
 
 	// Deploy the Counter counterContract to be used by this application.
 	counterContract, receipt, err := DeployContract(appContext, contract.DeployCounter)
@@ -110,20 +104,18 @@ func NewSubsidiesApplication(appContext AppContext, feederId, appId uint32) (App
 func (f *SubsidiesApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
 	// Creates a series of accounts to submit transactions
 	// none of these accounts have any balance, all gas is paid by the subsidy
+	workerAccounts, err := appContext.AllocateAccounts(numUsers, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	users := make([]User, numUsers)
-	addresses := make([]common.Address, numUsers)
 	for i := range users {
-		// Generate a new account for each worker - avoid account nonces related bottlenecks
-		workerAccount, err := f.accountFactory.CreateAccount(appContext.GetClient())
-		if err != nil {
-			return nil, err
-		}
+		workerAccount := workerAccounts[i]
 		users[i] = &SubsidiesUser{
 			counterContract: f.counterContract,
 			Sender:          workerAccount,
 		}
-		addresses[i] = workerAccount.address
 	}
 
 	return users, nil

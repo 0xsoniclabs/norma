@@ -71,6 +71,21 @@ func (mr *MockAppContextMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockAppContext)(nil).Close))
 }
 
+// AllocateAccounts mocks base method.
+func (m *MockAppContext) AllocateAccounts(numUsers int, minBalance *big.Int) ([]*Account, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AllocateAccounts", numUsers, minBalance)
+	ret0, _ := ret[0].([]*Account)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AllocateAccounts indicates an expected call of AllocateAccounts.
+func (mr *MockAppContextMockRecorder) AllocateAccounts(numUsers, minBalance any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllocateAccounts", reflect.TypeOf((*MockAppContext)(nil).AllocateAccounts), numUsers, minBalance)
+}
+
 // FundAccounts mocks base method.
 func (m *MockAppContext) FundAccounts(accounts []common.Address, value *big.Int) error {
 	m.ctrl.T.Helper()
