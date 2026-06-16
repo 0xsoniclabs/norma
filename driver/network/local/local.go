@@ -234,6 +234,10 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 	})
 }
 
+// prepareGenesis generates the genesis.json file for the network based on the
+// configuration provided at startup and stores it in a temporary directory.
+// The path to the generated genesis.json file is stored in the LocalNetwork
+// struct for later use during node creation.
 func (n *LocalNetwork) prepareGenesis() error {
 	tmpDir, err := os.MkdirTemp("", "norma-genesis-*")
 	if err != nil {
@@ -246,7 +250,7 @@ func (n *LocalNetwork) prepareGenesis() error {
 	}
 
 	genesisPath := filepath.Join(tmpDir, "genesis.json")
-	if err := genesis.GenerateJsonGenesis(genesisPath, getValidatorStakes(n.config.Validators), &rules); err != nil {
+	if err := genesis.GenerateJsonGenesis(genesisPath, driver.GetValidatorStakes(n.config.Validators), &rules); err != nil {
 		return errors.Join(fmt.Errorf("failed to generate genesis file: %w", err), os.RemoveAll(tmpDir))
 	}
 
@@ -254,22 +258,6 @@ func (n *LocalNetwork) prepareGenesis() error {
 	n.genesisJsonPath = genesisPath
 	return nil
 }
-
-func getValidatorStakes(validators driver.Validators) []uint64 {
-	stakes := make([]uint64, 0, validators.GetNumValidators())
-	for _, val := range validators {
-		instances := max(val.Instances, 1)
-		for range instances {
-			if val.Stake == 0 {
-				stakes = append(stakes, 5_000_000)
-				continue
-			}
-			stakes = append(stakes, val.Stake)
-		}
-	}
-	return stakes
-}
-
 func (n *LocalNetwork) RemoveNode(node driver.Node) error {
 	n.listenerMutex.Lock()
 	for listener := range n.listeners {
