@@ -196,7 +196,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		}
 
 		genesisPath := filepath.Join(tmpDir, "genesis.json")
-		if err := genesis.GenerateJsonGenesis(genesisPath, getValidatorStakes(config.NetworkConfig.Validators), &rules); err != nil {
+		if err := genesis.GenerateJsonGenesis(genesisPath, driver.GetValidatorStakes(config.NetworkConfig.Validators), &rules); err != nil {
 			return nil, fmt.Errorf("failed to generate temporary genesis: %w", err)
 		}
 
@@ -324,21 +324,6 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		fmt.Errorf("failed to get node online, %w", err),
 		node.Cleanup(),
 	)
-}
-
-func getValidatorStakes(validators driver.Validators) []uint64 {
-	stakes := make([]uint64, 0, validators.GetNumValidators())
-	for _, val := range validators {
-		instances := max(val.Instances, 1)
-		for range instances {
-			if val.Stake == 0 {
-				stakes = append(stakes, 5_000_000)
-				continue
-			}
-			stakes = append(stakes, val.Stake)
-		}
-	}
-	return stakes
 }
 
 // printLog streams and prints the logs of the given OperaNode, to debug cause of
