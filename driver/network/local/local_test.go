@@ -300,9 +300,9 @@ func TestLocalNetwork_CanRunWithVariousValidators(t *testing.T) {
 
 	validators := driver.NewValidators([]parser.Validator{
 		{},
-		{Name: "validator1", Instances: &three, ImageName: "sonic:v2.0.0"},
-		{Name: "validator2", Instances: &two, ImageName: "sonic:v2.0.1"},
-		{Name: "validator3", Instances: &one, ImageName: "sonic:v2.0.2"},
+		{Name: "validator1", Instances: &three, ImageName: "sonic:v2.1.6"},
+		{Name: "validator2", Instances: &two, ImageName: "sonic:local"},
+		{Name: "validator3", Instances: &one, ImageName: "sonic:latest"},
 		{Name: "validator4", ImageName: "sonic"},
 	})
 
@@ -521,7 +521,7 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T
 		_ = net.Shutdown()
 	})
 
-	images := []string{"sonic:v2.0.3", "sonic:v2.0.2", "sonic:v2.0.1", "sonic:v2.0.0"}
+	images := []string{"sonic:v2.1.6", "sonic:local", "sonic:latest"}
 	checksum := make(chan string)
 	gotChecksums := make(map[string]struct{})
 	for _, image := range images {
@@ -668,8 +668,9 @@ func TestLocalNetworkAdvanceEpoch_Success(t *testing.T) {
 
 func TestLocalNetwork_FailingFlagPropagated(t *testing.T) {
 	config := driver.NetworkConfig{Validators: []driver.Validator{
-		{Name: "validator", Failing: true, Instances: 1, ImageName: driver.DefaultClientDockerImageName}},
-	}
+		{Name: "validator-ok", Failing: false, Instances: 1, ImageName: driver.DefaultClientDockerImageName},
+		{Name: "validator-failing", Failing: true, Instances: 1, ImageName: driver.DefaultClientDockerImageName},
+	}}
 	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
@@ -688,10 +689,21 @@ func TestLocalNetwork_FailingFlagPropagated(t *testing.T) {
 		t.Fatalf("failed to create node: %v", err)
 	}
 
+	var failingNodes int
+	var nonFailingNodes int
 	for _, node := range net.GetActiveNodes() {
-		if !node.IsExpectedFailure() {
-			t.Errorf("node is not failing: %s", node.GetLabel())
+		if node.IsExpectedFailure() {
+			failingNodes++
+		} else {
+			nonFailingNodes++
 		}
+	}
+
+	if got, want := failingNodes, 2; got < want {
+		t.Errorf("insufficient failing nodes, got %d, want at least %d", got, want)
+	}
+	if got, want := nonFailingNodes, 1; got < want {
+		t.Errorf("insufficient non-failing nodes, got %d, want at least %d", got, want)
 	}
 
 }
