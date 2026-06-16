@@ -20,7 +20,7 @@ BUILD_DIR := $(CURDIR)/build
 
 all: \
     norma \
-	pull-hello-world-image \
+    pull-hello-world-image \
     pull-alpine-image \
     pull-prometheus-image \
 	build-r-renderer-image

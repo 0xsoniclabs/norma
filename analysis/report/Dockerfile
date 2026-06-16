@@ -1,6 +1,6 @@
 # Dockerfile for the Norma R report renderer.
 # Build with: 
-#    make build-docker 
+#    make build-r-renderer-image
 # or
 #    go run ./driver/norma build
 #

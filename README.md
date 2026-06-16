@@ -103,10 +103,6 @@ alternatively
 The experiments use the docker image that wraps the Sonic client. The image is built as part of
 the build process, and can be explicitly triggered:
 ```
-make build-docker
-```
-or
-```
 go run ./driver/norma build
 ```
 
