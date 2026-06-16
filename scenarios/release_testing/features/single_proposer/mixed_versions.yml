@@ -1,0 +1,43 @@
+# This scenario checks that a mixed validator set (sonic:v2.1.6 + sonic:local)
+# can stay live and continue producing blocks under steady load.
+# Expectations:
+# - The network starts with n validators split across the available versions.
+# - Constant transaction load runs through most of the scenario.
+# - All validators keep progressing and blocks continue to be produced.
+# NOTE: This test must be updated with each release to use the latest released version.
+name: Mixed Validator Versions Produce Blocks
+
+duration: 120
+
+network_rules:
+  genesis:
+    UPGRADES_SINGLE_PROPOSER: true
+    UPGRADES_SONIC: true
+  updates:
+    - time: 40
+      rules:
+        UPGRADES_ALLEGRO: true
+    - time: 80
+      rules:
+        UPGRADES_BRIO: true
+
+advance_epoch:
+  - time: 41
+  - time: 81
+
+validators:
+  - name: validator-local
+    imagename: "sonic:local"
+    instances: 3
+
+  - name: validator-v216
+    imagename: "sonic:v2.1.6"
+    failing: true
+
+applications:
+  - name: steady-load
+    type: counter
+    start: 10
+    users: 40
+    rate:
+      constant: 8

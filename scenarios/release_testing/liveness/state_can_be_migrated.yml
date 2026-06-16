@@ -1,0 +1,107 @@
+# This scenario validates that validators can go offline and rejoin with a local image,
+# reusing their data directory, through the full Sonic -> Allegro -> Brio upgrade path.
+# Expectations:
+# - baseline validator (sonic:local) provide liveness throughout all phases.
+# - One v2.1.6 validator migrates to local during the Allegro hardfork window.
+# - One v2.1.6 validator migrates to local during the Brio hardfork.
+# - Old nodes stop after migration and are not restarted to conserve resources.
+# - Block production continues through both hardfork transitions.
+# - State accumulated on v2.1.6 successfully resumes on sonic:local image.
+# - Restarting nodes accept the upgrades happening while they are offline and rejoin successfully.
+name: State Can Be Migrated Through Upgrade Path
+
+duration: 180
+
+validators:
+  - name: baseline
+    imagename: "sonic:local"
+    stake: 5000000000 # supermajority stake, network will not stall
+
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: false
+    UPGRADES_BRIO: false
+  updates:
+    - time: 30
+      rules:
+        UPGRADES_ALLEGRO: true
+    - time: 90
+      rules:
+        UPGRADES_BRIO: true
+
+advance_epoch:
+  - time: 31   # apply Allegro rules
+  - time: 91  # apply Brio rules
+
+nodes:
+  - name: allegro-validator-old
+    start: 5
+    leave: 20
+    client:
+      type: validator
+      imagename: "sonic:v2.1.6"
+      val_id: 2
+      data_volume: "allegro-validator-db"
+
+  - name: allegro-validator-new
+    rejoin: 60
+    client:
+      type: validator
+      imagename: "sonic:local"
+      val_id: 2
+      data_volume: "allegro-validator-db"
+
+  - name: brio-validator-old
+    start: 5
+    leave: 80
+    client:
+      type: validator
+      imagename: "sonic:v2.1.6"
+      val_id: 3
+      data_volume: "brio-validator-db"
+
+  - name: brio-validator-new
+    rejoin: 120
+    client:
+      type: validator
+      imagename: "sonic:local"
+      val_id: 3
+      data_volume: "brio-validator-db"
+
+checks:
+  - time: 60
+    check: blocks_rolling
+    config:
+      start: 20
+
+  - time: 100
+    check: blocks_rolling
+    config:
+      start: 80
+
+  - time: 180
+    check: block_height
+
+applications:
+  - name: steady-load
+    type: counter
+    users: 50
+    rate:
+      constant: 10
+
+  # allegro specific load
+  - name: bls12add
+    type: bls12add
+    start: 35
+    users: 10
+    rate:
+      constant: 5
+
+  # brio specific load
+  - name: largecontract
+    type: largecontract
+    start: 95
+    users: 10
+    rate:
+      constant: 8

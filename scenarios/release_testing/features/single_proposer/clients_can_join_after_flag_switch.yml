@@ -1,0 +1,149 @@
+# This scenario tests that validators can successfully join a network at various
+# points around the single_proposer flag switch, repeated for each hardfork:
+# Sonic, Allegro, and Brio.
+#
+# It is a minimal network including a single initial validator (supermajority
+# stake) and a single application producing constant, low-throughput load.
+#
+# For each hardfork phase, two v2.1.6 validators join:
+#   1. One joins before single_proposer is enabled and leaves 30s after SP goes true.
+#   2. One joins while single_proposer is active and leaves 30s after SP goes false.
+#
+# Between phases the respective hardfork upgrade rule is applied and an epoch
+# is advanced to activate it before starting the next phase.
+#
+# Expect: all six joining validators to be accepted successfully across all
+# three hardfork phases.
+name: Single Proposer Per Hardfork
+
+# The duration of the scenario's runtime, in seconds.
+duration: 640
+
+# Initial validator nodes in the network.
+validators:
+  - name: validator-latest
+    instances: 1
+    stake: 5000000000 # supermajority stake, network will not stall
+    imagename: "sonic:local"
+
+# Network rules to be applied to the network.
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: false
+    UPGRADES_BRIO: false
+    UPGRADES_SINGLE_PROPOSER: false
+    MAX_EPOCH_DURATION: 1000s # only advance epoch when necessary
+  updates:
+    # --- Phase 1: Sonic ---
+    - time: 60
+      rules:
+        UPGRADES_SINGLE_PROPOSER: true   # enable SP
+    - time: 150
+      rules:
+        UPGRADES_SINGLE_PROPOSER: false  # disable SP
+
+    # Upgrade to Allegro
+    - time: 210
+      rules:
+        UPGRADES_ALLEGRO: true
+
+    # --- Phase 2: Allegro ---
+    - time: 280
+      rules:
+        UPGRADES_SINGLE_PROPOSER: true   # enable SP
+    - time: 370
+      rules:
+        UPGRADES_SINGLE_PROPOSER: false  # disable SP
+
+    # Upgrade to Brio
+    - time: 430
+      rules:
+        UPGRADES_BRIO: true
+
+    # --- Phase 3: Brio ---
+    - time: 500
+      rules:
+        UPGRADES_SINGLE_PROPOSER: true   # enable SP
+    - time: 590
+      rules:
+        UPGRADES_SINGLE_PROPOSER: false  # disable SP
+
+advance_epoch:
+  # Phase 1 - Sonic
+  - time: 40   # accept sonic-sp-on
+  - time: 80   # activate single_proposer
+  - time: 130  # accept sonic-sp-off
+  - time: 170  # deactivate single_proposer
+
+  # Allegro upgrade
+  - time: 220  # activate allegro hardfork
+
+  # Phase 2 - Allegro
+  - time: 260  # accept allegro-sp-on
+  - time: 300  # activate single_proposer
+  - time: 350  # accept allegro-sp-off
+  - time: 390  # deactivate single_proposer
+
+  # Brio upgrade
+  - time: 440  # activate brio hardfork
+
+  # Phase 3 - Brio
+  - time: 480  # accept brio-sp-on
+  - time: 520  # activate single_proposer
+  - time: 570  # accept brio-sp-off
+  - time: 610  # deactivate single_proposer
+
+
+# nodes have to be upgraded while SP is active, at times: 60-150, 280-370, 500-590
+nodes:
+  - name: to-be-updated-during-sonic
+    start: 10
+    leave: 70
+    client:
+      type: validator
+      imagename: "sonic:v2.1.6"
+
+  - name: updated-during-sonic
+    start: 100
+    leave: 200
+    client:
+      type: validator
+      imagename: "sonic:local"
+
+
+  - name: to-be-updated-during-allegro
+    start: 230
+    leave: 290
+    client:
+      type: validator
+      imagename: "sonic:v2.1.6"
+
+  - name: updated-during-allegro
+    start: 320
+    leave: 420
+    client:
+      type: validator
+      imagename: "sonic:local"
+
+  - name: to-be-updated-during-brio
+    start: 450
+    leave: 510
+    client:
+      type: validator
+      imagename: "sonic:v2.1.6"
+  
+  - name: updated-during-brio
+    start: 540
+    leave: 620
+    client:
+      type: validator
+      imagename: "sonic:local"
+
+# In the network there is a single application producing constant load.
+applications:
+  - name: load
+    type: counter
+    users: 50
+    rate:
+      constant: 50    # Tx/s

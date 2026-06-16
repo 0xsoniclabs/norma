@@ -1,0 +1,48 @@
+name: test bundles compatibility between versions
+
+# This scenario tests the compatibility of transaction bundles 
+# in an network with mixed versions of the software.
+# All versions used have the gas subsidies feature.
+# NOTE: This test must be updated with each release to use the latest released version.
+duration: 90
+
+network_rules:
+  genesis:
+    UPGRADES_BRIO: true
+    UPGRADES_TRANSACTION_BUNDLES: true
+
+validators:
+  - name: local 
+    imagename: "sonic:local"
+
+applications:
+
+  - name: allofbundle 
+    type: allofbundle
+    users: 10
+    rate:
+      constant: 10    # Tx/s
+
+  - name: oneofbundle 
+    type: oneofbundle
+    users: 10
+    rate:
+      constant: 10    # Tx/s
+
+  - name: subsidizedbundle 
+    type: subsidizedbundle
+    users: 10
+    rate:
+      constant: 10    # Tx/s
+
+  - name: failingbundle 
+    type: failingbundle
+    users: 10
+    rate:
+      constant: 10    # Tx/s
+
+  - name: duplicatedbundle 
+    type: duplicatedbundle
+    users: 10
+    rate:
+      constant: 10    # Tx/s

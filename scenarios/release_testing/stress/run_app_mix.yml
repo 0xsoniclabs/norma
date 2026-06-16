@@ -1,0 +1,30 @@
+# This scenario runs 2 local nodes with Allegro, Brio, gas subsidies, and
+# transaction bundles enabled at genesis, exercising the mix load generator.
+# Expectations:
+# - Both validators start with all upgrades active from block 0.
+# - The mix app generates a blend of transaction types throughout the run.
+# - No stalls or failures are expected during the load period.
+name: Two Local Nodes Running Mix App
+
+duration: 120
+
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: true
+    UPGRADES_BRIO: true
+    UPGRADES_GAS_SUBSIDIES: true
+    UPGRADES_TRANSACTION_BUNDLES: true
+
+validators:
+  - name: local
+    imagename: "sonic:local"
+    instances: 2
+
+applications:
+  - name: mix-load
+    type: mix
+    users: 5
+    rate:
+      slope:
+        increment: 5

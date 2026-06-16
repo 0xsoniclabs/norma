@@ -1,0 +1,59 @@
+# A node with the wrong version will fork its state 
+# upgrading the node to a recent version will not 
+# allow to catch up.
+
+name: Node Fails to Start After Forking State
+
+duration: 110
+
+network_rules:
+  genesis:
+    MAX_EPOCH_DURATION: 5s
+    UPGRADES_ALLEGRO: true
+    UPGRADES_GAS_SUBSIDIES: true
+    UPGRADES_BRIO: false
+    UPGRADES_TRANSACTION_BUNDLES: false
+  updates:
+    - time: 20
+      rules:
+        UPGRADES_BRIO: true
+        UPGRADES_TRANSACTION_BUNDLES: true
+
+advance_epoch:
+  - time: 35
+  - time: 55
+  - time: 85
+
+validators:
+  - name: local
+    instances: 3
+    imagename: "sonic:local"
+
+nodes:
+  - name: old-node
+    start: 0
+    leave: 40
+    client:
+      imagename: "sonic:v2.1.6"
+      data_volume: "vol-upgrade"
+
+  - name: new-node
+    rejoin: 70
+    failing: true
+    client:
+      imagename: "sonic:local"
+      data_volume: "vol-upgrade"
+
+applications:
+  - name: background
+    type: counter
+    users: 20
+    rate:
+      constant: 10
+
+  - name: bundles
+    type: oneofbundle
+    start: 55
+    users: 10
+    rate:
+      constant: 5

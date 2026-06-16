@@ -1,0 +1,70 @@
+# This scenario simulates a stress test for distributed mode.
+#
+# It is an "Allegro" network, with disabled single proposer flag.
+# The Economy.ShortGasPower.AllocPerSec is set to 30M gas/s
+#
+# Mid scenario, 150% of network capacity = 45M gas worth of transactions
+# are to be sent for 2 minutes.
+#
+# A counter transaction is used for this. Each tx costs 28k gas each.
+# This means we need 45M/28k = 1607 tx/s
+#
+# Preparation: 40 seconds @ 75 txs / second
+# Stress: 90 seconds @ 750 txs / second
+# Teardown: 40 seconds @ 75 txs / second
+name: Distributed Proposer Stress Test
+
+# The duration of the scenario's runtime, in seconds.
+duration: 180
+
+# Initial validator nodes in the network.
+validators:
+  - name: validator-latest
+    instances: 2
+    imagename: "sonic:local"
+
+# Network rules to be applied to the network.
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: true
+    UPGRADES_BRIO: true
+    UPGRADES_SINGLE_PROPOSER: false
+    MAX_EPOCH_DURATION: 20s # relatively short epoch advancement
+    SHORT_ALLOC_PER_SEC: 15000000 # 15M
+    LONG_ALLOC_PER_SEC: 15000000 # keep short/long gas power aligned
+    EMITTER_INTERVAL: 200ms
+
+checks:
+  # when custom checks are defined, default checks are turned off
+  # so we must turn this back on manually
+  - time: 130
+    check: block_height
+  - time: 145
+    check: blocks_hashes
+  - time: 160
+    check: blocks_rolling
+  # custom check for this scenario
+  - time: 179             # throughout the scenario
+    check: block_gas_rate # Make sure that block gas rate never go above 30M
+    config:
+      ceiling: 16500000   # 15M + 10% slack
+      # known issue: random peaks that exceed 30M
+      failing: true
+
+# In the network there is a single application producing constant load.
+applications:
+  - name: normal
+    type: counter
+    users: 75         # one user per tx/s
+    start: 10          
+    end: 170
+    rate:
+      constant: 75    # Tx/s
+  - name: stress
+    type: counter
+    users: 750        # one user per tx/s
+    start: 50          # only during stress timing
+    end: 140
+    rate:
+      constant: 750   # Tx/s

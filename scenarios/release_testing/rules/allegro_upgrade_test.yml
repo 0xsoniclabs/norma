@@ -1,0 +1,34 @@
+# This scenario validates that enabling Allegro rules with mixed validator versions
+# (sonic:v2.1.6 and sonic:local) does not stall the network.
+# Expectations:
+# - Allegro is disabled at genesis.
+# - Allegro is enabled at update.
+# - Test shall use mixed versions supporting the Allegro hard fork (currently sonic:v2.1.6 and sonic:local).
+# NOTE: This test must be updated with each release to use the latest released version.
+name: Allegro Upgrade Does Not Stall Mixed Versions
+
+duration: 90
+
+validators:
+  - name: validator-local
+    imagename: "sonic:local"
+    instances: 2
+
+  - name: validator-v216
+    imagename: "sonic:v2.1.6"
+
+network_rules:
+  genesis:
+    UPGRADES_SONIC: true
+    UPGRADES_ALLEGRO: false
+  updates:
+    - time: 30
+      rules:
+        UPGRADES_ALLEGRO: true
+
+applications:
+  - name: steady-load
+    type: counter
+    users: 40
+    rate:
+      constant: 8

@@ -1,0 +1,43 @@
+name: test subsidies compatibility between versions
+
+# This scenario tests the compatibility of gas subsidies 
+# in an network with mixed versions of the software.
+# All versions used have the gas subsidies feature.
+
+duration: 90
+
+network_rules:
+  genesis:
+    UPGRADES_ALLEGRO: true
+    UPGRADES_GAS_SUBSIDIES: true
+  updates:
+    - time: 45
+      rules:
+        UPGRADES_BRIO: true
+
+validators:
+  - name: local 
+    imagename: "sonic:local"
+    instances: 3
+
+nodes:
+  - name: local-peer-sonic
+    start: 0
+    end: 30 # stop before brio upgrade
+    client:
+      type: validator
+      imagename: "sonic:v2.1.6"
+
+advance_epoch:
+  - time: 1 # advance epoch to update stakes
+  - time: 46 # advance epoch to activate rules change
+
+applications:
+  - name: subsidies 
+    type: subsidies
+    users: 10
+    rate:
+      constant: 20    # Tx/s
+
+
+
