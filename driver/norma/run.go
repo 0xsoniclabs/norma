@@ -226,7 +226,7 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 
 		if !skipReportRendering && ctx.Err() == nil {
 			slog.Info("rendering summary report (may take a few minutes the first time if R packages need to be installed) ...")
-			if file, err := report.SingleEvalReport.Render(monitor.GetMeasurementFileName(), outputDir); err != nil {
+			if file, err := report.SingleEvalReport.Render(monitor.GetMeasurementFileName(), outputDir, scenario.Name); err != nil {
 				slog.Error("report generation failed", "error", err)
 			} else {
 				slog.Info("summary report was exported", "file", fmt.Sprintf("file://%s/%s", outputDir, file))
