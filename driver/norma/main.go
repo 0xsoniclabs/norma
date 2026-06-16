@@ -36,6 +36,7 @@ func main() {
 		Commands: []*cli.Command{
 			&checkCommand,
 			&runCommand,
+			&buildCommand,
 			&purgeCommand,
 			&renderCommand,
 			&diffCommand,
