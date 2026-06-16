@@ -521,7 +521,7 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T
 		_ = net.Shutdown()
 	})
 
-	images := []string{"sonic:v2.1.6", "sonic:local", "sonic:latest"}
+	images := []string{"sonic:v2.1.5", "sonic:v2.1.6", "sonic:local", "sonic:latest"}
 	checksum := make(chan string)
 	gotChecksums := make(map[string]struct{})
 	for _, image := range images {
