@@ -265,12 +265,13 @@ func TestExecutor_ObserverNodes_HaveNilValidatorID(t *testing.T) {
 	node1 := driver.NewMockNode(ctrl)
 	node2 := driver.NewMockNode(ctrl)
 
-	net.EXPECT().CreateNode(gomock.AssignableToTypeOf(&driver.NodeConfig{})).DoAndReturn(func(cfg *driver.NodeConfig) (driver.Node, error) {
-		if cfg.ValidatorId != nil {
-			t.Fatalf("start observer node should have nil validator id, got %d", *cfg.ValidatorId)
-		}
-		return node1, nil
-	})
+	net.EXPECT().CreateNode(gomock.AssignableToTypeOf(&driver.NodeConfig{})).
+		DoAndReturn(func(cfg *driver.NodeConfig) (driver.Node, error) {
+			if cfg.ValidatorId != nil {
+				t.Fatalf("start observer node should have nil validator id, got %d", *cfg.ValidatorId)
+			}
+			return node1, nil
+		})
 	net.EXPECT().RemoveNode(node1)
 	node1.EXPECT().Stop()
 	node1.EXPECT().Cleanup()
