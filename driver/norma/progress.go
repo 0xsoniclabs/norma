@@ -94,7 +94,6 @@ func (l *progressLogger) shutdown() {
 }
 
 func logState(monitor *monitoring.Monitor, nodes *activeNodes) {
-	_ = getNumNodes(monitor)
 	blockStatuses := getBlockStatuses(monitor, nodes)
 	txPers := getTxPerSec(monitor, nodes)
 	txs := getNumTxs(monitor)
@@ -109,11 +108,6 @@ func logState(monitor *monitoring.Monitor, nodes *activeNodes) {
 		"gas", gas,
 		"stake", stakes,
 		"bTime", processingTimes)
-}
-
-func getNumNodes(monitor *monitoring.Monitor) string {
-	data, exists := monitoring.GetData(monitor, monitoring.Network{}, netmon.NumberOfNodes)
-	return getLastValAsString[monitoring.Time, int](exists, data)
 }
 
 func getNumTxs(monitor *monitoring.Monitor) string {
