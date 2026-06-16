@@ -60,7 +60,7 @@ var renderScript []byte
 
 // Render renders this report using the given input data file (in CSV format)
 // and places its results into the defined output directory.
-func (r *Report) Render(datafile, outputdir string) (outputfile string, err error) {
+func (r *Report) Render(datafile, outputdir, scenario string) (outputfile string, err error) {
 	script, err := createTempFile(renderScript, ".R")
 	if err != nil {
 		return "", err
@@ -83,7 +83,7 @@ func (r *Report) Render(datafile, outputdir string) (outputfile string, err erro
 		"-v", datafile+":/input.csv:ro",
 		"-v", outputdir+":/output",
 		"norma-r-renderer",
-		"Rscript", "/render.R", "/template.Rmd", "/input.csv", "/output", outputfile,
+		"Rscript", "/render.R", "/template.Rmd", "/input.csv", "/output", outputfile, scenario,
 	)
 	var out bytes.Buffer
 	cmd.Stdout = &out

@@ -10,23 +10,26 @@ if(length(new.packages)) install.packages(new.packages)
 
 library("rmarkdown")
 
-# test that there are exactly 3 arguments
-#  - the script to run
+# test that there are exactly 5 arguments
+#  - the report template to render
 #  - the data source file
 #  - the output directory
+#  - the output file name
+#  - the scenario name
 args <- commandArgs(trailingOnly=TRUE)
-if (length(args) != 4) {
-  stop("Script requires exactly four parameters: <template> <data> <outputdir> <outputfile>", call.=FALSE)
+if (length(args) != 5) {
+  stop("Script requires exactly five parameters: <template> <data> <outputdir> <outputfile> <scenario>", call.=FALSE)
 }
 
 template <- args[1]
 data <- args[2]
 outputdir <- args[3]
 outputfile <- args[4]
+scenario <- args[5]
 
 rmarkdown::render(
     template,
-    params = list(datafile = data),
+    params = list(datafile = data, scenario = scenario),
     output_dir = outputdir,
     output_file = outputfile,
     intermediates_dir = outputdir,
