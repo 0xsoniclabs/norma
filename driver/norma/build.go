@@ -35,9 +35,10 @@ import (
 // Run with `go run ./driver/norma build <scenario-dir-or-file>`
 
 var buildCommand = cli.Command{
-	Action: build,
-	Name:   "build",
-	Usage:  "builds required Sonic and report renderer Docker images for scenarios",
+	Action:    build,
+	Name:      "build",
+	Usage:     "builds required Sonic and report renderer Docker images for scenarios",
+	UsageText: "norma build [--dry-run] [<scenario-dir-or-file>=scenarios]",
 	Flags: []cli.Flag{
 		&dryRun,
 	},
