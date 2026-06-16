@@ -40,6 +40,20 @@ func (m *MockHost) EXPECT() *MockHostMockRecorder {
 	return m.recorder
 }
 
+// CheckRunning mocks base method.
+func (m *MockHost) CheckRunning() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CheckRunning")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CheckRunning indicates an expected call of CheckRunning.
+func (mr *MockHostMockRecorder) CheckRunning() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckRunning", reflect.TypeOf((*MockHost)(nil).CheckRunning))
+}
+
 // Cleanup mocks base method.
 func (m *MockHost) Cleanup() error {
 	m.ctrl.T.Helper()

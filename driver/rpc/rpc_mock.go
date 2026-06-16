@@ -211,6 +211,21 @@ func (mr *MockClientMockRecorder) HeaderByNumber(ctx, number any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeaderByNumber", reflect.TypeOf((*MockClient)(nil).HeaderByNumber), ctx, number)
 }
 
+// NonceAt mocks base method.
+func (m *MockClient) NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NonceAt", ctx, account, blockNumber)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NonceAt indicates an expected call of NonceAt.
+func (mr *MockClientMockRecorder) NonceAt(ctx, account, blockNumber any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NonceAt", reflect.TypeOf((*MockClient)(nil).NonceAt), ctx, account, blockNumber)
+}
+
 // PendingCodeAt mocks base method.
 func (m *MockClient) PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error) {
 	m.ctrl.T.Helper()
@@ -484,6 +499,21 @@ func (m *MockethRpcClient) HeaderByNumber(ctx context.Context, number *big.Int) 
 func (mr *MockethRpcClientMockRecorder) HeaderByNumber(ctx, number any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeaderByNumber", reflect.TypeOf((*MockethRpcClient)(nil).HeaderByNumber), ctx, number)
+}
+
+// NonceAt mocks base method.
+func (m *MockethRpcClient) NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NonceAt", ctx, account, blockNumber)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NonceAt indicates an expected call of NonceAt.
+func (mr *MockethRpcClientMockRecorder) NonceAt(ctx, account, blockNumber any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NonceAt", reflect.TypeOf((*MockethRpcClient)(nil).NonceAt), ctx, account, blockNumber)
 }
 
 // PendingCodeAt mocks base method.
