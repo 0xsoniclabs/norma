@@ -52,7 +52,7 @@ func TestMockedTrafficGenerating(t *testing.T) {
 	// app should be called 10-times to generate 10 txs
 	mockUser.EXPECT().GenerateTx().Return(&demoTx, nil).MinTimes(5).MaxTimes(11)
 	// network should be called 10-times to send 10 txs
-	mockedNetwork.EXPECT().SendTransaction(&demoTx).MinTimes(5).MaxTimes(11)
+	mockedNetwork.EXPECT().SendTransaction(&demoTx, gomock.Any()).MinTimes(5).MaxTimes(11)
 
 	// use constant shaper
 	constantShaper := shaper.NewConstantShaper(100) // 100 txs/sec
