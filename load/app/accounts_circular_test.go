@@ -1,17 +1,18 @@
 package app
 
 import (
+	"math/big"
+	"testing"
+
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/mock/gomock"
-	"math/big"
-	"testing"
 )
 
 func TestAccountsCircularPool(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	rpcClient := rpc.NewMockClient(ctrl)
-	rpcClient.EXPECT().NonceAt(gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(0), nil).AnyTimes()
+	rpcClient.EXPECT().PendingNonceAt(gomock.Any(), gomock.Any()).Return(uint64(0), nil).AnyTimes()
 
 	accountFactory, err := NewAccountFactory(big.NewInt(123), 45, 67)
 	if err != nil {

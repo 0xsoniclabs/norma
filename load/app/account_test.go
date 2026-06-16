@@ -1,11 +1,12 @@
 package app
 
 import (
+	"math/big"
+	"testing"
+
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/mock/gomock"
-	"math/big"
-	"testing"
 )
 
 func TestAccount_CreateAccount_AccountsUniq(t *testing.T) {
@@ -14,7 +15,7 @@ func TestAccount_CreateAccount_AccountsUniq(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	rpcClient := rpc.NewMockClient(ctrl)
-	rpcClient.EXPECT().NonceAt(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(uint64(0), nil)
+	rpcClient.EXPECT().PendingNonceAt(gomock.Any(), gomock.Any()).AnyTimes().Return(uint64(0), nil)
 
 	accounts := make(map[common.Address]struct{}, loops)
 	for i := 0; i < loops; i++ {

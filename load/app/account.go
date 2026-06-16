@@ -65,7 +65,7 @@ func (f *AccountFactory) CreateAccount(rpcClient rpc.Client) (*Account, error) {
 
 	nonce := uint64(0)
 	if rpcClient != nil {
-		nonce, err = rpcClient.NonceAt(context.Background(), address, nil) // nonce at latest block
+		nonce, err = rpcClient.PendingNonceAt(context.Background(), address)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get address nonce; %v", err)
 		}
