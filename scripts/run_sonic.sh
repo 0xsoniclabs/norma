@@ -16,7 +16,12 @@ datadir=$STATE_DB_DATADIR
 # Initialize datadir
 if [[ ! -d "${datadir}/chaindata" ]]; then
   mkdir -p "${datadir}"
-  ./sonictool --datadir "${datadir}" genesis json --experimental /genesis.json
+  ./sonictool \
+    --datadir "${datadir}" \
+    --statedb.livecache 1 \
+    --statedb.archivecache 1 \
+    --statedb.cache 1024 \
+    genesis json --experimental /genesis.json
 fi
 
 # Create password file for validator keystore decryption.
@@ -73,14 +78,17 @@ export GOMEMLIMIT="1GiB"
 ./sonicd \
     --datadir="${datadir}" \
     ${val_flag} \
-    --http --http.addr 0.0.0.0 --http.port 18545 --http.api admin,eth,sonic \
-    --ws --ws.addr 0.0.0.0 --ws.port 18546 --ws.api admin,eth,sonic \
+    --http --http.addr 0.0.0.0 --http.port 18545 --http.api admin,eth,sonic,txpool \
+    --ws --ws.addr 0.0.0.0 --ws.port 18546 --ws.api admin,eth,sonic,txpool \
     --pprof --pprof.addr 0.0.0.0 \
     --nat="extip:${external_ip}" \
     --metrics \
     --metrics.expensive \
     --config config.toml \
     --datadir.minfreedisk 0 \
+    --statedb.livecache 1 \
+    --statedb.archivecache 1 \
+    --statedb.cache 1024 \
     $EXTRA_ARGUMENTS
 
 # docker runs by default with root user, so any files or folders created by

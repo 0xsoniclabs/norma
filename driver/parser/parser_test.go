@@ -62,10 +62,10 @@ name: Small Test
 validators:
   - name: validator-1
   - name: validator-2
-    imagename: "sonic:v2.0.2"
+    imagename: "sonic:v2.1.6"
   - name: validator-3
     instances: 2
-    imagename: "sonic:v2.0.1"
+    imagename: "sonic:local"
   - name: validator-4
     instances: 3
     imagename: "sonic"
