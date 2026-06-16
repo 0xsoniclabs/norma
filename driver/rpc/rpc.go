@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/0xsoniclabs/sonic/api/sonicapi"
@@ -61,14 +62,14 @@ func WrapRpcClient(rpcClient *rpc.Client) *Impl {
 	return &Impl{
 		ethRpcClient:     ethclient.NewClient(rpcClient),
 		rpcClient:        rpcClient,
-		txReceiptTimeout: 600 * time.Second,
+		txReceiptTimeout: 90 * time.Second,
 	}
 }
 
 // ethRpcClient is a subset of the Ethereum client interface that is used by the application.
 type ethRpcClient interface {
 	bind.ContractBackend
-	NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error)
+	PendingNonceAt(ctx context.Context, account common.Address) (uint64, error)
 	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
 	BlockNumber(ctx context.Context) (uint64, error)
 	ChainID(ctx context.Context) (*big.Int, error)
@@ -111,7 +112,43 @@ func (r Impl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
 		}
 		return receipt, nil
 	}
-	return nil, fmt.Errorf("failed to get transaction receipt: timeout")
+	return nil, fmt.Errorf("failed to get transaction receipt: timeout (%s)", r.describeTxStatusAfterTimeout(txHash))
+}
+
+func (r Impl) describeTxStatusAfterTimeout(txHash common.Hash) string {
+	var pool map[string]any
+	if err := r.Call(&pool, "txpool_content"); err != nil {
+		return fmt.Sprintf("tx status unknown: %v", err)
+	}
+	pending, ok := pool["pending"]
+	if ok && txHashInTxPoolMap(txHash, pending) {
+		return "tx still pending in pool"
+	}
+	queued, ok := pool["queued"]
+	if ok && txHashInTxPoolMap(txHash, queued) {
+		return "tx is queued in pool"
+	}
+	return "tx not found in pool"
+}
+
+func txHashInTxPoolMap(txHash common.Hash, value any) bool {
+	target := strings.ToLower(txHash.Hex())
+	return txHashInTxPoolMapWithTarget(target, value)
+}
+
+func txHashInTxPoolMapWithTarget(target string, value any) bool {
+	switch v := value.(type) {
+	case map[string]any:
+		if hash, ok := v["hash"].(string); ok && strings.EqualFold(hash, target) {
+			return true
+		}
+		for _, nested := range v {
+			if txHashInTxPoolMapWithTarget(target, nested) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (r Impl) GetBundleInfo(planHash common.Hash) (*sonicapi.RPCBundleInfo, error) {
