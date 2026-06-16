@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"sync"
@@ -31,11 +32,12 @@ import (
 	"golang.org/x/exp/maps"
 
 	rpcdriver "github.com/0xsoniclabs/norma/driver/rpc"
-	"github.com/0xsoniclabs/norma/genesistools/genesis"
+	"github.com/0xsoniclabs/norma/genesis"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
 	"github.com/0xsoniclabs/norma/driver/network"
+	"github.com/0xsoniclabs/sonic/opera"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -77,6 +79,7 @@ type OperaNode struct {
 	host      network.Host
 	container *docker.Container
 	config    *OperaNodeConfig
+	tempDirs  []string
 }
 
 type OperaNodeConfig struct {
@@ -95,6 +98,8 @@ type OperaNodeConfig struct {
 	// MountDataDir is the directory where the node should store its state.
 	// Temporary location is used if nil.
 	MountDataDir *string
+	// GenesisJsonPath is the path to the host-generated genesis file mounted into the container.
+	GenesisJsonPath *string
 	// ExtraArguments are additional command line arguments to pass to the node.
 	ExtraArguments string
 }
@@ -168,8 +173,36 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 	shutdownTimeout := 180 * time.Second
 
 	validatorId := "0"
+	isValidator := config.ValidatorId != nil && *config.ValidatorId > 0
+	tempDirs := make([]string, 0)
+	genesisJSONPath := ""
 	if config.ValidatorId != nil {
 		validatorId = fmt.Sprintf("%d", *config.ValidatorId)
+	}
+	if config.GenesisJsonPath == nil || *config.GenesisJsonPath == "" {
+		if config.NetworkConfig == nil {
+			return nil, fmt.Errorf("missing network config for genesis generation")
+		}
+
+		tmpDir, err := os.MkdirTemp("", "norma-node-genesis-*")
+		if err != nil {
+			return nil, fmt.Errorf("failed to create temporary genesis dir: %w", err)
+		}
+		tempDirs = append(tempDirs, tmpDir)
+
+		rules := opera.FakeNetRules(opera.GetSonicUpgrades())
+		if err := genesis.ConfigureNetworkRulesMap(&rules, config.NetworkConfig.NetworkRules); err != nil {
+			return nil, fmt.Errorf("failed to configure rules for temporary genesis: %w", err)
+		}
+
+		genesisPath := filepath.Join(tmpDir, "genesis.json")
+		if err := genesis.GenerateJsonGenesis(genesisPath, driver.GetValidatorStakes(config.NetworkConfig.Validators), &rules); err != nil {
+			return nil, fmt.Errorf("failed to generate temporary genesis: %w", err)
+		}
+
+		genesisJSONPath = genesisPath
+	} else {
+		genesisJSONPath = *config.GenesisJsonPath
 	}
 
 	host, err := network.RetryReturn(ctx, network.DefaultRetryAttempts, 1*time.Second, func() (*docker.Container, error) {
@@ -183,24 +216,11 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 			portForwarding[service.Port] = ports[i]
 		}
 
-		stakes := []uint64{}
-		for _, val := range config.NetworkConfig.Validators {
-			for range max(val.Instances, 1) {
-				if val.Stake == 0 {
-					// if no stake defined, use default
-					stakes = append(stakes, 5_000_000)
-					continue
-				}
-				stakes = append(stakes, uint64(val.Stake))
-			}
-		}
-
 		envs := map[string]string{
-			"VALIDATOR_ID":      validatorId,
-			"VALIDATORS_COUNT":  fmt.Sprintf("%d", config.NetworkConfig.Validators.GetNumValidators()),
-			"VALIDATORS_STAKES": genesis.GetStakesString(stakes),
-			"NETWORK_LATENCY":   fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
-			"EXTRA_ARGUMENTS":   config.ExtraArguments,
+			"VALIDATOR_ID":     validatorId,
+			"VALIDATORS_COUNT": fmt.Sprintf("%d", config.NetworkConfig.Validators.GetNumValidators()),
+			"NETWORK_LATENCY":  fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
+			"EXTRA_ARGUMENTS":  config.ExtraArguments,
 		}
 
 		const dataDir = "/datadir"
@@ -217,6 +237,38 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 			*dataDirBinding = fmt.Sprintf("%s:%s", *config.MountDataDir, dataDir)
 		}
 
+		genesisBind := fmt.Sprintf("%s:/genesis.json:ro", genesisJSONPath)
+
+		var keystoreBinding *string
+		if isValidator {
+			privKey, pubKey, address, err := genesis.DeriveValidatorKey(*config.ValidatorId)
+			if err != nil {
+				return nil, fmt.Errorf("failed to derive validator key: %w", err)
+			}
+			envs["VALIDATOR_PUBKEY"] = pubKey
+			envs["VALIDATOR_ADDRESS"] = address
+
+			if config.MountDataDir != nil {
+				if err := genesis.WriteValidatorKeystore(privKey, *config.MountDataDir); err != nil {
+					return nil, fmt.Errorf("failed to write validator keystore in mounted datadir: %w", err)
+				}
+			} else {
+				validatorDir, err := os.MkdirTemp("", fmt.Sprintf("norma-validator-%d-*", *config.ValidatorId))
+				if err != nil {
+					return nil, fmt.Errorf("failed to create validator temp dir: %w", err)
+				}
+				tempDirs = append(tempDirs, validatorDir)
+
+				if err := genesis.WriteValidatorKeystore(privKey, validatorDir); err != nil {
+					return nil, fmt.Errorf("failed to write validator keystore: %w", err)
+				}
+
+				keystorePath := filepath.Join(validatorDir, "keystore")
+				keystoreBinding = new(string)
+				*keystoreBinding = fmt.Sprintf("%s:%s/keystore:ro", keystorePath, dataDir)
+			}
+		}
+
 		maps.Copy(envs, config.NetworkConfig.NetworkRules) // put in the network rules
 
 		return client.Start(&docker.ContainerConfig{
@@ -226,6 +278,8 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 			Environment:     envs,
 			Network:         dn,
 			DataDirBinding:  dataDirBinding,
+			GenesisFileBind: &genesisBind,
+			KeystoreBinding: keystoreBinding,
 		})
 	})
 
@@ -236,6 +290,11 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 	// Use a private copy of the config to avoid modifying the original.
 	nodeConfig := *config
 	nodeConfig.Image = image
+	nodeConfig.GenesisJsonPath = nil
+	if genesisJSONPath != "" {
+		nodeConfig.GenesisJsonPath = new(string)
+		*nodeConfig.GenesisJsonPath = genesisJSONPath
+	}
 	if config.ValidatorId != nil {
 		nodeConfig.ValidatorId = new(int)
 		*nodeConfig.ValidatorId = *config.ValidatorId
@@ -244,6 +303,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		host:      host,
 		container: host,
 		config:    &nodeConfig,
+		tempDirs:  tempDirs,
 	}
 
 	// Wait until the OperaNode inside the Container is ready.
@@ -262,7 +322,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 	return nil, errors.Join(
 		printLog(node),
 		fmt.Errorf("failed to get node online, %w", err),
-		node.host.Cleanup(),
+		node.Cleanup(),
 	)
 }
 
@@ -345,7 +405,14 @@ func (n *OperaNode) Stop() error {
 }
 
 func (n *OperaNode) Cleanup() error {
-	return n.host.Cleanup()
+	err := n.host.Cleanup()
+	for _, dir := range n.tempDirs {
+		if cleanupErr := os.RemoveAll(dir); cleanupErr != nil {
+			err = errors.Join(err, cleanupErr)
+		}
+	}
+	n.tempDirs = nil
+	return err
 }
 
 func (n *OperaNode) DialRpc() (rpcdriver.Client, error) {

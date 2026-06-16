@@ -14,28 +14,24 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Norma. If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package driver
 
-import (
-	"fmt"
-	"os"
-
-	"github.com/urfave/cli/v2"
-)
-
-func main() {
-	app := &cli.App{
-		Name:      "genesistools",
-		Usage:     "Tools that support running of Sonic Client in Norma network",
-		Copyright: "(c) 2025 SonicLabs",
-		Flags:     []cli.Flag{},
-		Commands: []*cli.Command{
-			&validatorCommand,
-			&genesisExportCommand,
-		},
+// GetValidatorStakes returns the list of validator stakes based on the provided
+// configuration. If a validator has a stake of 0, it defaults to 5 million.
+func GetValidatorStakes(validators Validators) []uint64 {
+	if validators.GetNumValidators() == 0 {
+		return []uint64{}
 	}
-	if err := app.Run(os.Args); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	stakes := make([]uint64, 0, validators.GetNumValidators())
+	for _, val := range validators {
+		instances := max(val.Instances, 1)
+		for range instances {
+			if val.Stake == 0 {
+				stakes = append(stakes, 5_000_000)
+				continue
+			}
+			stakes = append(stakes, val.Stake)
+		}
 	}
+	return stakes
 }

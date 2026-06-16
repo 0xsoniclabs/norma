@@ -12,9 +12,6 @@ echo "Sonic is going to export its services on ${external_ip}"
 echo "val id=${VALIDATOR_ID}"
 echo "genesis validator count=${VALIDATORS_COUNT}"
 
-# Export genesis.json
-./genesistools genesis export genesis.json
-
 datadir=$STATE_DB_DATADIR
 # Initialize datadir
 if [[ ! -d "${datadir}/chaindata" ]]; then
@@ -22,19 +19,8 @@ if [[ ! -d "${datadir}/chaindata" ]]; then
   ./sonictool --datadir "${datadir}" genesis json --experimental /genesis.json
 fi
 
-##
-## if $VALIDATOR_ID is set, it is a validator
-##
-if [[ $VALIDATOR_ID -ne 0 ]]
-then
-	cmd=$(./genesistools validator from -id "${VALIDATOR_ID}" -d "${datadir}")
-	read -ra res <<< "$cmd"
-	VALIDATOR_PUBKEY=${res[0]}
-	VALIDATOR_ADDRESS=${res[1]}
-fi
-
-# Create password file - "password" is default norma/genesistools accounts password
-echo password >> password.txt
+# Create password file for validator keystore decryption.
+echo password > password.txt
 VALIDATOR_PASSWORD="password.txt"
 
 # If validator, initialize here
@@ -42,6 +28,10 @@ val_flag=""
 if [[ $VALIDATOR_ID -ne 0 ]]
 then
 	echo "Sonic is now running as validator"
+  if [[ -z "${VALIDATOR_PUBKEY:-}" || -z "${VALIDATOR_ADDRESS:-}" ]]; then
+    echo "VALIDATOR_PUBKEY and VALIDATOR_ADDRESS must be set for validators"
+    exit 1
+  fi
 	echo "val.id=${VALIDATOR_ID}"
 	echo "pubkey=${VALIDATOR_PUBKEY}"
 	echo "address=${VALIDATOR_ADDRESS}"

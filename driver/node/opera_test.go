@@ -21,13 +21,37 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
+	"github.com/0xsoniclabs/norma/driver/network"
 )
+
+type cleanupHostStub struct{}
+
+func (cleanupHostStub) Hostname() string { return "" }
+
+func (cleanupHostStub) IsRunning() bool { return false }
+
+func (cleanupHostStub) CheckRunning() error { return nil }
+
+func (cleanupHostStub) GetAddressForService(*network.ServiceDescription) *network.AddressPort {
+	return nil
+}
+
+func (cleanupHostStub) Stop() error { return nil }
+
+func (cleanupHostStub) SaveLogTo(string) error { return nil }
+
+func (cleanupHostStub) StreamLog() (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader("")), nil
+}
+
+func (cleanupHostStub) Cleanup() error { return nil }
 
 func TestImplements(t *testing.T) {
 	var inst OperaNode
@@ -56,6 +80,31 @@ func TestOperaNode_StartAndStop(t *testing.T) {
 	})
 	if err = node.host.Stop(); err != nil {
 		t.Errorf("failed to stop Opera node: %v", err)
+	}
+}
+
+func TestOperaNode_Cleanup_RemovesTempDirs(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "norma-opera-cleanup-*")
+	if err != nil {
+		t.Fatalf("failed to create temporary directory: %v", err)
+	}
+
+	node := &OperaNode{
+		host:     cleanupHostStub{},
+		config:   &OperaNodeConfig{Label: "test"},
+		tempDirs: []string{tempDir},
+	}
+
+	if err := node.Cleanup(); err != nil {
+		t.Fatalf("cleanup failed: %v", err)
+	}
+
+	if _, err := os.Stat(tempDir); !os.IsNotExist(err) {
+		t.Fatalf("temporary directory should be removed, stat error: %v", err)
+	}
+
+	if node.tempDirs != nil {
+		t.Fatalf("tempDirs should be cleared after cleanup")
 	}
 }
 
