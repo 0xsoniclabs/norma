@@ -2,6 +2,7 @@ package checking
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
@@ -89,13 +90,30 @@ func (c *blocksRollingChecker) Check() error {
 		}
 
 		items := series.GetRange(first, last.Position) // skip last item
-		window := make([]monitoring.BlockStatus, c.toleranceSamples)
+		samples := len(items) + 1                      // include last item appended below
+		effectiveTolerance := c.toleranceSamples
+		if samples < effectiveTolerance {
+			effectiveTolerance = samples - 1
+			slog.Warn("blocks_rolling range is too short; check is not reliable",
+				"node", node,
+				"samples", samples,
+				"configured_tolerance", c.toleranceSamples,
+				"effective_tolerance", effectiveTolerance,
+			)
+		}
+		if effectiveTolerance < 1 {
+			nodeFunctional = false
+			networkFunctional = networkFunctional || nodeFunctional
+			continue
+		}
+
+		window := make([]monitoring.BlockStatus, effectiveTolerance)
 		for i, point := range append(items, *last) {
-			window[i%c.toleranceSamples] = point.Value
-			if i < c.toleranceSamples-1 {
+			window[i%effectiveTolerance] = point.Value
+			if i < effectiveTolerance-1 {
 				continue
 			}
-			prev := (i - c.toleranceSamples + 1) % c.toleranceSamples
+			prev := (i - effectiveTolerance + 1) % effectiveTolerance
 			if window[prev].BlockHeight >= point.Value.BlockHeight {
 				nodeFunctional = false
 				break

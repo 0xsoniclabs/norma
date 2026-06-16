@@ -11,8 +11,8 @@ func TestBlocksRolling_Blocks_Processed(t *testing.T) {
 	tests := map[string]struct {
 		series []uint64
 	}{
-		"one": {
-			series: []uint64{1},
+		"short-increasing-adapts-tolerance": {
+			series: []uint64{1, 2, 3, 4},
 		},
 		"monotonic-increasing": {
 			series: []uint64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
@@ -41,6 +41,20 @@ func TestBlocksRolling_Blocks_Processed(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestBlocksRolling_Blocks_RangeTooShort_AdaptsTolerance(t *testing.T) {
+	series := createBlockSeries(t, []uint64{1, 1, 1, 1})
+	ctrl := gomock.NewController(t)
+	monitor := NewMockMonitoringData(ctrl)
+	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
+	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
+
+	c := blocksRollingChecker{monitor: monitor, toleranceSamples: 5}
+	err := c.Check()
+	if err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 
