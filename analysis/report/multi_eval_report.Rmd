@@ -1,9 +1,10 @@
 ---
-title: "Norma Evaluation Diffing"
+title: "`r if (nzchar(params$scenario)) paste0('Norma Evaluation Diffing - ', params$scenario) else 'Norma Evaluation Diffing'`"
 output: html_document
 date: "`r Sys.Date()`"
 params:
     datafile: "measurements.csv"
+    scenario: ""
 ---
 
 ```{r setup, echo=FALSE, include=FALSE}

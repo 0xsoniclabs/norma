@@ -51,7 +51,7 @@ func TestRenderReport(t *testing.T) {
 			}
 
 			data := monitor.GetMeasurementFileName()
-			if res, err := report.Render(data, outputdir); err != nil {
+			if res, err := report.Render(data, outputdir, "test_scenario.yml"); err != nil {
 				t.Errorf("failed to render report: %v", err)
 			} else if _, err := os.Stat(outputdir + "/" + res); err != nil {
 				t.Errorf("generated report file %s does not exist: %v", res, err)
