@@ -47,7 +47,7 @@ var (
 	}
 
 	// MultiEvalReport is a report template comparing the results of multiple
-	// scenariou evaluations. The input CSV should be the concatenation of the
+	// scenario evaluations. The input CSV should be the concatenation of the
 	// individual measurement CSV files.
 	MultiEvalReport = Report{
 		name:     "multi_eval_report",
@@ -60,7 +60,7 @@ var renderScript []byte
 
 // Render renders this report using the given input data file (in CSV format)
 // and places its results into the defined output directory.
-func (r *Report) Render(datafile, outputdir, scenario string) (outputfile string, err error) {
+func (r *Report) Render(datafile, outputDir, scenario string) (outputFile string, err error) {
 	script, err := createTempFile(renderScript, ".R")
 	if err != nil {
 		return "", err
@@ -73,7 +73,7 @@ func (r *Report) Render(datafile, outputdir, scenario string) (outputfile string
 	}
 	defer func() { err = errors.Join(err, os.Remove(template)) }()
 
-	outputfile = r.name + ".html"
+	outputFile = r.name + ".html"
 
 	cmd := exec.Command("docker", "run", "--rm",
 		"--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
@@ -81,9 +81,9 @@ func (r *Report) Render(datafile, outputdir, scenario string) (outputfile string
 		"-v", script+":/render.R:ro",
 		"-v", template+":/template.Rmd:ro",
 		"-v", datafile+":/input.csv:ro",
-		"-v", outputdir+":/output",
+		"-v", outputDir+":/output",
 		"norma-r-renderer",
-		"Rscript", "/render.R", "/template.Rmd", "/input.csv", "/output", outputfile, scenario,
+		"Rscript", "/render.R", "/template.Rmd", "/input.csv", "/output", outputFile, scenario,
 	)
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -92,7 +92,7 @@ func (r *Report) Render(datafile, outputdir, scenario string) (outputfile string
 		return "", fmt.Errorf("%v\n%v", out.String(), err)
 	}
 
-	return outputfile, nil
+	return outputFile, nil
 }
 
 func createTempFile(content []byte, suffix string) (filename string, err error) {
