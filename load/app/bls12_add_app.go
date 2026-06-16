@@ -99,7 +99,7 @@ func (app *Bls12AddApplication) GetReceivedTransactions(rpcClient rpc.Client) (u
 
 	var total uint64
 	for _, addr := range addresses {
-		nonce, err := rpcClient.NonceAt(context.Background(), addr, nil)
+		nonce, err := rpcClient.PendingNonceAt(context.Background(), addr)
 		if err != nil {
 			return 0, fmt.Errorf("failed to get nonce for %v; %w", addr, err)
 		}
