@@ -20,10 +20,22 @@ BUILD_DIR := $(CURDIR)/build
 
 all: \
     norma \
-	build-docker
+	pull-hello-world-image \
+    pull-alpine-image \
+    pull-prometheus-image \
+	build-r-renderer-image
 
-build-docker: norma
-	go run ./driver/norma build
+pull-hello-world-image:
+	DOCKER_BUILDKIT=1 docker image pull hello-world
+
+pull-alpine-image:
+	DOCKER_BUILDKIT=1 docker image pull alpine
+
+pull-prometheus-image:
+	DOCKER_BUILDKIT=1 docker image pull prom/prometheus:v2.44.0
+
+build-r-renderer-image:
+	DOCKER_BUILDKIT=1 docker build analysis/report/ -t norma-r-renderer
 
 generate-abi: load/contracts/abi/Counter.abi load/contracts/abi/ERC20.abi load/contracts/abi/Store.abi load/contracts/abi/UniswapV2Pair.abi load/contracts/abi/UniswapRouter.abi load/contracts/abi/Helper.abi load/contracts/abi/SmartAccount.abi load/contracts/abi/EntryPoint.abi load/contracts/abi/TransientCounter.abi load/contracts/abi/SelfDestructOldContract.abi load/contracts/abi/SelfDestructNewContract.abi load/contracts/abi/EcdsaCounter.abi load/contracts/abi/LargeContract.abi load/contracts/abi/ProbabilisticFailing.abi # requires installed solc and Ethereum abigen - check README.md
 
