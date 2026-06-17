@@ -126,7 +126,10 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 		for j := 0; j < validator.Instances; j++ {
 			wg.Add(1)
 			image := validator.ImageName
-			label := fmt.Sprintf("%s-%d", validator.Name, j)
+			label := fmt.Sprintf("validator-%d", j)
+			if len(validator.Name) != 0 {
+				label = fmt.Sprintf("%s-%d", validator.Name, j)
+			}
 			go func(idx int) {
 				defer wg.Done()
 				validatorId := idx + 1

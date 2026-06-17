@@ -26,11 +26,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"golang.org/x/exp/maps"
 
+	"github.com/0xsoniclabs/norma/driver/parser"
 	rpcdriver "github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/norma/genesis"
 
@@ -104,10 +106,6 @@ type OperaNodeConfig struct {
 	ExtraArguments string
 }
 
-// labelPattern restricts labels for nodes to non-empty alpha-numerical strings
-// with underscores and hyphens.
-var labelPattern = regexp.MustCompile("[A-Za-z0-9_-]+")
-
 // imageEnsureState stores the completion signal and final error for one
 // in-flight image provisioning operation.
 type imageEnsureState struct {
@@ -158,7 +156,10 @@ func ensureImageAvailable(ctx context.Context, image string) error {
 
 // StartOperaDockerNode creates a new OperaNode running in a Docker container.
 func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker.Network, config *OperaNodeConfig) (*OperaNode, error) {
-	if !labelPattern.Match([]byte(config.Label)) {
+	// avoid slashes and underscores in labels
+	config.Label = strings.ReplaceAll(config.Label, "/", "-")
+	config.Label = strings.ReplaceAll(config.Label, "_", "-")
+	if !parser.NamePattern.MatchString(config.Label) {
 		return nil, fmt.Errorf("invalid label for node: '%v'", config.Label)
 	}
 
@@ -269,6 +270,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		maps.Copy(envs, config.NetworkConfig.NetworkRules) // put in the network rules
 
 		return client.Start(&docker.ContainerConfig{
+			Hostname:        config.Label,
 			ImageName:       image,
 			ShutdownTimeout: &shutdownTimeout,
 			PortForwarding:  portForwarding,

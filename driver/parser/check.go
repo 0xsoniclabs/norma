@@ -29,7 +29,7 @@ import (
 
 const namePatternStr = `^[A-Za-z0-9-.]+$`
 
-var namePattern = regexp.MustCompile(namePatternStr)
+var NamePattern = regexp.MustCompile(namePatternStr)
 
 // Check tests semantic constraints on the configuration of a scenario.
 func (s *Scenario) Check() error {
@@ -128,7 +128,7 @@ func (s *Scenario) Check() error {
 func (v *Validator) Check(scenario *Scenario) error {
 	errs := []error{}
 
-	if len(v.Name) != 0 && !namePattern.Match([]byte(v.Name)) {
+	if len(v.Name) != 0 && !NamePattern.Match([]byte(v.Name)) {
 		errs = append(errs, fmt.Errorf("validator name must match %v, got %v", namePatternStr, v.Name))
 	}
 
@@ -146,7 +146,7 @@ func (v *Validator) Check(scenario *Scenario) error {
 // Check tests semantic constraints on the node configuration of a scenario.
 func (n *Node) Check(scenario *Scenario) error {
 	errs := []error{}
-	if !namePattern.Match([]byte(n.Name)) {
+	if !NamePattern.Match([]byte(n.Name)) {
 		errs = append(errs, fmt.Errorf("node name must match %v, got %v", namePatternStr, n.Name))
 	}
 	if n.Instances != nil && *n.Instances < 0 {
@@ -204,7 +204,7 @@ func isTypeValid(t string) error {
 func (a *Application) Check(scenario *Scenario) error {
 	errs := []error{}
 
-	if !namePattern.Match([]byte(a.Name)) {
+	if !NamePattern.Match([]byte(a.Name)) {
 		errs = append(errs, fmt.Errorf("application name must match %v, got %v", namePatternStr, a.Name))
 	}
 
@@ -237,7 +237,7 @@ func (a *Application) Check(scenario *Scenario) error {
 func (c *Cheat) Check(scenario *Scenario) error {
 	errs := []error{}
 
-	if !namePattern.Match([]byte(c.Name)) {
+	if !NamePattern.Match([]byte(c.Name)) {
 		errs = append(errs, fmt.Errorf("cheat name must match %v, got %v", namePatternStr, c.Name))
 	}
 
