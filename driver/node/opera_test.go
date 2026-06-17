@@ -68,9 +68,9 @@ func TestOperaNode_StartAndStop(t *testing.T) {
 		_ = docker.Close()
 	})
 	node, err := StartOperaDockerNode(t.Context(), docker, nil, &OperaNodeConfig{
-		Label:         "test",
+		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
-		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
+		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())},
 	})
 	if err != nil {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
@@ -91,7 +91,7 @@ func TestOperaNode_Cleanup_RemovesTempDirs(t *testing.T) {
 
 	node := &OperaNode{
 		host:     cleanupHostStub{},
-		config:   &OperaNodeConfig{Label: "test"},
+		config:   &OperaNodeConfig{Label: t.Name()},
 		tempDirs: []string{tempDir},
 	}
 
@@ -117,9 +117,9 @@ func TestOperaNode_RpcServiceIsReadyAfterStartup(t *testing.T) {
 		_ = docker.Close()
 	})
 	node, err := StartOperaDockerNode(t.Context(), docker, nil, &OperaNodeConfig{
-		Label:         "test",
+		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
-		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
+		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())},
 	})
 	if err != nil {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
@@ -142,9 +142,9 @@ func TestOperaNode_StreamLog(t *testing.T) {
 	})
 
 	node, err := StartOperaDockerNode(t.Context(), docker, nil, &OperaNodeConfig{
-		Label:         "test",
+		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
-		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
+		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())},
 	})
 	if err != nil {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
@@ -196,9 +196,9 @@ func TestOperaNode_MetricsExposed(t *testing.T) {
 	})
 
 	node, err := StartOperaDockerNode(t.Context(), docker, nil, &OperaNodeConfig{
-		Label:         "test",
+		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
-		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
+		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())},
 	})
 	if err != nil {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
@@ -242,9 +242,9 @@ func TestClient_Stop_Graceful(t *testing.T) {
 	}()
 
 	node, err := StartOperaDockerNode(t.Context(), client, nil, &OperaNodeConfig{
-		Label:         "test",
+		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
-		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
+		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())},
 	})
 	if err != nil {
 		t.Fatalf("failed to create client node: %v", err)
@@ -265,7 +265,7 @@ func TestClient_Stop_Graceful(t *testing.T) {
 		}
 	}()
 
-	done := make(chan bool)
+	done := make(chan bool, 1)
 	go func() {
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {

@@ -173,9 +173,9 @@ func TestMonitorIntegrationPrometheusLogReceived(t *testing.T) {
 		_ = client.Close()
 	})
 	node, err := opera.StartOperaDockerNode(t.Context(), client, nil, &opera.OperaNodeConfig{
-		Label:         "test",
+		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
-		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators},
+		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())},
 	})
 	if err != nil {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)

@@ -36,7 +36,7 @@ func TestBls12AddApplication(t *testing.T) {
 		"UPGRADES_ALLEGRO": "true",
 	}
 	net, err := local.NewLocalNetwork(t.Context(), &driver.NetworkConfig{
-		Validators:   driver.DefaultValidators,
+		Validators:   driver.DefaultValidators(t.Name()),
 		NetworkRules: rules,
 	})
 	if err != nil {
