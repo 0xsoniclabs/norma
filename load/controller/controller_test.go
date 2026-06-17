@@ -58,7 +58,7 @@ func TestLoadGeneration_CanRealizeConstantTrafficShape(t *testing.T) {
 			check := NewRateCheck(float64(rate))
 			var count atomic.Int32
 			net.EXPECT().DialRandomRpc().AnyTimes().Return(rpcClient, nil)
-			net.EXPECT().SendTransaction(gomock.Any(), "").AnyTimes().Do(func(any) {
+			net.EXPECT().SendTransaction(gomock.Any(), gomock.Any()).AnyTimes().Do(func(any, any) {
 				check.NewEvent()
 				count.Add(1)
 			})
