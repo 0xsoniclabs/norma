@@ -261,21 +261,21 @@ name: Network Rules Example
 
 network_rules:
   genesis:
-      Blocks:
-        MaxBlockGas: 20500000000
-      Epochs:
-        MaxEpochGas: 1500000000000
-        MaxEpochDuration: 123s
+      blocks:
+        max_block_gas: 20500000000
+      epochs:
+        max_epoch_gas: 1500000000000
+        max_epoch_duration: 123s
   updates:
       - time: 10
         rules:
-          Blocks:
-            MaxBlockGas: 20500000001
+          blocks:
+            max_block_gas: 20500000001
       - time: 30
         rules:
-          Epochs:
-            MaxEpochGas: 1500000000002
-            MaxEpochDuration: 10s
+          epochs:
+            max_epoch_gas: 1500000000002
+            max_epoch_duration: 10s
 
 `
 
