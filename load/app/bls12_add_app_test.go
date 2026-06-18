@@ -25,6 +25,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/network"
 	"github.com/0xsoniclabs/norma/driver/network/local"
+	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/0xsoniclabs/norma/load/app"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -32,9 +33,11 @@ import (
 // TestBls12AddApplication verifies that the BLS12-381 G1 addition precompile
 // application can generate and process transactions on an Allegro network.
 func TestBls12AddApplication(t *testing.T) {
-	rules := map[string]string{
-		"UPGRADES_SONIC":   "true",
-		"UPGRADES_ALLEGRO": "true",
+	rules := driver.NetworkRules{
+		Upgrades: &genesis.UpgradesPatch{
+			Sonic:   new(true),
+			Allegro: new(true),
+		},
 	}
 	net, err := local.NewLocalNetwork(t.Context(), &driver.NetworkConfig{
 		Validators:   driver.DefaultValidators(t.Name()),

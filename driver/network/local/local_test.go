@@ -31,6 +31,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver/network"
 	"github.com/0xsoniclabs/norma/driver/parser"
+	"github.com/0xsoniclabs/norma/genesis"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/node"
@@ -608,9 +609,13 @@ func TestLocalNetworkApplyNetworkRules_Success(t *testing.T) {
 		t.Fatalf("failed to call eth_getRules: %v", err)
 	}
 
-	rules := driver.NetworkRules{}
 	wantFee := originalRules.Economy.MinBaseFee.Int64() + 123
-	rules["MIN_BASE_FEE"] = fmt.Sprintf("%d", wantFee)
+	baseFeePatch := genesis.BigIntValue(*big.NewInt(wantFee))
+	rules := driver.NetworkRules{
+		Economy: &genesis.EconomyPatch{
+			MinBaseFee: &baseFeePatch,
+		},
+	}
 
 	if err := net.ApplyNetworkRules(rules); err != nil {
 		t.Errorf("failed to apply network rules: %v", err)

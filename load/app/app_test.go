@@ -26,6 +26,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/network"
 	"github.com/0xsoniclabs/norma/driver/network/local"
+	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/0xsoniclabs/norma/load/app"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"
@@ -146,22 +147,37 @@ func TestGenerators(t *testing.T) {
 // getCumulativeUpgrades returns a map of upgrades that are enabled
 // up to and including the lastSupported upgrade.
 // This function is needed because upgrades should be cumulative, not exclusive.
-func getCumulativeUpgrades(lastSupported string) map[string]string {
-	upgrades := map[string][]string{
-		"UPGRADES_SONIC":   {"UPGRADES_SONIC"},
-		"UPGRADES_ALLEGRO": {"UPGRADES_SONIC", "UPGRADES_ALLEGRO"},
-		"UPGRADES_BRIO":    {"UPGRADES_SONIC", "UPGRADES_ALLEGRO", "UPGRADES_BRIO"},
+func getCumulativeUpgrades(lastSupported string) driver.NetworkRules {
+	sonic := false
+	allegro := false
+	brio := false
+
+	switch lastSupported {
+	case "UPGRADES_SONIC":
+		sonic = true
+	case "UPGRADES_ALLEGRO":
+		sonic = true
+		allegro = true
+	case "UPGRADES_BRIO":
+		sonic = true
+		allegro = true
+		brio = true
 	}
-	result := make(map[string]string)
-	for _, upgrade := range upgrades[lastSupported] {
-		result[upgrade] = "true"
+
+	return driver.NetworkRules{
+		Upgrades: &genesis.UpgradesPatch{
+			Sonic:   new(sonic),
+			Allegro: new(allegro),
+			Brio:    new(brio),
+		},
 	}
-	return result
 }
 
 func TestGenerators_Subsidies(t *testing.T) {
-	rules := map[string]string{
-		"UPGRADES_GAS_SUBSIDIES": "true",
+	rules := driver.NetworkRules{
+		Upgrades: &genesis.UpgradesPatch{
+			GasSubsidies: new(true),
+		},
 	}
 	net, err := local.NewLocalNetwork(t.Context(), &driver.NetworkConfig{
 		Validators:   driver.DefaultValidators(t.Name()),

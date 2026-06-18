@@ -14,6 +14,7 @@ import (
 	big "math/big"
 	reflect "reflect"
 
+	opera "github.com/0xsoniclabs/sonic/opera"
 	ethereum "github.com/ethereum/go-ethereum"
 	common "github.com/ethereum/go-ethereum/common"
 	types "github.com/ethereum/go-ethereum/core/types"
@@ -102,6 +103,21 @@ func (m *MockContractBackend) FilterLogs(ctx context.Context, q ethereum.FilterQ
 func (mr *MockContractBackendMockRecorder) FilterLogs(ctx, q any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterLogs", reflect.TypeOf((*MockContractBackend)(nil).FilterLogs), ctx, q)
+}
+
+// GetNetworkRules mocks base method.
+func (m *MockContractBackend) GetNetworkRules(block string) (opera.Rules, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNetworkRules", block)
+	ret0, _ := ret[0].(opera.Rules)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNetworkRules indicates an expected call of GetNetworkRules.
+func (mr *MockContractBackendMockRecorder) GetNetworkRules(block any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkRules", reflect.TypeOf((*MockContractBackend)(nil).GetNetworkRules), block)
 }
 
 // HeaderByNumber mocks base method.
