@@ -100,7 +100,6 @@ func build(ctx *cli.Context) error {
 	for _, image := range []string{
 		"hello-world:latest",
 		"alpine:latest",
-		"prom/prometheus:v2.44.0",
 	} {
 		pullArgs := []string{"image", "pull", image}
 		if runDry {

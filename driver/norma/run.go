@@ -34,7 +34,6 @@ import (
 	"github.com/0xsoniclabs/norma/driver/executor"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	_ "github.com/0xsoniclabs/norma/driver/monitoring/app"
-	prometheusmon "github.com/0xsoniclabs/norma/driver/monitoring/prometheus"
 	_ "github.com/0xsoniclabs/norma/driver/monitoring/user"
 	"github.com/0xsoniclabs/norma/driver/network/local"
 	"github.com/0xsoniclabs/norma/driver/parser"
@@ -49,7 +48,6 @@ var runCommand = cli.Command{
 	Usage:  "runs a scenario",
 	Flags: []cli.Flag{
 		&evalLabel,
-		&keepPrometheusRunning,
 		&numValidators,
 		&skipChecks,
 		&skipReportRendering,
@@ -69,11 +67,6 @@ var (
 		Usage:   "define a directory at which the monitoring artifact will be saved.",
 		Value:   "",
 		Aliases: []string{"o"},
-	}
-	keepPrometheusRunning = cli.BoolFlag{
-		Name:    "keep-prometheus-running",
-		Usage:   "if set, the Prometheus instance will not be shut down after the run is complete.",
-		Aliases: []string{"kpr"},
 	}
 	numValidators = cli.IntFlag{
 		Name:  "num-validators",
@@ -100,7 +93,6 @@ func run(ctx *cli.Context) (err error) {
 	}
 
 	outputDir := ctx.String(outputDirectory.Name)
-	keepPrometheusRunning := ctx.Bool(keepPrometheusRunning.Name)
 	skipChecks := ctx.Bool(skipChecks.Name)
 	skipReportRendering := ctx.Bool(skipReportRendering.Name)
 	openReport := ctx.Bool(openReport.Name)
@@ -119,7 +111,7 @@ func run(ctx *cli.Context) (err error) {
 		if label == "" {
 			label = fmt.Sprintf("eval_%d", time.Now().Unix())
 		}
-		if err := runScenario(ctx.Context, file, outputDir, label, keepPrometheusRunning, skipChecks, skipReportRendering, openReport); err != nil {
+		if err := runScenario(ctx.Context, file, outputDir, label, skipChecks, skipReportRendering, openReport); err != nil {
 			return fmt.Errorf("failed to run scenario %q: %w", file, err)
 		}
 	}
@@ -127,7 +119,7 @@ func run(ctx *cli.Context) (err error) {
 	return nil
 }
 
-func runScenario(ctx context.Context, path, outputDir, label string, keepPrometheusRunning, skipChecks, skipReportRendering, openReport bool) error {
+func runScenario(ctx context.Context, path, outputDir, label string, skipChecks, skipReportRendering, openReport bool) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -143,7 +135,7 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 		if err := seqScenario.Check(); err != nil {
 			return err
 		}
-		return runSequentialScenario(ctx, &seqScenario, path, outputDir, label, keepPrometheusRunning, skipChecks, skipReportRendering, openReport)
+		return runSequentialScenario(ctx, &seqScenario, path, outputDir, label, skipChecks, skipReportRendering, openReport)
 	}
 
 	slog.Info("reading scenario file", "path", path)
@@ -250,21 +242,6 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 		return err
 	}
 
-	// Run prometheus.
-	slog.Info("starting Prometheus ...")
-	prom, err := prometheusmon.Start(ctx, net, net.GetDockerNetwork())
-	if err != nil {
-		slog.Error("error starting Prometheus", "error", err)
-	}
-	defer func() {
-		if !keepPrometheusRunning && prom != nil {
-			slog.Info("shutting down Prometheus ...")
-			if err := prom.Shutdown(); err != nil {
-				slog.Error("error during Prometheus shutdown", "error", err)
-			}
-		}
-	}()
-
 	var checks map[string]checking.Checker
 	if !skipChecks {
 		// Initialize network consistency checks.
@@ -292,7 +269,7 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 }
 
 // runSequentialScenario handles execution of the new sequential scenario format.
-func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScenario, path, outputDir, label string, keepPrometheusRunning, skipChecks, skipReportRendering, openReport bool) error {
+func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScenario, path, outputDir, label string, skipChecks, skipReportRendering, openReport bool) error {
 	slog.Info("running sequential scenario", "path", path, "name", scenario.Name)
 
 	// create symlink as qol (_latest => _####) where #### is the randomly generated name
@@ -385,21 +362,6 @@ func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScena
 	if err := monitoring.InstallAllRegisteredSources(monitor); err != nil {
 		return err
 	}
-
-	// Run prometheus.
-	slog.Info("starting Prometheus ...")
-	prom, err := prometheusmon.Start(ctx, net, net.GetDockerNetwork())
-	if err != nil {
-		slog.Error("error starting Prometheus", "error", err)
-	}
-	defer func() {
-		if !keepPrometheusRunning && prom != nil {
-			slog.Info("shutting down Prometheus ...")
-			if err := prom.Shutdown(); err != nil {
-				slog.Error("error during Prometheus shutdown", "error", err)
-			}
-		}
-	}()
 
 	var checks map[string]checking.Checker
 	if !skipChecks {
