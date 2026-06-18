@@ -286,8 +286,8 @@ func (n *LocalNetwork) RemoveNode(node driver.Node) error {
 	return nil
 }
 
-func (n *LocalNetwork) SendTransaction(tx *types.Transaction) {
-	n.rpcWorkerPool.SendTransaction(tx)
+func (n *LocalNetwork) SendTransaction(tx *types.Transaction, source string) {
+	n.rpcWorkerPool.SendTransaction(tx, source)
 }
 
 func (n *LocalNetwork) DialRandomRpc() (rpcdriver.Client, error) {

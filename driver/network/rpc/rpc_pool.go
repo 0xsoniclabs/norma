@@ -30,7 +30,7 @@ import (
 )
 
 type RpcWorkerPool struct {
-	txs     chan *types.Transaction
+	txs     chan transactionWithSource
 	workers map[driver.Node]*workerGroup
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -40,15 +40,15 @@ func NewRpcWorkerPool() *RpcWorkerPool {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &RpcWorkerPool{
-		txs:     make(chan *types.Transaction),
+		txs:     make(chan transactionWithSource, 100),
 		workers: make(map[driver.Node]*workerGroup, 10),
 		ctx:     ctx,
 		cancel:  cancel,
 	}
 }
 
-func (p *RpcWorkerPool) SendTransaction(tx *types.Transaction) {
-	p.txs <- tx
+func (p *RpcWorkerPool) SendTransaction(tx *types.Transaction, source string) {
+	p.txs <- transactionWithSource{tx: tx, source: source}
 }
 
 func (p *RpcWorkerPool) AfterNodeCreation(newNode driver.Node) {
@@ -63,7 +63,7 @@ func (p *RpcWorkerPool) AfterNodeCreation(newNode driver.Node) {
 	wg := workerGroup{}
 	p.workers[newNode] = &wg
 	for i := 0; i < 150; i++ {
-		wg.add(*rpcUrl, p.txs)
+		wg.add(newNode.GetLabel(), *rpcUrl, p.txs)
 	}
 }
 
@@ -95,8 +95,8 @@ func (p *RpcWorkerPool) Close() error {
 // When the group is closed, it should not be re-used and should be forgotten.
 type workerGroup []*worker
 
-func (wg *workerGroup) add(rpcUrl driver.URL, txs chan *types.Transaction) {
-	w := newWorker(rpcUrl, txs)
+func (wg *workerGroup) add(nodeName string, rpcUrl driver.URL, txs chan transactionWithSource) {
+	w := newWorker(nodeName, rpcUrl, txs)
 	*wg = append(*wg, w)
 }
 
@@ -120,27 +120,29 @@ func (wg *workerGroup) close() {
 // it starts dispatching asynchronously. This process can be interrupted by
 // closing the worker before it starts dispatching.
 type worker struct {
-	rpcUrl driver.URL
-	done   chan bool
-	txs    chan *types.Transaction
-	ctx    context.Context
-	cancel context.CancelFunc
+	nodeName string
+	rpcUrl   driver.URL
+	done     chan bool
+	txs      chan transactionWithSource
+	ctx      context.Context
+	cancel   context.CancelFunc
 }
 
-func newWorker(rpcUrl driver.URL, txs chan *types.Transaction) *worker {
+func newWorker(nodeName string, rpcUrl driver.URL, txs chan transactionWithSource) *worker {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	w := &worker{
-		rpcUrl: rpcUrl,
-		done:   make(chan bool),
-		txs:    txs,
-		ctx:    ctx,
-		cancel: cancel,
+		nodeName: nodeName,
+		rpcUrl:   rpcUrl,
+		done:     make(chan bool),
+		txs:      txs,
+		ctx:      ctx,
+		cancel:   cancel,
 	}
 
 	go func() {
 		if err := w.runRpcSenderLoop(); err != nil {
-			slog.Error("failed to open RPC connection", "error", err)
+			slog.Error("failed to open RPC connection", "error", err, "node", nodeName)
 			return
 		}
 	}()
@@ -158,9 +160,13 @@ func (p *worker) close() {
 
 func (p *worker) runRpcSenderLoop() error {
 	defer close(p.done)
-	rpcClient, err := network.RetryReturn(p.ctx, network.DefaultRetryAttempts, 1*time.Second, func() (*ethclient.Client, error) {
-		return ethclient.Dial(string(p.rpcUrl))
-	})
+	rpcClient, err := network.RetryReturn(
+		p.ctx,
+		network.DefaultRetryAttempts,
+		1*time.Second,
+		func() (*ethclient.Client, error) {
+			return ethclient.Dial(string(p.rpcUrl))
+		})
 
 	if rpcClient == nil || err != nil {
 		return err
@@ -170,12 +176,22 @@ func (p *worker) runRpcSenderLoop() error {
 	for {
 		select {
 		case tx := <-p.txs:
-			err := rpcClient.SendTransaction(context.Background(), tx)
+			err := rpcClient.SendTransaction(context.Background(), tx.tx)
 			if err != nil {
-				slog.Error("failed to send tx", "error", err)
+				slog.Warn("failed to send tx", "node", p.nodeName, "source", tx.source, "error", err)
 			}
 		case <-p.ctx.Done():
 			return nil
 		}
 	}
+}
+
+// transactionWithSource is a struct that holds a transaction and its source.
+// It is used to provide feedback about the origin of the transaction in case
+// of an error when sending it to the RPC client.
+type transactionWithSource struct {
+	tx *types.Transaction
+	// source is a string describing the origin of the transaction,
+	// e.g. the load generator that created it.
+	source string
 }
