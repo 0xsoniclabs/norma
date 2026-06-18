@@ -17,11 +17,25 @@ validators:
 # Start with shorted epoch duration to reflect the network rules updates.
 network_rules:
   genesis:
-    MAX_EPOCH_DURATION: 10s
+    epochs:
+      max_epoch_duration: 10s
   updates:
     - time: 25
       rules:
-        MAX_PARENTS: 0
+        dag:
+          max_parents: 3
+
+# Network rule updates are applied on epoch transition.
+advance_epoch:
+  - time: 26
+
+checks:
+  - time: 28
+    check: network_rules
+    config:
+      rules:
+        dag:
+          max_parents: 3
 
 
 # In the network, there is a few applications producing the load.

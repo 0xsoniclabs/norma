@@ -20,13 +20,16 @@ validators:
 # while enabling the hardfork later
 network_rules:
   genesis:
-    UPGRADES_ALLEGRO: true
-    UPGRADES_BRIO: false
-    MAX_EPOCH_DURATION: 3s
+    upgrades:
+      allegro: true
+      brio: false
+    epochs:
+      max_epoch_duration: 3s
   updates:
     - time: 60
       rules:
-        UPGRADES_BRIO: true  # hardfork enabled
+        upgrades:
+          brio: true  # hardfork enabled
 
 nodes:
     - name: node-v212

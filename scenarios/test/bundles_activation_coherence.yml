@@ -24,16 +24,19 @@ validators:
 # Brio and bundles start disabled and are enabled after all nodes are upgraded.
 network_rules:
   genesis:
-    MAX_EPOCH_DURATION: 5s
-    UPGRADES_ALLEGRO: true
-    UPGRADES_GAS_SUBSIDIES: true
-    UPGRADES_BRIO: false
-    UPGRADES_TRANSACTION_BUNDLES: false
+    epochs:
+      max_epoch_duration: 5s
+    upgrades:
+      allegro: true
+      gas_subsidies: true
+      brio: false
+      transaction_bundles: false
   updates:
     - time: 50
       rules:
-        UPGRADES_BRIO: true
-        UPGRADES_TRANSACTION_BUNDLES: true
+        upgrades:
+          brio: true
+          transaction_bundles: true
 
 
 # Nodes: stop old version, start new version reusing the same data_volume.

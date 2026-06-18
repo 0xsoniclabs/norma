@@ -12,7 +12,8 @@ duration: 240
 # Shortens epoch duration to reflect changes in validator registrations.
 network_rules:
   genesis:
-    MAX_EPOCH_DURATION: 5s
+    epochs:
+      max_epoch_duration: 5s
 
 # The network scenario to exercise. 
 nodes:
