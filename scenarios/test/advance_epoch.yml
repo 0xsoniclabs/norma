@@ -22,8 +22,8 @@ validators:
 # and updates of the rules during the network run.
 network_rules:
   genesis:
-    Epochs:
-      MaxEpochDuration: 1h  # only one epoch in this scenario
+    epochs:
+      max_epoch_duration: 1h  # only one epoch in this scenario
 
 # advance epoch by 3 mid-scenario (keep in mind 5-6 seconds / epoch advance)
 advance_epoch:

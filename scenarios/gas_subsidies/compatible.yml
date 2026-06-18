@@ -8,8 +8,8 @@ duration: 5
 
 network_rules:
   genesis:
-    Upgrades:
-      GasSubsidies: true
+    upgrades:
+      gas_subsidies: true
 
 validators:
   - name: local # local branch, used to test different versions

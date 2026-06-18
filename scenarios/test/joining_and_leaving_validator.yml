@@ -15,8 +15,8 @@ validators:
 # Make sure epochs are only transitioned on demand.
 network_rules:
   genesis:
-    Epochs:
-      MaxEpochDuration: 600s
+    epochs:
+      max_epoch_duration: 600s
 
 
 advance_epoch:
