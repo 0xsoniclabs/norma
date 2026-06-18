@@ -108,6 +108,7 @@ func (config *CheckerConfig) Check() error {
 
 	isBool := func(v any) bool { _, ok := v.(bool); return ok }
 	isPositiveInt := func(v any) bool { i, ok := v.(int); return ok && i >= 0 }
+	isMap := func(v any) bool { _, ok := v.(map[string]any); return ok }
 
 	checks := map[string]func(any) bool{
 		"failing":   isBool,
@@ -115,6 +116,7 @@ func (config *CheckerConfig) Check() error {
 		"start":     isPositiveInt,
 		"ceiling":   isPositiveInt,
 		"slack":     isPositiveInt,
+		"rules":     isMap,
 	}
 
 	for key, check := range checks {
