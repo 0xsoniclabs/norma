@@ -15,8 +15,8 @@ validators:
     imagename: "sonic:local"
   - name: v2.1 # release branch
     imagename: "sonic:v2.1"
-  - name: v2.1.2 # first version with gas subsidies
-    imagename: "sonic:v2.1.2"
+  - name: v2.1.6 # first version with gas subsidies
+    imagename: "sonic:v2.1.6"
 
 applications:
 

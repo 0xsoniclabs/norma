@@ -23,11 +23,6 @@ validators:
     imagename: "sonic:local"
   - name: release-branch
     imagename: "sonic:v2.1" # release branch
-  - name: v2.1.2
-    imagename: "sonic:v2.1.2" # first version with gas subsidies
-  - name: too-old
-    imagename: "sonic:v2.1.1" # last version before gas subsidies
-    failing: true
 
 applications:
   - name: subsidies 

@@ -7,7 +7,7 @@ name: Network Updates Base Fee
 # The duration of the scenario's runtime, in seconds.
 duration: 180
 
-# There was a min base fee behaviour update between client versions
+# There was a min base fee behavior update between client versions
 network_rules:
   genesis:
     UPGRADES_SONIC: true
@@ -25,11 +25,11 @@ validators:
 
 # Append updated nodes in the network.
 nodes:
-  - name: node-v202
+  - name: node-v216
     instances: 1
     start: 60   # will start when the base fee is already updated
     client:
-      imagename: "sonic:v2.0.2"
+      imagename: "sonic:v2.1.6"
       type: validator
 
 # In the network, there is a few applications producing the load.

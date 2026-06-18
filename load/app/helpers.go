@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-var gasFeeCap = big.NewInt(1e12)
+var gasFeeCap = big.NewInt(2e12)
 var gasTipCap = big.NewInt(0)
 
 func createTx(from *Account, toAddress common.Address, value *big.Int, data []byte, gasLimit uint64) (*types.Transaction, error) {

@@ -12,9 +12,9 @@ validators:
   - name: validators
     instances: 3 # 3 validators out of 4 can keep super-majority and run the network
     imagename: "sonic:latest"
-  - name: validator-v2.1.2
+  - name: validator-v2.1.6
     failing: true
-    imagename: "sonic:v2.1.2"   # this node should stop working after the hardfork
+    imagename: "sonic:v2.1.6"   # this node should stop working after the hardfork
 
 # Start with the hardfork disabled
 # while enabling the hardfork later
@@ -29,11 +29,11 @@ network_rules:
         UPGRADES_BRIO: true  # hardfork enabled
 
 nodes:
-    - name: node-v212
+    - name: node-v216
       start: 30
       failing: true
       client:
-        imagename: sonic:v2.1.2 # this node should stop working after the hardfork
+        imagename: sonic:v2.1.6 # this node should stop working after the hardfork
     - name: node-latest
       start: 30
 

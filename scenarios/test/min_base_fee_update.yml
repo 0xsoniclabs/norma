@@ -14,8 +14,8 @@ duration: 180
 
 # Initial validator nodes in the network.
 validators:
-  - name: validator-v2.0.3
-    imagename: "sonic:v2.0.3"
+  - name: validator-v2.1.6
+    imagename: "sonic:v2.1.6"
   - name: validator-allegro
     imagename: "sonic"
 
