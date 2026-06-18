@@ -113,7 +113,7 @@ func TestGenerators(t *testing.T) {
 			// run local network of one node
 			rules := getCumulativeUpgrades(upgrade)
 			net, err := local.NewLocalNetwork(t.Context(), &driver.NetworkConfig{
-				Validators:   driver.DefaultValidators,
+				Validators:   driver.DefaultValidators(t.Name()),
 				NetworkRules: rules,
 			})
 			if err != nil {
@@ -172,7 +172,7 @@ func TestGenerators_Subsidies(t *testing.T) {
 		"UPGRADES_GAS_SUBSIDIES": "true",
 	}
 	net, err := local.NewLocalNetwork(t.Context(), &driver.NetworkConfig{
-		Validators:   driver.DefaultValidators,
+		Validators:   driver.DefaultValidators(t.Name()),
 		NetworkRules: rules,
 	})
 	if err != nil {

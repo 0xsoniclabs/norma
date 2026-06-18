@@ -21,7 +21,7 @@ func TestGenerators_Bundles(t *testing.T) {
 	rules["UPGRADES_TRANSACTION_BUNDLES"] = "true"
 	rules["UPGRADES_GAS_SUBSIDIES"] = "true"
 	net, err := local.NewLocalNetwork(t.Context(), &driver.NetworkConfig{
-		Validators:   driver.DefaultValidators,
+		Validators:   driver.DefaultValidators(t.Name()),
 		NetworkRules: rules,
 	})
 	if err != nil {

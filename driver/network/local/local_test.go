@@ -43,7 +43,7 @@ func TestLocalNetworkIsNetwork(t *testing.T) {
 }
 
 func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
-	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
 	for _, N := range []int{1, 3} {
 		N := N
 		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
@@ -85,9 +85,9 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 func TestLocalNetwork_CanEnforceNetworkLatency(t *testing.T) {
 	for _, rtt := range []time.Duration{0, 100 * time.Millisecond, 200 * time.Millisecond} {
 		rtt := rtt
-		t.Run(fmt.Sprintf("rtt=%v", rtt), func(t *testing.T) {
+		t.Run(fmt.Sprintf("rtt-%v", rtt), func(t *testing.T) {
 			config := driver.NetworkConfig{
-				Validators:    driver.NewDefaultValidators(2),
+				Validators:    driver.NewDefaultTestValidators(t.Name(), 2),
 				RoundTripTime: rtt,
 			}
 			net, err := NewLocalNetwork(t.Context(), &config)
@@ -118,7 +118,8 @@ func TestLocalNetwork_CanEnforceNetworkLatency(t *testing.T) {
 }
 
 func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
-	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
+	config.Validators[0].Name = fmt.Sprintf("validator-%s", t.Name())
 	for _, N := range []int{1, 3} {
 		N := N
 		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
@@ -164,7 +165,7 @@ func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
 
 func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 	N := 2
-	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
 
 	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
@@ -200,7 +201,7 @@ func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 
 func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 	N := 3
-	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
 
 	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
@@ -265,7 +266,7 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 func TestLocalNetwork_CanRunWithMultipleValidators(t *testing.T) {
 	for _, N := range []int{1, 3} {
 		N := N
-		config := driver.NetworkConfig{Validators: driver.NewDefaultValidators(N)}
+		config := driver.NetworkConfig{Validators: driver.NewDefaultTestValidators(t.Name(), N)}
 		t.Run(fmt.Sprintf("num_validators=%d", N), func(t *testing.T) {
 			net, err := NewLocalNetwork(t.Context(), &config)
 			if err != nil {
@@ -300,9 +301,9 @@ func TestLocalNetwork_CanRunWithVariousValidators(t *testing.T) {
 
 	validators := driver.NewValidators([]parser.Validator{
 		{},
-		{Name: "validator1", Instances: &three, ImageName: "sonic:v2.1.6"},
-		{Name: "validator2", Instances: &two, ImageName: "sonic:local"},
-		{Name: "validator3", Instances: &one, ImageName: "sonic:latest"},
+		{Name: "validator1", Instances: &three, ImageName: "sonic:v2.1.5"},
+		{Name: "validator2", Instances: &two, ImageName: "sonic:v2.1.6"},
+		{Name: "validator3", Instances: &one, ImageName: "sonic:local"},
 		{Name: "validator4", ImageName: "sonic"},
 	})
 
@@ -324,7 +325,7 @@ func TestLocalNetwork_CanRunWithVariousValidators(t *testing.T) {
 }
 
 func TestLocalNetwork_NotifiesListenersOnNodeStartup(t *testing.T) {
-	config := driver.NetworkConfig{Validators: driver.NewDefaultValidators(2)}
+	config := driver.NetworkConfig{Validators: driver.NewDefaultTestValidators(t.Name(), 2)}
 	ctrl := gomock.NewController(t)
 	listener := driver.NewMockNetworkListener(ctrl)
 
@@ -345,7 +346,7 @@ func TestLocalNetwork_NotifiesListenersOnNodeStartup(t *testing.T) {
 	listener.EXPECT().AfterNodeCreation(gomock.Any())
 
 	_, err = net.CreateNode(&driver.NodeConfig{
-		Name:  "Test",
+		Name:  t.Name(),
 		Image: driver.DefaultClientDockerImageName,
 	})
 	if err != nil {
@@ -360,7 +361,7 @@ func TestLocalNetwork_NotifiesListenersOnNodeStartup(t *testing.T) {
 }
 
 func TestLocalNetwork_NotifiesListenersOnAppStartup(t *testing.T) {
-	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
+	config := driver.NetworkConfig{Validators: driver.NewDefaultTestValidators(t.Name(), 1)}
 	ctrl := gomock.NewController(t)
 	listener := driver.NewMockNetworkListener(ctrl)
 
@@ -384,7 +385,7 @@ func TestLocalNetwork_NotifiesListenersOnAppStartup(t *testing.T) {
 }
 
 func TestLocalNetwork_CanRemoveNode(t *testing.T) {
-	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
 	for _, N := range []int{1, 3} {
 		N := N
 		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
@@ -448,8 +449,8 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 func TestLocalNetwork_Num_Validators_Started(t *testing.T) {
 	for i := 1; i < 3; i++ {
 		i := i
-		t.Run(fmt.Sprintf("num_validators=%d", i), func(t *testing.T) {
-			config := driver.NetworkConfig{Validators: driver.NewDefaultValidators(i)}
+		t.Run(fmt.Sprintf("num_validators%d", i), func(t *testing.T) {
+			config := driver.NetworkConfig{Validators: driver.NewDefaultTestValidators(t.Name(), i)}
 			net, err := NewLocalNetwork(t.Context(), &config)
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
@@ -470,7 +471,7 @@ func TestLocalNetwork_Num_Validators_Started(t *testing.T) {
 // TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions checks if
 // docker can create client through images called "sonic" and "sonic:local"
 func TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions(t *testing.T) {
-	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
 
 	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
@@ -511,7 +512,7 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_LatestVersions(t *testing.T
 // docker can create client through images called "sonic:<versions>"
 // The checksum of each version must be unique.
 func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T) {
-	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
 
 	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
@@ -552,7 +553,7 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T
 // and extract the checksum.
 func getChecksum(net *LocalNetwork, image string) (checksum string, err error) {
 	node, err := net.CreateNode(&driver.NodeConfig{
-		Name:  fmt.Sprintf("T-%s", image),
+		Name:  fmt.Sprintf("T-%s", strings.ReplaceAll(image, ":", "-")),
 		Image: image,
 	})
 	if err != nil {
@@ -580,7 +581,7 @@ func getChecksum(net *LocalNetwork, image string) (checksum string, err error) {
 }
 
 func TestLocalNetworkApplyNetworkRules_Success(t *testing.T) {
-	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
 	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
@@ -628,7 +629,7 @@ func TestLocalNetworkApplyNetworkRules_Success(t *testing.T) {
 }
 
 func TestLocalNetworkAdvanceEpoch_Success(t *testing.T) {
-	config := driver.NetworkConfig{Validators: driver.DefaultValidators}
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
 	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
@@ -711,7 +712,7 @@ func TestLocalNetwork_FailingFlagPropagated(t *testing.T) {
 func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	temp := t.TempDir()
 
-	config := driver.NetworkConfig{Validators: driver.DefaultValidators, OutputDir: temp}
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name()), OutputDir: temp}
 	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)

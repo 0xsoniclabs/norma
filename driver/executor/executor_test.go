@@ -35,7 +35,7 @@ func TestExecutor_RunEmptyScenario(t *testing.T) {
 	clock := NewSimClock()
 	net := driver.NewMockNetwork(ctrl)
 	scenario := parser.Scenario{
-		Name:       "Test",
+		Name:       t.Name(),
 		Duration:   10,
 		Validators: []parser.Validator{{Name: "validator"}},
 	}
@@ -53,7 +53,7 @@ func TestExecutor_RunSingleNodeScenario(t *testing.T) {
 
 	clock := NewSimClock()
 	scenario := parser.Scenario{
-		Name:       "Test",
+		Name:       t.Name(),
 		Duration:   10,
 		Validators: []parser.Validator{{Name: "validator"}},
 		Nodes: []parser.Node{{
@@ -88,7 +88,7 @@ func TestExecutor_RunMultipleNodeScenario(t *testing.T) {
 
 	clock := NewSimClock()
 	scenario := parser.Scenario{
-		Name:       "Test",
+		Name:       t.Name(),
 		Duration:   10,
 		Validators: []parser.Validator{{Name: "validator"}},
 		Nodes: []parser.Node{{
@@ -131,7 +131,7 @@ func TestExecutor_Validator_StartEndRejoinLeave(t *testing.T) {
 	var two, three = 2, 3
 	clock := NewSimClock()
 	scenario := parser.Scenario{
-		Name:       "Test",
+		Name:       t.Name(),
 		Duration:   10,
 		Validators: []parser.Validator{{Name: "validator"}}, //id=1
 		Nodes: []parser.Node{
@@ -235,7 +235,7 @@ func TestExecutor_Validator_StartEndRejoinLeave(t *testing.T) {
 func TestExecutor_ObserverNodes_HaveNilValidatorID(t *testing.T) {
 	clock := NewSimClock()
 	scenario := parser.Scenario{
-		Name:       "Test",
+		Name:       t.Name(),
 		Duration:   10,
 		Validators: []parser.Validator{{Name: "validator"}},
 		Nodes: []parser.Node{
@@ -295,7 +295,7 @@ func TestExecutor_RunSingleApplicationScenario(t *testing.T) {
 
 	clock := NewSimClock()
 	scenario := parser.Scenario{
-		Name:       "Test",
+		Name:       t.Name(),
 		Duration:   10,
 		Validators: []parser.Validator{{Name: "validator"}},
 		Applications: []parser.Application{{
@@ -329,7 +329,7 @@ func TestExecutor_RunMultipleApplicationScenario(t *testing.T) {
 
 	clock := NewSimClock()
 	scenario := parser.Scenario{
-		Name:       "Test",
+		Name:       t.Name(),
 		Duration:   10,
 		Validators: []parser.Validator{{Name: "validator"}},
 		Applications: []parser.Application{{
@@ -368,7 +368,7 @@ func TestExecutor_TestUserAbort(t *testing.T) {
 
 	clock := NewWallTimeClock()
 	scenario := parser.Scenario{
-		Name:       "Test",
+		Name:       t.Name(),
 		Duration:   5,
 		Validators: []parser.Validator{{Name: "validator"}},
 		Nodes: []parser.Node{{
@@ -404,7 +404,7 @@ func TestExecutor_RunScenarioWithDefaultChecks(t *testing.T) {
 	clock := NewSimClock()
 	net := driver.NewMockNetwork(ctrl)
 	scenario := parser.Scenario{
-		Name:       "Test",
+		Name:       t.Name(),
 		Duration:   10,
 		Validators: []parser.Validator{{Name: "validator"}},
 	}
@@ -447,7 +447,7 @@ func TestExecutor_RunScenarioWithDefaultChecks(t *testing.T) {
 func TestExecutor_scheduleNetworkRulesEvents(t *testing.T) {
 	clock := NewSimClock()
 	scenario := parser.Scenario{
-		Name:     "Test",
+		Name:     t.Name(),
 		Duration: 10,
 		NetworkRules: parser.NetworkRules{
 			Updates: []parser.NetworkRulesUpdate{
@@ -497,7 +497,7 @@ func TestExecutor_scheduleAdvanceEpochEvents(t *testing.T) {
 
 	clock := NewSimClock()
 	scenario := parser.Scenario{
-		Name:     "Test",
+		Name:     t.Name(),
 		Duration: 10,
 		AdvanceEpoch: []parser.AdvanceEpoch{
 			{Time: 1, Epochs: &one},

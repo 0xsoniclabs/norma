@@ -17,6 +17,7 @@
 package driver
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/0xsoniclabs/carmen/go/common"
@@ -31,7 +32,9 @@ import (
 const DefaultClientDockerImageName = "sonic"
 
 // DefaultValidators is a default configuration for a single validator.
-var DefaultValidators = NewDefaultValidators(1)
+func DefaultValidators(name string) Validators {
+	return NewDefaultTestValidators(name, 1)
+}
 
 // ResolveClientImageName returns imageName if set, otherwise the default client
 // image name.
@@ -188,6 +191,10 @@ type Validators []Validator
 // using the default client docker image.
 func NewDefaultValidators(instances int) Validators {
 	return []Validator{{Name: "validator", Instances: instances, ImageName: DefaultClientDockerImageName}}
+}
+
+func NewDefaultTestValidators(name string, instances int) Validators {
+	return []Validator{{Name: fmt.Sprintf("validator-%s", name), Instances: instances, ImageName: DefaultClientDockerImageName}}
 }
 
 // NewValidators creates a new Validators from a parser.Validators.
