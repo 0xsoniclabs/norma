@@ -116,7 +116,7 @@ func (c *appContext) GetTransactOptions(account *Account) (*bind.TransactOpts, e
 		return nil, fmt.Errorf("failed to get gas price suggestion: %w", err)
 	}
 
-	nonce, err := client.NonceAt(ctxt, account.address, nil)
+	nonce, err := client.PendingNonceAt(ctxt, account.address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get nonce: %w", err)
 	}
@@ -183,7 +183,12 @@ func (c *appContext) FundAccounts(accounts []common.Address, value *big.Int) err
 			return fmt.Errorf("failed to distribute funds: %w", err)
 		}
 		txs = append(txs, tx)
-		opts.Nonce.Add(opts.Nonce, big.NewInt(1))
+
+		nonce, err := c.rpcClient.PendingNonceAt(context.Background(), c.GetTreasure().address)
+		if err != nil {
+			return fmt.Errorf("failed to refresh pending nonce: %w", err)
+		}
+		opts.Nonce = new(big.Int).SetUint64(nonce)
 	}
 
 	// Wait for all the transactions to be completed.

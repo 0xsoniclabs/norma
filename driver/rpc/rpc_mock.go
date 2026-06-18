@@ -60,6 +60,21 @@ func (mr *MockClientMockRecorder) BalanceAt(ctx, account, blockNumber any) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BalanceAt", reflect.TypeOf((*MockClient)(nil).BalanceAt), ctx, account, blockNumber)
 }
 
+// BlockNumber mocks base method.
+func (m *MockClient) BlockNumber(ctx context.Context) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BlockNumber", ctx)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BlockNumber indicates an expected call of BlockNumber.
+func (mr *MockClientMockRecorder) BlockNumber(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockNumber", reflect.TypeOf((*MockClient)(nil).BlockNumber), ctx)
+}
+
 // Call mocks base method.
 func (m *MockClient) Call(result any, method string, args ...any) error {
 	m.ctrl.T.Helper()
@@ -92,21 +107,6 @@ func (m *MockClient) CallContract(ctx context.Context, call ethereum.CallMsg, bl
 func (mr *MockClientMockRecorder) CallContract(ctx, call, blockNumber any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CallContract", reflect.TypeOf((*MockClient)(nil).CallContract), ctx, call, blockNumber)
-}
-
-// BlockNumber mocks base method.
-func (m *MockClient) BlockNumber(ctx context.Context) (uint64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BlockNumber", ctx)
-	ret0, _ := ret[0].(uint64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// BlockNumber indicates an expected call of BlockNumber.
-func (mr *MockClientMockRecorder) BlockNumber(ctx any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockNumber", reflect.TypeOf((*MockClient)(nil).BlockNumber), ctx)
 }
 
 // ChainID mocks base method.
@@ -179,6 +179,21 @@ func (m *MockClient) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]
 func (mr *MockClientMockRecorder) FilterLogs(ctx, q any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterLogs", reflect.TypeOf((*MockClient)(nil).FilterLogs), ctx, q)
+}
+
+// GetBundleInfo mocks base method.
+func (m *MockClient) GetBundleInfo(planHash common.Hash) (*sonicapi.RPCBundleInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBundleInfo", planHash)
+	ret0, _ := ret[0].(*sonicapi.RPCBundleInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBundleInfo indicates an expected call of GetBundleInfo.
+func (mr *MockClientMockRecorder) GetBundleInfo(planHash any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleInfo", reflect.TypeOf((*MockClient)(nil).GetBundleInfo), planHash)
 }
 
 // HeaderByNumber mocks base method.
@@ -315,21 +330,6 @@ func (mr *MockClientMockRecorder) WaitForBundleInfo(ctx, planHash any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForBundleInfo", reflect.TypeOf((*MockClient)(nil).WaitForBundleInfo), ctx, planHash)
 }
 
-// GetBundleInfo mocks base method.
-func (m *MockClient) GetBundleInfo(planHash common.Hash) (*sonicapi.RPCBundleInfo, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBundleInfo", planHash)
-	ret0, _ := ret[0].(*sonicapi.RPCBundleInfo)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetBundleInfo indicates an expected call of GetBundleInfo.
-func (mr *MockClientMockRecorder) GetBundleInfo(planHash any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleInfo", reflect.TypeOf((*MockClient)(nil).GetBundleInfo), planHash)
-}
-
 // WaitTransactionReceipt mocks base method.
 func (m *MockClient) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error) {
 	m.ctrl.T.Helper()
@@ -384,21 +384,6 @@ func (mr *MockethRpcClientMockRecorder) BalanceAt(ctx, account, blockNumber any)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BalanceAt", reflect.TypeOf((*MockethRpcClient)(nil).BalanceAt), ctx, account, blockNumber)
 }
 
-// CallContract mocks base method.
-func (m *MockethRpcClient) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CallContract", ctx, call, blockNumber)
-	ret0, _ := ret[0].([]byte)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CallContract indicates an expected call of CallContract.
-func (mr *MockethRpcClientMockRecorder) CallContract(ctx, call, blockNumber any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CallContract", reflect.TypeOf((*MockethRpcClient)(nil).CallContract), ctx, call, blockNumber)
-}
-
 // BlockNumber mocks base method.
 func (m *MockethRpcClient) BlockNumber(ctx context.Context) (uint64, error) {
 	m.ctrl.T.Helper()
@@ -412,6 +397,21 @@ func (m *MockethRpcClient) BlockNumber(ctx context.Context) (uint64, error) {
 func (mr *MockethRpcClientMockRecorder) BlockNumber(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockNumber", reflect.TypeOf((*MockethRpcClient)(nil).BlockNumber), ctx)
+}
+
+// CallContract mocks base method.
+func (m *MockethRpcClient) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CallContract", ctx, call, blockNumber)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CallContract indicates an expected call of CallContract.
+func (mr *MockethRpcClientMockRecorder) CallContract(ctx, call, blockNumber any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CallContract", reflect.TypeOf((*MockethRpcClient)(nil).CallContract), ctx, call, blockNumber)
 }
 
 // ChainID mocks base method.
