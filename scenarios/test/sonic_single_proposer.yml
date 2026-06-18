@@ -21,19 +21,19 @@ validators:
 # Network rules to be applied to the network.
 network_rules:
   genesis:
-    Upgrades:
-      Sonic: true
-      Allegro: false
-      SingleProposerBlockFormation: false
+    upgrades:
+      sonic: true
+      allegro: false
+      single_proposer_block_formation: false
   updates:
     - time: 90
       rules:
-        Upgrades:
-          SingleProposerBlockFormation: true
+        upgrades:
+          single_proposer_block_formation: true
     - time: 210
       rules:
-        Upgrades:
-          SingleProposerBlockFormation: false
+        upgrades:
+          single_proposer_block_formation: false
 
 advance_epoch:
   - time: 120

@@ -10,16 +10,16 @@ duration: 180
 # There was a min base fee behaviour update between client versions
 network_rules:
   genesis:
-    Upgrades:
-      Sonic: true
-      Allegro: false
-    Economy:
-      MinBaseFee: 1000000000
+    upgrades:
+      sonic: true
+      allegro: false
+    economy:
+      min_base_fee: 1000000000
   updates:
     - time: 20
       rules:
-        Economy:
-          MinBaseFee: 1000000000000
+        economy:
+          min_base_fee: 1000000000000
 
 # Initial validator nodes in the network.
 validators:

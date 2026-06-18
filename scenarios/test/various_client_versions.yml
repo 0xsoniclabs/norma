@@ -11,9 +11,9 @@ duration: 180
 # Older client versions does not support Allegro, i.e., we must disable it.
 network_rules:
   genesis:
-    Upgrades:
-      Sonic: true
-      Allegro: false
+    upgrades:
+      sonic: true
+      allegro: false
 
 # The network scenario to exercise.
 nodes:
