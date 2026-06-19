@@ -352,7 +352,7 @@ func TestExecutor_RunMultipleApplicationScenario(t *testing.T) {
 	net.EXPECT().CreateApplication(gomock.Any(), gomock.Any()).Return(app2, nil)
 	app1.EXPECT().Start(gomock.Any())
 	app1.EXPECT().Stop()
-	app1.EXPECT().Start(gomock.Any())
+	app2.EXPECT().Start(gomock.Any())
 	app2.EXPECT().Stop()
 
 	if err := Run(t.Context(), clock, net, &scenario, nil); err != nil {
