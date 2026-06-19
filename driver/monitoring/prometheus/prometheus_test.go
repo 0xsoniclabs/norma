@@ -106,7 +106,7 @@ func TestNodeCanBeAdded(t *testing.T) {
 
 // startPrometheus starts a prometheus node and returns it.
 func startPrometheus(t *testing.T, net *local.LocalNetwork) *Prometheus {
-	prom, err := Start(net, net.GetDockerNetwork())
+	prom, err := Start(t.Context(), net, net.GetDockerNetwork())
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}

@@ -555,7 +555,7 @@ func scheduleApplicationEvents(ctx context.Context, source *parser.Application, 
 			return ctx.Err()
 		}
 		name := fmt.Sprintf("%s-%d", source.Name, i)
-		newApp, err := net.CreateApplication(&driver.ApplicationConfig{
+		newApp, err := net.CreateApplication(ctx, &driver.ApplicationConfig{
 			Name:  name,
 			Type:  source.Type,
 			Rate:  &source.Rate,
@@ -565,7 +565,7 @@ func scheduleApplicationEvents(ctx context.Context, source *parser.Application, 
 			return err
 		}
 		queue.add(toSingleEvent(startTime, fmt.Sprintf("starting app %s", name), func() error {
-			return newApp.Start()
+			return newApp.Start(ctx)
 		}))
 		queue.add(toSingleEvent(endTime, fmt.Sprintf("stopping app %s", name), func() error {
 			return newApp.Stop()

@@ -43,7 +43,7 @@ func TestRetryRpcReturnGracefully(t *testing.T) {
 func TestClosePool(t *testing.T) {
 	t.Parallel()
 
-	pool := NewRpcWorkerPool()
+	pool := NewRpcWorkerPool(t.Context())
 	counter := &atomic.Int32{}
 	wg := &sync.WaitGroup{}
 

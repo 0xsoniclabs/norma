@@ -36,8 +36,8 @@ type RpcWorkerPool struct {
 	cancel  context.CancelFunc
 }
 
-func NewRpcWorkerPool() *RpcWorkerPool {
-	ctx, cancel := context.WithCancel(context.Background())
+func NewRpcWorkerPool(ctx context.Context) *RpcWorkerPool {
+	ctx, cancel := context.WithCancel(ctx)
 
 	return &RpcWorkerPool{
 		txs:     make(chan transactionWithSource, 100),

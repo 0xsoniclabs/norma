@@ -84,10 +84,6 @@ type LocalNetwork struct {
 }
 
 func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalNetwork, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
 	client, err := docker.NewClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client; %v", err)
@@ -114,7 +110,7 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 		nodes:          map[driver.NodeID]*node.OperaNode{},
 		apps:           []driver.Application{},
 		listeners:      map[driver.NetworkListener]bool{},
-		rpcWorkerPool:  rpc.NewRpcWorkerPool(),
+		rpcWorkerPool:  rpc.NewRpcWorkerPool(ctx),
 	}
 
 	if err := net.prepareGenesis(); err != nil {
@@ -365,8 +361,8 @@ type localApplication struct {
 	done       *sync.WaitGroup
 }
 
-func (a *localApplication) Start() error {
-	ctx, cancel := context.WithCancel(context.Background())
+func (a *localApplication) Start(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
 	a.cancel = cancel
 
 	a.done.Add(1)
@@ -407,7 +403,7 @@ func (a *localApplication) GetReceivedTransactions() (uint64, error) {
 	return a.controller.GetReceivedTransactions()
 }
 
-func (n *LocalNetwork) CreateApplication(config *driver.ApplicationConfig) (driver.Application, error) {
+func (n *LocalNetwork) CreateApplication(ctx context.Context, config *driver.ApplicationConfig) (driver.Application, error) {
 	rpcClient, err := n.DialRandomRpc()
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to RPC to initialize the application; %v", err)

@@ -42,8 +42,7 @@ type Prometheus struct {
 }
 
 // Start starts a Prometheus instance in a Docker container.
-func Start(net driver.Network, dn *docker.Network) (*Prometheus, error) {
-	ctx := context.Background()
+func Start(ctx context.Context, net driver.Network, dn *docker.Network) (*Prometheus, error) {
 	timeout := 1 * time.Second
 
 	client, err := docker.NewClient()

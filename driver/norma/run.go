@@ -237,7 +237,7 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 
 	// Run prometheus.
 	slog.Info("starting Prometheus ...")
-	prom, err := prometheusmon.Start(net, net.GetDockerNetwork())
+	prom, err := prometheusmon.Start(ctx, net, net.GetDockerNetwork())
 	if err != nil {
 		slog.Error("error starting Prometheus", "error", err)
 	}

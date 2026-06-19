@@ -140,7 +140,7 @@ func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
 
 			apps := []driver.Application{}
 			for i := 0; i < N; i++ {
-				app, err := net.CreateApplication(&driver.ApplicationConfig{
+				app, err := net.CreateApplication(t.Context(), &driver.ApplicationConfig{
 					Name: fmt.Sprintf("A-%d-%s", i, t.Name()),
 				})
 				if err != nil {
@@ -155,7 +155,7 @@ func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
 			}
 
 			for _, app := range apps {
-				if err := app.Start(); err != nil {
+				if err := app.Start(t.Context()); err != nil {
 					t.Errorf("failed to start app: %v", err)
 				}
 			}
@@ -193,7 +193,7 @@ func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 	}
 
 	for i := 0; i < N; i++ {
-		_, err := net.CreateApplication(&driver.ApplicationConfig{
+		_, err := net.CreateApplication(t.Context(), &driver.ApplicationConfig{
 			Name: fmt.Sprintf("A-%d-%s", i, t.Name()),
 		})
 		if err != nil {
@@ -278,14 +278,14 @@ func TestLocalNetwork_CanRunWithMultipleValidators(t *testing.T) {
 				_ = net.Shutdown()
 			})
 
-			app, err := net.CreateApplication(&driver.ApplicationConfig{
+			app, err := net.CreateApplication(t.Context(), &driver.ApplicationConfig{
 				Name: "TestApp",
 			})
 			if err != nil {
 				t.Fatalf("failed to create app: %v", err)
 			}
 
-			if err := app.Start(); err != nil {
+			if err := app.Start(t.Context()); err != nil {
 				t.Errorf("failed to start app: %v", err)
 			}
 
@@ -374,7 +374,7 @@ func TestLocalNetwork_NotifiesListenersOnAppStartup(t *testing.T) {
 	net.RegisterListener(listener)
 	listener.EXPECT().AfterApplicationCreation(gomock.Any())
 
-	_, err = net.CreateApplication(&driver.ApplicationConfig{
+	_, err = net.CreateApplication(t.Context(), &driver.ApplicationConfig{
 		Name: "TestApp",
 	})
 	if err != nil {
