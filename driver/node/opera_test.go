@@ -18,6 +18,7 @@ package node
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -37,21 +38,21 @@ func (cleanupHostStub) Hostname() string { return "" }
 
 func (cleanupHostStub) IsRunning() bool { return false }
 
-func (cleanupHostStub) CheckRunning() error { return nil }
+func (cleanupHostStub) CheckRunning(ctx context.Context) error { return nil }
 
 func (cleanupHostStub) GetAddressForService(*network.ServiceDescription) *network.AddressPort {
 	return nil
 }
 
-func (cleanupHostStub) Stop() error { return nil }
+func (cleanupHostStub) Stop(ctx context.Context) error { return nil }
 
-func (cleanupHostStub) SaveLogTo(string) error { return nil }
+func (cleanupHostStub) SaveLogTo(ctx context.Context, path string) error { return nil }
 
-func (cleanupHostStub) StreamLog() (io.ReadCloser, error) {
+func (cleanupHostStub) StreamLog(context.Context) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("")), nil
 }
 
-func (cleanupHostStub) Cleanup() error { return nil }
+func (cleanupHostStub) Cleanup(ctx context.Context) error { return nil }
 
 func TestImplements(t *testing.T) {
 	var inst OperaNode
@@ -76,11 +77,11 @@ func TestOperaNode_StartAndStop(t *testing.T) {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := node.Cleanup(); err != nil {
+		if err := node.Cleanup(t.Context()); err != nil {
 			t.Errorf("failed to cleanup node: %v", err)
 		}
 	})
-	if err = node.host.Stop(); err != nil {
+	if err = node.host.Stop(t.Context()); err != nil {
 		t.Errorf("failed to stop Opera node: %v", err)
 	}
 }
@@ -97,7 +98,7 @@ func TestOperaNode_Cleanup_RemovesTempDirs(t *testing.T) {
 		tempDirs: []string{tempDir},
 	}
 
-	if err := node.Cleanup(); err != nil {
+	if err := node.Cleanup(t.Context()); err != nil {
 		t.Fatalf("cleanup failed: %v", err)
 	}
 
@@ -127,7 +128,7 @@ func TestOperaNode_RpcServiceIsReadyAfterStartup(t *testing.T) {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := node.Cleanup(); err != nil {
+		if err := node.Cleanup(t.Context()); err != nil {
 			t.Errorf("failed to cleanup node: %v", err)
 		}
 	})
@@ -154,12 +155,12 @@ func TestOperaNode_StreamLog(t *testing.T) {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := node.Cleanup(); err != nil {
+		if err := node.Cleanup(t.Context()); err != nil {
 			t.Errorf("failed to cleanup node: %v", err)
 		}
 	})
 
-	reader, err := node.StreamLog()
+	reader, err := node.StreamLog(t.Context())
 	if err != nil {
 		t.Fatalf("cannot read logs: %e", err)
 	}
@@ -210,7 +211,7 @@ func TestOperaNode_MetricsExposed(t *testing.T) {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := node.Cleanup(); err != nil {
+		if err := node.Cleanup(t.Context()); err != nil {
 			t.Errorf("failed to cleanup node: %v", err)
 		}
 	})
@@ -258,12 +259,12 @@ func TestClient_Stop_Graceful(t *testing.T) {
 		t.Fatalf("failed to create client node: %v", err)
 	}
 	defer func() {
-		if err := node.Cleanup(); err != nil {
+		if err := node.Cleanup(t.Context()); err != nil {
 			t.Errorf("cannot cleanup: %v", err)
 		}
 	}()
 
-	reader, err := node.StreamLog()
+	reader, err := node.StreamLog(t.Context())
 	if err != nil {
 		t.Errorf("error: %v", err)
 	}
@@ -284,7 +285,7 @@ func TestClient_Stop_Graceful(t *testing.T) {
 		}
 	}()
 
-	if err := node.Stop(); err != nil {
+	if err := node.Stop(t.Context()); err != nil {
 		t.Errorf("cannot stop client node: %v", err)
 	}
 

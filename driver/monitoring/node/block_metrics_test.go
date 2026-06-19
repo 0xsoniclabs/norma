@@ -17,6 +17,7 @@
 package nodemon
 
 import (
+	"context"
 	"io"
 	"strings"
 	"testing"
@@ -59,13 +60,13 @@ func TestIntegrateRegistryWithShutdownNodeMetrics(t *testing.T) {
 	node2.EXPECT().GetLabel().AnyTimes().Return(string(monitoring.Node2TestId))
 	node3.EXPECT().GetLabel().AnyTimes().Return(string(monitoring.Node3TestId))
 
-	node1.EXPECT().StreamLog().AnyTimes().DoAndReturn(func() (io.ReadCloser, error) {
+	node1.EXPECT().StreamLog(gomock.Any()).AnyTimes().DoAndReturn(func(context.Context) (io.ReadCloser, error) {
 		return io.NopCloser(strings.NewReader(monitoring.Node1TestLog)), nil
 	})
-	node2.EXPECT().StreamLog().AnyTimes().DoAndReturn(func() (io.ReadCloser, error) {
+	node2.EXPECT().StreamLog(gomock.Any()).AnyTimes().DoAndReturn(func(context.Context) (io.ReadCloser, error) {
 		return io.NopCloser(strings.NewReader(monitoring.Node2TestLog)), nil
 	})
-	node3.EXPECT().StreamLog().AnyTimes().DoAndReturn(func() (io.ReadCloser, error) {
+	node3.EXPECT().StreamLog(gomock.Any()).AnyTimes().DoAndReturn(func(context.Context) (io.ReadCloser, error) {
 		return io.NopCloser(strings.NewReader(monitoring.Node3TestLog)), nil
 	})
 

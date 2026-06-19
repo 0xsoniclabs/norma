@@ -97,14 +97,14 @@ func NewClient() (*Client, error) {
 }
 
 // Purge removes all Docker objects created by norma.
-func Purge() error {
+func Purge(ctx context.Context) error {
 	cli, err := NewClient()
 	if err != nil {
 		return err
 	}
 
 	// get all containers created by norma
-	containers, err := cli.listContainers()
+	containers, err := cli.listContainers(ctx)
 	if err != nil {
 		return err
 	}
@@ -112,21 +112,21 @@ func Purge() error {
 	// remove all containers
 	for _, c := range containers {
 		// remove the container
-		err = cli.cli.ContainerRemove(context.Background(), c.ID, container.RemoveOptions{Force: true})
+		err = cli.cli.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true})
 		if err != nil {
 			return err
 		}
 	}
 
 	// get all networks created by norma
-	networks, err := cli.listNetworks()
+	networks, err := cli.listNetworks(ctx)
 	if err != nil {
 		return err
 	}
 
 	// remove all networks
 	for _, n := range networks {
-		err = cli.cli.NetworkRemove(context.Background(), n.ID)
+		err = cli.cli.NetworkRemove(ctx, n.ID)
 		if err != nil {
 			return err
 		}
@@ -144,7 +144,7 @@ func (c *Client) Close() error {
 // services to be offered -- and port-forwarding specifications to make those
 // services reachable from outside the Docker container (e.g. by the
 // application running this code).
-func (c *Client) Start(config *ContainerConfig) (*Container, error) {
+func (c *Client) Start(ctx context.Context, config *ContainerConfig) (*Container, error) {
 	envVars := []string{}
 	for key, value := range config.Environment {
 		envVars = append(envVars, fmt.Sprintf("%s=%s", key, value))
@@ -171,7 +171,7 @@ func (c *Client) Start(config *ContainerConfig) (*Container, error) {
 
 	init := true
 	stopTimeout := int(config.ShutdownTimeout.Seconds())
-	resp, err := c.cli.ContainerCreate(context.Background(), &container.Config{
+	resp, err := c.cli.ContainerCreate(ctx, &container.Config{
 		Image:      config.ImageName,
 		Tty:        false,
 		Env:        envVars,
@@ -195,14 +195,14 @@ func (c *Client) Start(config *ContainerConfig) (*Container, error) {
 	// custom network at the same time (otherwise on network cleanup the
 	// forwarded ports would be lost)
 	if config.Network != nil {
-		err = c.cli.NetworkConnect(context.Background(), config.Network.id, resp.ID, nil)
+		err = c.cli.NetworkConnect(ctx, config.Network.id, resp.ID, nil)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if err := network.Retry(context.Background(), network.DefaultRetryAttempts, 1*time.Second, func() error {
-		return c.cli.ContainerStart(context.Background(), resp.ID, container.StartOptions{})
+	if err := network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second, func() error {
+		return c.cli.ContainerStart(ctx, resp.ID, container.StartOptions{})
 	}); err != nil {
 		return nil, err
 	}
@@ -211,12 +211,12 @@ func (c *Client) Start(config *ContainerConfig) (*Container, error) {
 }
 
 // CreateBridgeNetwork creates a new Docker bridge network.
-func (c *Client) CreateBridgeNetwork() (*Network, error) {
+func (c *Client) CreateBridgeNetwork(ctx context.Context) (*Network, error) {
 	// generate random name for network
 	name := fmt.Sprintf("norma_network_%d", rand.Int())
 
 	// create new network
-	resp, err := c.cli.NetworkCreate(context.Background(), name, dockerNetwork.CreateOptions{
+	resp, err := c.cli.NetworkCreate(ctx, name, dockerNetwork.CreateOptions{
 		Labels: map[string]string{
 			objectsLabel: "true",
 		},
@@ -247,8 +247,8 @@ func (c *Container) IsRunning() bool {
 
 // CheckRunning returns an error if the container process is no longer running,
 // either because it exited on its own or because its state cannot be determined.
-func (c *Container) CheckRunning() error {
-	info, err := c.client.cli.ContainerInspect(context.Background(), c.id)
+func (c *Container) CheckRunning(ctx context.Context) error {
+	info, err := c.client.cli.ContainerInspect(ctx, c.id)
 	if err != nil {
 		return fmt.Errorf("failed to inspect container: %w", err)
 	}
@@ -261,28 +261,28 @@ func (c *Container) CheckRunning() error {
 // Stop terminates this container. Services within the container will be
 // signaled about the upcoming termination followed by being killed after a set
 // timeout (see ContainerConfig.ShutdownTimeout).
-func (c *Container) Stop() error {
+func (c *Container) Stop(ctx context.Context) error {
 	if c.stopped {
 		return nil
 	}
 	c.stopped = true
 	timeout := int(c.config.ShutdownTimeout.Seconds())
-	return c.client.cli.ContainerStop(context.Background(), c.id, container.StopOptions{
+	return c.client.cli.ContainerStop(ctx, c.id, container.StopOptions{
 		Signal: string(SigInt), Timeout: &timeout})
 }
 
 // Cleanup stops the container (unless it is already stopped) and frees any
 // resources associated to it. After the operation, the Container is to be
 // considered invalid.
-func (c *Container) Cleanup() error {
+func (c *Container) Cleanup(ctx context.Context) error {
 	if c.cleaned {
 		return nil
 	}
-	if err := c.Stop(); err != nil {
+	if err := c.Stop(ctx); err != nil {
 		return err
 	}
 	c.cleaned = true
-	return c.client.cli.ContainerRemove(context.Background(), c.id, container.RemoveOptions{Force: true})
+	return c.client.cli.ContainerRemove(ctx, c.id, container.RemoveOptions{})
 }
 
 // GetAddressForService retrieves the Address of a service running in this
@@ -301,7 +301,7 @@ func (c *Container) GetAddressForService(service *network.ServiceDescription) *n
 }
 
 // SaveLogTo fetches the log of the container and saves it to the given directory.
-func (c *Container) SaveLogTo(directory string) error {
+func (c *Container) SaveLogTo(ctx context.Context, directory string) error {
 	opt := container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
@@ -309,7 +309,7 @@ func (c *Container) SaveLogTo(directory string) error {
 
 	// TODO if this proves insufficient, an alternative would be to mount certain directories from
 	// the container to temp on the host and here just copy local directories
-	reader, err := c.client.cli.ContainerLogs(context.Background(), c.id, opt)
+	reader, err := c.client.cli.ContainerLogs(ctx, c.id, opt)
 	if err != nil {
 		return err
 	}
@@ -327,14 +327,14 @@ func (c *Container) SaveLogTo(directory string) error {
 	return nil
 }
 
-func (c *Container) StreamLog() (io.ReadCloser, error) {
+func (c *Container) StreamLog(ctx context.Context) (io.ReadCloser, error) {
 	opt := container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Follow:     true,
 	}
 
-	reader, err := c.client.cli.ContainerLogs(context.Background(), c.id, opt)
+	reader, err := c.client.cli.ContainerLogs(ctx, c.id, opt)
 	if err != nil {
 		return nil, err
 	}
@@ -343,15 +343,15 @@ func (c *Container) StreamLog() (io.ReadCloser, error) {
 }
 
 // SendSignal sends a signal to the container.
-func (c *Container) SendSignal(signal Signal) error {
-	return c.client.cli.ContainerKill(context.Background(), c.id, string(signal))
+func (c *Container) SendSignal(ctx context.Context, signal Signal) error {
+	return c.client.cli.ContainerKill(ctx, c.id, string(signal))
 }
 
 // Exec executes a command in the container.
 // This method is blocking until the command has finished.
 // The output of the command is returned as a string (stdout + stderr).
 // The command is required to be tokenized and interpreted in shell's exec form.
-func (c *Container) Exec(cmd []string) (string, error) {
+func (c *Container) Exec(ctx context.Context, cmd []string) (string, error) {
 	// Create a container exec instance
 	execConfig := container.ExecOptions{
 		Tty:          true,
@@ -359,7 +359,7 @@ func (c *Container) Exec(cmd []string) (string, error) {
 		AttachStdout: true,
 		AttachStderr: true,
 	}
-	execResp, err := c.client.cli.ContainerExecCreate(context.Background(), c.id, execConfig)
+	execResp, err := c.client.cli.ContainerExecCreate(ctx, c.id, execConfig)
 	if err != nil {
 		return "", fmt.Errorf("failed to create exec instance: %s", err)
 	}
@@ -370,7 +370,7 @@ func (c *Container) Exec(cmd []string) (string, error) {
 	}
 
 	// Attach to the exec instance
-	resp, err := c.client.cli.ContainerExecAttach(context.Background(), execResp.ID, container.ExecStartOptions{})
+	resp, err := c.client.cli.ContainerExecAttach(ctx, execResp.ID, container.ExecStartOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to attach to exec instance: %s", err)
 	}
@@ -383,7 +383,7 @@ func (c *Container) Exec(cmd []string) (string, error) {
 	}
 
 	// Wait for the exec command to finish
-	execInspect, err := c.client.cli.ContainerExecInspect(context.Background(), execResp.ID)
+	execInspect, err := c.client.cli.ContainerExecInspect(ctx, execResp.ID)
 	if err != nil {
 		return (string)(output), fmt.Errorf("failed to inspect exec instance: %s", err)
 	}
@@ -398,19 +398,19 @@ func (c *Container) Exec(cmd []string) (string, error) {
 }
 
 // Cleanup removes the network from the Docker host.
-func (n *Network) Cleanup() error {
+func (n *Network) Cleanup(ctx context.Context) error {
 	if n.cleaned {
 		return nil
 	}
 	// remove all containers from the network, so we can remove the network
-	containers, err := n.client.listContainers()
+	containers, err := n.client.listContainers(ctx)
 	if err != nil {
 		return err
 	}
 	for _, c := range containers {
 		for _, cn := range c.NetworkSettings.Networks {
 			if cn.NetworkID == n.id {
-				if err := n.client.cli.NetworkDisconnect(context.Background(), n.id, c.ID, true); err != nil {
+				if err := n.client.cli.NetworkDisconnect(ctx, n.id, c.ID, true); err != nil {
 					return err
 				}
 			}
@@ -418,12 +418,12 @@ func (n *Network) Cleanup() error {
 	}
 	n.cleaned = true
 	// remove the network
-	return n.client.cli.NetworkRemove(context.Background(), n.id)
+	return n.client.cli.NetworkRemove(ctx, n.id)
 }
 
 // listNetworks returns a list of all networks on the Docker host filtered by label.
-func (c *Client) listNetworks() ([]dockerNetwork.Inspect, error) {
-	return c.cli.NetworkList(context.Background(), dockerNetwork.ListOptions{
+func (c *Client) listNetworks(ctx context.Context) ([]dockerNetwork.Inspect, error) {
+	return c.cli.NetworkList(ctx, dockerNetwork.ListOptions{
 		Filters: filters.NewArgs(getObjectsLabelFilter()),
 	})
 }
@@ -442,8 +442,8 @@ func (c *Client) ContainerExists(name string) (bool, error) {
 
 // listContainers returns a list of all containers (running and stopped) on the
 // Docker host created by norma.
-func (c *Client) listContainers() ([]types.Container, error) {
-	return c.cli.ContainerList(context.Background(), container.ListOptions{
+func (c *Client) listContainers(ctx context.Context) ([]types.Container, error) {
+	return c.cli.ContainerList(ctx, container.ListOptions{
 		All:     true,
 		Filters: filters.NewArgs(getObjectsLabelFilter()),
 	})

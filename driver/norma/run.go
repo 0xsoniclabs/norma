@@ -23,9 +23,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
@@ -109,30 +107,19 @@ func run(ctx *cli.Context) (err error) {
 
 	path := args.First()
 
-	// Create a context that is cancelled on SIGINT/SIGTERM so that both
-	// network startup and scenario execution can be interrupted cleanly,
-	// allowing all deferred shutdowns to execute.
-	stoppableCtx, stop := signal.NotifyContext(ctx.Context, os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	go func() {
-		<-stoppableCtx.Done()
-		slog.Info("stopping...")
-		stop() // second Ctrl+C will force-kill
-	}()
-
 	files, err := collectScenarioFiles(path)
 	if err != nil {
 		return fmt.Errorf("failed to collect scenario files: %w", err)
 	}
 	for _, file := range files {
-		if stoppableCtx.Err() != nil {
-			return stoppableCtx.Err()
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 		label := ctx.String(evalLabel.Name)
 		if label == "" {
 			label = fmt.Sprintf("eval_%d", time.Now().Unix())
 		}
-		if err := runScenario(stoppableCtx, file, outputDir, label, keepPrometheusRunning, skipChecks, skipReportRendering, openReport); err != nil {
+		if err := runScenario(ctx.Context, file, outputDir, label, keepPrometheusRunning, skipChecks, skipReportRendering, openReport); err != nil {
 			return fmt.Errorf("failed to run scenario %q: %w", file, err)
 		}
 	}
@@ -275,7 +262,7 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 	defer logger.shutdown()
 	err = executor.Run(ctx, clock, net, &scenario, checks)
 	if err != nil {
-		dumpNodeLogs(net)
+		dumpNodeLogs(ctx, net)
 		return err
 	}
 	slog.Info("execution completed successfully")
@@ -295,10 +282,10 @@ func openBrowser(s string) error {
 }
 
 // dumpNodeLogs prints the logs of all active nodes to help diagnose failures.
-func dumpNodeLogs(net driver.Network) {
+func dumpNodeLogs(ctx context.Context, net driver.Network) {
 	nodes := net.GetActiveNodes()
 	for _, node := range nodes {
-		reader, err := node.StreamLog()
+		reader, err := node.StreamLog(ctx)
 		if err != nil {
 			slog.Error("failed to stream log", "node", node.GetLabel(), "error", err)
 			continue

@@ -83,9 +83,9 @@ func TestNodeSourceRetrievesSensorData(t *testing.T) {
 	net.EXPECT().UnregisterListener(gomock.Any()).AnyTimes()
 	net.EXPECT().GetActiveNodes().Return([]driver.Node{node1, node2}).AnyTimes()
 
-	node1.EXPECT().StreamLog().AnyTimes().Return(io.NopCloser(strings.NewReader("")), nil)
-	node2.EXPECT().StreamLog().AnyTimes().Return(io.NopCloser(strings.NewReader("")), nil)
-	node3.EXPECT().StreamLog().AnyTimes().Return(io.NopCloser(strings.NewReader("")), nil)
+	node1.EXPECT().StreamLog(gomock.Any()).AnyTimes().Return(io.NopCloser(strings.NewReader("")), nil)
+	node2.EXPECT().StreamLog(gomock.Any()).AnyTimes().Return(io.NopCloser(strings.NewReader("")), nil)
+	node3.EXPECT().StreamLog(gomock.Any()).AnyTimes().Return(io.NopCloser(strings.NewReader("")), nil)
 
 	monitor, err := mon.NewMonitor(net, mon.MonitorConfig{OutputDir: t.TempDir()})
 	if err != nil {

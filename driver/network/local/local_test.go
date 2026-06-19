@@ -72,13 +72,13 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 			}
 
 			for _, node := range nodes {
-				if err := node.Stop(); err != nil {
+				if err := node.Stop(t.Context()); err != nil {
 					t.Errorf("failed to stop node: %v", err)
 				}
 			}
 
 			for _, node := range nodes {
-				if err := node.Cleanup(); err != nil {
+				if err := node.Cleanup(t.Context()); err != nil {
 					t.Errorf("failed to cleanup node: %v", err)
 				}
 			}
@@ -223,7 +223,7 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	listener := driver.NewMockNetworkListener(ctrl)
 	listener.EXPECT().AfterNodeCreation(gomock.Any()).DoAndReturn(func(node driver.Node) {
-		reader, err := node.StreamLog()
+		reader, err := node.StreamLog(t.Context())
 		if err != nil {
 			t.Errorf("error: %v", err)
 		}
@@ -433,10 +433,10 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 
 			// removed nodes are only detached from the network, but still running - i.e. they can be turned off
 			for _, node := range nodes {
-				if err := node.Stop(); err != nil {
+				if err := node.Stop(t.Context()); err != nil {
 					t.Errorf("failed to stop node: %v", err)
 				}
-				if err := node.Cleanup(); err != nil {
+				if err := node.Cleanup(t.Context()); err != nil {
 					t.Errorf("failed to cleanup node: %v", err)
 				}
 			}
@@ -557,7 +557,7 @@ func getChecksum(net *LocalNetwork, image string) (checksum string, err error) {
 		return "", fmt.Errorf("failed to create node: %v", err)
 	}
 
-	reader, err := node.StreamLog()
+	reader, err := node.StreamLog(context.Background())
 	if err != nil {
 		return "", fmt.Errorf("cannot read node logs: %e", err)
 	}
@@ -769,10 +769,10 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	if err := net.RemoveNode(node); err != nil {
 		t.Fatalf("failed to remove node: %v", err)
 	}
-	if err := node.Stop(); err != nil {
+	if err := node.Stop(t.Context()); err != nil {
 		t.Fatalf("failed to stop node: %v", err)
 	}
-	if err := node.Cleanup(); err != nil {
+	if err := node.Cleanup(t.Context()); err != nil {
 		t.Fatalf("failed to cleanup node: %v", err)
 	}
 

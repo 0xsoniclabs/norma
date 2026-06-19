@@ -31,9 +31,9 @@ var purgeCommand = cli.Command{
 	Usage:  "purges all resources created by norma",
 }
 
-func purge(_ *cli.Context) error {
+func purge(ctx *cli.Context) error {
 	slog.Info("purging all resources...")
-	err := docker.Purge()
+	err := docker.Purge(ctx.Context)
 	if err != nil {
 		return err
 	}

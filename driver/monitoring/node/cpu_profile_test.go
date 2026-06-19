@@ -42,7 +42,7 @@ func TestCanCollectCpuProfileDateFromOperaNode(t *testing.T) {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := node.Cleanup(); err != nil {
+		if err := node.Cleanup(t.Context()); err != nil {
 			t.Errorf("failed to cleanup node: %v", err)
 		}
 	})

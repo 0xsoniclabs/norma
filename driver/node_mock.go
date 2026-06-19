@@ -10,6 +10,7 @@
 package driver
 
 import (
+	context "context"
 	io "io"
 	reflect "reflect"
 
@@ -43,32 +44,32 @@ func (m *MockNode) EXPECT() *MockNodeMockRecorder {
 }
 
 // Cleanup mocks base method.
-func (m *MockNode) Cleanup() error {
+func (m *MockNode) Cleanup(arg0 context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Cleanup")
+	ret := m.ctrl.Call(m, "Cleanup", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Cleanup indicates an expected call of Cleanup.
-func (mr *MockNodeMockRecorder) Cleanup() *gomock.Call {
+func (mr *MockNodeMockRecorder) Cleanup(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cleanup", reflect.TypeOf((*MockNode)(nil).Cleanup))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cleanup", reflect.TypeOf((*MockNode)(nil).Cleanup), arg0)
 }
 
 // DialRpc mocks base method.
-func (m *MockNode) DialRpc() (rpc.Client, error) {
+func (m *MockNode) DialRpc(arg0 context.Context) (rpc.Client, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DialRpc")
+	ret := m.ctrl.Call(m, "DialRpc", arg0)
 	ret0, _ := ret[0].(rpc.Client)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DialRpc indicates an expected call of DialRpc.
-func (mr *MockNodeMockRecorder) DialRpc() *gomock.Call {
+func (mr *MockNodeMockRecorder) DialRpc(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DialRpc", reflect.TypeOf((*MockNode)(nil).DialRpc))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DialRpc", reflect.TypeOf((*MockNode)(nil).DialRpc), arg0)
 }
 
 // GetLabel mocks base method.
@@ -171,17 +172,17 @@ func (mr *MockNodeMockRecorder) IsRunning() *gomock.Call {
 }
 
 // Kill mocks base method.
-func (m *MockNode) Kill() error {
+func (m *MockNode) Kill(arg0 context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Kill")
+	ret := m.ctrl.Call(m, "Kill", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Kill indicates an expected call of Kill.
-func (mr *MockNodeMockRecorder) Kill() *gomock.Call {
+func (mr *MockNodeMockRecorder) Kill(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Kill", reflect.TypeOf((*MockNode)(nil).Kill))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Kill", reflect.TypeOf((*MockNode)(nil).Kill), arg0)
 }
 
 // MetricsPort mocks base method.
@@ -199,30 +200,30 @@ func (mr *MockNodeMockRecorder) MetricsPort() *gomock.Call {
 }
 
 // Stop mocks base method.
-func (m *MockNode) Stop() error {
+func (m *MockNode) Stop(arg0 context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stop")
+	ret := m.ctrl.Call(m, "Stop", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Stop indicates an expected call of Stop.
-func (mr *MockNodeMockRecorder) Stop() *gomock.Call {
+func (mr *MockNodeMockRecorder) Stop(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockNode)(nil).Stop))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockNode)(nil).Stop), arg0)
 }
 
 // StreamLog mocks base method.
-func (m *MockNode) StreamLog() (io.ReadCloser, error) {
+func (m *MockNode) StreamLog(arg0 context.Context) (io.ReadCloser, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StreamLog")
+	ret := m.ctrl.Call(m, "StreamLog", arg0)
 	ret0, _ := ret[0].(io.ReadCloser)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // StreamLog indicates an expected call of StreamLog.
-func (mr *MockNodeMockRecorder) StreamLog() *gomock.Call {
+func (mr *MockNodeMockRecorder) StreamLog(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StreamLog", reflect.TypeOf((*MockNode)(nil).StreamLog))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StreamLog", reflect.TypeOf((*MockNode)(nil).StreamLog), arg0)
 }

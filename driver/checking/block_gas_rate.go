@@ -17,6 +17,7 @@
 package checking
 
 import (
+	"context"
 	"fmt"
 	"math"
 
@@ -27,12 +28,13 @@ import (
 const defaultCeiling float64 = math.MaxFloat64
 
 func init() {
-	RegisterNetworkCheck("block_gas_rate", func(net driver.Network, monitor *monitoring.Monitor) Checker {
-		return &blockGasRateChecker{
-			monitor: &monitoringDataAdapter{monitor},
-			ceiling: defaultCeiling,
-		}
-	})
+	RegisterNetworkCheck("block_gas_rate",
+		func(net driver.Network, monitor *monitoring.Monitor) Checker {
+			return &blockGasRateChecker{
+				monitor: &monitoringDataAdapter{monitor},
+				ceiling: defaultCeiling,
+			}
+		})
 }
 
 // blockGasRateChecker is a Checker checking if each block has gas below the ceiling
@@ -59,7 +61,7 @@ func (c *blockGasRateChecker) Configure(config CheckerConfig) Checker {
 }
 
 // Check retrieve current BlockGasRate and see that each block has gas rate below ceiling.
-func (c *blockGasRateChecker) Check() error {
+func (c *blockGasRateChecker) Check(ctx context.Context) error {
 	series := c.monitor.GetBlockGasRate()
 	last := series.GetLatest()
 	if last == nil {

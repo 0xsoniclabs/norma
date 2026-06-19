@@ -277,17 +277,18 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 
 		maps.Copy(envs, config.NetworkConfig.NetworkRules) // put in the network rules
 
-		return client.Start(&docker.ContainerConfig{
-			Hostname:        config.Label,
-			ImageName:       image,
-			ShutdownTimeout: &shutdownTimeout,
-			PortForwarding:  portForwarding,
-			Environment:     envs,
-			Network:         dn,
-			DataDirBinding:  dataDirBinding,
-			GenesisFileBind: &genesisBind,
-			KeystoreBinding: keystoreBinding,
-		})
+		return client.Start(ctx,
+			&docker.ContainerConfig{
+				Hostname:        config.Label,
+				ImageName:       image,
+				ShutdownTimeout: &shutdownTimeout,
+				PortForwarding:  portForwarding,
+				Environment:     envs,
+				Network:         dn,
+				DataDirBinding:  dataDirBinding,
+				GenesisFileBind: &genesisBind,
+				KeystoreBinding: keystoreBinding,
+			})
 	})
 
 	if err != nil {
@@ -315,7 +316,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 
 	// Wait until the OperaNode inside the Container is ready.
 	err = network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second, func() error {
-		if err := node.host.CheckRunning(); err != nil {
+		if err := node.host.CheckRunning(ctx); err != nil {
 			return fmt.Errorf("%w: %w", err, network.ErrPermanent)
 		}
 		_, err = node.GetNodeID()
@@ -327,16 +328,16 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 
 	// The node did not show up in time, so we consider the start to have failed.
 	return nil, errors.Join(
-		printLog(node),
+		printLog(ctx, node),
 		fmt.Errorf("failed to get node online, %w", err),
-		node.Cleanup(),
+		node.Cleanup(ctx),
 	)
 }
 
 // printLog streams and prints the logs of the given OperaNode, to debug cause of
 // startup failure.
-func printLog(node *OperaNode) error {
-	reader, err := node.StreamLog()
+func printLog(ctx context.Context, node *OperaNode) error {
+	reader, err := node.StreamLog(ctx)
 	if err != nil {
 		return fmt.Errorf("cannot read node logs: %w", err)
 	}
@@ -403,16 +404,16 @@ func (n *OperaNode) GetValidatorId() *int {
 	return n.config.ValidatorId
 }
 
-func (n *OperaNode) StreamLog() (io.ReadCloser, error) {
-	return n.host.StreamLog()
+func (n *OperaNode) StreamLog(ctx context.Context) (io.ReadCloser, error) {
+	return n.host.StreamLog(ctx)
 }
 
-func (n *OperaNode) Stop() error {
-	return n.host.Stop()
+func (n *OperaNode) Stop(ctx context.Context) error {
+	return n.host.Stop(ctx)
 }
 
-func (n *OperaNode) Cleanup() error {
-	err := n.host.Cleanup()
+func (n *OperaNode) Cleanup(ctx context.Context) error {
+	err := n.host.Cleanup(ctx)
 	for _, dir := range n.tempDirs {
 		if cleanupErr := os.RemoveAll(dir); cleanupErr != nil {
 			err = errors.Join(err, cleanupErr)
@@ -422,14 +423,14 @@ func (n *OperaNode) Cleanup() error {
 	return err
 }
 
-func (n *OperaNode) DialRpc() (rpcdriver.Client, error) {
+func (n *OperaNode) DialRpc(ctx context.Context) (rpcdriver.Client, error) {
 	url := n.GetServiceUrl(&OperaRpcService)
 	if url == nil {
 		return nil, fmt.Errorf("node %s does not export an RPC server", n.GetLabel())
 	}
 
-	rpcClient, err := network.RetryReturn(context.Background(), network.DefaultRetryAttempts, 1*time.Second, func() (*rpc.Client, error) {
-		return rpc.DialContext(context.Background(), string(*url))
+	rpcClient, err := network.RetryReturn(ctx, network.DefaultRetryAttempts, 1*time.Second, func() (*rpc.Client, error) {
+		return rpc.DialContext(ctx, string(*url))
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial RPC for node %s; %v", n.GetLabel(), err)
@@ -439,12 +440,12 @@ func (n *OperaNode) DialRpc() (rpcdriver.Client, error) {
 
 // AddPeer informs the client instance represented by the OperaNode about the
 // existence of another node, to which it may establish a connection.
-func (n *OperaNode) AddPeer(id driver.NodeID) error {
-	rpcClient, err := n.DialRpc()
+func (n *OperaNode) AddPeer(ctx context.Context, id driver.NodeID) error {
+	rpcClient, err := n.DialRpc(ctx)
 	if err != nil {
 		return err
 	}
-	return network.Retry(context.Background(), network.DefaultRetryAttempts, 1*time.Second, func() error {
+	return network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second, func() error {
 		if err := rpcClient.Call(nil, "admin_addTrustedPeer", id); err != nil {
 			return fmt.Errorf("failed to add trusted peer on node %s: %v", id, err)
 		}
@@ -454,24 +455,24 @@ func (n *OperaNode) AddPeer(id driver.NodeID) error {
 
 // RemovePeer informs the client instance represented by the OperaNode
 // that the input node is no more available in the network.
-func (n *OperaNode) RemovePeer(id driver.NodeID) error {
-	rpcClient, err := n.DialRpc()
+func (n *OperaNode) RemovePeer(ctx context.Context, id driver.NodeID) error {
+	rpcClient, err := n.DialRpc(ctx)
 	if err != nil {
 		return err
 	}
-	return network.Retry(context.Background(), network.DefaultRetryAttempts, 1*time.Second, func() error {
+	return network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second, func() error {
 		return rpcClient.Call(nil, "admin_removePeer", id)
 	})
 }
 
 // Kill sends a SigKill signal to node.
-func (n *OperaNode) Kill() error {
-	return n.container.SendSignal(docker.SigKill)
+func (n *OperaNode) Kill(ctx context.Context) error {
+	return n.container.SendSignal(ctx, docker.SigKill)
 }
 
 // GetRoundTripTime returns the median network round-trip time to the given host.
 func (n *OperaNode) GetRoundTripTime(host string) (time.Duration, error) {
-	output, err := n.container.Exec([]string{"ping", "-c", "5", host})
+	output, err := n.container.Exec(context.Background(), []string{"ping", "-c", "5", host})
 	if err != nil {
 		return 0, err
 	}

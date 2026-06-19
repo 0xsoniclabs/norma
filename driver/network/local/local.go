@@ -44,6 +44,7 @@ import (
 // LocalNetwork is a Docker based network running each individual node
 // within its own, dedicated Docker Container.
 type LocalNetwork struct {
+	ctx            context.Context
 	docker         *docker.Client
 	network        *docker.Network
 	config         driver.NetworkConfig
@@ -83,12 +84,16 @@ type LocalNetwork struct {
 }
 
 func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalNetwork, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	client, err := docker.NewClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client; %v", err)
 	}
 
-	dn, err := client.CreateBridgeNetwork()
+	dn, err := client.CreateBridgeNetwork(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create bridge network; %v", err)
 	}
@@ -101,6 +106,7 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 
 	// Create the empty network.
 	net := &LocalNetwork{
+		ctx:            ctx,
 		docker:         client,
 		network:        dn,
 		config:         *config,
@@ -186,7 +192,7 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 }
 
 // addNodeIntoNetwork connects the node with other nodes in the network, adds it into the list of nodes.
-func (n *LocalNetwork) addNodeIntoNetwork(node *node.OperaNode) error {
+func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaNode) error {
 	n.nodesMutex.Lock()
 	defer n.nodesMutex.Unlock()
 
@@ -195,7 +201,7 @@ func (n *LocalNetwork) addNodeIntoNetwork(node *node.OperaNode) error {
 		return fmt.Errorf("failed to get node id; %v", err)
 	}
 	for _, other := range n.nodes {
-		if err = other.AddPeer(id); err != nil {
+		if err = other.AddPeer(ctx, id); err != nil {
 			return fmt.Errorf("failed to add peer; %v", err)
 		}
 	}
@@ -210,7 +216,7 @@ func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNod
 	if err != nil {
 		return nil, fmt.Errorf("failed to start opera docker; %v", err)
 	}
-	if err := n.addNodeIntoNetwork(node); err != nil {
+	if err := n.addNodeIntoNetwork(ctx, node); err != nil {
 		return nil, fmt.Errorf("failed to connect node; %w", err)
 	}
 	n.listenerMutex.Lock()
@@ -224,7 +230,7 @@ func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNod
 // CreateNode creates nodes in the network during run.
 func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error) {
 	if config.Cheater {
-		_, err := n.createNode(context.Background(), &node.OperaNodeConfig{
+		_, err := n.createNode(n.ctx, &node.OperaNodeConfig{
 			Label:          "cheater-" + config.Name,
 			Failing:        config.Failing,
 			Image:          config.Image,
@@ -243,7 +249,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 		*datadir = fmt.Sprintf("%s/%s", n.config.OutputDir, *config.DataVolume)
 	}
 
-	return n.createNode(context.Background(), &node.OperaNodeConfig{
+	return n.createNode(n.ctx, &node.OperaNodeConfig{
 		Label:           config.Name,
 		Failing:         config.Failing,
 		Image:           config.Image,
@@ -295,7 +301,7 @@ func (n *LocalNetwork) RemoveNode(node driver.Node) error {
 
 	delete(n.nodes, id)
 	for _, other := range n.nodes {
-		if err = other.RemovePeer(id); err != nil {
+		if err = other.RemovePeer(n.ctx, id); err != nil {
 			n.nodesMutex.Unlock()
 			return fmt.Errorf("failed to remove peer; %v", err)
 		}
@@ -322,7 +328,7 @@ func (n *LocalNetwork) DialRandomRpc() (rpcdriver.Client, error) {
 	if len(reliable) == 0 {
 		reliable = nodes // use failing nodes if there are no reliable nodes
 	}
-	return reliable[rand.Intn(len(reliable))].DialRpc()
+	return reliable[rand.Intn(len(reliable))].DialRpc(n.ctx)
 }
 
 func (n *LocalNetwork) ApplyNetworkRules(rules driver.NetworkRules) error {
@@ -477,6 +483,9 @@ func (n *LocalNetwork) UnregisterListener(listener driver.NetworkListener) {
 func (n *LocalNetwork) Shutdown() error {
 	var errs []error
 
+	// cleanups shall be completed, even after execution context is canceled.
+	ctx := context.Background()
+
 	// First stop all generators.
 	for _, app := range n.apps {
 		// TODO: shutdown apps in parallel.
@@ -493,10 +502,10 @@ func (n *LocalNetwork) Shutdown() error {
 	// Second, shut down the nodes.
 	for _, node := range n.nodes {
 		// TODO: shutdown nodes in parallel.
-		if err := node.Stop(); err != nil {
+		if err := node.Stop(ctx); err != nil {
 			errs = append(errs, err)
 		}
-		if err := node.Cleanup(); err != nil {
+		if err := node.Cleanup(ctx); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -504,7 +513,7 @@ func (n *LocalNetwork) Shutdown() error {
 
 	// Third, shut down the docker network.
 	if n.network != nil {
-		if err := n.network.Cleanup(); err != nil {
+		if err := n.network.Cleanup(ctx); err != nil {
 			errs = append(errs, err)
 		}
 	}
