@@ -8,6 +8,7 @@ import (
 	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/0xsoniclabs/sonic/evmcore"
 	"github.com/0xsoniclabs/sonic/gossip/contract/driverauth100"
+	"github.com/0xsoniclabs/sonic/opera"
 	"github.com/0xsoniclabs/sonic/opera/contracts/driverauth"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -22,6 +23,10 @@ func ApplyNetworkRules(backend ContractBackend, rules genesis.NetworkRulesPatch)
 	}
 
 	patchJSON, err := json.Marshal(rules)
+	if err != nil {
+		return fmt.Errorf("failed to marshal network rules patch; %v", err)
+	}
+	originalRules := opera.FakeNetRules(opera.GetSonicUpgrades())
 
 	// Use Fake ID for the network
 	// Driver owner is the first validator from the list i.e., index 1 (defined in genesis export in genesis.GenerateJsonGenesis)
