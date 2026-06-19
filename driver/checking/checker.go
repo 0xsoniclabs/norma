@@ -62,7 +62,7 @@ func InitNetworkChecks(network driver.Network, monitor *monitoring.Monitor) Chec
 
 // Check executes all checkers and returns an error if any of them find an issue.
 func (c Checks) Check(ctx context.Context) error {
-	errs := make([]error, len(c))
+	errs := make([]error, 0, len(c))
 	for _, checker := range c {
 		errs = append(errs, checker.Check(ctx))
 	}
