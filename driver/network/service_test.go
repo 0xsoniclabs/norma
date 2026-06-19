@@ -17,6 +17,7 @@
 package network
 
 import (
+	context "context"
 	"fmt"
 	"net"
 	"testing"
@@ -79,14 +80,15 @@ func TestRetry(t *testing.T) {
 	t.Parallel()
 
 	var count int
-	err := Retry(t.Context(), 5, 1*time.Millisecond, func() error {
-		count++
-		if count >= 5 {
-			return nil
-		} else {
-			return fmt.Errorf("no time to end yet")
-		}
-	})
+	err := Retry(t.Context(), 5, 1*time.Millisecond,
+		func(context.Context) error {
+			count++
+			if count >= 5 {
+				return nil
+			} else {
+				return fmt.Errorf("no time to end yet")
+			}
+		})
 
 	if err != nil {
 		t.Errorf("Retry should success eventually")

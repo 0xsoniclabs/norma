@@ -85,13 +85,14 @@ func Start(ctx context.Context, net driver.Network, dn *docker.Network) (*Promet
 
 	// wait until the prometheus inside the Container is ready.
 	// this is necessary for SIGHUP signal to be delivered correctly
-	if err := network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second, func() error {
-		resp, err := http.Get(prometheus.GetUrl() + "/-/ready")
-		if err == nil && resp.StatusCode != http.StatusOK {
-			err = fmt.Errorf("not yet HTTP OK")
-		}
-		return err
-	}); err == nil {
+	if err := network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second,
+		func(ctx context.Context) error {
+			resp, err := http.Get(prometheus.GetUrl() + "/-/ready")
+			if err == nil && resp.StatusCode != http.StatusOK {
+				err = fmt.Errorf("not yet HTTP OK")
+			}
+			return err
+		}); err == nil {
 		slog.Info("started Prometheus", "url", prometheus.GetUrl())
 
 		// listen for new Nodes

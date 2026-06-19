@@ -17,6 +17,7 @@
 package app_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -105,16 +106,17 @@ func TestBls12AddApplication(t *testing.T) {
 		t.Errorf("invalid number of sent transactions reported, wanted %d, got %d", want, got)
 	}
 
-	err = network.Retry(t.Context(), network.DefaultRetryAttempts, 1*time.Second, func() error {
-		received, err := application.GetReceivedTransactions(rpcClient)
-		if err != nil {
-			return fmt.Errorf("unable to get amount of received txs; %v", err)
-		}
-		if received != uint64(numTransactions) {
-			return fmt.Errorf("unexpected amount of txs in chain, wanted %d, got %d", numTransactions, received)
-		}
-		return nil
-	})
+	err = network.Retry(t.Context(), network.DefaultRetryAttempts, 1*time.Second,
+		func(ctx context.Context) error {
+			received, err := application.GetReceivedTransactions(rpcClient)
+			if err != nil {
+				return fmt.Errorf("unable to get amount of received txs; %v", err)
+			}
+			if received != uint64(numTransactions) {
+				return fmt.Errorf("unexpected amount of txs in chain, wanted %d, got %d", numTransactions, received)
+			}
+			return nil
+		})
 	if err != nil {
 		t.Error(err)
 	}

@@ -164,7 +164,7 @@ func (p *worker) runRpcSenderLoop() error {
 		p.ctx,
 		network.DefaultRetryAttempts,
 		1*time.Second,
-		func() (*ethclient.Client, error) {
+		func(ctx context.Context) (*ethclient.Client, error) {
 			return ethclient.Dial(string(p.rpcUrl))
 		})
 

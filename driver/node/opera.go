@@ -211,85 +211,86 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		genesisJSONPath = *config.GenesisJsonPath
 	}
 
-	host, err := network.RetryReturn(ctx, network.DefaultRetryAttempts, 1*time.Second, func() (*docker.Container, error) {
-		ports, err := network.GetFreePorts(len(operaServices.Services()))
-		if err != nil {
-			return nil, err
-		}
-
-		portForwarding := make(map[network.Port]network.Port, len(ports))
-		for i, service := range operaServices.Services() {
-			portForwarding[service.Port] = ports[i]
-		}
-
-		envs := map[string]string{
-			"VALIDATOR_ID":     validatorId,
-			"VALIDATORS_COUNT": fmt.Sprintf("%d", config.NetworkConfig.Validators.GetNumValidators()),
-			"NETWORK_LATENCY":  fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
-			"EXTRA_ARGUMENTS":  config.ExtraArguments,
-		}
-
-		const dataDir = "/datadir"
-		envs["STATE_DB_DATADIR"] = dataDir
-
-		// when configured, mount the datadir to the host
-		var dataDirBinding *string
-		if config.MountDataDir != nil {
-			if err := os.MkdirAll(*config.MountDataDir, 0777); err != nil {
+	host, err := network.RetryReturn(ctx, network.DefaultRetryAttempts, 1*time.Second,
+		func(ctx context.Context) (*docker.Container, error) {
+			ports, err := network.GetFreePorts(len(operaServices.Services()))
+			if err != nil {
 				return nil, err
 			}
 
-			dataDirBinding = new(string)
-			*dataDirBinding = fmt.Sprintf("%s:%s", *config.MountDataDir, dataDir)
-		}
-
-		genesisBind := fmt.Sprintf("%s:/genesis.json:ro", genesisJSONPath)
-
-		var keystoreBinding *string
-		if isValidator {
-			privKey, pubKey, address, err := genesis.DeriveValidatorKey(*config.ValidatorId)
-			if err != nil {
-				return nil, fmt.Errorf("failed to derive validator key: %w", err)
+			portForwarding := make(map[network.Port]network.Port, len(ports))
+			for i, service := range operaServices.Services() {
+				portForwarding[service.Port] = ports[i]
 			}
-			envs["VALIDATOR_PUBKEY"] = pubKey
-			envs["VALIDATOR_ADDRESS"] = address
 
+			envs := map[string]string{
+				"VALIDATOR_ID":     validatorId,
+				"VALIDATORS_COUNT": fmt.Sprintf("%d", config.NetworkConfig.Validators.GetNumValidators()),
+				"NETWORK_LATENCY":  fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
+				"EXTRA_ARGUMENTS":  config.ExtraArguments,
+			}
+
+			const dataDir = "/datadir"
+			envs["STATE_DB_DATADIR"] = dataDir
+
+			// when configured, mount the datadir to the host
+			var dataDirBinding *string
 			if config.MountDataDir != nil {
-				if err := genesis.WriteValidatorKeystore(privKey, *config.MountDataDir); err != nil {
-					return nil, fmt.Errorf("failed to write validator keystore in mounted datadir: %w", err)
-				}
-			} else {
-				validatorDir, err := os.MkdirTemp("", fmt.Sprintf("norma-validator-%d-*", *config.ValidatorId))
-				if err != nil {
-					return nil, fmt.Errorf("failed to create validator temp dir: %w", err)
-				}
-				tempDirs = append(tempDirs, validatorDir)
-
-				if err := genesis.WriteValidatorKeystore(privKey, validatorDir); err != nil {
-					return nil, fmt.Errorf("failed to write validator keystore: %w", err)
+				if err := os.MkdirAll(*config.MountDataDir, 0777); err != nil {
+					return nil, err
 				}
 
-				keystorePath := filepath.Join(validatorDir, "keystore")
-				keystoreBinding = new(string)
-				*keystoreBinding = fmt.Sprintf("%s:%s/keystore:ro", keystorePath, dataDir)
+				dataDirBinding = new(string)
+				*dataDirBinding = fmt.Sprintf("%s:%s", *config.MountDataDir, dataDir)
 			}
-		}
 
-		maps.Copy(envs, config.NetworkConfig.NetworkRules) // put in the network rules
+			genesisBind := fmt.Sprintf("%s:/genesis.json:ro", genesisJSONPath)
 
-		return client.Start(ctx,
-			&docker.ContainerConfig{
-				Hostname:        config.Label,
-				ImageName:       image,
-				ShutdownTimeout: &shutdownTimeout,
-				PortForwarding:  portForwarding,
-				Environment:     envs,
-				Network:         dn,
-				DataDirBinding:  dataDirBinding,
-				GenesisFileBind: &genesisBind,
-				KeystoreBinding: keystoreBinding,
-			})
-	})
+			var keystoreBinding *string
+			if isValidator {
+				privKey, pubKey, address, err := genesis.DeriveValidatorKey(*config.ValidatorId)
+				if err != nil {
+					return nil, fmt.Errorf("failed to derive validator key: %w", err)
+				}
+				envs["VALIDATOR_PUBKEY"] = pubKey
+				envs["VALIDATOR_ADDRESS"] = address
+
+				if config.MountDataDir != nil {
+					if err := genesis.WriteValidatorKeystore(privKey, *config.MountDataDir); err != nil {
+						return nil, fmt.Errorf("failed to write validator keystore in mounted datadir: %w", err)
+					}
+				} else {
+					validatorDir, err := os.MkdirTemp("", fmt.Sprintf("norma-validator-%d-*", *config.ValidatorId))
+					if err != nil {
+						return nil, fmt.Errorf("failed to create validator temp dir: %w", err)
+					}
+					tempDirs = append(tempDirs, validatorDir)
+
+					if err := genesis.WriteValidatorKeystore(privKey, validatorDir); err != nil {
+						return nil, fmt.Errorf("failed to write validator keystore: %w", err)
+					}
+
+					keystorePath := filepath.Join(validatorDir, "keystore")
+					keystoreBinding = new(string)
+					*keystoreBinding = fmt.Sprintf("%s:%s/keystore:ro", keystorePath, dataDir)
+				}
+			}
+
+			maps.Copy(envs, config.NetworkConfig.NetworkRules) // put in the network rules
+
+			return client.Start(ctx,
+				&docker.ContainerConfig{
+					Hostname:        config.Label,
+					ImageName:       image,
+					ShutdownTimeout: &shutdownTimeout,
+					PortForwarding:  portForwarding,
+					Environment:     envs,
+					Network:         dn,
+					DataDirBinding:  dataDirBinding,
+					GenesisFileBind: &genesisBind,
+					KeystoreBinding: keystoreBinding,
+				})
+		})
 
 	if err != nil {
 		return nil, err
@@ -315,13 +316,14 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 	}
 
 	// Wait until the OperaNode inside the Container is ready.
-	err = network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second, func() error {
-		if err := node.host.CheckRunning(ctx); err != nil {
-			return fmt.Errorf("%w: %w", err, network.ErrPermanent)
-		}
-		_, err = node.GetNodeID()
-		return err
-	})
+	err = network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second,
+		func(ctx context.Context) error {
+			if err := node.host.CheckRunning(ctx); err != nil {
+				return fmt.Errorf("%w: %w", err, network.ErrPermanent)
+			}
+			_, err = node.GetNodeID()
+			return err
+		})
 	if err == nil {
 		return node, nil
 	}
@@ -429,9 +431,10 @@ func (n *OperaNode) DialRpc(ctx context.Context) (rpcdriver.Client, error) {
 		return nil, fmt.Errorf("node %s does not export an RPC server", n.GetLabel())
 	}
 
-	rpcClient, err := network.RetryReturn(ctx, network.DefaultRetryAttempts, 1*time.Second, func() (*rpc.Client, error) {
-		return rpc.DialContext(ctx, string(*url))
-	})
+	rpcClient, err := network.RetryReturn(ctx, network.DefaultRetryAttempts, 1*time.Second,
+		func(ctx context.Context) (*rpc.Client, error) {
+			return rpc.DialContext(ctx, string(*url))
+		})
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial RPC for node %s; %v", n.GetLabel(), err)
 	}
@@ -445,12 +448,22 @@ func (n *OperaNode) AddPeer(ctx context.Context, id driver.NodeID) error {
 	if err != nil {
 		return err
 	}
-	return network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second, func() error {
-		if err := rpcClient.Call(nil, "admin_addTrustedPeer", id); err != nil {
-			return fmt.Errorf("failed to add trusted peer on node %s: %v", id, err)
-		}
-		return rpcClient.Call(nil, "admin_addPeer", id)
-	})
+	// <<<<<<< HEAD
+	return network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second,
+		func(ctx context.Context) error {
+			if err := rpcClient.Call(nil, "admin_addTrustedPeer", id); err != nil {
+				return fmt.Errorf("failed to add trusted peer on node %s: %v", id, err)
+			}
+			return rpcClient.Call(nil, "admin_addPeer", id)
+		})
+	// =======
+	//
+	//	return network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second,
+	//		func(ctx context.Context) error {
+	//			return rpcClient.Call(nil, "admin_addPeer", id)
+	//		})
+	//
+	// >>>>>>> d712d71 (Forward context, do not capture)
 }
 
 // RemovePeer informs the client instance represented by the OperaNode
@@ -460,9 +473,10 @@ func (n *OperaNode) RemovePeer(ctx context.Context, id driver.NodeID) error {
 	if err != nil {
 		return err
 	}
-	return network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second, func() error {
-		return rpcClient.Call(nil, "admin_removePeer", id)
-	})
+	return network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second,
+		func(ctx context.Context) error {
+			return rpcClient.Call(nil, "admin_removePeer", id)
+		})
 }
 
 // Kill sends a SigKill signal to node.

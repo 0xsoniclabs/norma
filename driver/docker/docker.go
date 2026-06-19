@@ -201,9 +201,10 @@ func (c *Client) Start(ctx context.Context, config *ContainerConfig) (*Container
 		}
 	}
 
-	if err := network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second, func() error {
-		return c.cli.ContainerStart(ctx, resp.ID, container.StartOptions{})
-	}); err != nil {
+	if err := network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second,
+		func(ctx context.Context) error {
+			return c.cli.ContainerStart(ctx, resp.ID, container.StartOptions{})
+		}); err != nil {
 		return nil, err
 	}
 
