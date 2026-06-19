@@ -36,6 +36,16 @@ import (
 
 //go:generate mockgen -destination rpc_mock.go -package rpc . Client,ethRpcClient,rpcClient
 
+// txPoolContent is the response structure for txpool_content.
+type txPoolContent struct {
+	Pending map[string]map[string]txPoolTransaction `json:"pending"`
+	Queued  map[string]map[string]txPoolTransaction `json:"queued"`
+}
+
+type txPoolTransaction struct {
+	Hash common.Hash `json:"hash"`
+}
+
 // Client is an interface that provides a subset of the Ethereum client and RPC client interfaces.
 type Client interface {
 	ethRpcClient
@@ -46,6 +56,10 @@ type Client interface {
 	// This method retries with exponential backoff to fetch the transaction receipt,
 	//  until a certain timeout is reached.
 	WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
+
+	// GetTransactionPoolStatus queries the transaction pool for the given transaction hash
+	// and returns whether it is pending, queued, or not present in the pool.
+	GetTransactionPoolStatus(txHash common.Hash) (TxPoolStatus, error)
 
 	// GetBundleInfo calls sonic_getBundleInfo with the given execution plan hash.
 	// Returns nil, nil if the bundle has not been executed yet.
@@ -111,7 +125,16 @@ func (r Impl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
 		}
 		return receipt, nil
 	}
-	return nil, fmt.Errorf("failed to get transaction receipt: timeout")
+
+	status, err := r.GetTransactionPoolStatus(txHash)
+	if err != nil {
+		return nil, errors.Join(
+			fmt.Errorf("failed to get transaction pool status: %w", err),
+			fmt.Errorf("failed to get transaction receipt: timeout"),
+		)
+	}
+
+	return nil, fmt.Errorf("failed to get transaction receipt: timeout, transaction pool status: %s", status)
 }
 
 func (r Impl) GetBundleInfo(planHash common.Hash) (*sonicapi.RPCBundleInfo, error) {
@@ -185,4 +208,49 @@ func (r Impl) transactionReceipt(txHash common.Hash) (*types.Receipt, error) {
 	}
 
 	return receipt, nil
+}
+
+// TxPoolStatus represents the presence of a transaction in the transaction pool.
+type TxPoolStatus int
+
+const (
+	// TxPoolStatusNotPresent indicates the transaction is not in the pool.
+	TxPoolStatusNotPresent TxPoolStatus = iota
+	// TxPoolStatusPending indicates the transaction is in the pending queue.
+	TxPoolStatusPending
+	// TxPoolStatusQueued indicates the transaction is in the queued (future) pool.
+	TxPoolStatusQueued
+)
+
+func (s TxPoolStatus) String() string {
+	switch s {
+	case TxPoolStatusPending:
+		return "pending"
+	case TxPoolStatusQueued:
+		return "queued"
+	default:
+		return "not present"
+	}
+}
+
+func (r Impl) GetTransactionPoolStatus(txHash common.Hash) (TxPoolStatus, error) {
+	var content txPoolContent
+	if err := r.Call(&content, "txpool_content"); err != nil {
+		return TxPoolStatusNotPresent, fmt.Errorf("failed to get txpool content: %w", err)
+	}
+	for _, txsByNonce := range content.Pending {
+		for _, tx := range txsByNonce {
+			if tx.Hash == txHash {
+				return TxPoolStatusPending, nil
+			}
+		}
+	}
+	for _, txsByNonce := range content.Queued {
+		for _, tx := range txsByNonce {
+			if tx.Hash == txHash {
+				return TxPoolStatusQueued, nil
+			}
+		}
+	}
+	return TxPoolStatusNotPresent, nil
 }
