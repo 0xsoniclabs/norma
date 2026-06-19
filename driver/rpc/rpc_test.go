@@ -2,13 +2,14 @@ package rpc
 
 import (
 	"errors"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"go.uber.org/mock/gomock"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"go.uber.org/mock/gomock"
 )
 
 func TestRpcClientImpl_WaitTransactionReceipt_Success(t *testing.T) {
@@ -79,8 +80,11 @@ func TestRpcClientImpl_WaitTransactionReceipt_Timeout(t *testing.T) {
 			return nil
 		}).
 		AnyTimes()
+	mock.EXPECT().
+		Call(gomock.Any(), "txpool_content", gomock.Any()).
+		MinTimes(1)
 
-	if _, err := client.WaitTransactionReceipt(common.Hash{}); err == nil || err.Error() != "failed to get transaction receipt: timeout" {
+	if _, err := client.WaitTransactionReceipt(common.Hash{}); err == nil || err.Error() != "failed to get transaction receipt: timeout, transaction pool status: not present" {
 		t.Fatalf("expected timeout error, got %v", err)
 	}
 }
