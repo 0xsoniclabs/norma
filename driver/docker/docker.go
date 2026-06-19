@@ -428,6 +428,18 @@ func (c *Client) listNetworks() ([]dockerNetwork.Inspect, error) {
 	})
 }
 
+// ContainerExists returns true if a container with the given name is
+// currently running on the Docker host.
+func (c *Client) ContainerExists(name string) (bool, error) {
+	containers, err := c.cli.ContainerList(context.Background(), container.ListOptions{
+		Filters: filters.NewArgs(filters.Arg("name", fmt.Sprintf("^/%s$", name))),
+	})
+	if err != nil {
+		return false, err
+	}
+	return len(containers) > 0, nil
+}
+
 // listContainers returns a list of all containers on the Docker host filtered by label.
 func (c *Client) listContainers() ([]types.Container, error) {
 	return c.cli.ContainerList(context.Background(), container.ListOptions{})
