@@ -196,6 +196,21 @@ func (mr *MockClientMockRecorder) GetBundleInfo(planHash any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleInfo", reflect.TypeOf((*MockClient)(nil).GetBundleInfo), planHash)
 }
 
+// GetTransactionPoolStatus mocks base method.
+func (m *MockClient) GetTransactionPoolStatus(txHash common.Hash) (TxPoolStatus, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTransactionPoolStatus", txHash)
+	ret0, _ := ret[0].(TxPoolStatus)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTransactionPoolStatus indicates an expected call of GetTransactionPoolStatus.
+func (mr *MockClientMockRecorder) GetTransactionPoolStatus(txHash any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactionPoolStatus", reflect.TypeOf((*MockClient)(nil).GetTransactionPoolStatus), txHash)
+}
+
 // HeaderByNumber mocks base method.
 func (m *MockClient) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
 	m.ctrl.T.Helper()
