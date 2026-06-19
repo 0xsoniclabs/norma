@@ -163,6 +163,14 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		return nil, fmt.Errorf("invalid label for node: '%v'", config.Label)
 	}
 
+	exists, err := client.ContainerExists(config.Label)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check for existing container: %w", err)
+	}
+	if exists {
+		return nil, fmt.Errorf("a container with name %q is already running", config.Label)
+	}
+
 	image := driver.ResolveClientImageName(config.Image)
 	if err := ensureImageAvailable(ctx, image); err != nil {
 		return nil, fmt.Errorf("failed to ensure image %q: %w", image, err)
