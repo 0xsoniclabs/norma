@@ -165,10 +165,10 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 
 	exists, err := client.ContainerExists(config.Label)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check for existing container: %w", err)
+		return nil, fmt.Errorf("failed to start docker node: %w", err)
 	}
 	if exists {
-		return nil, fmt.Errorf("a container with name %q is already running", config.Label)
+		return nil, fmt.Errorf("failed to start docker node: container %q already running", config.Label)
 	}
 
 	image := driver.ResolveClientImageName(config.Image)
