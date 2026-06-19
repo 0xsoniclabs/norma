@@ -11,9 +11,10 @@ import (
 
 var (
 	verbosityFlag = cli.IntFlag{
-		Name:  "verbosity",
-		Usage: "Changes logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail",
-		Value: 3,
+		Name:    "verbosity",
+		Aliases: []string{"v"},
+		Usage:   "Changes logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail",
+		Value:   3,
 	}
 
 	vmoduleFlag = cli.StringFlag{
@@ -43,7 +44,7 @@ var AllLoggerFlags = []cli.Flag{
 func SetupLogger(ctx *cli.Context) error {
 
 	output := io.Writer(os.Stdout)
-	handler := log.NewTerminalHandler(output, true)
+	handler := log.NewTerminalHandler(output, canColor())
 	glogger := log.NewGlogHandler(handler)
 
 	verbosity := log.FromLegacyLevel(ctx.Int(verbosityFlag.Name))
@@ -57,4 +58,13 @@ func SetupLogger(ctx *cli.Context) error {
 	log.SetDefault(log.NewLogger(glogger))
 
 	return nil
+}
+
+func canColor() bool {
+	info, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+
+	return (info.Mode() & os.ModeCharDevice) != 0
 }
