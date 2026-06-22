@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand"
 	"os"
 	"strings"
@@ -452,6 +453,7 @@ func (c *Client) ForceRemoveContainer(name string) error {
 		return err
 	}
 	for _, cont := range containers {
+		slog.Warn("force-removing container", "name", name, "id", cont.ID)
 		if err := c.cli.ContainerRemove(context.Background(), cont.ID, container.RemoveOptions{Force: true}); err != nil {
 			return err
 		}
