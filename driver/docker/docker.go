@@ -440,6 +440,25 @@ func (c *Client) ContainerExists(name string) (bool, error) {
 	return len(containers) > 0, nil
 }
 
+// ForceRemoveContainer force-removes a container with the given name if it
+// exists. This is useful for cleaning up leaked containers from previous test
+// runs before starting a new container with the same name.
+func (c *Client) ForceRemoveContainer(name string) error {
+	containers, err := c.cli.ContainerList(context.Background(), container.ListOptions{
+		All:     true,
+		Filters: filters.NewArgs(filters.Arg("name", fmt.Sprintf("^/%s$", name))),
+	})
+	if err != nil {
+		return err
+	}
+	for _, cont := range containers {
+		if err := c.cli.ContainerRemove(context.Background(), cont.ID, container.RemoveOptions{Force: true}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // listContainers returns a list of all containers on the Docker host filtered by label.
 func (c *Client) listContainers() ([]types.Container, error) {
 	return c.cli.ContainerList(context.Background(), container.ListOptions{})

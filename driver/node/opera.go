@@ -163,12 +163,10 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		return nil, fmt.Errorf("invalid label for node: '%v'", config.Label)
 	}
 
-	exists, err := client.ContainerExists(config.Label)
-	if err != nil {
-		return nil, fmt.Errorf("failed to start docker node: %w", err)
-	}
-	if exists {
-		return nil, fmt.Errorf("failed to start docker node: container %q already running", config.Label)
+	// Force-remove any existing container with the same name from a previous
+	// run that may have leaked (e.g. due to test timeout or crash).
+	if err := client.ForceRemoveContainer(config.Label); err != nil {
+		return nil, fmt.Errorf("failed to remove existing container %q: %w", config.Label, err)
 	}
 
 	image := driver.ResolveClientImageName(config.Image)
