@@ -1,7 +1,7 @@
 // Norma CI test norma using "make test"
 
 pipeline {
-	agent { label 'x86-8-42-m' }
+	agent { label 'rls-bare-g' }
 	
 	options {
 		timestamps ()
@@ -46,6 +46,12 @@ pipeline {
 			    sh 'cd genesis && go test ./...'
 				sh 'go test ./...  -p 2 --parallel 2 --timeout 30m'
 			}
+		}
+	}
+
+	post {
+		always {
+			sh 'go run ./driver/norma purge'
 		}
 	}
 }
