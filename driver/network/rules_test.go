@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/0xsoniclabs/norma/genesis"
-	"github.com/0xsoniclabs/sonic/gossip/contract/driverauth100"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/mock/gomock"
 )
@@ -18,16 +17,9 @@ func TestApplyNetworkRules_Success(t *testing.T) {
 	baseFee.SetInt64(123)
 	header := types.Header{BaseFee: &baseFee}
 
-	bytecode, err := convertContractBytecode(driverauth100.ContractMetaData.Bin)
-	if err != nil {
-		t.Fatalf("failed to decode contract bytecode: %v", err)
-	}
-
 	ctrl := gomock.NewController(t)
 	backend := NewMockContractBackend(ctrl)
 	backend.EXPECT().HeaderByNumber(gomock.Any(), gomock.Any()).Return(&header, nil)
-	backend.EXPECT().PendingCodeAt(gomock.Any(), gomock.Any()).Return(bytecode, nil)
-	backend.EXPECT().EstimateGas(gomock.Any(), gomock.Any()).Return(uint64(123), nil)
 	backend.EXPECT().PendingNonceAt(gomock.Any(), gomock.Any()).Return(uint64(0), nil)
 	backend.EXPECT().SendTransaction(gomock.Any(), gomock.Any()).Return(nil)
 	backend.EXPECT().WaitTransactionReceipt(gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil)
