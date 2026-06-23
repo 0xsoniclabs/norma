@@ -5,7 +5,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/0xsoniclabs/sonic/gossip/contract/sfc100"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/mock/gomock"
@@ -48,10 +47,10 @@ func TestRegisterValidatorNode_Failure_TransactionReverted(t *testing.T) {
 func mockBackendForCreateValidator(t *testing.T, test func(backend *MockContractBackend)) {
 	t.Parallel()
 
-	bytecode, err := convertContractBytecode(sfc100.ContractMetaData.Bin)
-	if err != nil {
-		t.Fatalf("failed to decode contract bytecode: %v", err)
-	}
+	// bytecode, err := convertContractBytecode(sfc100.ContractMetaData.Bin)
+	// if err != nil {
+	// 	t.Fatalf("failed to decode contract bytecode: %v", err)
+	// }
 
 	uint256Type, err := abi.NewType("uint256", "", nil)
 	if err != nil {
@@ -81,8 +80,6 @@ func mockBackendForCreateValidator(t *testing.T, test func(backend *MockContract
 
 	backend.EXPECT().CallContract(gomock.Any(), gomock.Any(), gomock.Any()).Return(lastValIdPacked, nil)
 	backend.EXPECT().HeaderByNumber(gomock.Any(), gomock.Any()).Return(&header, nil)
-	backend.EXPECT().PendingCodeAt(gomock.Any(), gomock.Any()).Return(bytecode, nil)
-	backend.EXPECT().EstimateGas(gomock.Any(), gomock.Any()).Return(uint64(123), nil)
 	backend.EXPECT().PendingNonceAt(gomock.Any(), gomock.Any()).Return(uint64(0), nil)
 	backend.EXPECT().SendTransaction(gomock.Any(), gomock.Any()).Return(nil)
 
