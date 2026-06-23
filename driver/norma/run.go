@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -274,6 +275,7 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 	defer logger.shutdown()
 	err = executor.Run(ctx, clock, net, &scenario, checks)
 	if err != nil {
+		dumpNodeLogs(net)
 		return err
 	}
 	slog.Info("execution completed successfully")
@@ -290,4 +292,23 @@ func openBrowser(s string) error {
 
 	cmd := exec.Command(path, s)
 	return cmd.Start()
+}
+
+// dumpNodeLogs prints the logs of all active nodes to help diagnose failures.
+func dumpNodeLogs(net driver.Network) {
+	nodes := net.GetActiveNodes()
+	for _, node := range nodes {
+		reader, err := node.StreamLog()
+		if err != nil {
+			slog.Error("failed to stream log", "node", node.GetLabel(), "error", err)
+			continue
+		}
+		data, err := io.ReadAll(reader)
+		_ = reader.Close()
+		if err != nil {
+			slog.Error("failed to read log", "node", node.GetLabel(), "error", err)
+			continue
+		}
+		slog.Error("node log on failure", "node", node.GetLabel(), "log", string(data))
+	}
 }
