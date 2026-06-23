@@ -47,11 +47,6 @@ func TestRegisterValidatorNode_Failure_TransactionReverted(t *testing.T) {
 func mockBackendForCreateValidator(t *testing.T, test func(backend *MockContractBackend)) {
 	t.Parallel()
 
-	// bytecode, err := convertContractBytecode(sfc100.ContractMetaData.Bin)
-	// if err != nil {
-	// 	t.Fatalf("failed to decode contract bytecode: %v", err)
-	// }
-
 	uint256Type, err := abi.NewType("uint256", "", nil)
 	if err != nil {
 		t.Fatalf("failed to create uint256 type: %v", err)
