@@ -150,6 +150,15 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 		return fmt.Errorf("couldn't create temp dir for output; %w", err)
 	}
 
+	// Try sequential format first.
+	seqScenario, seqErr := parser.ParseSequentialFile(path)
+	if seqErr == nil {
+		if err := seqScenario.Check(); err != nil {
+			return err
+		}
+		return runSequentialScenario(ctx, &seqScenario, path, outputDir, label, keepPrometheusRunning, skipChecks, skipReportRendering, openReport)
+	}
+
 	slog.Info("reading scenario file", "path", path)
 	scenario, err := parser.ParseFile(path)
 	if err != nil {
@@ -281,6 +290,178 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 	slog.Info("execution completed successfully")
 
 	return nil
+}
+
+// runSequentialScenario handles execution of the new sequential scenario format.
+func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScenario, path, outputDir, label string, keepPrometheusRunning, skipChecks, skipReportRendering, openReport bool) error {
+	slog.Info("running sequential scenario", "path", path, "name", scenario.Name)
+
+	// create symlink as qol (_latest => _####) where #### is the randomly generated name
+	symlink := filepath.Join(filepath.Dir(outputDir), fmt.Sprintf("norma_data_%s_latest", label))
+	if _, lstatErr := os.Lstat(symlink); lstatErr == nil {
+		if err := os.Remove(symlink); err != nil {
+			return fmt.Errorf("failed to remove existing _latest symlink: %w", err)
+		}
+	}
+	if err := os.Symlink(outputDir, symlink); err != nil {
+		return fmt.Errorf("failed to create _latest symlink: %w", err)
+	}
+
+	slog.Info("monitoring data is written", "output", outputDir)
+
+	// Copy scenario yml to outputDir as well to provide context
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(outputDir, filepath.Base(path)), data, 0644); err != nil {
+		return err
+	}
+
+	// Log initial rules.
+	for k, v := range scenario.InitialRules {
+		slog.Info("network Rule", "key", k, "value", v)
+	}
+
+	// Startup network. The first "startNode" step with type=validator is used
+	// as the initial validators configuration (for genesis and bootstrap).
+	// That step is then removed from the scenario since those nodes are already running.
+	validators, scenario := extractBootstrapValidators(scenario)
+	net, err := local.NewLocalNetwork(ctx, &driver.NetworkConfig{
+		Validators:   validators,
+		NetworkRules: driver.NetworkRules(maps.Clone(scenario.InitialRules)),
+		OutputDir:    outputDir,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		slog.Info("shutting down network ...")
+		if err := net.Shutdown(); err != nil {
+			slog.Error("error during network shutdown", "error", err)
+		}
+	}()
+
+	// Initialize monitoring environment.
+	monitor, err := monitoring.NewMonitor(net, monitoring.MonitorConfig{
+		EvaluationLabel: label,
+		OutputDir:       outputDir,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		slog.Info("shutting down data monitor ...")
+		if err := monitor.Shutdown(); err != nil {
+			slog.Error("error during monitor shutdown", "error", err)
+		}
+		slog.Info("monitoring data was written", "output", outputDir)
+		slog.Info("raw data was exported", "file", monitor.GetMeasurementFileName())
+
+		if !skipReportRendering && ctx.Err() == nil {
+			slog.Info("rendering summary report ...")
+			if file, err := report.SingleEvalReport.Render(monitor.GetMeasurementFileName(), outputDir, scenario.Name); err != nil {
+				slog.Error("report generation failed", "error", err)
+			} else {
+				slog.Info("summary report was exported", "file", fmt.Sprintf("file://%s/%s", outputDir, file))
+				if openReport {
+					if err := openBrowser(filepath.Join(outputDir, file)); err != nil {
+						slog.Warn("failed to open report in browser", "error", err)
+					}
+				}
+			}
+		} else {
+			slog.Info("report rendering skipped")
+			slog.Info(fmt.Sprintf("To render report run `norma render %s`", monitor.GetMeasurementFileName()))
+		}
+	}()
+
+	// Install monitoring sensory.
+	if err := monitoring.InstallAllRegisteredSources(monitor); err != nil {
+		return err
+	}
+
+	// Run prometheus.
+	slog.Info("starting Prometheus ...")
+	prom, err := prometheusmon.Start(net, net.GetDockerNetwork())
+	if err != nil {
+		slog.Error("error starting Prometheus", "error", err)
+	}
+	defer func() {
+		if !keepPrometheusRunning && prom != nil {
+			slog.Info("shutting down Prometheus ...")
+			if err := prom.Shutdown(); err != nil {
+				slog.Error("error during Prometheus shutdown", "error", err)
+			}
+		}
+	}()
+
+	var checks map[string]checking.Checker
+	if !skipChecks {
+		checks = checking.InitNetworkChecks(net, monitor)
+	}
+
+	// Run the sequential scenario.
+	slog.Info("running scenario", "path", path)
+	logger := startProgressLogger(monitor, net)
+	defer logger.shutdown()
+	if err := executor.RunSequential(ctx, net, scenario, checks); err != nil {
+		return err
+	}
+	slog.Info("execution completed successfully")
+
+	return nil
+}
+
+// extractBootstrapValidators determines the initial validators for the network.
+// All leading "startNode" steps with type=validator at the beginning
+// of the scenario are extracted and used as bootstrap validators.
+// If no validators are found, a single default validator is used.
+func extractBootstrapValidators(scenario *parser.SequentialScenario) (driver.Validators, *parser.SequentialScenario) {
+	// Extract leading validator startNode steps.
+	var validators driver.Validators
+	var count int
+
+	for _, step := range scenario.Steps {
+		if step.Function != parser.FuncStartNode {
+			break // stop at first non-startNode step
+		}
+		if step.NodeType != "validator" {
+			break // stop at first non-validator startNode
+		}
+
+		instances := 1
+		if step.Instances != nil {
+			instances = *step.Instances
+		}
+		image := driver.ResolveClientImageName(step.ImageName)
+
+		var stake uint64
+		if step.Stake != nil {
+			stake = *step.Stake
+		}
+
+		validators = append(validators, driver.Validator{
+			Name:      step.Identifier,
+			Instances: instances,
+			ImageName: image,
+			Stake:     stake,
+		})
+		count++
+	}
+
+	if len(validators) == 0 {
+		// No validator step found; use a single default validator.
+		return driver.NewDefaultValidators(1), scenario
+	}
+
+	// Return a copy of the scenario with the bootstrap steps removed.
+	remaining := make([]parser.Step, 0, len(scenario.Steps)-count)
+	remaining = append(remaining, scenario.Steps[count:]...)
+
+	modified := *scenario
+	modified.Steps = remaining
+	return validators, &modified
 }
 
 func openBrowser(s string) error {

@@ -1,0 +1,19 @@
+# This scenario verifies the waitForEpoch function.
+# It starts validators with a short MAX_EPOCH_DURATION so that an epoch
+# change occurs naturally, then uses waitForEpoch to block until it happens.
+
+Name: Wait For Epoch
+
+
+InitialNetworkRules:
+  MAX_EPOCH_DURATION: 5s
+
+Scenario:
+  - startNode: validator
+    type: validator
+    instances: 3
+
+  - waitForEpoch
+
+  - checkBlocksProduced:
+    tolerance: 10

@@ -1,0 +1,29 @@
+# This scenario tests validators with custom stake values.
+# Validators with different stakes receive proportional voting weight
+# in the consensus, reflected in the stake distribution shown in progress logs.
+
+Name: Custom Stake Test
+
+
+Scenario:
+  - startNode: heavy
+    type: validator
+    stake: 10000000
+
+  - startNode: medium
+    type: validator
+    stake: 5000000
+
+  - startNode: light
+    type: validator
+    stake: 1000000
+
+  - waitFor: 10s
+
+  - advanceEpoch
+
+  - undelegate: medium
+
+  - stopNode: medium
+
+  - waitFor: 10s

@@ -1,0 +1,14 @@
+Name: Single Node Test
+
+
+Scenario:
+  - startNode: validator-0
+    type: validator
+
+  - waitFor: 10s
+
+  - startNode: validator-1
+    type: validator
+    imagename: "sonic:v2.1.6"
+
+  - waitFor: 10s

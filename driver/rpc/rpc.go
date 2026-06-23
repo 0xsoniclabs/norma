@@ -75,7 +75,7 @@ func WrapRpcClient(rpcClient *rpc.Client) *Impl {
 	return &Impl{
 		ethRpcClient:     ethclient.NewClient(rpcClient),
 		rpcClient:        rpcClient,
-		txReceiptTimeout: 90 * time.Second,
+		txReceiptTimeout: 30 * time.Second,
 	}
 }
 

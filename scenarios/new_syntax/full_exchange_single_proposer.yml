@@ -1,0 +1,64 @@
+
+Name: Single Proposer Gradual Exchange
+
+
+InitialNetworkRules:
+  UPGRADES_SONIC: true
+  UPGRADES_ALLEGRO: false
+  UPGRADES_SINGLE_PROPOSER: true
+  MAX_EPOCH_DURATION: 1000s
+
+Scenario:
+  - startNode: val-g1-1
+    type: validator
+
+  - runApp: load
+    type: counter
+    users: 50
+    rate:
+      constant: 20
+
+  - startNode: val-g1-2
+    type: validator
+
+  - advanceEpoch  # val-g1-2 joined
+
+  - startNode: val-g1-3
+    type: validator
+
+  - advanceEpoch  # val-g1-3 joined
+
+  - startNode: val-g2-1
+    type: validator
+
+  - advanceEpoch  # val-g2-1 joined
+
+  - undelegate: val-g1-1
+
+  - stopNode: val-g1-1
+
+  - advanceEpoch  # val-g1-1 left
+
+  - startNode: val-g2-2
+    type: validator
+
+  - advanceEpoch  # val-g2-2 joined
+
+  - undelegate: val-g1-2
+
+  - stopNode: val-g1-2
+
+  - advanceEpoch  # val-g1-2 left
+
+  - startNode: val-g2-3
+    type: validator
+
+  - advanceEpoch  # val-g2-3 joined
+
+  - undelegate: val-g1-3
+
+  - stopNode: val-g1-3
+
+  - advanceEpoch  # val-g1-3 left
+
+  - stopApp: load

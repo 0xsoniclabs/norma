@@ -74,6 +74,31 @@ func AdvanceEpoch(client rpc.Client, epochIncrement int) error {
 	return fmt.Errorf("failed to advance epoch: waited too long for the epoch to be advanced")
 }
 
+// WaitForEpochChange waits until the current epoch changes. It polls the
+// network until a new epoch is observed or a timeout of 60 seconds is reached.
+func WaitForEpochChange(client rpc.Client) error {
+	currentEpoch, err := GetCurrentEpoch(client)
+	if err != nil {
+		return fmt.Errorf("failed to get current epoch: %w", err)
+	}
+
+	start := time.Now()
+	for time.Since(start) < 60*time.Second {
+		newEpoch, err := GetCurrentEpoch(client)
+		if err != nil {
+			return fmt.Errorf("failed to get epoch while waiting: %w", err)
+		}
+		if newEpoch > currentEpoch {
+			slog.Info("epoch changed", "from", uint64(currentEpoch), "to", uint64(newEpoch))
+			logEpochSummary(client)
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	return fmt.Errorf("timed out waiting for epoch to change from %d", uint64(currentEpoch))
+}
+
 func GetCurrentEpoch(client rpc.Client) (hexutil.Uint64, error) {
 	var currentEpoch hexutil.Uint64
 	if err := client.Call(&currentEpoch, "eth_currentEpoch"); err != nil {

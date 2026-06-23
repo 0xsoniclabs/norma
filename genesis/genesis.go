@@ -27,9 +27,14 @@ import (
 // The file is written to the given path.
 func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera.Rules) error {
 	validatorsCount := len(validatorStakes)
+	// Use the current time (truncated to the second) so that the initial
+	// EpochStart is close to the real wall-clock time. This prevents the
+	// first block from immediately sealing the epoch due to a huge time
+	// delta between the genesis timestamp and the current block time.
+	// Truncation ensures all nodes in a local network share the same value.
 	jsonGenesis := makefakegenesis.GenesisJson{
 		Rules:         *rules,
-		BlockZeroTime: time.Unix(100, 0), // Genesis files must have the same timestamp across all nodes.
+		BlockZeroTime: time.Now().Truncate(time.Second),
 	}
 
 	// Create infrastructure contracts.

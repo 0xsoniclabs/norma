@@ -38,6 +38,15 @@ func TestCheckScenarios(t *testing.T) {
 	}
 	for _, file := range files {
 		t.Run(file, func(t *testing.T) {
+			// Try sequential format first, fall back to legacy format.
+			seqScenario, seqErr := parser.ParseSequentialFile(file)
+			if seqErr == nil {
+				if err := seqScenario.Check(); err != nil {
+					t.Fatalf("sequential scenario check failed for: %s: %v", file, err)
+				}
+				return
+			}
+
 			scenario, err := parser.ParseFile(file)
 			if err != nil {
 				t.Fatalf("failed to parse file: %v", err)
@@ -56,7 +65,10 @@ func listAll() ([]string, error) {
 			if err != nil {
 				return err
 			}
-			if strings.HasSuffix(path, ".yml") {
+			if info.IsDir() {
+				return nil
+			}
+			if strings.HasSuffix(path, ".yml") || strings.HasSuffix(path, ".yaml") {
 				files = append(files, path)
 			}
 			return nil

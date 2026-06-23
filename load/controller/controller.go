@@ -143,6 +143,13 @@ func (ac *AppController) GetSentTransactions() (uint64, error) {
 
 func (ac *AppController) GetReceivedTransactions() (uint64, error) {
 	for retry := 0; ; retry++ {
+		if ac.rpcClient == nil {
+			var err error
+			ac.rpcClient, err = ac.network.DialRandomRpc()
+			if err != nil {
+				return 0, fmt.Errorf("failed to dial random RPC: %w", err)
+			}
+		}
 		// fetch transaction data from the network
 		res, err := ac.application.GetReceivedTransactions(ac.rpcClient)
 		if err == nil {
@@ -156,7 +163,8 @@ func (ac *AppController) GetReceivedTransactions() (uint64, error) {
 		ac.rpcClient.Close()
 		ac.rpcClient, err = ac.network.DialRandomRpc()
 		if err != nil {
-			return 0, fmt.Errorf("failed to dial random RPC; %v", err)
+			ac.rpcClient = nil
+			return 0, fmt.Errorf("failed to dial random RPC: %w", err)
 		}
 	}
 }

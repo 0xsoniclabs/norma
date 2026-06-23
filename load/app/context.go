@@ -64,13 +64,6 @@ func NewContext(factory RpcClientFactory, treasury *Account, networkRules map[st
 		networkRules: networkRules,
 	}
 
-	// Install a helper contract on the network to perform operations.
-	helper, _, err := DeployContract(res, contract.DeployHelper)
-	if err != nil {
-		return nil, fmt.Errorf("failed to deploy helper contract: %w", err)
-	}
-
-	res.helper = helper
 	return res, nil
 }
 
@@ -131,7 +124,7 @@ func (c *appContext) GetTransactOptions(account *Account) (*bind.TransactOpts, e
 }
 
 // GetReceipt waits for the receipt of the given transaction hash to be available.
-// The function times out after 10 seconds.
+// The function times out after 90 seconds.
 func (c *appContext) GetReceipt(txHash common.Hash) (*types.Receipt, error) {
 	return c.rpcClient.WaitTransactionReceipt(txHash)
 }
@@ -162,6 +155,16 @@ func (c *appContext) Run(
 // FundAccounts transfers the given amount of funds from the treasure to each of the
 // given accounts.
 func (c *appContext) FundAccounts(accounts []common.Address, value *big.Int) error {
+
+	// Install a helper contract on the network on first use.
+	if c.helper == nil {
+		helper, _, err := DeployContract(c, contract.DeployHelper)
+		if err != nil {
+			return fmt.Errorf("failed to deploy helper contract: %w", err)
+		}
+		c.helper = helper
+	}
+
 	// Group funding requests in batches to avoid making individual transactions
 	// too big for a single block.
 	const batchSize = 128

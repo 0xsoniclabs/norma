@@ -1,0 +1,19 @@
+Name: Single Node Test
+
+
+InitialNetworkRules:
+  MAX_EPOCH_DURATION: 10s
+  UPGRADES_ALLEGRO: true
+  UPGRADES_GAS_SUBSIDIES: true
+
+Scenario:
+  - startNode: validator-0
+    type: validator
+
+  - runApp: subsidies
+    type: subsidies
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 10s

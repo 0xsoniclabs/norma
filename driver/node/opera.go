@@ -371,6 +371,12 @@ func (n *OperaNode) IsRunning() bool {
 	return n.host.IsRunning()
 }
 
+// CheckRunning returns an error if the node's container process is no longer
+// running (e.g. it crashed or exited unexpectedly).
+func (n *OperaNode) CheckRunning() error {
+	return n.host.CheckRunning()
+}
+
 func (n *OperaNode) GetServiceUrl(service *network.ServiceDescription) *driver.URL {
 	addr := n.host.GetAddressForService(service)
 	if addr == nil {
