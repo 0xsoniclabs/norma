@@ -1,7 +1,7 @@
 // Norma CI test norma using "make test"
 
 pipeline {
-	agent { label 'rls-bare-g' }
+	agent { label 'kvm-8-32-l-1' }
 	
 	options {
 		timestamps ()
