@@ -48,7 +48,7 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
 	for _, N := range []int{1, 3} {
 		N := N
-		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
+		t.Run(fmt.Sprintf("num-nodes-%d", N), func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
 			defer cancel()
 			net, err := NewLocalNetwork(ctx, &config)
@@ -63,7 +63,7 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 			for i := 0; i < N; i++ {
 				node, err := net.CreateNode(&driver.NodeConfig{
 					Image: driver.DefaultClientDockerImageName,
-					Name:  fmt.Sprintf("N-%d-%d", i, time.Now().UnixNano()),
+					Name:  fmt.Sprintf("N-%d-%s", i, t.Name()),
 				})
 				if err != nil {
 					t.Fatalf("failed to create node: %v", err)
@@ -128,7 +128,7 @@ func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
 	config.Validators[0].Name = fmt.Sprintf("validator-%s", t.Name())
 	for _, N := range []int{1, 3} {
 		N := N
-		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
+		t.Run(fmt.Sprintf("num-nodes-%d", N), func(t *testing.T) {
 
 			net, err := NewLocalNetwork(t.Context(), &config)
 			if err != nil {
@@ -141,13 +141,13 @@ func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
 			apps := []driver.Application{}
 			for i := 0; i < N; i++ {
 				app, err := net.CreateApplication(&driver.ApplicationConfig{
-					Name: fmt.Sprintf("A-%d-%d", i, time.Now().UnixNano()),
+					Name: fmt.Sprintf("A-%d-%s", i, t.Name()),
 				})
 				if err != nil {
 					t.Fatalf("failed to create app: %v", err)
 				}
 
-				if got, want := app.Config().Name, fmt.Sprintf("A-%d-%d", i, time.Now().UnixNano()); got != want {
+				if got, want := app.Config().Name, fmt.Sprintf("A-%d-%s", i, t.Name()); got != want {
 					t.Errorf("app configurion not propagated: %v != %v", got, want)
 				}
 
@@ -184,7 +184,7 @@ func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 
 	for i := 0; i < N; i++ {
 		_, err := net.CreateNode(&driver.NodeConfig{
-			Name:  fmt.Sprintf("N-%d-%d", i, time.Now().UnixNano()),
+			Name:  fmt.Sprintf("N-%d-%s", i, t.Name()),
 			Image: driver.DefaultClientDockerImageName,
 		})
 		if err != nil {
@@ -194,7 +194,7 @@ func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 
 	for i := 0; i < N; i++ {
 		_, err := net.CreateApplication(&driver.ApplicationConfig{
-			Name: fmt.Sprintf("A-%d-%d", i, time.Now().UnixNano()),
+			Name: fmt.Sprintf("A-%d-%s", i, t.Name()),
 		})
 		if err != nil {
 			t.Errorf("failed to create app: %v", err)
@@ -246,7 +246,7 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 	net.RegisterListener(listener)
 
 	_, err = net.CreateNode(&driver.NodeConfig{
-		Name:  fmt.Sprintf("N-%d-%d", 1, time.Now().UnixNano()),
+		Name:  fmt.Sprintf("N-%d-%s", 1, t.Name()),
 		Image: driver.DefaultClientDockerImageName,
 	})
 	if err != nil {
@@ -269,7 +269,7 @@ func TestLocalNetwork_CanRunWithMultipleValidators(t *testing.T) {
 	for _, N := range []int{1, 3} {
 		N := N
 		config := driver.NetworkConfig{Validators: driver.NewDefaultTestValidators(t.Name(), N)}
-		t.Run(fmt.Sprintf("num_validators=%d", N), func(t *testing.T) {
+		t.Run(fmt.Sprintf("num-validators-%d", N), func(t *testing.T) {
 			net, err := NewLocalNetwork(t.Context(), &config)
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
@@ -387,7 +387,7 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
 	for _, N := range []int{1, 3} {
 		N := N
-		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
+		t.Run(fmt.Sprintf("num-nodes-%d", N), func(t *testing.T) {
 			net, err := NewLocalNetwork(t.Context(), &config)
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
@@ -405,7 +405,7 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 			nodes := make([]driver.Node, 0, N)
 			for i := 0; i < N; i++ {
 				node, err := net.CreateNode(&driver.NodeConfig{
-					Name:  fmt.Sprintf("N-%d-%d", i, time.Now().UnixNano()),
+					Name:  fmt.Sprintf("N-%d-%s", i, t.Name()),
 					Image: driver.DefaultClientDockerImageName,
 				})
 				if err != nil {
@@ -446,7 +446,7 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 
 func TestLocalNetwork_Num_Validators_Started(t *testing.T) {
 	for i := 1; i < 3; i++ {
-		t.Run(fmt.Sprintf("validators%d", i), func(t *testing.T) {
+		t.Run(fmt.Sprintf("num-validators-%d", i), func(t *testing.T) {
 			config := driver.NetworkConfig{Validators: driver.NewDefaultTestValidators(t.Name(), i)}
 			net, err := NewLocalNetwork(t.Context(), &config)
 			if err != nil {
