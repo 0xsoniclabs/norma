@@ -19,8 +19,6 @@ if [[ ! -d "${datadir}/chaindata" ]]; then
   ./sonictool \
     --datadir "${datadir}" \
     --statedb.livecache 1 \
-    --statedb.archivecache 1 \
-    --statedb.cache 1024 \
     genesis json --experimental /genesis.json
 fi
 
@@ -87,8 +85,6 @@ export GOMEMLIMIT="1GiB"
     --config config.toml \
     --datadir.minfreedisk 0 \
     --statedb.livecache 1 \
-    --statedb.archivecache 1 \
-    --statedb.cache 1024 \
     $EXTRA_ARGUMENTS
 
 # docker runs by default with root user, so any files or folders created by
