@@ -63,7 +63,7 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 			for i := 0; i < N; i++ {
 				node, err := net.CreateNode(&driver.NodeConfig{
 					Image: driver.DefaultClientDockerImageName,
-					Name:  fmt.Sprintf("T-%d", i),
+					Name:  fmt.Sprintf("%v-N%d", t.Name(), i),
 				})
 				if err != nil {
 					t.Fatalf("failed to create node: %v", err)
@@ -141,13 +141,13 @@ func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
 			apps := []driver.Application{}
 			for i := 0; i < N; i++ {
 				app, err := net.CreateApplication(&driver.ApplicationConfig{
-					Name: fmt.Sprintf("T-%d", i),
+					Name: fmt.Sprintf("%v-A%d", t.Name(), i),
 				})
 				if err != nil {
 					t.Fatalf("failed to create app: %v", err)
 				}
 
-				if got, want := app.Config().Name, fmt.Sprintf("T-%d", i); got != want {
+				if got, want := app.Config().Name, fmt.Sprintf("%v-A%d", t.Name(), i); got != want {
 					t.Errorf("app configurion not propagated: %v != %v", got, want)
 				}
 
@@ -184,7 +184,7 @@ func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 
 	for i := 0; i < N; i++ {
 		_, err := net.CreateNode(&driver.NodeConfig{
-			Name:  fmt.Sprintf("T-%d", i),
+			Name:  fmt.Sprintf("%v-N%d", t.Name(), i),
 			Image: driver.DefaultClientDockerImageName,
 		})
 		if err != nil {
@@ -194,7 +194,7 @@ func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 
 	for i := 0; i < N; i++ {
 		_, err := net.CreateApplication(&driver.ApplicationConfig{
-			Name: fmt.Sprintf("T-%d", i),
+			Name: fmt.Sprintf("%v-A%d", t.Name(), i),
 		})
 		if err != nil {
 			t.Errorf("failed to create app: %v", err)
@@ -246,7 +246,7 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 	net.RegisterListener(listener)
 
 	_, err = net.CreateNode(&driver.NodeConfig{
-		Name:  fmt.Sprintf("T-%d", 1),
+		Name:  fmt.Sprintf("%v-N%d", t.Name(), 1),
 		Image: driver.DefaultClientDockerImageName,
 	})
 	if err != nil {
@@ -405,7 +405,7 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 			nodes := make([]driver.Node, 0, N)
 			for i := 0; i < N; i++ {
 				node, err := net.CreateNode(&driver.NodeConfig{
-					Name:  fmt.Sprintf("T-%d", i),
+					Name:  fmt.Sprintf("%v-N%d", t.Name(), i),
 					Image: driver.DefaultClientDockerImageName,
 				})
 				if err != nil {
