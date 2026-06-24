@@ -16,7 +16,7 @@ concurrency:
 jobs:
   golangci:
     name: Go Lint
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Checkout
