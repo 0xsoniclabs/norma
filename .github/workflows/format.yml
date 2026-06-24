@@ -1,0 +1,36 @@
+name: Format
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: format-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gofmt:
+    name: Go Format Check
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check gofmt
+        run: |
+          set -euo pipefail
+          DIFF=$(find . -type f -name '*.go' ! -path '*/client/*' -print0 | xargs -0 gofmt -l)
+          echo "$DIFF"
+          test -z "$DIFF"

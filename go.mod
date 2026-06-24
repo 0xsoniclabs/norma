@@ -11,7 +11,7 @@ require (
 	github.com/ethereum/go-ethereum v1.17.1
 	github.com/holiman/uint256 v1.3.2
 	github.com/jupp0r/go-priority-queue v0.0.0-20160601094913-ab1073853bde
-	github.com/urfave/cli/v2 v2.27.5
+	github.com/urfave/cli/v2 v2.27.7
 	go.uber.org/mock v0.6.0
 	golang.org/x/exp v0.0.0-20241204233417-43b7b7cde48d
 	gopkg.in/yaml.v3 v3.0.1
@@ -35,7 +35,7 @@ require (
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/consensys/gnark-crypto v0.18.1 // indirect
 	github.com/containerd/log v0.1.0 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/crate-crypto/go-eth-kzg v1.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
