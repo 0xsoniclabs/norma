@@ -18,6 +18,7 @@ package local
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -48,7 +49,9 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 	for _, N := range []int{1, 3} {
 		N := N
 		t.Run(fmt.Sprintf("num_nodes=%d", N), func(t *testing.T) {
-			net, err := NewLocalNetwork(t.Context(), &config)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
+			defer cancel()
+			net, err := NewLocalNetwork(ctx, &config)
 			if err != nil {
 				t.Fatalf("failed to create new local network: %v", err)
 			}
