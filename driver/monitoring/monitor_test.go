@@ -181,7 +181,9 @@ func TestMonitorIntegrationPrometheusLogReceived(t *testing.T) {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = node.Cleanup()
+		if err := node.Cleanup(); err != nil {
+			t.Errorf("failed to cleanup node: %v", err)
+		}
 	})
 
 	// simulate existing nodes
@@ -194,7 +196,9 @@ func TestMonitorIntegrationPrometheusLogReceived(t *testing.T) {
 		t.Fatalf("failed to create monitor instance: %v", err)
 	}
 	defer func() {
-		_ = monitor.Shutdown()
+		if err := monitor.Shutdown(); err != nil {
+			t.Errorf("failed to shutdown monitor: %v", err)
+		}
 	}()
 
 	// check metric arrived

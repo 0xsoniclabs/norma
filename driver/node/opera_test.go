@@ -76,7 +76,9 @@ func TestOperaNode_StartAndStop(t *testing.T) {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = node.Cleanup()
+		if err := node.Cleanup(); err != nil {
+			t.Errorf("failed to cleanup node: %v", err)
+		}
 	})
 	if err = node.host.Stop(); err != nil {
 		t.Errorf("failed to stop Opera node: %v", err)
@@ -125,7 +127,9 @@ func TestOperaNode_RpcServiceIsReadyAfterStartup(t *testing.T) {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = node.Cleanup()
+		if err := node.Cleanup(); err != nil {
+			t.Errorf("failed to cleanup node: %v", err)
+		}
 	})
 	if id, err := node.GetNodeID(); err != nil || len(id) == 0 {
 		t.Errorf("failed to fetch NodeID from Opera node: '%v', err: %v", id, err)
@@ -150,7 +154,9 @@ func TestOperaNode_StreamLog(t *testing.T) {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = node.Cleanup()
+		if err := node.Cleanup(); err != nil {
+			t.Errorf("failed to cleanup node: %v", err)
+		}
 	})
 
 	reader, err := node.StreamLog()
@@ -204,7 +210,9 @@ func TestOperaNode_MetricsExposed(t *testing.T) {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = node.Cleanup()
+		if err := node.Cleanup(); err != nil {
+			t.Errorf("failed to cleanup node: %v", err)
+		}
 	})
 
 	url := node.GetServiceUrl(&OperaDebugService)

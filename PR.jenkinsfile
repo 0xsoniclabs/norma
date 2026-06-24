@@ -18,6 +18,13 @@ pipeline {
     }
 
     stages {
+
+        stage("Pre Clean-up") {
+            steps {
+                sh 'go run ./driver/norma purge'
+            }
+        }
+ 
         stage('Check Norma Format') {
             steps {
                 catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
@@ -37,7 +44,7 @@ pipeline {
         stage('Test Norma') {
             steps {
                 sh 'cd genesis && go test ./...'
-                sh 'go test ./...  -p 2 --parallel 2 --timeout 30m'
+                sh 'go test ./...  -p 2 --parallel 2 --timeout 30m --failfast'
             }
         }
     }

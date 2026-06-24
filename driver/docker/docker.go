@@ -282,7 +282,7 @@ func (c *Container) Cleanup() error {
 		return err
 	}
 	c.cleaned = true
-	return c.client.cli.ContainerRemove(context.Background(), c.id, container.RemoveOptions{})
+	return c.client.cli.ContainerRemove(context.Background(), c.id, container.RemoveOptions{Force: true})
 }
 
 // GetAddressForService retrieves the Address of a service running in this
@@ -440,9 +440,13 @@ func (c *Client) ContainerExists(name string) (bool, error) {
 	return len(containers) > 0, nil
 }
 
-// listContainers returns a list of all containers on the Docker host filtered by label.
+// listContainers returns a list of all containers (running and stopped) on the
+// Docker host created by norma.
 func (c *Client) listContainers() ([]types.Container, error) {
-	return c.cli.ContainerList(context.Background(), container.ListOptions{})
+	return c.cli.ContainerList(context.Background(), container.ListOptions{
+		All:     true,
+		Filters: filters.NewArgs(getObjectsLabelFilter()),
+	})
 }
 
 // getObjectsLabelFilter returns a filter for the objects label.

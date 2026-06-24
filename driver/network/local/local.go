@@ -119,19 +119,21 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 	net.RegisterListener(net.rpcWorkerPool)
 
 	// Start all validators.
-	errs := make([]error, config.Validators.GetNumValidators())
-	var wg sync.WaitGroup
+	type nodeResult struct {
+		idx int
+		err error
+	}
+	numValidators := config.Validators.GetNumValidators()
+	results := make(chan nodeResult, numValidators)
 	var idx int
 	for _, validator := range config.Validators {
 		for j := 0; j < validator.Instances; j++ {
-			wg.Add(1)
 			image := validator.ImageName
 			label := fmt.Sprintf("validator-%d", j)
 			if len(validator.Name) != 0 {
 				label = fmt.Sprintf("%s-%d", validator.Name, j)
 			}
-			go func(idx int) {
-				defer wg.Done()
+			go func(idx int, label string) {
 				validatorId := idx + 1
 				nodeConfig := node.OperaNodeConfig{
 					ValidatorId:     &validatorId,
@@ -142,12 +144,28 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 					GenesisJsonPath: &net.genesisJsonPath,
 					ExtraArguments:  validator.ExtraArguments,
 				}
-				_, errs[idx] = net.createNode(ctx, &nodeConfig)
-			}(idx)
+				_, err := net.createNode(ctx, &nodeConfig)
+				if err != nil {
+					err = fmt.Errorf("validator %q (idx=%d, image=%s): %w", label, idx, image, err)
+				}
+				results <- nodeResult{idx, err}
+			}(idx, label)
 			idx++
 		}
 	}
-	wg.Wait()
+
+	errs := make([]error, numValidators)
+	for i := 0; i < numValidators; i++ {
+		select {
+		case r := <-results:
+			errs[r.idx] = r.err
+		case <-ctx.Done():
+			return nil, errors.Join(
+				fmt.Errorf("context cancelled while waiting for validators to start: %w", ctx.Err()),
+				net.Shutdown(),
+			)
+		}
+	}
 
 	// If starting the validators failed, the network startup should fail.
 	if err := errors.Join(errs...); err != nil {

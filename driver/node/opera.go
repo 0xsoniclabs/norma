@@ -445,6 +445,9 @@ func (n *OperaNode) AddPeer(id driver.NodeID) error {
 		return err
 	}
 	return network.Retry(context.Background(), network.DefaultRetryAttempts, 1*time.Second, func() error {
+		if err := rpcClient.Call(nil, "admin_addTrustedPeer", id); err != nil {
+			return fmt.Errorf("failed to add trusted peer on node %s: %v", id, err)
+		}
 		return rpcClient.Call(nil, "admin_addPeer", id)
 	})
 }
