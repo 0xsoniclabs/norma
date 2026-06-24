@@ -1,0 +1,29 @@
+# This scenario verifies epoch advancement behavior.
+#
+# Expected: one epoch change is observed (epoch 1 → 2). This is the genesis
+# epoch transition — the genesis seals epoch 1 to activate the initial
+# validators, so the first live blocks are produced in epoch 2. The monitoring
+# picks up genesis blocks (epoch 1) and then live blocks (epoch 2), reporting
+# one transition.
+#
+# No additional automatic epoch changes should occur because:
+# - MAX_EPOCH_DURATION (100s) is not exceeded (scenario runs ~20s)
+# - MAX_EPOCH_GAS is set high enough to not be exhausted by event overhead
+
+Name: Advance Epoch Test
+
+InitialNetworkRules:
+  MAX_EPOCH_DURATION: 100s
+  MAX_EPOCH_GAS: 1000000000
+
+Scenario:
+  - startNode: validator
+    type: validator
+    instances: 3
+
+  - waitFor: 10s
+
+  - advanceEpoch
+
+  - waitFor: 10s
+  

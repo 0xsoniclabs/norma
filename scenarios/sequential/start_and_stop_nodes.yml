@@ -1,0 +1,40 @@
+Name: Start and Stop Nodes Test
+
+Scenario:
+  - startNode: validator-0
+    type: validator
+    instances: 2
+
+  - runApp: normal
+    type: counter
+    users: 10
+    rate:
+      constant: 10
+
+  - waitForEpoch
+
+  - startNode: validator-1
+    type: validator
+
+  - waitForEpoch
+
+  - startNode: validator-2
+    type: validator
+
+  - waitForEpoch
+
+  - stopNode: validator-1
+
+  - waitForEpoch
+
+  - startNode: validator-1 # same identifier => rejoin
+    type: validator
+
+  - advanceEpoch
+
+  - advanceEpoch
+
+  - undelegate: validator-2
+
+  - stopNode: validator-2
+  

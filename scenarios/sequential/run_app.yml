@@ -1,0 +1,23 @@
+Name: Run Application Test
+
+Scenario:
+  - startNode: validator-0
+    type: validator
+
+  - runApp: normal
+    type: counter
+    users: 10
+    rate:
+      constant: 1
+
+  - runApp: erc20
+    type: erc20
+    users: 10
+    rate:
+      constant: 1
+
+  - waitFor: 10s
+
+  - stopApp: normal
+
+  - waitFor: 10s
