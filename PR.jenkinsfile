@@ -1,7 +1,7 @@
 // Norma CI test norma using "make test"
 
 pipeline {
-    agent { label 'x86-8-32-l || x86-8-32-m' }
+    agent { label 'x86-8-32-l || x86-8-32-m || x86-8-32-s' }
 
     options {
         timestamps()
@@ -18,6 +18,13 @@ pipeline {
     }
 
     stages {
+
+        stage("Pre Clean-up") {
+            steps {
+                sh 'go run ./driver/norma purge'
+            }
+        }
+ 
         stage('Check Norma Format') {
             steps {
                 catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
