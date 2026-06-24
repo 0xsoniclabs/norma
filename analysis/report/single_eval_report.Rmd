@@ -315,6 +315,44 @@ ggplot(data = data) +
     theme(plot.title = element_text(hjust = 0.5)) # center title
 ```
 
+### Epoch per Node
+
+The following chart shows the epoch number of each node over time.
+
+```{r epoch_per_node, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
+data <- all_data %>%
+    dplyr::filter(metric == "NodeEpochStatus") %>% # filter metric of interest
+    mutate(value = as.numeric(value)) # convert value to int
+
+ggplot(data = data) +
+    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
+    ggtitle("Epoch over Time") + # chart title
+    xlab("Time") + # x-axis title
+    ylab("Epoch") + # y-axis title
+    labs(colour = "Nodes") + # legend title
+    theme(plot.title = element_text(hjust = 0.5)) # center title
+```
+
+### Validator Stakes
+
+The following chart shows the received stake per validator over time.
+
+```{r validator_stakes, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
+data <- all_data %>%
+    dplyr::filter(metric == "ValidatorStake") %>%
+    mutate(value = as.numeric(value))
+
+if (nrow(data) > 0) {
+    ggplot(data = data) +
+        geom_line(aes(x = elapsed_sec, y = value / 1e18, group = node, colour = factor(node))) +
+        ggtitle("Validator Stakes") +
+        xlab("Time [s]") +
+        ylab("Stake [S]") +
+        labs(colour = "Validator") +
+        theme(plot.title = element_text(hjust = 0.5))
+}
+```
+
 ### TxPool Per Node
 
 The following charts show statistics of transaction pool.
