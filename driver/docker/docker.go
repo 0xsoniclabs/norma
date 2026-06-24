@@ -282,7 +282,7 @@ func (c *Container) Cleanup() error {
 		return err
 	}
 	c.cleaned = true
-	return c.client.cli.ContainerRemove(context.Background(), c.id, container.RemoveOptions{})
+	return c.client.cli.ContainerRemove(context.Background(), c.id, container.RemoveOptions{Force: true})
 }
 
 // GetAddressForService retrieves the Address of a service running in this
