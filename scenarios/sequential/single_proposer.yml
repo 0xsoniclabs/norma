@@ -1,0 +1,31 @@
+Name: Single Block Proposer Test
+
+InitialNetworkRules:
+  UPGRADES_SONIC: true
+  UPGRADES_ALLEGRO: true
+  UPGRADES_GAS_SUBSIDIES: true
+  UPGRADES_BRIO: false
+
+Scenario:
+  - startNode: validator-0
+    type: validator
+    instances: 5 # ensure the network continues after failures of other nodes
+
+  - waitFor: 5s
+
+  - startNode: validator-1
+    type: validator
+    imagename: "sonic:v2.1.6"
+    failing: true  # this node should stop working after the hardfork
+
+  - waitFor: 5s
+
+  - updateRules:
+      UPGRADES_BRIO: true  # hardfork enabled
+
+  - waitFor: 5s
+
+  - startNode: validator-2
+    type: validator
+    imagename: "sonic:v2.1.6"
+    failing: true  # this node should not be able to sync when Brio is enabled
