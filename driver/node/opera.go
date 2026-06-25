@@ -448,7 +448,6 @@ func (n *OperaNode) AddPeer(ctx context.Context, id driver.NodeID) error {
 	if err != nil {
 		return err
 	}
-	// <<<<<<< HEAD
 	return network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second,
 		func(ctx context.Context) error {
 			if err := rpcClient.Call(nil, "admin_addTrustedPeer", id); err != nil {
@@ -456,14 +455,6 @@ func (n *OperaNode) AddPeer(ctx context.Context, id driver.NodeID) error {
 			}
 			return rpcClient.Call(nil, "admin_addPeer", id)
 		})
-	// =======
-	//
-	//	return network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second,
-	//		func(ctx context.Context) error {
-	//			return rpcClient.Call(nil, "admin_addPeer", id)
-	//		})
-	//
-	// >>>>>>> d712d71 (Forward context, do not capture)
 }
 
 // RemovePeer informs the client instance represented by the OperaNode
