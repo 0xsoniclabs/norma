@@ -193,7 +193,7 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 				s.Rules[k] = v
 			}
 		} else if val.Tag != "!!null" && val.Value != "" {
-			return fmt.Errorf("Update rules value must be a mapping, got %q", val.Value)
+			return fmt.Errorf("update rules value must be a mapping, got %q", val.Value)
 		}
 	case FuncAdvanceEpoch, FuncWaitForEpoch:
 		// These take no value (or null).
