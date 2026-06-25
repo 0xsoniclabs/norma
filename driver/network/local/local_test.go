@@ -801,3 +801,28 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 			temp, currVisitedDirs)
 	}
 }
+
+func TestWaitForBlockProduction_AllNodesProduceBlocks(t *testing.T) {
+	t.Parallel()
+	config := driver.NetworkConfig{
+		Validators: driver.NewDefaultTestValidators(t.Name(), 2),
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
+	defer cancel()
+
+	net, err := NewLocalNetwork(ctx, &config)
+	if err != nil {
+		t.Fatalf("failed to create local network: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = net.Shutdown()
+	})
+
+	// WaitForBlockProduction should succeed since validators are already
+	// producing blocks after network startup.
+	blockCtx, blockCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer blockCancel()
+	if err := net.WaitForBlockProduction(blockCtx); err != nil {
+		t.Fatalf("WaitForBlockProduction failed: %v", err)
+	}
+}

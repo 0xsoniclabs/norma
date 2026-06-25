@@ -22,10 +22,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -211,6 +213,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		genesisJSONPath = *config.GenesisJsonPath
 	}
 
+	slog.Info("Starting Opera node", "label", config.Label, "image", image, "validatorId", validatorId, "genesisJsonPath", genesisJSONPath)
 	host, err := network.RetryReturn(ctx, network.DefaultRetryAttempts, 1*time.Second, func() (*docker.Container, error) {
 		ports, err := network.GetFreePorts(len(operaServices.Services()))
 		if err != nil {
@@ -293,6 +296,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 	if err != nil {
 		return nil, err
 	}
+	slog.Info("Opera node started", "label", config.Label, "hostname", host.Hostname())
 
 	// Use a private copy of the config to avoid modifying the original.
 	nodeConfig := *config
@@ -313,6 +317,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		tempDirs:  tempDirs,
 	}
 
+	slog.Info("Waiting for Opera node to be ready", "label", config.Label, "hostname", host.Hostname())
 	// Wait until the OperaNode inside the Container is ready.
 	err = network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second, func() error {
 		if err := node.host.CheckRunning(); err != nil {
@@ -405,6 +410,79 @@ func (n *OperaNode) GetValidatorId() *int {
 
 func (n *OperaNode) StreamLog() (io.ReadCloser, error) {
 	return n.host.StreamLog()
+}
+
+// CheckBlockProducing verifies that the node is producing blocks by streaming
+// the container logs and waiting until at least 2 "New block" lines with
+// strictly increasing block indices are observed. The provided context controls
+// the deadline; if it expires before the condition is met, an error is returned.
+func (n *OperaNode) CheckBlockProducing(ctx context.Context) error {
+	slog.Info("checking block production", "node", n.GetLabel())
+	reader, err := n.StreamLog()
+	if err != nil {
+		return fmt.Errorf("failed to stream log for block production check: %w", err)
+	}
+	defer func() {
+		if err := reader.Close(); err != nil {
+			slog.Error("failed to close log stream", "node", n.GetLabel(), "error", err)
+		}
+	}()
+
+	done := make(chan struct{})
+	var scanErr error
+	go func() {
+		defer close(done)
+		scanner := bufio.NewScanner(reader)
+		var lastIndex int64 = -1
+		seen := 0
+		for scanner.Scan() {
+			line := scanner.Text()
+			if !strings.Contains(line, "New block") {
+				continue
+			}
+			idx, err := parseBlockIndex(line)
+			if err != nil {
+				continue
+			}
+			if idx > lastIndex {
+				slog.Debug("observed block", "node", n.GetLabel(), "index", idx, "seen", seen+1)
+				lastIndex = idx
+				seen++
+			}
+			if seen >= 2 {
+				return
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			scanErr = err
+		} else {
+			scanErr = fmt.Errorf("log stream ended without observing 2 increasing blocks (saw %d)", seen)
+		}
+	}()
+
+	select {
+	case <-done:
+		slog.Info("block production confirmed", "node", n.GetLabel())
+		return scanErr
+	case <-ctx.Done():
+		slog.Warn("block production check timed out", "node", n.GetLabel())
+		if err := reader.Close(); err != nil {
+			slog.Error("failed to close log stream", "node", n.GetLabel(), "error", err)
+		}
+		return fmt.Errorf("node %s did not produce 2 increasing blocks before timeout: %w", n.GetLabel(), ctx.Err())
+	}
+}
+
+// blockIndexReg matches the block index field in a "New block" log line.
+var blockIndexReg = regexp.MustCompile(`index=(\d+)`)
+
+// parseBlockIndex extracts the block index from a "New block" log line.
+func parseBlockIndex(line string) (int64, error) {
+	m := blockIndexReg.FindStringSubmatch(line)
+	if len(m) < 2 {
+		return 0, fmt.Errorf("no block index found in line")
+	}
+	return strconv.ParseInt(m[1], 10, 64)
 }
 
 func (n *OperaNode) Stop() error {
