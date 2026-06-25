@@ -22,10 +22,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -405,6 +407,75 @@ func (n *OperaNode) GetValidatorId() *int {
 
 func (n *OperaNode) StreamLog() (io.ReadCloser, error) {
 	return n.host.StreamLog()
+}
+
+// CheckBlockProducing verifies that the node is producing blocks by streaming
+// the container logs and waiting until at least 2 "New block" lines with
+// strictly increasing block indices are observed. The provided context controls
+// the deadline; if it expires before the condition is met, an error is returned.
+func (n *OperaNode) CheckBlockProducing(ctx context.Context) error {
+	reader, err := n.StreamLog()
+	if err != nil {
+		return fmt.Errorf("failed to stream log for block production check: %w", err)
+	}
+	defer func() {
+		if err := reader.Close(); err != nil {
+			slog.Error("failed to close log stream", "node", n.GetLabel(), "error", err)
+		}
+	}()
+
+	done := make(chan struct{})
+	var scanErr error
+	go func() {
+		defer close(done)
+		scanner := bufio.NewScanner(reader)
+		var lastIndex int64 = -1
+		seen := 0
+		for scanner.Scan() {
+			line := scanner.Text()
+			if !strings.Contains(line, "New block") {
+				continue
+			}
+			idx, err := parseBlockIndex(line)
+			if err != nil {
+				continue
+			}
+			if idx > lastIndex {
+				lastIndex = idx
+				seen++
+			}
+			if seen >= 2 {
+				return
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			scanErr = err
+		} else {
+			scanErr = fmt.Errorf("log stream ended without observing 2 increasing blocks (saw %d)", seen)
+		}
+	}()
+
+	select {
+	case <-done:
+		return scanErr
+	case <-ctx.Done():
+		if err := reader.Close(); err != nil {
+			slog.Error("failed to close log stream", "node", n.GetLabel(), "error", err)
+		}
+		return fmt.Errorf("node %s did not produce 2 increasing blocks before timeout: %w", n.GetLabel(), ctx.Err())
+	}
+}
+
+// blockIndexReg matches the block index field in a "New block" log line.
+var blockIndexReg = regexp.MustCompile(`index=(\d+)`)
+
+// parseBlockIndex extracts the block index from a "New block" log line.
+func parseBlockIndex(line string) (int64, error) {
+	m := blockIndexReg.FindStringSubmatch(line)
+	if len(m) < 2 {
+		return 0, fmt.Errorf("no block index found in line")
+	}
+	return strconv.ParseInt(m[1], 10, 64)
 }
 
 func (n *OperaNode) Stop() error {

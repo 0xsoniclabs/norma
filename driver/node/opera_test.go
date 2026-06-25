@@ -18,6 +18,7 @@ package node
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -294,4 +295,112 @@ func TestClient_Stop_Graceful(t *testing.T) {
 	case <-time.After(180 * time.Second):
 		t.Errorf("container did not stop gracefully")
 	}
+}
+
+func TestCheckBlockProducing_SucceedsWithTwoIncreasingBlocks(t *testing.T) {
+	t.Parallel()
+	logContent := "INFO [05-04|09:34:15.537] Starting node\n" +
+		"INFO [05-04|09:34:16.000] New block index=1 gas_used=0 txs=0 t=1ms\n" +
+		"INFO [05-04|09:34:17.000] New block index=2 gas_used=0 txs=0 t=1ms\n"
+
+	node := &OperaNode{
+		host:   &fakeLogHost{logContent: logContent},
+		config: &OperaNodeConfig{Label: "test-node"},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := node.CheckBlockProducing(ctx); err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+}
+
+func TestCheckBlockProducing_FailsWithOnlyOneBlock(t *testing.T) {
+	t.Parallel()
+	logContent := "INFO [05-04|09:34:15.537] Starting node\n" +
+		"INFO [05-04|09:34:16.000] New block index=1 gas_used=0 txs=0 t=1ms\n"
+
+	node := &OperaNode{
+		host:   &fakeLogHost{logContent: logContent},
+		config: &OperaNodeConfig{Label: "test-node"},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := node.CheckBlockProducing(ctx)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "without observing 2 increasing blocks") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestCheckBlockProducing_FailsWhenNoBlockBeforeTimeout(t *testing.T) {
+	t.Parallel()
+
+	node := &OperaNode{
+		host:   &blockingLogHost{},
+		config: &OperaNodeConfig{Label: "test-node"},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	err := node.CheckBlockProducing(ctx)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "did not produce 2 increasing blocks before timeout") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestCheckBlockProducing_FailsWhenLogStreamEndsWithoutBlock(t *testing.T) {
+	t.Parallel()
+	logContent := "INFO Starting node\nINFO IPC endpoint opened\n"
+
+	node := &OperaNode{
+		host:   &fakeLogHost{logContent: logContent},
+		config: &OperaNodeConfig{Label: "test-node"},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := node.CheckBlockProducing(ctx)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "without observing 2 increasing blocks") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+// fakeLogHost is a test Host implementation that returns pre-configured log content.
+type fakeLogHost struct {
+	cleanupHostStub
+	logContent string
+}
+
+func (h *fakeLogHost) StreamLog() (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader(h.logContent)), nil
+}
+
+// blockingLogHost is a test Host implementation whose StreamLog blocks until
+// the reader is closed (simulating a running container with no block output).
+type blockingLogHost struct {
+	cleanupHostStub
+}
+
+func (h *blockingLogHost) StreamLog() (io.ReadCloser, error) {
+	r, w := io.Pipe()
+	// Write some non-block log lines, then keep the pipe open.
+	go func() {
+		_, _ = w.Write([]byte("INFO Starting node\nINFO IPC endpoint opened\n"))
+		// Never close w — the reader blocks until r.Close() is called.
+	}()
+	return r, nil
 }

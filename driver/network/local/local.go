@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
@@ -203,6 +204,39 @@ func (n *LocalNetwork) addNodeIntoNetwork(node *node.OperaNode) error {
 	return nil
 }
 
+// WaitForBlockProduction waits until all nodes in the network have logged at
+// least one "New block" line. The provided context controls the overall deadline.
+func (n *LocalNetwork) WaitForBlockProduction(ctx context.Context) error {
+	n.nodesMutex.Lock()
+	nodes := make([]*node.OperaNode, 0, len(n.nodes))
+	for _, nd := range n.nodes {
+		nodes = append(nodes, nd)
+	}
+	n.nodesMutex.Unlock()
+
+	type result struct {
+		label string
+		err   error
+	}
+	results := make(chan result, len(nodes))
+
+	for _, nd := range nodes {
+		go func(nd *node.OperaNode) {
+			err := nd.CheckBlockProducing(ctx)
+			results <- result{nd.GetLabel(), err}
+		}(nd)
+	}
+
+	var errs []error
+	for range nodes {
+		r := <-results
+		if r.err != nil {
+			errs = append(errs, fmt.Errorf("node %s: %w", r.label, r.err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // createNode is an internal version of CreateNode enabling the creation
 // of validator and non-validator nodes in the network.
 func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNodeConfig) (*node.OperaNode, error) {
@@ -213,6 +247,19 @@ func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNod
 	if err := n.addNodeIntoNetwork(node); err != nil {
 		return nil, fmt.Errorf("failed to connect node; %w", err)
 	}
+
+	// Wait for the newly added node to produce a block.
+	blockCtx, blockCancel := context.WithTimeout(ctx, 50*time.Second)
+	defer blockCancel()
+	if err := node.CheckBlockProducing(blockCtx); err != nil {
+		return nil, fmt.Errorf("node %s failed block production check: %w", node.GetLabel(), err)
+	}
+
+	// Wait until all nodes in the network are producing blocks.
+	if err := n.WaitForBlockProduction(blockCtx); err != nil {
+		return nil, fmt.Errorf("network failed block production check: %w", err)
+	}
+
 	n.listenerMutex.Lock()
 	for listener := range n.listeners {
 		listener.AfterNodeCreation(node)
