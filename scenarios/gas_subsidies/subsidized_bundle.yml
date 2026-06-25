@@ -13,7 +13,7 @@ network_rules:
 validators:
   - name: local
     instances: 2
-    imagename: "sonic:local" # local submodule, used to test different versions
+    imagename: "Sonic:local" # local submodule, used to test different versions
 
 applications:
 

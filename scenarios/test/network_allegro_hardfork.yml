@@ -11,10 +11,10 @@ duration: 180
 validators:
   - name: validators
     instances: 3
-    imagename: "sonic:latest"
+    imagename: "Sonic:latest"
   - name: validator-v2.0.2
     failing: true
-    imagename: "sonic:v2.0.2"   # this node should stop working after the hardfork
+    imagename: "Sonic:v2.0.2"   # this node should stop working after the hardfork
 
 # Start with the hardfork disabled
 # while enabling the hardfork later
@@ -36,7 +36,7 @@ nodes:
     start: 30
     failing: true
     client:
-      imagename: "sonic:v2.0.2"   # this node should stop working after the hardfork
+      imagename: "Sonic:v2.0.2"   # this node should stop working after the hardfork
   - name: node-latest
     start: 30
 

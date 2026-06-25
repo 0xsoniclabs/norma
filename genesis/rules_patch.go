@@ -97,12 +97,12 @@ func (b BigIntValue) MarshalYAML() (any, error) {
 // Additionally it can be sent serialized using json to change the network rules
 // during execution.
 type NetworkRulesPatch struct {
-	Dag      *DagPatch      `yaml:"dag,omitempty" json:"Dag,omitempty"`
-	Emitter  *EmitterPatch  `yaml:"emitter,omitempty" json:"Emitter,omitempty"`
-	Epochs   *EpochsPatch   `yaml:"epochs,omitempty" json:"Epochs,omitempty"`
-	Blocks   *BlocksPatch   `yaml:"blocks,omitempty" json:"Blocks,omitempty"`
-	Economy  *EconomyPatch  `yaml:"economy,omitempty" json:"Economy,omitempty"`
-	Upgrades *UpgradesPatch `yaml:"upgrades,omitempty" json:"Upgrades,omitempty"`
+	Dag      *DagPatch      `yaml:"Dag,omitempty" json:"Dag,omitempty"`
+	Emitter  *EmitterPatch  `yaml:"Emitter,omitempty" json:"Emitter,omitempty"`
+	Epochs   *EpochsPatch   `yaml:"Epochs,omitempty" json:"Epochs,omitempty"`
+	Blocks   *BlocksPatch   `yaml:"Blocks,omitempty" json:"Blocks,omitempty"`
+	Economy  *EconomyPatch  `yaml:"Economy,omitempty" json:"Economy,omitempty"`
+	Upgrades *UpgradesPatch `yaml:"Upgrades,omitempty" json:"Upgrades,omitempty"`
 }
 
 func NewRulesPatchFromOperaRules(rules opera.Rules) (NetworkRulesPatch, error) {
@@ -141,64 +141,64 @@ func (p *NetworkRulesPatch) PrettyPrint() string {
 }
 
 type DagPatch struct {
-	MaxParents     *uint64 `yaml:"max_parents,omitempty" json:"MaxParents,omitempty"`
-	MaxFreeParents *uint64 `yaml:"max_free_parents,omitempty" json:"MaxFreeParents,omitempty"`
-	MaxExtraData   *uint32 `yaml:"max_extra_data,omitempty" json:"MaxExtraData,omitempty"`
+	MaxParents     *uint64 `yaml:"MaxParents,omitempty" json:"MaxParents,omitempty"`
+	MaxFreeParents *uint64 `yaml:"MaxFreeParents,omitempty" json:"MaxFreeParents,omitempty"`
+	MaxExtraData   *uint32 `yaml:"MaxExtraData,omitempty" json:"MaxExtraData,omitempty"`
 }
 
 type EmitterPatch struct {
-	Interval        *Duration `yaml:"interval,omitempty" json:"Interval,omitempty"`
-	StallThreshold  *Duration `yaml:"stall_threshold,omitempty" json:"StallThreshold,omitempty"`
-	StalledInterval *Duration `yaml:"stalled_interval,omitempty" json:"StalledInterval,omitempty"`
+	Interval        *Duration `yaml:"Interval,omitempty" json:"Interval,omitempty"`
+	StallThreshold  *Duration `yaml:"StallThreshold,omitempty" json:"StallThreshold,omitempty"`
+	StalledInterval *Duration `yaml:"StalledInterval,omitempty" json:"StalledInterval,omitempty"`
 }
 
 type EpochsPatch struct {
-	MaxEpochGas      *uint64   `yaml:"max_epoch_gas,omitempty" json:"MaxEpochGas,omitempty"`
-	MaxEpochDuration *Duration `yaml:"max_epoch_duration,omitempty" json:"MaxEpochDuration,omitempty"`
+	MaxEpochGas      *uint64   `yaml:"MaxEpochGas,omitempty" json:"MaxEpochGas,omitempty"`
+	MaxEpochDuration *Duration `yaml:"MaxEpochDuration,omitempty" json:"MaxEpochDuration,omitempty"`
 }
 
 type BlocksPatch struct {
-	MaxBlockGas             *uint64   `yaml:"max_block_gas,omitempty" json:"MaxBlockGas,omitempty"`
-	MaxEmptyBlockSkipPeriod *Duration `yaml:"max_empty_block_skip_period,omitempty" json:"MaxEmptyBlockSkipPeriod,omitempty"`
+	MaxBlockGas             *uint64   `yaml:"MaxBlockGas,omitempty" json:"MaxBlockGas,omitempty"`
+	MaxEmptyBlockSkipPeriod *Duration `yaml:"MaxEmptyBlockSkipPeriod,omitempty" json:"MaxEmptyBlockSkipPeriod,omitempty"`
 }
 
 type EconomyPatch struct {
-	BlockMissedSlack *uint64        `yaml:"block_missed_slack,omitempty" json:"BlockMissedSlack,omitempty"`
-	Gas              *GasPatch      `yaml:"gas,omitempty" json:"Gas,omitempty"`
-	MinGasPrice      *BigIntValue   `yaml:"min_gas_price,omitempty" json:"MinGasPrice,omitempty"`
-	MinBaseFee       *BigIntValue   `yaml:"min_base_fee,omitempty" json:"MinBaseFee,omitempty"`
-	ShortGasPower    *GasPowerPatch `yaml:"short_gas_power,omitempty" json:"ShortGasPower,omitempty"`
-	LongGasPower     *GasPowerPatch `yaml:"long_gas_power,omitempty" json:"LongGasPower,omitempty"`
+	BlockMissedSlack *uint64        `yaml:"BlockMissedSlack,omitempty" json:"BlockMissedSlack,omitempty"`
+	Gas              *GasPatch      `yaml:"Gas,omitempty" json:"Gas,omitempty"`
+	MinGasPrice      *BigIntValue   `yaml:"MinGasPrice,omitempty" json:"MinGasPrice,omitempty"`
+	MinBaseFee       *BigIntValue   `yaml:"MinBaseFee,omitempty" json:"MinBaseFee,omitempty"`
+	ShortGasPower    *GasPowerPatch `yaml:"ShortGasPower,omitempty" json:"ShortGasPower,omitempty"`
+	LongGasPower     *GasPowerPatch `yaml:"LongGasPower,omitempty" json:"LongGasPower,omitempty"`
 }
 
 type GasPatch struct {
-	MaxEventGas          *uint64 `yaml:"max_event_gas,omitempty" json:"MaxEventGas,omitempty"`
-	EventGas             *uint64 `yaml:"event_gas,omitempty" json:"EventGas,omitempty"`
-	ParentGas            *uint64 `yaml:"parent_gas,omitempty" json:"ParentGas,omitempty"`
-	ExtraDataGas         *uint64 `yaml:"extra_data_gas,omitempty" json:"ExtraDataGas,omitempty"`
-	BlockVotesBaseGas    *uint64 `yaml:"block_votes_base_gas,omitempty" json:"BlockVotesBaseGas,omitempty"`
-	BlockVoteGas         *uint64 `yaml:"block_vote_gas,omitempty" json:"BlockVoteGas,omitempty"`
-	EpochVoteGas         *uint64 `yaml:"epoch_vote_gas,omitempty" json:"EpochVoteGas,omitempty"`
-	MisbehaviourProofGas *uint64 `yaml:"misbehaviour_proof_gas,omitempty" json:"MisbehaviourProofGas,omitempty"`
+	MaxEventGas          *uint64 `yaml:"MaxEventGas,omitempty" json:"MaxEventGas,omitempty"`
+	EventGas             *uint64 `yaml:"EventGas,omitempty" json:"EventGas,omitempty"`
+	ParentGas            *uint64 `yaml:"ParentGas,omitempty" json:"ParentGas,omitempty"`
+	ExtraDataGas         *uint64 `yaml:"ExtraDataGas,omitempty" json:"ExtraDataGas,omitempty"`
+	BlockVotesBaseGas    *uint64 `yaml:"BlockVotesBaseGas,omitempty" json:"BlockVotesBaseGas,omitempty"`
+	BlockVoteGas         *uint64 `yaml:"BlockVoteGas,omitempty" json:"BlockVoteGas,omitempty"`
+	EpochVoteGas         *uint64 `yaml:"EpochVoteGas,omitempty" json:"EpochVoteGas,omitempty"`
+	MisbehaviourProofGas *uint64 `yaml:"MisbehaviourProofGas,omitempty" json:"MisbehaviourProofGas,omitempty"`
 }
 
 type GasPowerPatch struct {
-	AllocPerSec        *uint64   `yaml:"alloc_per_sec,omitempty" json:"AllocPerSec,omitempty"`
-	MaxAllocPeriod     *Duration `yaml:"max_alloc_period,omitempty" json:"MaxAllocPeriod,omitempty"`
-	StartupAllocPeriod *Duration `yaml:"startup_alloc_period,omitempty" json:"StartupAllocPeriod,omitempty"`
-	MinStartupGas      *uint64   `yaml:"min_startup_gas,omitempty" json:"MinStartupGas,omitempty"`
+	AllocPerSec        *uint64   `yaml:"AllocPerSec,omitempty" json:"AllocPerSec,omitempty"`
+	MaxAllocPeriod     *Duration `yaml:"MaxAllocPeriod,omitempty" json:"MaxAllocPeriod,omitempty"`
+	StartupAllocPeriod *Duration `yaml:"StartupAllocPeriod,omitempty" json:"StartupAllocPeriod,omitempty"`
+	MinStartupGas      *uint64   `yaml:"MinStartupGas,omitempty" json:"MinStartupGas,omitempty"`
 }
 
 type UpgradesPatch struct {
-	Berlin                       *bool `yaml:"berlin,omitempty" json:"Berlin,omitempty"`
-	London                       *bool `yaml:"london,omitempty" json:"London,omitempty"`
-	Llr                          *bool `yaml:"llr,omitempty" json:"Llr,omitempty"`
-	Sonic                        *bool `yaml:"sonic,omitempty" json:"Sonic,omitempty"`
-	Allegro                      *bool `yaml:"allegro,omitempty" json:"Allegro,omitempty"`
-	Brio                         *bool `yaml:"brio,omitempty" json:"Brio,omitempty"`
-	SingleProposerBlockFormation *bool `yaml:"single_proposer_block_formation,omitempty" json:"SingleProposerBlockFormation,omitempty"`
-	GasSubsidies                 *bool `yaml:"gas_subsidies,omitempty" json:"GasSubsidies,omitempty"`
-	TransactionBundles           *bool `yaml:"transaction_bundles,omitempty" json:"TransactionBundles,omitempty"`
+	Berlin                       *bool `yaml:"Berlin,omitempty" json:"Berlin,omitempty"`
+	London                       *bool `yaml:"London,omitempty" json:"London,omitempty"`
+	Llr                          *bool `yaml:"Llr,omitempty" json:"Llr,omitempty"`
+	Sonic                        *bool `yaml:"Sonic,omitempty" json:"Sonic,omitempty"`
+	Allegro                      *bool `yaml:"Allegro,omitempty" json:"Allegro,omitempty"`
+	Brio                         *bool `yaml:"Brio,omitempty" json:"Brio,omitempty"`
+	SingleProposerBlockFormation *bool `yaml:"SingleProposerBlockFormation,omitempty" json:"SingleProposerBlockFormation,omitempty"`
+	GasSubsidies                 *bool `yaml:"GasSubsidies,omitempty" json:"GasSubsidies,omitempty"`
+	TransactionBundles           *bool `yaml:"TransactionBundles,omitempty" json:"TransactionBundles,omitempty"`
 }
 
 func ApplyNetworkRulesPatch(rules *opera.Rules, patch NetworkRulesPatch) error {
