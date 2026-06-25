@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
@@ -188,6 +189,8 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 }
 
 // addNodeIntoNetwork connects the node with other nodes in the network, adds it into the list of nodes.
+// It is best-effort: if some existing nodes are unreachable, the new node will
+// still join the network as long as at least one peer connection succeeds.
 func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaNode) error {
 	n.nodesMutex.Lock()
 	defer n.nodesMutex.Unlock()
@@ -196,10 +199,21 @@ func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaN
 	if err != nil {
 		return fmt.Errorf("failed to get node id; %v", err)
 	}
+	var succeeded int
 	for _, other := range n.nodes {
 		if err = other.AddPeer(ctx, id); err != nil {
-			return fmt.Errorf("failed to add peer; %v", err)
+			label := other.GetLabel()
+			if checkErr := other.CheckRunning(ctx); checkErr != nil {
+				slog.Error("node has crashed", "node", label, "status", checkErr)
+			} else {
+				slog.Warn("failed to add peer to node", "node", label, "error", err)
+			}
+		} else {
+			succeeded++
 		}
+	}
+	if len(n.nodes) > 0 && succeeded == 0 {
+		return fmt.Errorf("failed to add peer; no existing node was reachable")
 	}
 	n.nodes[id] = node
 	return nil
@@ -324,7 +338,29 @@ func (n *LocalNetwork) DialRandomRpc() (rpcdriver.Client, error) {
 	if len(reliable) == 0 {
 		reliable = nodes // use failing nodes if there are no reliable nodes
 	}
-	return reliable[rand.Intn(len(reliable))].DialRpc(n.ctx)
+	// Shuffle and try nodes in order, skipping unresponsive ones.
+	perm := rand.Perm(len(reliable))
+	for _, i := range perm {
+		chosen := reliable[i]
+		client, err := chosen.DialRpc(n.ctx)
+		if err != nil {
+			slog.Warn("node unreachable in DialRandomRpc, skipping",
+				"node", chosen.GetLabel(), "error", err)
+			continue
+		}
+		// Verify the connection is actually alive with a quick call.
+		probeCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_, probeErr := client.BlockNumber(probeCtx)
+		cancel()
+		if probeErr != nil {
+			slog.Warn("node not responding in DialRandomRpc, skipping",
+				"node", chosen.GetLabel(), "error", probeErr)
+			client.Close()
+			continue
+		}
+		return client, nil
+	}
+	return nil, fmt.Errorf("no reachable node found among %d active nodes", len(reliable))
 }
 
 func (n *LocalNetwork) ApplyNetworkRules(rules driver.NetworkRules) error {
@@ -345,6 +381,16 @@ func (n *LocalNetwork) AdvanceEpoch(epochIncrement int) error {
 	defer client.Close()
 
 	return network.AdvanceEpoch(client, epochIncrement)
+}
+
+func (n *LocalNetwork) WaitForEpochChange() error {
+	client, err := n.DialRandomRpc()
+	if err != nil {
+		return fmt.Errorf("failed to connect to network: %w", err)
+	}
+	defer client.Close()
+
+	return network.WaitForEpochChange(client)
 }
 
 // treasureAccountPrivateKey is an account with tokens that can be used to

@@ -99,6 +99,9 @@ type Network interface {
 
 	// AdvanceEpoch advances an epoch by the given number.
 	AdvanceEpoch(epochIncrement int) error
+
+	// WaitForEpochChange waits until the epoch changes.
+	WaitForEpochChange() error
 }
 
 // NetworkConfig is a collection of network parameters to be used by factories
