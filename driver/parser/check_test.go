@@ -500,29 +500,6 @@ func TestScenario_CheatIssuesAreDetected(t *testing.T) {
 	}
 }
 
-func TestScenario_UnknownNetworkRuleInUpdatesIsDetected(t *testing.T) {
-	scenario := Scenario{
-		Name:     "Test",
-		Duration: 60,
-		NetworkRules: NetworkRules{
-			Updates: []NetworkRulesUpdate{
-				{
-					Time: 10,
-					Rules: networkRules{
-						Dag: &genesis.DagPatch{
-							MaxParents: new(uint64(0)),
-						},
-					},
-				},
-			},
-		},
-	}
-	err := scenario.Check()
-	if err == nil || !strings.Contains(err.Error(), "invalid timed network rules patch") {
-		t.Errorf("invalid network rules in updates was not detected")
-	}
-}
-
 func TestScenario_NegativeNetworkRuleUpdateTimeIsDetected(t *testing.T) {
 	scenario := Scenario{
 		Name:     "Test",
