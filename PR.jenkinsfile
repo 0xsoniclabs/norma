@@ -1,51 +1,57 @@
 // Norma CI test norma using "make test"
 
 pipeline {
-	agent { label 'x86-8-42-m' }
-	
-	options {
-		timestamps ()
-		timeout(time: 3, unit: 'HOURS')
-		disableConcurrentBuilds(abortPrevious: true)
-	}
+    agent { label 'x86-8-32-l || x86-8-32-m' }
 
-	environment {
-		GOROOT = '/usr/local/go'
-		DOCKER_API_VERSION = 1.45
-		GOMEMLIMIT = '60GiB'
-		GOCACHE = '/mnt/tmp-disk/go-cache'
-		TMPDIR = '/mnt/tmp-disk/'
-	}
+    options {
+        timestamps()
+        timeout(time: 3, unit: 'HOURS')
+        disableConcurrentBuilds(abortPrevious: true)
+    }
 
-	stages {
-	    stage('Prune Docker') {
-	        steps {
-	            sh 'docker builder prune -a -f'
-	            sh 'docker system prune -a -f'
-	        }
-	    }
+    environment {
+        GOROOT = '/usr/local/go'
+        DOCKER_API_VERSION = 1.45
+        GOMEMLIMIT = '60GiB'
+        GOCACHE = '/mnt/tmp-disk/go-cache'
+        TMPDIR = '/mnt/tmp-disk/'
+    }
 
-		stage('Check Norma Format') {
-			steps {
-				catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
-					sh 'diff=`${GOROOT}/bin/gofmt -l \$(find . -type f -name "*.go"| grep -v "/client/")`; echo "$diff"; test -z "$diff"'
-				}
-			}
-		}
+    stages {
 
-		stage('Make Norma') {
-			steps {
-				sh 'make clean'
-				sh 'git submodule update --init --recursive'
-				sh 'make all'
-			}
-		}
+        stage("Pre Clean-up") {
+            steps {
+                sh 'go run ./driver/norma purge'
+            }
+        }
+ 
+        stage('Check Norma Format') {
+            steps {
+                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                    sh 'diff=`${GOROOT}/bin/gofmt -l \$(find . -type f -name "*.go"| grep -v "/client/")`; echo "$diff"; test -z "$diff"'
+                }
+            }
+        }
 
-		stage('Test Norma') {
-			steps {
-			    sh 'cd genesis && go test ./...'
-				sh 'go test ./...  -p 2 --parallel 2 --timeout 30m'
-			}
-		}
-	}
+        stage('Make Norma') {
+            steps {
+                sh 'make clean'
+                sh 'git submodule update --init --recursive'
+                sh 'make all'
+            }
+        }
+
+        stage('Test Norma') {
+            steps {
+                sh 'cd genesis && go test ./...'
+                sh 'go test ./...  -p 2 --parallel 2 --timeout 30m --failfast'
+            }
+        }
+    }
+
+    post {
+        always {
+            sh 'go run ./driver/norma purge'
+        }
+    }
 }
