@@ -18,7 +18,7 @@ duration: 90
 validators:
   - name: validator
     instances: 3
-    imagename: "sonic:local"
+    imagename: "Sonic:local"
 
 # 5s epoch duration for automatic epoch sealing.
 # Brio and bundles start disabled and are enabled after all nodes are upgraded.
@@ -47,7 +47,7 @@ nodes:
     leave: 10
     client:
       type: validator
-      imagename: "sonic:v2.1.6"
+      imagename: "Sonic:v2.1.6"
       data_volume: "vol-1"
       val_id: 4
 
@@ -55,7 +55,7 @@ nodes:
     rejoin: 20
     client:
       type: validator
-      imagename: "sonic:local"
+      imagename: "Sonic:local"
       data_volume: "vol-1"
       val_id: 4
 
@@ -68,7 +68,7 @@ nodes:
     leave: 30
     client:
       type: validator
-      imagename: "sonic:v2.1.6"
+      imagename: "Sonic:v2.1.6"
       data_volume: "vol-2"
       val_id: 5
 
@@ -76,7 +76,7 @@ nodes:
     rejoin: 60
     client:
       type: validator
-      imagename: "sonic:local"
+      imagename: "Sonic:local"
       data_volume: "vol-2"
       val_id: 5
 
