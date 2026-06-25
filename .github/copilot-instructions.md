@@ -21,6 +21,12 @@ These instructions apply to all Go code and tests in this repository.
 - For tests with multiple cases, use table-driven tests.
 - Define test tables as `map[string]fixtureType`.
 
+## Useful commands
+
+- `gofmt -w <file>`: Format a Go file in place.
+- `go test -v -run <test_name> ./... `: Run selected test in the repository with verbose output.
+- `golangci-lint run ./...`: Run linters on the entire repository.
+
 ## Examples
 
 - Single-error call:
