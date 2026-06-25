@@ -222,6 +222,38 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 	return nil
 }
 
+// stepFunctionDescriptions provides a human-readable description for each step function.
+var stepFunctionDescriptions = map[StepFunction]string{
+	FuncStartNode:           "Start a new network node (validator, observer, or rpc).",
+	FuncStopNode:            "Stop a running network node by name.",
+	FuncUndelegate:          "Undelegate stake from a validator node.",
+	FuncUpdateRules:         "Update one or more network rules (key/value pairs).",
+	FuncAdvanceEpoch:        "Advance the network to the next epoch by sending transactions.",
+	FuncWaitForEpoch:        "Wait until the network reaches the next epoch boundary.",
+	FuncRunApp:              "Start a load-generating application.",
+	FuncStopApp:             "Stop a running load-generating application by name.",
+	FuncCheckBlocksProduced: "Assert that all nodes have produced blocks within tolerance.",
+	FuncCheckBlocksHalted:   "Assert that block production has halted on the specified node.",
+	FuncCheckBlockHashes:    "Assert that all nodes agree on the same block hashes.",
+	FuncCheckBlockHeights:   "Assert that all nodes are within tolerance of the same block height.",
+	FuncCheckBlockGasRate:   "Assert that the block gas rate is at or below a ceiling.",
+	FuncWaitFor:             "Pause scenario execution for a fixed duration.",
+}
+
+// paramDescriptions provides a human-readable description for each parameter key.
+var paramDescriptions = map[string]string{
+	"type":       "Node type (\"validator\", \"observer\", \"rpc\") for startNode; application type for runApp.",
+	"imageName":  "Docker image name to use for the node.",
+	"dataVolume": "Docker volume name to mount as the node data directory.",
+	"stake":      "Initial stake amount (uint64) for a validator node.",
+	"instances":  "Number of node instances to start.",
+	"failing":    "When true, the step is expected to fail; a passing result is treated as an error.",
+	"users":      "Number of concurrent user accounts the application should simulate.",
+	"rate":       "Transaction rate configuration for the application.",
+	"ceiling":    "Maximum allowed value (float64) for a check (e.g. gas rate ceiling).",
+	"tolerance":  "Allowed deviation (int, in blocks) between nodes for a height/production check.",
+}
+
 // allowedParams defines which parameter keys are valid for each step function.
 var allowedParams = map[StepFunction][]string{
 	FuncStartNode:           {"type", "imageName", "dataVolume", "stake", "instances", "failing"},
@@ -358,4 +390,38 @@ func (s *SequentialScenario) setDefaults() {
 	if _, explicit := s.InitialRules["MAX_EPOCH_DURATION"]; !explicit {
 		s.InitialRules["MAX_EPOCH_DURATION"] = DefaultMaxEpochDuration
 	}
+}
+
+// PrintSequentialHelp writes a formatted summary of all available sequential
+// scenario step functions, their descriptions, and accepted parameters to w.
+// It returns the first write error encountered, if any.
+func PrintSequentialHelp(w io.Writer) error {
+	ew := &errWriter{w: w}
+	ew.printf("Sequential scenario step functions:\n\n")
+	for _, fn := range allStepFunctions {
+		desc := stepFunctionDescriptions[fn]
+		params := allowedParams[fn]
+		ew.printf("  %-26s %s\n", fn, desc)
+		for _, p := range params {
+			ew.printf("      %-22s %s\n", p+":", paramDescriptions[p])
+		}
+		if len(params) > 0 {
+			ew.printf("\n")
+		}
+	}
+	return ew.err
+}
+
+// errWriter wraps an io.Writer and records the first write error so that
+// callers can chain multiple writes without checking each one individually.
+type errWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (ew *errWriter) printf(format string, args ...any) {
+	if ew.err != nil {
+		return
+	}
+	_, ew.err = fmt.Fprintf(ew.w, format, args...)
 }

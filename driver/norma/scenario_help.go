@@ -17,36 +17,20 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
-	"github.com/0xsoniclabs/norma/driver/globalflags"
+	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/urfave/cli/v2"
 )
 
-// Run with `go run ./driver/norma`
+// Run with `go run ./driver/norma scenario-help`
 
-func main() {
-	app := &cli.App{
-		Name:      "Norma Network Runner",
-		HelpName:  "norma",
-		Usage:     "A set of tools for running network scenarios",
-		Copyright: "(c) 2023 Fantom Foundation",
-		Flags:     globalflags.AllGlobalFlags,
-		Commands: []*cli.Command{
-			&checkCommand,
-			&runCommand,
-			&buildCommand,
-			&purgeCommand,
-			&renderCommand,
-			&diffCommand,
-			&scenarioHelpCommand,
-		},
-		Before: globalflags.ProcessGlobalFlags,
-	}
+var scenarioHelpCommand = cli.Command{
+	Action: scenarioHelp,
+	Name:   "scenario-help",
+	Usage:  "prints available step functions and parameters for sequential scenarios",
+}
 
-	if err := app.Run(os.Args); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+func scenarioHelp(_ *cli.Context) error {
+	return parser.PrintSequentialHelp(os.Stdout)
 }

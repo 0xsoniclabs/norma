@@ -22,6 +22,31 @@ import (
 	"testing"
 )
 
+func TestAllStepFunctionsAreDocumented(t *testing.T) {
+	for _, fn := range allStepFunctions {
+		if desc, ok := stepFunctionDescriptions[fn]; !ok || strings.TrimSpace(desc) == "" {
+			t.Errorf("step function %q has no entry in stepFunctionDescriptions", fn)
+		}
+		if _, ok := allowedParams[fn]; !ok {
+			t.Errorf("step function %q has no entry in allowedParams", fn)
+		}
+	}
+}
+
+func TestAllParamKeysAreDocumented(t *testing.T) {
+	seen := map[string]bool{}
+	for _, params := range allowedParams {
+		for _, p := range params {
+			seen[p] = true
+		}
+	}
+	for p := range seen {
+		if desc, ok := paramDescriptions[p]; !ok || strings.TrimSpace(desc) == "" {
+			t.Errorf("parameter %q has no entry in paramDescriptions", p)
+		}
+	}
+}
+
 func TestParseSequential_MinimalScenario(t *testing.T) {
 	input := `
 Name: Minimal Test
