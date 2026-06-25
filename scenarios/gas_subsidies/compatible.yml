@@ -13,11 +13,11 @@ network_rules:
 
 validators:
   - name: local # local branch, used to test different versions
-    imagename: "sonic:local"
+    imagename: "Sonic:local"
   - name: v2.1 # release branch
-    imagename: "sonic:v2.1"
+    imagename: "Sonic:v2.1"
   - name: v2.1.2 # first version with gas subsidies
-    imagename: "sonic:v2.1.2"
+    imagename: "Sonic:v2.1.2"
 
 applications:
 
