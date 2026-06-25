@@ -78,7 +78,7 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 			}
 
 			for _, node := range nodes {
-				if err := node.Cleanup(t.Context()); err != nil {
+				if err := node.Cleanup(context.Background()); err != nil {
 					t.Errorf("failed to cleanup node: %v", err)
 				}
 			}
@@ -436,7 +436,7 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 				if err := node.Stop(t.Context()); err != nil {
 					t.Errorf("failed to stop node: %v", err)
 				}
-				if err := node.Cleanup(t.Context()); err != nil {
+				if err := node.Cleanup(context.Background()); err != nil {
 					t.Errorf("failed to cleanup node: %v", err)
 				}
 			}
@@ -772,7 +772,7 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	if err := node.Stop(t.Context()); err != nil {
 		t.Fatalf("failed to stop node: %v", err)
 	}
-	if err := node.Cleanup(t.Context()); err != nil {
+	if err := node.Cleanup(context.Background()); err != nil {
 		t.Fatalf("failed to cleanup node: %v", err)
 	}
 

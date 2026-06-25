@@ -18,6 +18,7 @@ package docker
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"os"
 	"strings"
@@ -68,7 +69,7 @@ func TestContainer_StopCanBeCalledMoreThanOnce(t *testing.T) {
 func TestContainer_Cleanup(t *testing.T) {
 	cli, cont := startContainer(t)
 
-	if err := cont.Cleanup(t.Context()); err != nil {
+	if err := cont.Cleanup(context.Background()); err != nil {
 		t.Fatalf("error: %v", err)
 	}
 
@@ -84,7 +85,7 @@ func TestContainer_CleanupCanBeCalledMoreThanOnce(t *testing.T) {
 		t.Errorf("started container is not running")
 	}
 
-	if err := cont.Cleanup(t.Context()); err != nil {
+	if err := cont.Cleanup(context.Background()); err != nil {
 		t.Fatalf("error cleaning up container: %v", err)
 	}
 
@@ -96,7 +97,7 @@ func TestContainer_CleanupCanBeCalledMoreThanOnce(t *testing.T) {
 		t.Errorf("cleaned up container is still running")
 	}
 
-	if err := cont.Cleanup(t.Context()); err != nil {
+	if err := cont.Cleanup(context.Background()); err != nil {
 		t.Fatalf("error calling Cleanup() on cleared container: %v", err)
 	}
 }
@@ -242,7 +243,7 @@ func TestContainer_SendSignal(t *testing.T) {
 func TestNetwork_Cleanup(t *testing.T) {
 	cli, net := createNetwork(t)
 
-	if err := net.Cleanup(t.Context()); err != nil {
+	if err := net.Cleanup(context.Background()); err != nil {
 		t.Fatalf("error: %v", err)
 	}
 
@@ -254,7 +255,7 @@ func TestNetwork_Cleanup(t *testing.T) {
 func TestNetwork_CleanupCanBeCalledMoreThanOnce(t *testing.T) {
 	cli, net := createNetwork(t)
 
-	if err := net.Cleanup(t.Context()); err != nil {
+	if err := net.Cleanup(context.Background()); err != nil {
 		t.Fatalf("error cleaning up network: %v", err)
 	}
 
@@ -262,7 +263,7 @@ func TestNetwork_CleanupCanBeCalledMoreThanOnce(t *testing.T) {
 		t.Fatalf("network should no longer exist: %s", net.id)
 	}
 
-	if err := net.Cleanup(t.Context()); err != nil {
+	if err := net.Cleanup(context.Background()); err != nil {
 		t.Fatalf("error calling Cleanup() on cleared network: %v", err)
 	}
 }
@@ -333,6 +334,7 @@ func startContainer(t *testing.T) (*Client, *Container) {
 
 	timeout := time.Second
 	cont, err := cli.Start(t.Context(), &ContainerConfig{
+		Hostname:        t.Name(),
 		ImageName:       "hello-world",
 		ShutdownTimeout: &timeout,
 	})
@@ -341,7 +343,7 @@ func startContainer(t *testing.T) (*Client, *Container) {
 	}
 
 	t.Cleanup(func() {
-		_ = cont.Cleanup(t.Context())
+		_ = cont.Cleanup(context.Background())
 		_ = cli.Close()
 	})
 
@@ -356,6 +358,7 @@ func startRunningContainer(t *testing.T, dn *Network) (*Client, *Container) {
 
 	timeout := time.Second
 	cont, err := cli.Start(t.Context(), &ContainerConfig{
+		Hostname:        t.Name(),
 		ImageName:       "alpine",                            // use minimal linux image
 		Entrypoint:      []string{"tail", "-f", "/dev/null"}, // keep container running
 		ShutdownTimeout: &timeout,
@@ -366,7 +369,7 @@ func startRunningContainer(t *testing.T, dn *Network) (*Client, *Container) {
 	}
 
 	t.Cleanup(func() {
-		_ = cont.Cleanup(t.Context())
+		_ = cont.Cleanup(context.Background())
 		_ = cli.Close()
 	})
 
@@ -385,7 +388,7 @@ func createNetwork(t *testing.T) (*Client, *Network) {
 	}
 
 	t.Cleanup(func() {
-		_ = net.Cleanup(t.Context())
+		_ = net.Cleanup(context.Background())
 		_ = cli.Close()
 	})
 

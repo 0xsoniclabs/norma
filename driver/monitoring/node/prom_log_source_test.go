@@ -17,6 +17,7 @@
 package nodemon
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"testing"
@@ -95,7 +96,7 @@ func TestLogsIntegrationGetRealMetric(t *testing.T) {
 		_ = client.Close()
 	})
 	node, err := opera.StartOperaDockerNode(t.Context(), client, nil, &opera.OperaNodeConfig{
-		Label:         "test",
+		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())},
 	})
@@ -103,7 +104,7 @@ func TestLogsIntegrationGetRealMetric(t *testing.T) {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := node.Cleanup(t.Context()); err != nil {
+		if err := node.Cleanup(context.Background()); err != nil {
 			t.Errorf("failed to cleanup node: %v", err)
 		}
 	})
@@ -129,7 +130,7 @@ func TestLogsIntegrationGetRealMetric(t *testing.T) {
 		source := NewPromLogSource(monitor, metricKeys)
 		var found bool
 		for i := 0; i < 100; i++ {
-			series, exists := source.GetData("test")
+			series, exists := source.GetData(monitoring.Node(t.Name()))
 			if exists {
 				datapoint := series.GetLatest()
 				if datapoint != nil {
