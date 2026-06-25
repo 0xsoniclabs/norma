@@ -91,7 +91,7 @@ func (s *Step) checkStartNode() error {
 	errs := []error{}
 
 	if s.Identifier == "" {
-		errs = append(errs, fmt.Errorf("Start node requires an identifier (name)"))
+		errs = append(errs, fmt.Errorf("start node requires an identifier (name)"))
 	} else if !NamePattern.Match([]byte(s.Identifier)) {
 		errs = append(errs, fmt.Errorf("node name must match %v, got %v", namePatternStr, s.Identifier))
 	}
@@ -116,7 +116,7 @@ func (s *Step) checkStopNode() error {
 	errs := []error{}
 
 	if s.Identifier == "" {
-		errs = append(errs, fmt.Errorf("Stop node requires an identifier (name)"))
+		errs = append(errs, fmt.Errorf("stop node requires an identifier (name)"))
 	} else if !NamePattern.Match([]byte(s.Identifier)) {
 		errs = append(errs, fmt.Errorf("node name must match %v, got %v", namePatternStr, s.Identifier))
 	}
@@ -128,20 +128,20 @@ func (s *Step) checkRunApp() error {
 	errs := []error{}
 
 	if s.Identifier == "" {
-		errs = append(errs, fmt.Errorf("Run app requires an identifier (name)"))
+		errs = append(errs, fmt.Errorf("run app requires an identifier (name)"))
 	} else if !NamePattern.Match([]byte(s.Identifier)) {
 		errs = append(errs, fmt.Errorf("app name must match %v, got %v", namePatternStr, s.Identifier))
 	}
 
 	appType := s.AppType
 	if appType == "" {
-		errs = append(errs, fmt.Errorf("Run app requires a type"))
+		errs = append(errs, fmt.Errorf("run app requires a type"))
 	} else if !app.IsSupportedApplicationType(appType) {
 		errs = append(errs, fmt.Errorf("unknown application type: %v", appType))
 	}
 
 	if s.Rate == nil {
-		errs = append(errs, fmt.Errorf("Run app requires a rate"))
+		errs = append(errs, fmt.Errorf("run app requires a rate"))
 	} else if err := s.Rate.Check(nil); err != nil {
 		errs = append(errs, err)
 	}
@@ -157,7 +157,7 @@ func (s *Step) checkStopApp() error {
 	errs := []error{}
 
 	if s.Identifier == "" {
-		errs = append(errs, fmt.Errorf("Stop app requires an identifier (name)"))
+		errs = append(errs, fmt.Errorf("stop app requires an identifier (name)"))
 	} else if !NamePattern.Match([]byte(s.Identifier)) {
 		errs = append(errs, fmt.Errorf("app name must match %v, got %v", namePatternStr, s.Identifier))
 	}
@@ -169,7 +169,7 @@ func (s *Step) checkUpdateRules() error {
 	errs := []error{}
 
 	if len(s.Rules) == 0 {
-		errs = append(errs, fmt.Errorf("Update rules requires at least one rule"))
+		errs = append(errs, fmt.Errorf("update rules requires at least one rule"))
 	}
 	for key := range s.Rules {
 		if !genesis.IsSupportedNetworkRule(key) {
