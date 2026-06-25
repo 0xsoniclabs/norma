@@ -195,6 +195,7 @@ func (n *LocalNetwork) addNodeIntoNetwork(node *node.OperaNode) error {
 	if err != nil {
 		return fmt.Errorf("failed to get node id; %v", err)
 	}
+	slog.Info("Adding node into network", "node", node.GetLabel(), "id", id)
 	for _, other := range n.nodes {
 		if err = other.AddPeer(id); err != nil {
 			return fmt.Errorf("failed to add peer; %v", err)
@@ -213,6 +214,8 @@ func (n *LocalNetwork) WaitForBlockProduction(ctx context.Context) error {
 		nodes = append(nodes, nd)
 	}
 	n.nodesMutex.Unlock()
+
+	slog.Info("waiting for block production on all nodes", "count", len(nodes))
 
 	type result struct {
 		label string
@@ -233,6 +236,11 @@ func (n *LocalNetwork) WaitForBlockProduction(ctx context.Context) error {
 		if r.err != nil {
 			errs = append(errs, fmt.Errorf("node %s: %w", r.label, r.err))
 		}
+	}
+	if len(errs) > 0 {
+		slog.Error("block production check failed for some nodes", "failures", len(errs))
+	} else {
+		slog.Info("all nodes confirmed block production", "count", len(nodes))
 	}
 	return errors.Join(errs...)
 }

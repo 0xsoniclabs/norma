@@ -213,6 +213,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		genesisJSONPath = *config.GenesisJsonPath
 	}
 
+	slog.Info("Starting Opera node", "label", config.Label, "image", image, "validatorId", validatorId, "genesisJsonPath", genesisJSONPath)
 	host, err := network.RetryReturn(ctx, network.DefaultRetryAttempts, 1*time.Second, func() (*docker.Container, error) {
 		ports, err := network.GetFreePorts(len(operaServices.Services()))
 		if err != nil {
@@ -295,6 +296,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 	if err != nil {
 		return nil, err
 	}
+	slog.Info("Opera node started", "label", config.Label, "hostname", host.Hostname())
 
 	// Use a private copy of the config to avoid modifying the original.
 	nodeConfig := *config
@@ -315,6 +317,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		tempDirs:  tempDirs,
 	}
 
+	slog.Info("Waiting for Opera node to be ready", "label", config.Label, "hostname", host.Hostname())
 	// Wait until the OperaNode inside the Container is ready.
 	err = network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second, func() error {
 		if err := node.host.CheckRunning(); err != nil {
@@ -414,6 +417,7 @@ func (n *OperaNode) StreamLog() (io.ReadCloser, error) {
 // strictly increasing block indices are observed. The provided context controls
 // the deadline; if it expires before the condition is met, an error is returned.
 func (n *OperaNode) CheckBlockProducing(ctx context.Context) error {
+	slog.Info("checking block production", "node", n.GetLabel())
 	reader, err := n.StreamLog()
 	if err != nil {
 		return fmt.Errorf("failed to stream log for block production check: %w", err)
@@ -441,6 +445,7 @@ func (n *OperaNode) CheckBlockProducing(ctx context.Context) error {
 				continue
 			}
 			if idx > lastIndex {
+				slog.Debug("observed block", "node", n.GetLabel(), "index", idx, "seen", seen+1)
 				lastIndex = idx
 				seen++
 			}
@@ -457,8 +462,10 @@ func (n *OperaNode) CheckBlockProducing(ctx context.Context) error {
 
 	select {
 	case <-done:
+		slog.Info("block production confirmed", "node", n.GetLabel())
 		return scanErr
 	case <-ctx.Done():
+		slog.Warn("block production check timed out", "node", n.GetLabel())
 		if err := reader.Close(); err != nil {
 			slog.Error("failed to close log stream", "node", n.GetLabel(), "error", err)
 		}
