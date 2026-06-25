@@ -1,0 +1,45 @@
+# This scenario demonstrates all available check functions.
+
+Name: All Checks Test
+
+InitialNetworkRules:
+  MAX_EPOCH_DURATION: 10s
+
+Scenario:
+  - startNode: validator
+    type: validator
+    instances: 3
+
+  - runApp: load
+    type: counter
+    users: 50
+    rate:
+      constant: 20
+
+  - waitFor: 15s
+
+  # Verify blocks are being produced (block height increases
+  # within a rolling window of samples).
+  - checkBlocksProduced:
+    tolerance: 10
+
+  # Verify all nodes agree on block hashes.
+  - checkBlockHashes
+
+  # Verify block heights across nodes are within tolerance.
+  - checkBlockHeights:
+    tolerance: 5
+
+  # Verify block gas rate does not exceed the ceiling.
+  - checkBlockGasRate:
+    ceiling: 1000000000000000
+
+  - stopApp: load
+
+  # Stop all validators so blocks genuinely halt.
+  - stopNode: validator
+
+  - waitFor: 15s
+
+  # Verify blocks have halted (monitoring data is stale after stopNode).
+  - checkBlocksHalted

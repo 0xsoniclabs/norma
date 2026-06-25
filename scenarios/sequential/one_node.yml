@@ -1,0 +1,8 @@
+Name: Single Node Test
+
+Scenario:
+  - startNode: validator-latest
+    type: validator
+    instances: 1
+
+  - waitFor: 10s
