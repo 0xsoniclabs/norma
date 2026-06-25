@@ -378,9 +378,18 @@ func ParseSequentialFile(path string) (scenario SequentialScenario, err error) {
 	return ParseSequential(reader)
 }
 
+// DefaultMaxEpochDuration is applied to sequential scenarios that do not
+// explicitly set MaxEpochDuration in their InitialNetworkRules.Epochs.
+const DefaultMaxEpochDuration = 15 * time.Second
+
 // setDefaults sets default values on the sequential scenario.
 func (s *SequentialScenario) setDefaults() {
-	ensureDefaultEpochDuration(&s.InitialRules)
+	if s.InitialRules.Epochs == nil {
+		s.InitialRules.Epochs = &genesis.EpochsPatch{}
+	}
+	if s.InitialRules.Epochs.MaxEpochDuration == nil {
+		s.InitialRules.Epochs.MaxEpochDuration = genesis.NewDuration(DefaultMaxEpochDuration)
+	}
 }
 
 // PrintSequentialHelp writes a formatted summary of all available sequential
