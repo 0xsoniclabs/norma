@@ -17,6 +17,7 @@
 package parser
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -33,10 +34,8 @@ func (s *SequentialScenario) Check() error {
 		errs = append(errs, fmt.Errorf("scenario name must not be empty"))
 	}
 	// Validate initial network rules.
-	for key := range s.InitialRules {
-		if !genesis.IsSupportedNetworkRule(key) {
-			errs = append(errs, fmt.Errorf("unknown network rule in initial rules: %v", key))
-		}
+	if err := genesis.ValidateNetworkRulesPatch(s.InitialRules); err != nil {
+		errs = append(errs, fmt.Errorf("invalid initial network rules: %w", err))
 	}
 
 	// Validate each step.
@@ -168,13 +167,9 @@ func (s *Step) checkStopApp() error {
 func (s *Step) checkUpdateRules() error {
 	errs := []error{}
 
-	if len(s.Rules) == 0 {
-		errs = append(errs, fmt.Errorf("update rules requires at least one rule"))
-	}
-	for key := range s.Rules {
-		if !genesis.IsSupportedNetworkRule(key) {
-			errs = append(errs, fmt.Errorf("unknown network rule: %v", key))
-		}
+	b, err := json.Marshal(s.Rules)
+	if err != nil || string(b) == "{}" {
+		errs = append(errs, fmt.Errorf("Update rules requires at least one rule"))
 	}
 
 	return errors.Join(errs...)

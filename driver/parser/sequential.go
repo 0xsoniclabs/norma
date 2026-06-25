@@ -25,6 +25,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/0xsoniclabs/norma/genesis"
 	"gopkg.in/yaml.v3"
 )
 
@@ -79,9 +80,9 @@ func toStepFunction(s string) (StepFunction, error) {
 // SequentialScenario is the root element of a sequential scenario description.
 // Unlike the time-based Scenario, it defines an ordered list of blocking steps.
 type SequentialScenario struct {
-	Name         string            `yaml:"Name"`
-	InitialRules map[string]string `yaml:"InitialNetworkRules"`
-	Steps        []Step            `yaml:"Scenario"`
+	Name         string                    `yaml:"Name"`
+	InitialRules genesis.NetworkRulesPatch `yaml:"InitialNetworkRules"`
+	Steps        []Step                    `yaml:"Scenario"`
 }
 
 // Step is a single blocking operation in a sequential scenario.
@@ -106,7 +107,7 @@ type Step struct {
 	Rate    *Rate
 
 	// Update rules parameters
-	Rules map[string]string
+	Rules genesis.NetworkRulesPatch
 
 	// Check parameters
 	Ceiling   *float64
@@ -184,16 +185,15 @@ func (s *Step) unmarshalMapping(node *yaml.Node) error {
 func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 	switch fn {
 	case FuncUpdateRules:
-		// Value is a map of rules.
+		// Value is a NetworkRulesPatch mapping.
 		if val.Kind == yaml.MappingNode {
-			s.Rules = make(map[string]string)
-			for i := 0; i < len(val.Content); i += 2 {
-				k := val.Content[i].Value
-				v := val.Content[i+1].Value
-				s.Rules[k] = v
+			var patch genesis.NetworkRulesPatch
+			if err := val.Decode(&patch); err != nil {
+				return fmt.Errorf("invalid updateRules value: %w", err)
 			}
+			s.Rules = patch
 		} else if val.Tag != "!!null" && val.Value != "" {
-			return fmt.Errorf("update rules value must be a mapping, got %q", val.Value)
+			return fmt.Errorf("updateRules value must be a mapping, got %q", val.Value)
 		}
 	case FuncAdvanceEpoch, FuncWaitForEpoch:
 		// These take no value (or null).
@@ -379,16 +379,16 @@ func ParseSequentialFile(path string) (scenario SequentialScenario, err error) {
 }
 
 // DefaultMaxEpochDuration is applied to sequential scenarios that do not
-// explicitly set MAX_EPOCH_DURATION in their InitialNetworkRules.
-const DefaultMaxEpochDuration = "15s"
+// explicitly set MaxEpochDuration in their InitialNetworkRules.Epochs.
+const DefaultMaxEpochDuration = 15 * time.Second
 
 // setDefaults sets default values on the sequential scenario.
 func (s *SequentialScenario) setDefaults() {
-	if s.InitialRules == nil {
-		s.InitialRules = make(map[string]string)
+	if s.InitialRules.Epochs == nil {
+		s.InitialRules.Epochs = &genesis.EpochsPatch{}
 	}
-	if _, explicit := s.InitialRules["MAX_EPOCH_DURATION"]; !explicit {
-		s.InitialRules["MAX_EPOCH_DURATION"] = DefaultMaxEpochDuration
+	if s.InitialRules.Epochs.MaxEpochDuration == nil {
+		s.InitialRules.Epochs.MaxEpochDuration = genesis.NewDuration(DefaultMaxEpochDuration)
 	}
 }
 

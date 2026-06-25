@@ -13,8 +13,9 @@
 Name: Advance Epoch Test
 
 InitialNetworkRules:
-  MAX_EPOCH_DURATION: 100s
-  MAX_EPOCH_GAS: 1000000000
+  Epochs:
+    MaxEpochDuration: 100s
+    MaxEpochGas: 1000000000
 
 Scenario:
   - startNode: validator
