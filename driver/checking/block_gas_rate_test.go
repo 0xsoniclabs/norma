@@ -28,7 +28,7 @@ func TestBlocksGasRate_Success(t *testing.T) {
 			monitor.EXPECT().GetBlockGasRate().Return(series)
 
 			c := blockGasRateChecker{monitor: monitor, ceiling: 30}
-			if err := c.Check(); err != nil {
+			if err := c.Check(t.Context()); err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
@@ -52,7 +52,7 @@ func TestBlocksGasRate_Failure(t *testing.T) {
 			monitor.EXPECT().GetBlockGasRate().Return(series)
 
 			c := blockGasRateChecker{monitor: monitor, ceiling: 30}
-			if err := c.Check(); err == nil || !strings.Contains(err.Error(), "exceeded gas ceiling") {
+			if err := c.Check(t.Context()); err == nil || !strings.Contains(err.Error(), "exceeded gas ceiling") {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
@@ -67,25 +67,25 @@ func TestBlocksGasRate_Configure(t *testing.T) {
 
 	// original will fail because gas rates exceed 30
 	original := blockGasRateChecker{monitor: monitor, ceiling: 30}
-	if err := original.Check(); err == nil || !strings.Contains(err.Error(), "exceeded gas ceiling") {
+	if err := original.Check(t.Context()); err == nil || !strings.Contains(err.Error(), "exceeded gas ceiling") {
 		t.Errorf("not caught: exceeded gas ceiling; %v", err)
 	}
 
 	// emptyOriginal has the same behavior as original
 	emptyOriginal := original.Configure(CheckerConfig{})
-	if err := emptyOriginal.Check(); err == nil || !strings.Contains(err.Error(), "exceeded gas ceiling") {
+	if err := emptyOriginal.Check(t.Context()); err == nil || !strings.Contains(err.Error(), "exceeded gas ceiling") {
 		t.Errorf("not caught: exceeded gas ceiling; %v", err)
 	}
 
 	// success will pass because ceiling is now 50
 	success := original.Configure(CheckerConfig{"ceiling": 50})
-	if err := success.Check(); err != nil {
+	if err := success.Check(t.Context()); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
 	// emptySuccess has the same behavior as success
 	emptySuccess := success.Configure(CheckerConfig{})
-	if err := emptySuccess.Check(); err != nil {
+	if err := emptySuccess.Check(t.Context()); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

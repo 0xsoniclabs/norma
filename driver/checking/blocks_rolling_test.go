@@ -37,7 +37,7 @@ func TestBlocksRolling_Blocks_Processed(t *testing.T) {
 			monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
 
 			c := blocksRollingChecker{monitor: monitor, toleranceSamples: 5}
-			if err := c.Check(); err != nil {
+			if err := c.Check(t.Context()); err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
@@ -80,7 +80,7 @@ func TestBlocksRolling_Blocks_Failure(t *testing.T) {
 			monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
 
 			c := blocksRollingChecker{monitor: monitor, toleranceSamples: 5}
-			if err := c.Check(); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
+			if err := c.Check(t.Context()); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
@@ -97,14 +97,14 @@ func TestBlocksRolling_Blocks_WithStarts(t *testing.T) {
 	checker := blocksRollingChecker{monitor: monitor, toleranceSamples: 5}
 	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
 	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
-	if err := checker.Check(); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
+	if err := checker.Check(t.Context()); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
 		t.Errorf("unexpected error: %v", err)
 	}
 
 	configured := checker.Configure(CheckerConfig{"start": 5})
 	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
 	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
-	if err := configured.Check(); err != nil {
+	if err := configured.Check(t.Context()); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -118,25 +118,25 @@ func TestBlocksRolling_Configure(t *testing.T) {
 
 	// original returns error because it sees 1, 1, 1, 1, 1
 	original := blocksRollingChecker{monitor: monitor, toleranceSamples: 5}
-	if err := original.Check(); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
+	if err := original.Check(t.Context()); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
 		t.Errorf("not caught: network is down; %v", err)
 	}
 
 	// emptyOriginal has the same behavior as original
 	emptyOriginal := original.Configure(CheckerConfig{})
-	if err := emptyOriginal.Check(); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
+	if err := emptyOriginal.Check(t.Context()); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
 		t.Errorf("not caught: network is down; %v", err)
 	}
 
 	// success will pass because it sees the entire series 1->6
 	success := original.Configure(CheckerConfig{"tolerance": 10})
-	if err := success.Check(); err != nil {
+	if err := success.Check(t.Context()); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
 	// emptySuccess has the same behavior as success
 	emptySuccess := success.Configure(CheckerConfig{})
-	if err := emptySuccess.Check(); err != nil {
+	if err := emptySuccess.Check(t.Context()); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

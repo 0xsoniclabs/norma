@@ -42,7 +42,7 @@ type Prometheus struct {
 }
 
 // Start starts a Prometheus instance in a Docker container.
-func Start(net driver.Network, dn *docker.Network) (*Prometheus, error) {
+func Start(ctx context.Context, net driver.Network, dn *docker.Network) (*Prometheus, error) {
 	timeout := 1 * time.Second
 
 	client, err := docker.NewClient()
@@ -56,14 +56,16 @@ func Start(net driver.Network, dn *docker.Network) (*Prometheus, error) {
 	}
 
 	// start the container
-	container, err := client.Start(&docker.ContainerConfig{
-		ImageName:       prometheusImage,
-		ShutdownTimeout: &timeout,
-		PortForwarding: map[network.Port]network.Port{
-			PrometheusPort: ports[0],
-		},
-		Network: dn,
-	})
+	container, err := client.Start(
+		ctx,
+		&docker.ContainerConfig{
+			ImageName:       prometheusImage,
+			ShutdownTimeout: &timeout,
+			PortForwarding: map[network.Port]network.Port{
+				PrometheusPort: ports[0],
+			},
+			Network: dn,
+		})
 	if err != nil {
 		return nil, err
 	}
@@ -77,19 +79,20 @@ func Start(net driver.Network, dn *docker.Network) (*Prometheus, error) {
 	// initialize the config
 	err = prometheus.initializeConfig()
 	if err != nil {
-		_ = container.Cleanup()
+		_ = container.Cleanup(ctx)
 		return nil, err
 	}
 
 	// wait until the prometheus inside the Container is ready.
 	// this is necessary for SIGHUP signal to be delivered correctly
-	if err := network.Retry(context.Background(), network.DefaultRetryAttempts, 1*time.Second, func() error {
-		resp, err := http.Get(prometheus.GetUrl() + "/-/ready")
-		if err == nil && resp.StatusCode != http.StatusOK {
-			err = fmt.Errorf("not yet HTTP OK")
-		}
-		return err
-	}); err == nil {
+	if err := network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second,
+		func(ctx context.Context) error {
+			resp, err := http.Get(prometheus.GetUrl() + "/-/ready")
+			if err == nil && resp.StatusCode != http.StatusOK {
+				err = fmt.Errorf("not yet HTTP OK")
+			}
+			return err
+		}); err == nil {
 		slog.Info("started Prometheus", "url", prometheus.GetUrl())
 
 		// listen for new Nodes
@@ -104,7 +107,7 @@ func Start(net driver.Network, dn *docker.Network) (*Prometheus, error) {
 	}
 
 	// if we reach this point, the prometheus instance is not ready
-	_ = container.Cleanup()
+	_ = container.Cleanup(ctx)
 	return nil, fmt.Errorf("prometheus instance is not ready")
 }
 
@@ -114,7 +117,9 @@ func (p *Prometheus) AddNode(node driver.Node) error {
 	if err != nil {
 		return err
 	}
+	ctx := context.Background()
 	_, err = p.container.Exec(
+		ctx,
 		[]string{"sh", "-c", fmt.Sprintf("echo '%s' > /etc/prometheus/opera-%s.json", cfg, node.Hostname())})
 	if err != nil {
 		return err
@@ -126,7 +131,7 @@ func (p *Prometheus) AddNode(node driver.Node) error {
 // Shutdown shuts down the Prometheus instance.
 func (p *Prometheus) Shutdown() error {
 	p.net.UnregisterListener(p)
-	return p.container.Cleanup()
+	return p.container.Cleanup(context.Background())
 }
 
 // GetUrl returns the URL of the Prometheus instance.
@@ -153,12 +158,15 @@ func (p *Prometheus) AfterApplicationCreation(driver.Application) {
 // initializeConfig initializes the Prometheus configuration file by echoing config content
 // into container's config location.
 func (p *Prometheus) initializeConfig() error {
+	ctx := context.Background()
 	_, err := p.container.Exec(
+		ctx,
 		[]string{"sh", "-c", fmt.Sprintf("echo '%s' > /etc/prometheus/prometheus.yml", promCfg)})
 	return err
 }
 
 // reloadConfig reloads the Prometheus configuration by sending "SIGHUP" signal.
 func (p *Prometheus) reloadConfig() error {
-	return p.container.SendSignal(docker.SigHup)
+	ctx := context.Background()
+	return p.container.SendSignal(ctx, docker.SigHup)
 }

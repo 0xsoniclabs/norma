@@ -16,12 +16,14 @@
 
 package driver
 
+import "context"
+
 //go:generate mockgen -source application.go -destination application_mock.go -package driver
 
 // Application is an abstraction of an application running on a Norma net.
 type Application interface {
 	// Start begins producing load on the network as configured for this app.
-	Start() error
+	Start(context.Context) error
 	// Stop terminates the load production.
 	Stop() error
 

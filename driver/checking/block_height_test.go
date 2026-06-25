@@ -50,9 +50,9 @@ func TestBlockHeightCheckerValid(t *testing.T) {
 			rpc1 := rpc.NewMockClient(ctrl)
 			rpc2 := rpc.NewMockClient(ctrl)
 			net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
-			node1.EXPECT().DialRpc().MinTimes(1).Return(rpc1, nil)
+			node1.EXPECT().DialRpc(gomock.Any()).MinTimes(1).Return(rpc1, nil)
 			node1.EXPECT().IsExpectedFailure().AnyTimes()
-			node2.EXPECT().DialRpc().MinTimes(1).Return(rpc2, nil)
+			node2.EXPECT().DialRpc(gomock.Any()).MinTimes(1).Return(rpc2, nil)
 			node2.EXPECT().IsExpectedFailure().AnyTimes()
 			node1.EXPECT().GetLabel().AnyTimes().Return("node1")
 			node2.EXPECT().GetLabel().AnyTimes().Return("node2")
@@ -63,7 +63,7 @@ func TestBlockHeightCheckerValid(t *testing.T) {
 			rpc2.EXPECT().Close()
 
 			checker := blockHeightChecker{net: net, slack: test.slack}
-			if err := checker.Configure(test.config).Check(); err != nil {
+			if err := checker.Configure(test.config).Check(t.Context()); err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
@@ -95,9 +95,9 @@ func TestBlockHeightCheckerInvalid_WithSlack(t *testing.T) {
 			rpc1 := rpc.NewMockClient(ctrl)
 			rpc2 := rpc.NewMockClient(ctrl)
 			net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
-			node1.EXPECT().DialRpc().MinTimes(1).Return(rpc1, nil)
+			node1.EXPECT().DialRpc(gomock.Any()).MinTimes(1).Return(rpc1, nil)
 			node1.EXPECT().IsExpectedFailure().AnyTimes()
-			node2.EXPECT().DialRpc().MinTimes(1).Return(rpc2, nil)
+			node2.EXPECT().DialRpc(gomock.Any()).MinTimes(1).Return(rpc2, nil)
 			node2.EXPECT().IsExpectedFailure().AnyTimes()
 			node1.EXPECT().GetLabel().AnyTimes().Return("node1")
 			node2.EXPECT().GetLabel().AnyTimes().Return("node2")
@@ -108,7 +108,7 @@ func TestBlockHeightCheckerInvalid_WithSlack(t *testing.T) {
 			rpc2.EXPECT().Close()
 
 			checker := blockHeightChecker{net: net, slack: test.slack}
-			if err := checker.Configure(test.config).Check(); err == nil || !strings.Contains(err.Error(), "reports too old block") {
+			if err := checker.Configure(test.config).Check(t.Context()); err == nil || !strings.Contains(err.Error(), "reports too old block") {
 				t.Errorf("Block Height check should failed, got: %v", err)
 			}
 		})
@@ -122,12 +122,12 @@ func TestBlockHeight_ExpectedFailingNode(t *testing.T) {
 
 	node1 := driver.NewMockNode(ctrl)
 	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
-	node1.EXPECT().DialRpc().Return(rpc, nil)
+	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc, nil)
 	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
 
 	node2 := driver.NewMockNode(ctrl)
 	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
-	node2.EXPECT().DialRpc().Return(rpc, nil)
+	node2.EXPECT().DialRpc(gomock.Any()).Return(rpc, nil)
 	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
 
 	net := driver.NewMockNetwork(ctrl)
@@ -139,7 +139,7 @@ func TestBlockHeight_ExpectedFailingNode(t *testing.T) {
 	)
 
 	c := blockHeightChecker{net: net}
-	if err := c.Check(); err != nil {
+	if err := c.Check(t.Context()); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -151,12 +151,12 @@ func TestBlockHeight_NoFailure_When_Expected(t *testing.T) {
 
 	node1 := driver.NewMockNode(ctrl)
 	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
-	node1.EXPECT().DialRpc().Return(rpc, nil)
+	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc, nil)
 	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
 
 	node2 := driver.NewMockNode(ctrl)
 	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
-	node2.EXPECT().DialRpc().Return(rpc, nil)
+	node2.EXPECT().DialRpc(gomock.Any()).Return(rpc, nil)
 	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
 
 	net := driver.NewMockNetwork(ctrl)
@@ -168,7 +168,7 @@ func TestBlockHeight_NoFailure_When_Expected(t *testing.T) {
 	)
 
 	c := blockHeightChecker{net: net}
-	if err := c.Check(); err == nil || !strings.Contains(err.Error(), "unexpected failure set to provide the block height") {
+	if err := c.Check(t.Context()); err == nil || !strings.Contains(err.Error(), "unexpected failure set to provide the block height") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

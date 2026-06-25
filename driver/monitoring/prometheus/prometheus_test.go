@@ -18,6 +18,7 @@ package prometheusmon
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -75,29 +76,30 @@ func TestNodeCanBeAdded(t *testing.T) {
 		t.Fatalf("error: %v", err)
 	}
 	// wait for prometheus to reload config
-	err := network.Retry(t.Context(), network.DefaultRetryAttempts, 1*time.Second, func() error {
-		// verify node is added by calling prometheus API
-		resp, err := http.Get(prom.GetUrl() + "/api/v1/targets")
-		if err != nil {
-			return err
-		}
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("status code not HTTP OK: %d", resp.StatusCode)
-		}
+	err := network.Retry(t.Context(), network.DefaultRetryAttempts, 1*time.Second,
+		func(context.Context) error {
+			// verify node is added by calling prometheus API
+			resp, err := http.Get(prom.GetUrl() + "/api/v1/targets")
+			if err != nil {
+				return err
+			}
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("status code not HTTP OK: %d", resp.StatusCode)
+			}
 
-		// check response contains the node's label
-		rawResponse, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-		_ = resp.Body.Close()
+			// check response contains the node's label
+			rawResponse, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+			_ = resp.Body.Close()
 
-		if bytes.Contains(rawResponse, []byte(node.GetLabel())) {
-			return fmt.Errorf("response does not contain Node Label: %s", rawResponse)
-		}
+			if bytes.Contains(rawResponse, []byte(node.GetLabel())) {
+				return fmt.Errorf("response does not contain Node Label: %s", rawResponse)
+			}
 
-		return nil
-	})
+			return nil
+		})
 
 	if err != nil {
 		t.Fatalf("node '%s' not added into prometheus: %s", node.GetLabel(), err)
@@ -106,7 +108,7 @@ func TestNodeCanBeAdded(t *testing.T) {
 
 // startPrometheus starts a prometheus node and returns it.
 func startPrometheus(t *testing.T, net *local.LocalNetwork) *Prometheus {
-	prom, err := Start(net, net.GetDockerNetwork())
+	prom, err := Start(t.Context(), net, net.GetDockerNetwork())
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}

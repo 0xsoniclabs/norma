@@ -33,9 +33,9 @@ func TestBlockHashesCheckerValid(t *testing.T) {
 	node2 := driver.NewMockNode(ctrl)
 	rpc := rpc.NewMockClient(ctrl)
 	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
-	node1.EXPECT().DialRpc().MinTimes(1).Return(rpc, nil)
+	node1.EXPECT().DialRpc(gomock.Any()).MinTimes(1).Return(rpc, nil)
 	node1.EXPECT().IsExpectedFailure().AnyTimes()
-	node2.EXPECT().DialRpc().MinTimes(1).Return(rpc, nil)
+	node2.EXPECT().DialRpc(gomock.Any()).MinTimes(1).Return(rpc, nil)
 	node2.EXPECT().IsExpectedFailure().AnyTimes()
 	result := blockHashes{
 		Hash:         common.Hash{0x11},
@@ -48,7 +48,7 @@ func TestBlockHashesCheckerValid(t *testing.T) {
 		rpc.EXPECT().Close().Times(2),
 	)
 	c := blocksHashesChecker{net: net}
-	err := c.Check()
+	err := c.Check(t.Context())
 	if err != nil {
 		t.Errorf("unexpected error from blocksHashesChecker: %v", err)
 	}
@@ -62,9 +62,9 @@ func TestBlockHashesCheckerInvalidStateRoot(t *testing.T) {
 	rpc1 := rpc.NewMockClient(ctrl)
 	rpc2 := rpc.NewMockClient(ctrl)
 	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
-	node1.EXPECT().DialRpc().MinTimes(1).Return(rpc1, nil)
+	node1.EXPECT().DialRpc(gomock.Any()).MinTimes(1).Return(rpc1, nil)
 	node1.EXPECT().IsExpectedFailure().AnyTimes()
-	node2.EXPECT().DialRpc().MinTimes(1).Return(rpc2, nil)
+	node2.EXPECT().DialRpc(gomock.Any()).MinTimes(1).Return(rpc2, nil)
 	node2.EXPECT().IsExpectedFailure().AnyTimes()
 	result1 := blockHashes{
 		Hash:         common.Hash{0x11},
@@ -84,7 +84,7 @@ func TestBlockHashesCheckerInvalidStateRoot(t *testing.T) {
 	rpc2.EXPECT().Close()
 
 	c := blocksHashesChecker{net: net}
-	err := c.Check()
+	err := c.Check(t.Context())
 	if err.Error() != "stateRoot of the block 3 does not match" {
 		t.Errorf("unexpected error from blocksHashesChecker: %v", err)
 	}
@@ -100,11 +100,11 @@ func TestBlockHashesCheckerInvalidLastBlock(t *testing.T) {
 	rpc2 := rpc.NewMockClient(ctrl)
 	rpc3 := rpc.NewMockClient(ctrl)
 	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2, node3})
-	node1.EXPECT().DialRpc().MinTimes(1).Return(rpc1, nil)
+	node1.EXPECT().DialRpc(gomock.Any()).MinTimes(1).Return(rpc1, nil)
 	node1.EXPECT().IsExpectedFailure().AnyTimes()
-	node2.EXPECT().DialRpc().MinTimes(1).Return(rpc2, nil)
+	node2.EXPECT().DialRpc(gomock.Any()).MinTimes(1).Return(rpc2, nil)
 	node2.EXPECT().IsExpectedFailure().AnyTimes()
-	node3.EXPECT().DialRpc().MinTimes(1).Return(rpc3, nil)
+	node3.EXPECT().DialRpc(gomock.Any()).MinTimes(1).Return(rpc3, nil)
 	node3.EXPECT().IsExpectedFailure().AnyTimes()
 	result1 := blockHashes{
 		Hash:         common.Hash{0x11},
@@ -132,7 +132,7 @@ func TestBlockHashesCheckerInvalidLastBlock(t *testing.T) {
 	rpc3.EXPECT().Close()
 
 	c := blocksHashesChecker{net: net}
-	err := c.Check()
+	err := c.Check(t.Context())
 	if err.Error() != "receiptsRoot of the block 3 does not match" {
 		t.Errorf("unexpected error from blocksHashesChecker: %v", err)
 	}
@@ -148,12 +148,12 @@ func TestBlockHashes_ExpectedFailingNode(t *testing.T) {
 
 	node1 := driver.NewMockNode(ctrl)
 	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
-	node1.EXPECT().DialRpc().Return(rpc1, nil)
+	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc1, nil)
 	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
 
 	node2 := driver.NewMockNode(ctrl)
 	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
-	node2.EXPECT().DialRpc().Return(rpc2, nil)
+	node2.EXPECT().DialRpc(gomock.Any()).Return(rpc2, nil)
 	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
 
 	net := driver.NewMockNetwork(ctrl)
@@ -185,7 +185,7 @@ func TestBlockHashes_ExpectedFailingNode(t *testing.T) {
 	)
 
 	c := blocksHashesChecker{net: net}
-	if err := c.Check(); err != nil {
+	if err := c.Check(t.Context()); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -200,12 +200,12 @@ func TestBlockHashes_NoFailure_When_Expected(t *testing.T) {
 
 	node1 := driver.NewMockNode(ctrl)
 	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
-	node1.EXPECT().DialRpc().Return(rpc1, nil)
+	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc1, nil)
 	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
 
 	node2 := driver.NewMockNode(ctrl)
 	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
-	node2.EXPECT().DialRpc().Return(rpc2, nil)
+	node2.EXPECT().DialRpc(gomock.Any()).Return(rpc2, nil)
 	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
 
 	net := driver.NewMockNetwork(ctrl)
@@ -232,7 +232,7 @@ func TestBlockHashes_NoFailure_When_Expected(t *testing.T) {
 	)
 
 	c := blocksHashesChecker{net: net}
-	if err := c.Check(); err == nil || !strings.Contains(err.Error(), "unexpected failure set to provide the block hashes") {
+	if err := c.Check(t.Context()); err == nil || !strings.Contains(err.Error(), "unexpected failure set to provide the block hashes") {
 		t.Errorf("unexpected success")
 	}
 }
@@ -247,12 +247,12 @@ func TestBlockHashes_NoFailure_Diff_Block_Height(t *testing.T) {
 
 	node1 := driver.NewMockNode(ctrl)
 	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
-	node1.EXPECT().DialRpc().Return(rpc1, nil)
+	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc1, nil)
 	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
 
 	node2 := driver.NewMockNode(ctrl)
 	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
-	node2.EXPECT().DialRpc().Return(rpc2, nil)
+	node2.EXPECT().DialRpc(gomock.Any()).Return(rpc2, nil)
 	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
 
 	net := driver.NewMockNetwork(ctrl)
@@ -281,7 +281,7 @@ func TestBlockHashes_NoFailure_Diff_Block_Height(t *testing.T) {
 	)
 
 	c := blocksHashesChecker{net: net}
-	if err := c.Check(); err != nil {
+	if err := c.Check(t.Context()); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -300,17 +300,17 @@ func TestBlockHashes_Failing_Delays_And_OK_Nodes(t *testing.T) {
 
 	node1 := driver.NewMockNode(ctrl)
 	node1.EXPECT().IsExpectedFailure().AnyTimes()
-	node1.EXPECT().DialRpc().Return(rpc1, nil)
+	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc1, nil)
 	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
 
 	node2 := driver.NewMockNode(ctrl)
 	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
-	node2.EXPECT().DialRpc().Return(rpc2, nil)
+	node2.EXPECT().DialRpc(gomock.Any()).Return(rpc2, nil)
 	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
 
 	node3 := driver.NewMockNode(ctrl)
 	node3.EXPECT().IsExpectedFailure().AnyTimes()
-	node3.EXPECT().DialRpc().Return(rpc3, nil)
+	node3.EXPECT().DialRpc(gomock.Any()).Return(rpc3, nil)
 	node3.EXPECT().GetLabel().AnyTimes().Return("node3")
 
 	net := driver.NewMockNetwork(ctrl)
@@ -353,7 +353,7 @@ func TestBlockHashes_Failing_Delays_And_OK_Nodes(t *testing.T) {
 	)
 
 	c := blocksHashesChecker{net: net}
-	if err := c.Check(); err != nil {
+	if err := c.Check(t.Context()); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

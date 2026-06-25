@@ -17,6 +17,7 @@
 package monitoring
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -115,7 +116,7 @@ func (n *NodeLogDispatcher) AfterNodeCreation(node driver.Node) {
 	go n.runLogCollector(node)
 
 	// Start a goroutine parsing the log and dispatching block information.
-	logStream, err := node.StreamLog()
+	logStream, err := node.StreamLog(context.Background())
 	if err != nil {
 		slog.Error(
 			"failed to obtain logs of node, will not be able to track blocks",
@@ -153,7 +154,7 @@ func (n *NodeLogDispatcher) startDispatcher(node Node, reader io.ReadCloser) {
 func (n *NodeLogDispatcher) runLogCollector(node driver.Node) {
 	defer n.wg.Done()
 	label := node.GetLabel()
-	in, err := node.StreamLog()
+	in, err := node.StreamLog(context.Background())
 	if err != nil {
 		slog.Error("failed to obtain logs of node, log is not captured",
 			"node", label,

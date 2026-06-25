@@ -17,6 +17,7 @@
 package checking
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -36,7 +37,7 @@ var registrations = make(registry)
 
 // Checker does the consistency check at the end of the scenario.
 type Checker interface {
-	Check() error
+	Check(ctx context.Context) error
 	Configure(CheckerConfig) Checker
 }
 
@@ -60,10 +61,10 @@ func InitNetworkChecks(network driver.Network, monitor *monitoring.Monitor) Chec
 }
 
 // Check executes all checkers and returns an error if any of them find an issue.
-func (c Checks) Check() error {
-	errs := make([]error, len(c))
+func (c Checks) Check(ctx context.Context) error {
+	errs := make([]error, 0, len(c))
 	for _, checker := range c {
-		errs = append(errs, checker.Check())
+		errs = append(errs, checker.Check(ctx))
 	}
 
 	return errors.Join(errs...)
@@ -85,8 +86,8 @@ func NewFailingChecker(checker Checker) Checker {
 	return &failingChecker{checker}
 }
 
-func (c *failingChecker) Check() error {
-	if err := c.checker.Check(); err == nil {
+func (c *failingChecker) Check(ctx context.Context) error {
+	if err := c.checker.Check(ctx); err == nil {
 		return fmt.Errorf("failure expected")
 	}
 	return nil

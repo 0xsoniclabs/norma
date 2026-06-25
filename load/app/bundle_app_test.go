@@ -126,17 +126,18 @@ func testBundleGenerator(t *testing.T, application app.Application, ctxt app.App
 			"count", info.Count)
 	}
 
-	err = network.Retry(t.Context(), network.DefaultRetryAttempts, 1*time.Second, func() error {
-		sent := user.GetSentTransactions()
-		received, err := application.GetReceivedTransactions(rpcClient)
-		if err != nil {
-			return fmt.Errorf("unable to get amount of received txs; %v", err)
-		}
-		if received != sent {
-			return fmt.Errorf("unexpected amount of txs in chain (sent %d, received %d)", sent, received)
-		}
-		return nil
-	})
+	err = network.Retry(t.Context(), network.DefaultRetryAttempts, 1*time.Second,
+		func(ctx context.Context) error {
+			sent := user.GetSentTransactions()
+			received, err := application.GetReceivedTransactions(rpcClient)
+			if err != nil {
+				return fmt.Errorf("unable to get amount of received txs; %v", err)
+			}
+			if received != sent {
+				return fmt.Errorf("unexpected amount of txs in chain (sent %d, received %d)", sent, received)
+			}
+			return nil
+		})
 	if err != nil {
 		t.Error(err)
 	}
@@ -171,30 +172,32 @@ func testRpcNonceBundleGenerator(t *testing.T, application app.Application, ctxt
 		t.Logf("Sent bundle %d\n", i)
 
 		// wait for tx to be processed (necessary because of nonce loading in GenerateTx())
-		_ = network.Retry(t.Context(), 5, 1*time.Second, func() error {
+		_ = network.Retry(t.Context(), 5, 1*time.Second,
+			func(ctx context.Context) error {
+				received, err := application.GetReceivedTransactions(rpcClient)
+				if err != nil {
+					return fmt.Errorf("unable to get amount of received txs; %v", err)
+				}
+				if received <= lastReceived {
+					t.Logf("Waiting for received txs increase before sending next tx (received %d)\n", received)
+					return fmt.Errorf("not enough bundled txs received, received %d", received)
+				}
+				lastReceived = received
+				return nil
+			})
+	}
+
+	err = network.Retry(t.Context(), 10, 1*time.Second,
+		func(ctx context.Context) error {
 			received, err := application.GetReceivedTransactions(rpcClient)
 			if err != nil {
 				return fmt.Errorf("unable to get amount of received txs; %v", err)
 			}
-			if received <= lastReceived {
-				t.Logf("Waiting for received txs increase before sending next tx (received %d)\n", received)
+			if received < 2 {
 				return fmt.Errorf("not enough bundled txs received, received %d", received)
 			}
-			lastReceived = received
 			return nil
 		})
-	}
-
-	err = network.Retry(t.Context(), 10, 1*time.Second, func() error {
-		received, err := application.GetReceivedTransactions(rpcClient)
-		if err != nil {
-			return fmt.Errorf("unable to get amount of received txs; %v", err)
-		}
-		if received < 2 {
-			return fmt.Errorf("not enough bundled txs received, received %d", received)
-		}
-		return nil
-	})
 	if err != nil {
 		t.Error(err)
 	}

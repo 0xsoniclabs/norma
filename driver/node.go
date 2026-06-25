@@ -17,6 +17,7 @@
 package driver
 
 import (
+	"context"
 	"io"
 
 	"github.com/0xsoniclabs/norma/driver/network"
@@ -58,23 +59,23 @@ type Node interface {
 	GetServiceUrl(*network.ServiceDescription) *URL
 
 	// DialRpc establish an RPC connection with the node and returns the RPC client.
-	DialRpc() (rpc.Client, error)
+	DialRpc(context.Context) (rpc.Client, error)
 
 	// StreamLog provides a reader that is continuously providing the host log.
 	// It is up to the caller to close the stream.
-	StreamLog() (io.ReadCloser, error)
+	StreamLog(context.Context) (io.ReadCloser, error)
 
 	// Stop shuts down this node gracefully, using its regular shutdown
 	// procedure (not killed). After stopping the service, no more interactions
 	// are expected to succeed.
-	Stop() error
+	Stop(context.Context) error
 
 	// Kill shuts down this node disgracefully by using SigKill.
-	Kill() error
+	Kill(context.Context) error
 
 	// Cleanup releases all underlying resources. After the cleanup no more
 	// operations on this node are expected to succeed.
-	Cleanup() error
+	Cleanup(context.Context) error
 }
 
 // NodeID is a unique ID identifying each node. This identifier is used, for

@@ -72,13 +72,13 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 			}
 
 			for _, node := range nodes {
-				if err := node.Stop(); err != nil {
+				if err := node.Stop(t.Context()); err != nil {
 					t.Errorf("failed to stop node: %v", err)
 				}
 			}
 
 			for _, node := range nodes {
-				if err := node.Cleanup(); err != nil {
+				if err := node.Cleanup(context.Background()); err != nil {
 					t.Errorf("failed to cleanup node: %v", err)
 				}
 			}
@@ -140,7 +140,7 @@ func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
 
 			apps := []driver.Application{}
 			for i := 0; i < N; i++ {
-				app, err := net.CreateApplication(&driver.ApplicationConfig{
+				app, err := net.CreateApplication(t.Context(), &driver.ApplicationConfig{
 					Name: fmt.Sprintf("A-%d-%s", i, t.Name()),
 				})
 				if err != nil {
@@ -155,7 +155,7 @@ func TestLocalNetwork_CanStartApplicationsAndShutThemDown(t *testing.T) {
 			}
 
 			for _, app := range apps {
-				if err := app.Start(); err != nil {
+				if err := app.Start(t.Context()); err != nil {
 					t.Errorf("failed to start app: %v", err)
 				}
 			}
@@ -193,7 +193,7 @@ func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 	}
 
 	for i := 0; i < N; i++ {
-		_, err := net.CreateApplication(&driver.ApplicationConfig{
+		_, err := net.CreateApplication(t.Context(), &driver.ApplicationConfig{
 			Name: fmt.Sprintf("A-%d-%s", i, t.Name()),
 		})
 		if err != nil {
@@ -223,7 +223,7 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	listener := driver.NewMockNetworkListener(ctrl)
 	listener.EXPECT().AfterNodeCreation(gomock.Any()).DoAndReturn(func(node driver.Node) {
-		reader, err := node.StreamLog()
+		reader, err := node.StreamLog(t.Context())
 		if err != nil {
 			t.Errorf("error: %v", err)
 		}
@@ -278,14 +278,14 @@ func TestLocalNetwork_CanRunWithMultipleValidators(t *testing.T) {
 				_ = net.Shutdown()
 			})
 
-			app, err := net.CreateApplication(&driver.ApplicationConfig{
+			app, err := net.CreateApplication(t.Context(), &driver.ApplicationConfig{
 				Name: "TestApp",
 			})
 			if err != nil {
 				t.Fatalf("failed to create app: %v", err)
 			}
 
-			if err := app.Start(); err != nil {
+			if err := app.Start(t.Context()); err != nil {
 				t.Errorf("failed to start app: %v", err)
 			}
 
@@ -374,7 +374,7 @@ func TestLocalNetwork_NotifiesListenersOnAppStartup(t *testing.T) {
 	net.RegisterListener(listener)
 	listener.EXPECT().AfterApplicationCreation(gomock.Any())
 
-	_, err = net.CreateApplication(&driver.ApplicationConfig{
+	_, err = net.CreateApplication(t.Context(), &driver.ApplicationConfig{
 		Name: "TestApp",
 	})
 	if err != nil {
@@ -433,10 +433,10 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 
 			// removed nodes are only detached from the network, but still running - i.e. they can be turned off
 			for _, node := range nodes {
-				if err := node.Stop(); err != nil {
+				if err := node.Stop(t.Context()); err != nil {
 					t.Errorf("failed to stop node: %v", err)
 				}
-				if err := node.Cleanup(); err != nil {
+				if err := node.Cleanup(context.Background()); err != nil {
 					t.Errorf("failed to cleanup node: %v", err)
 				}
 			}
@@ -557,7 +557,7 @@ func getChecksum(net *LocalNetwork, image string) (checksum string, err error) {
 		return "", fmt.Errorf("failed to create node: %v", err)
 	}
 
-	reader, err := node.StreamLog()
+	reader, err := node.StreamLog(context.Background())
 	if err != nil {
 		return "", fmt.Errorf("cannot read node logs: %e", err)
 	}
@@ -769,10 +769,10 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	if err := net.RemoveNode(node); err != nil {
 		t.Fatalf("failed to remove node: %v", err)
 	}
-	if err := node.Stop(); err != nil {
+	if err := node.Stop(t.Context()); err != nil {
 		t.Fatalf("failed to stop node: %v", err)
 	}
-	if err := node.Cleanup(); err != nil {
+	if err := node.Cleanup(context.Background()); err != nil {
 		t.Fatalf("failed to cleanup node: %v", err)
 	}
 

@@ -18,13 +18,12 @@ pipeline {
     }
 
     stages {
-
-        stage("Pre Clean-up") {
+        stage('Pre Clean-up') {
             steps {
                 sh 'go run ./driver/norma purge'
             }
         }
- 
+
         stage('Check Norma Format') {
             steps {
                 catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {

@@ -18,6 +18,7 @@ package monitoring
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"sync"
 	"testing"
@@ -181,7 +182,7 @@ func TestMonitorIntegrationPrometheusLogReceived(t *testing.T) {
 		t.Fatalf("failed to create an Opera node on Docker: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := node.Cleanup(); err != nil {
+		if err := node.Cleanup(context.Background()); err != nil {
 			t.Errorf("failed to cleanup node: %v", err)
 		}
 	})
