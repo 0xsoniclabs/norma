@@ -19,6 +19,7 @@ Scenario:
   - startNode: light
     type: validator
     stake: 1000000
+    instances: 2
 
   - waitFor: 10s
 
@@ -29,4 +30,8 @@ Scenario:
   - stopNode: medium
 
   - waitFor: 10s
+  
+  - undelegate: light
+
+  - stopNode: light
   
