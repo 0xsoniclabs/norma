@@ -347,12 +347,11 @@ func TestSequential_MultiInstanceNode(t *testing.T) {
 	node2.EXPECT().GetLabel().Return("validators-1").AnyTimes()
 	node2.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 
-	gomock.InOrder(
-		registry.EXPECT().registerNewValidator().Return(2, nil),
-		net.EXPECT().CreateNode(gomock.Any()).Return(node1, nil),
-		registry.EXPECT().registerNewValidator().Return(3, nil),
-		net.EXPECT().CreateNode(gomock.Any()).Return(node2, nil),
-	)
+	// Validators are registered sequentially, then nodes created in parallel.
+	first := registry.EXPECT().registerNewValidator().Return(2, nil)
+	registry.EXPECT().registerNewValidator().Return(3, nil).After(first)
+	net.EXPECT().CreateNode(gomock.Any()).Return(node1, nil)
+	net.EXPECT().CreateNode(gomock.Any()).Return(node2, nil)
 
 	instances := 2
 	scenario := parser.SequentialScenario{

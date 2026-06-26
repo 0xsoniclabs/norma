@@ -27,6 +27,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver/checking"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/genesis"
+	"golang.org/x/sync/errgroup"
 )
 
 // RunSequential executes a sequential scenario on the given network.
@@ -294,45 +295,79 @@ func execStartNode(
 		}
 	}
 
-	var newNodes []driver.Node
+	type nodeResult struct {
+		instanceName string
+		node         driver.Node
+		validatorId  *int
+	}
+	results := make([]nodeResult, instances)
+
+	// Pre-compute instance names and register validators sequentially.
+	// Registration involves on-chain reads (LastValidatorID) that are not
+	// safe for concurrent use, so we do this before the parallel fan-out.
+	instanceNames := make([]string, instances)
+	validatorIds := make([]*int, instances)
 	for instance := range instances {
 		instanceName := name
 		if instances > 1 {
 			instanceName = fmt.Sprintf("%s-%d", name, instance)
 		}
+		instanceNames[instance] = instanceName
 
-		var validatorId *int
 		if isValidator {
 			if id, ok := state.validatorIds[instanceName]; ok {
 				// Use pre-assigned ID (genesis validator or rejoin).
-				validatorId = &id
+				validatorIds[instance] = &id
 			} else if !isRejoin {
 				id, err := registry.registerNewValidator()
 				if err != nil {
-					return fmt.Errorf("failed to register validator %s: %w", instanceName, err)
+					return fmt.Errorf(
+						"failed to register validator %s: %w",
+						instanceName, err,
+					)
 				}
-				validatorId = &id
+				validatorIds[instance] = &id
 			}
 		}
+	}
 
-		node, err := net.CreateNode(&driver.NodeConfig{
-			Name:        instanceName,
-			Failing:     step.Failing,
-			Image:       image,
-			Validator:   isValidator,
-			ValidatorId: validatorId,
-			DataVolume:  dataVolumePtr(step.DataVolume),
+	// Create nodes in parallel — all on-chain state has been settled above.
+	g, _ := errgroup.WithContext(ctx)
+	for instance := range instances {
+		g.Go(func() error {
+			node, err := net.CreateNode(&driver.NodeConfig{
+				Name:        instanceNames[instance],
+				Failing:     step.Failing,
+				Image:       image,
+				Validator:   isValidator,
+				ValidatorId: validatorIds[instance],
+				DataVolume:  dataVolumePtr(step.DataVolume),
+			})
+			if err != nil {
+				return fmt.Errorf(
+					"failed to create node %s: %w",
+					instanceNames[instance], err,
+				)
+			}
+
+			results[instance] = nodeResult{
+				instanceNames[instance], node, validatorIds[instance],
+			}
+			return nil
 		})
-		if err != nil {
-			return fmt.Errorf("failed to create node %s: %w", instanceName, err)
-		}
+	}
+	if err := g.Wait(); err != nil {
+		return err
+	}
 
-		state.nodes[instanceName] = node
-		state.nodeHistory[instanceName] = true
-		if validatorId != nil {
-			state.validatorIds[instanceName] = *validatorId
+	var newNodes []driver.Node
+	for _, r := range results {
+		state.nodes[r.instanceName] = r.node
+		state.nodeHistory[r.instanceName] = true
+		if r.validatorId != nil {
+			state.validatorIds[r.instanceName] = *r.validatorId
 		}
-		newNodes = append(newNodes, node)
+		newNodes = append(newNodes, r.node)
 	}
 
 	// Also mark the base name in history for single-instance nodes.
