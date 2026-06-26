@@ -14,15 +14,125 @@ library(slider)
 
 figure_dimensions <- c(10, 4)
 
-# load monitoring data
+# Load monitoring data
 all_data <- read_csv(params$datafile)
 start_time <- min(all_data$time, na.rm = TRUE)
 if (nrow(all_data) > 0) {
     all_data <- all_data %>%
         mutate(elapsed_sec = as.numeric(time - start_time) / 1e9)
 } else {
-    # guard against empty data sets. prevent crash
+    # Guard against empty data sets to prevent crashes
     all_data$elapsed_sec <- 0
+}
+
+# --- Helper functions ---
+
+# Filter a named metric and convert its value column to numeric.
+filter_metric <- function(data, metric_name) {
+    data %>%
+        dplyr::filter(metric == metric_name) %>%
+        mutate(value = as.numeric(value))
+}
+
+# ggplot theme with a horizontally centered title.
+norma_theme <- function() {
+    theme(plot.title = element_text(hjust = 0.5))
+}
+
+# Scatter plot of a block metric with a smooth trend line.
+# Expects columns: block, value.
+block_trend_plot <- function(data, title, ylab) {
+    ggplot(data, aes(x = block, y = value)) +
+        geom_point() +
+        geom_smooth(se = FALSE) +
+        ggtitle(title) +
+        xlab("Block Height") +
+        ylab(ylab) +
+        norma_theme()
+}
+
+# Line plot of a per-node metric over elapsed time.
+# Expects columns: elapsed_sec, value, node.
+node_time_plot <- function(data, title, ylab,
+                           xlab = "Time",
+                           color_label = "Nodes") {
+    ggplot(data, aes(
+        x = elapsed_sec, y = value,
+        group = node, colour = factor(node)
+    )) +
+        geom_line() +
+        ggtitle(title) +
+        xlab(xlab) +
+        ylab(ylab) +
+        labs(colour = color_label) +
+        norma_theme()
+}
+
+# Plot of a per-node metric over block height.
+# Expects columns: block, value, node.
+# When smooth = TRUE, draws trend lines instead of scatter points.
+node_block_plot <- function(data, title, ylab, smooth = FALSE) {
+    p <- ggplot(data, aes(
+        x = block, y = value,
+        group = node, colour = factor(node)
+    )) +
+        ggtitle(title) +
+        xlab("Block Height") +
+        ylab(ylab) +
+        labs(colour = "Nodes") +
+        norma_theme()
+
+    if (smooth) p + geom_smooth(se = FALSE) else p + geom_point()
+}
+
+# Compute a 5-second sliding window transaction rate from accumulated counts.
+# data:       rows for a single metric, with numeric `time` and `value` columns
+# group_cols: character vector of column names to group by
+# Returns a data frame with columns: rate, time, elapsed_sec
+compute_sliding_rate <- function(data, group_cols, start_time) {
+    result <- data %>%
+        mutate(value = as.numeric(value), time = as.numeric(time)) %>%
+        group_by(across(all_of(group_cols))) %>%
+        arrange(time) %>%
+        reframe(
+            time = time,
+            increment = value - lag(value, default = 0)
+        ) %>%
+        arrange(time) %>%
+        slide_period_dfr(
+            as.POSIXct(.$time / 1e9, origin = "1970-01-01"),
+            "second",
+            .every = 5,
+            function(d) {
+                summarize(d,
+                    rate = sum(increment) / 5,
+                    time = (max(time) + min(time)) / 2
+                )
+            }
+        )
+
+    if (nrow(result) > 0) {
+        result %>%
+            drop_na(rate) %>%
+            mutate(elapsed_sec = (time - as.numeric(start_time)) / 1e9)
+    } else {
+        result %>% mutate(rate = 0, elapsed_sec = 0)
+    }
+}
+
+# Compute per-observation incremental rate (delta between consecutive values).
+# data:       rows for a single metric with elapsed_sec and value columns
+# group_cols: character vector of column names to group by
+# Returns a data frame with: elapsed_sec, rate, and the grouping columns
+compute_incremental_rate <- function(data, group_cols) {
+    data %>%
+        mutate(value = as.numeric(value)) %>%
+        group_by(across(all_of(group_cols))) %>%
+        arrange(across(c(all_of(group_cols), "elapsed_sec"))) %>%
+        reframe(
+            elapsed_sec = elapsed_sec,
+            rate = value - lag(value, default = 0)
+        )
 }
 ```
 
@@ -37,17 +147,8 @@ The following chart shows the Gas spent per block and a trend line showing long-
 
 
 ```{r gas_spent_per_block, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "BlockGasUsed") %>% # filter metric of interrest
-    mutate(value = as.numeric(value)) # convert value to int
-
-ggplot(data = data) +
-    geom_point(aes(x = block, y = value)) + # the data points
-    geom_smooth(aes(x = block, y = value), se = FALSE) + # a trend line
-    ggtitle("Gas per Block") + # chart title
-    xlab("Block Height") + # x-axis title
-    ylab("Gas spent") + # y-axis title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "BlockGasUsed") %>%
+    block_trend_plot("Gas per Block", "Gas spent")
 ```
 
 
@@ -55,17 +156,8 @@ ggplot(data = data) +
 The following chart shows the number of Transactions per block and a trend line showing long-term trends.
 
 ```{r transactions_per_block, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "BlockNumberOfTransactions") %>% # filter metric
-    mutate(value = as.numeric(value)) # convert to int
-
-ggplot(data = data) +
-    geom_point(aes(x = block, y = value)) + # the data points
-    geom_smooth(aes(x = block, y = value), se = FALSE) + # a trend line
-    ggtitle("Transactions per Block") + # chart title
-    xlab("Block Height") + # x-axis title
-    ylab("Number of Transactions") + # y-axis title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "BlockNumberOfTransactions") %>%
+    block_trend_plot("Transactions per Block", "Number of Transactions")
 ```
 
 
@@ -73,31 +165,23 @@ ggplot(data = data) +
 The following chart shows the time between the earliest reported completion time of block `n-1` and earliest reported completion time block `n` for block `n`.
 
 ```{r block_delay_time, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    # filter desired metric and columns
+all_data %>%
     dplyr::filter(metric == "BlockCompletionTime") %>%
     select(block, value) %>%
-    # convert values into numbers
     mutate(value = as.numeric(value)) %>%
-    # find earliest time for each block
     group_by(block) %>%
     summarise(value = min(value)) %>%
-    # compute delta between consecutive blocks
     arrange(block) %>%
     mutate(delta = value - lag(value)) %>%
-    drop_na(delta)
-
-ggplot(data = data) +
-    # a horizontal line marking the 1s target
-    geom_hline(yintercept = 1, linetype = "dashed", color = "red") +
-    # the individual block delays
-    geom_point(aes(x = block, y = delta / 1e9)) +
-    # a interpolation line
-    geom_smooth(aes(x = block, y = delta / 1e9), se = FALSE) +
-    ggtitle("Block Delay") + # chart title
-    xlab("Block Height") + # x-axis title
-    ylab("Delay [s]") + # y-axis title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+    drop_na(delta) %>%
+    ggplot(aes(x = block, y = delta / 1e9)) +
+        geom_hline(yintercept = 1, linetype = "dashed", color = "red") +
+        geom_point() +
+        geom_smooth(se = FALSE) +
+        ggtitle("Block Delay") +
+        xlab("Block Height") +
+        ylab("Delay [s]") +
+        norma_theme()
 ```
 
 
@@ -105,17 +189,8 @@ ggplot(data = data) +
 The following chart shows the Gas Rate per block and a trend line.
 
 ```{r gas_rate_per_block, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "BlockGasRate") %>% # filter metric of interrest
-    mutate(value = as.numeric(value)) # convert value to int
-
-ggplot(data = data) +
-    geom_point(aes(x = block, y = value)) + # the data points
-    geom_smooth(aes(x = block, y = value), se = FALSE) + # a trend line
-    ggtitle("Gas Rate per Block") + # chart title
-    xlab("Block Height") + # x-axis title
-    ylab("Gas per Second") + # y-axis title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "BlockGasRate") %>%
+    block_trend_plot("Gas Rate per Block", "Gas per Second")
 ```
 
 
@@ -123,17 +198,8 @@ ggplot(data = data) +
 The following chart shows the Gas Base-Fee per block and a trend line.
 
 ```{r gas_base_fee_per_block, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "BlockGasBaseFee") %>% # filter metric of interrest
-    mutate(value = as.numeric(value)) # convert value to int
-
-ggplot(data = data) +
-    geom_point(aes(x = block, y = value)) + # the data points
-    geom_smooth(aes(x = block, y = value), se = FALSE) + # a trend line
-    ggtitle("Gas Base Fee per Block") + # chart title
-    xlab("Block Height") + # x-axis title
-    ylab("Gas Base Fee") + # y-axis title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "BlockGasBaseFee") %>%
+    block_trend_plot("Gas Base Fee per Block", "Gas Base Fee")
 ```
 
 ## Network Metrics
@@ -145,102 +211,29 @@ This section covers metrics that are network wide properties.
 The following chart shows the total rate of incoming and committed transactions smoothed over 5 second intervals.
 
 ```{r throughput_over_time, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-# compute the rate at which transactions have been sent to the network
 sent_rate <- all_data %>%
-    # filter for rows and columns needed
     dplyr::filter(metric == "SentTransactions") %>%
     select(time, app, workers, value) %>%
-    # convert values to numerical values
-    mutate(value = as.numeric(value)) %>%
-    mutate(time = as.numeric(time)) %>%
-    # convert per-account absolute values to increment values
-    group_by(app, workers) %>%
-    arrange(time) %>%
-    reframe(
-        time = time,
-        increment = value - lag(value, default = 0)
-    ) %>%
-    # compute average rate over dynamic sized windows (each 5 seconds)
-    arrange(time) %>%
-    slide_period_dfr(
-        as.POSIXct(.$time / 1e9, origin = "1970-01-01"),
-        "second",
-        .every = 5,
-        function(data) {
-            summarize(
-                data,
-                # compute the rate over time window
-                rate = sum(increment) / 5,
-                # associate rate to mid-point time
-                time = (max(time) + min(time)) / 2
-            )
-        }
-    )
+    compute_sliding_rate(c("app", "workers"), start_time)
 
-if (nrow(sent_rate) > 0) {
-    sent_rate <- sent_rate %>%
-        drop_na(rate) %>%
-        # convert time from UNIX nanoseconds to elapsed seconds
-        mutate(elapsed_sec = (time - as.numeric(start_time)) / 1e9)
-} else {
-    sent_rate <- sent_rate %>%
-        mutate(rate = 0) %>%
-        mutate(elapsed_sec = 0)
-}
-
-
-# compute the number of received (=committed) transactions
 received_rate <- all_data %>%
-    # filter rows and columns
     dplyr::filter(metric == "ReceivedTransactions") %>%
     select(time, app, value) %>%
-    # convert value and time to numerical values
-    mutate(value = as.numeric(value)) %>%
-    mutate(time = as.numeric(time)) %>%
-    # compute the individual increments
-    group_by(app) %>%
-    arrange(time) %>%
-    reframe(
-        time = time,
-        increment = value - lag(value, default = 0),
-    ) %>%
-    # compute average rate over dynamic sized windows (each 5 seconds)
-    arrange(time) %>%
-    slide_period_dfr(
-        as.POSIXct(.$time / 1e9, origin = "1970-01-01"),
-        "second",
-        .every = 5,
-        function(data) {
-            summarize(
-                data,
-                # compute the rate over time window
-                rate = sum(increment) / 5,
-                # associate rate to mid-point time
-                time = (max(time) + min(time)) / 2
-            )
-        }
-    )
-
-if (nrow(sent_rate) > 0) {
-    received_rate <- received_rate %>%
-        drop_na(rate) %>%
-        # convert time from UNIX nanoseconds to elapsed seconds
-        mutate(elapsed_sec = (time - as.numeric(start_time)) / 1e9)
-} else {
-    received_rate <- received_rate %>%
-        mutate(rate = 0) %>%
-        mutate(elapsed_sec = 0)
-}
+    compute_sliding_rate("app", start_time)
 
 ggplot() +
-    geom_line(data = sent_rate, aes(x = elapsed_sec, y = rate, color = "incomming [5s window]")) +
-    # geom_smooth(data=sent_rate, aes(x=elapsed_sec, y=rate)) +
-    geom_line(data = received_rate, aes(x = elapsed_sec, y = rate, color = "committed [5s window]")) +
-    # geom_smooth(data=received_rate, aes(x=elapsed_sec, y=rate)) +
+    geom_line(
+        data = sent_rate,
+        aes(x = elapsed_sec, y = rate, color = "incomming [5s window]")
+    ) +
+    geom_line(
+        data = received_rate,
+        aes(x = elapsed_sec, y = rate, color = "committed [5s window]")
+    ) +
     ggtitle("Incomming and Committed Transaction Rates") +
     xlab("Time (s)") +
     ylab("Tx/s") +
-    theme(plot.title = element_text(hjust = 0.5))
+    norma_theme()
 ```
 
 
@@ -249,16 +242,13 @@ ggplot() +
 The number of nodes in the network over time.
 
 ```{r nodes_in_network, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "NumberOfNodes") %>% # filter metric
-    mutate(value = as.numeric(value)) # convert value to int
-
-ggplot(data = data) +
-    geom_point(aes(x = elapsed_sec, y = value)) + # the data points
-    ggtitle("Nodes in Network") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("Number of Nodes") + # y-axis title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "NumberOfNodes") %>%
+    ggplot(aes(x = elapsed_sec, y = value)) +
+        geom_point() +
+        ggtitle("Nodes in Network") +
+        xlab("Time") +
+        ylab("Number of Nodes") +
+        norma_theme()
 ```
 
 
@@ -271,29 +261,19 @@ This section covers metrics that are node specific.
 The following chart shows the time required by each node for processing each individual block.
 
 ```{r block_processing_time, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "BlockEventAndTxsProcessingTime") %>%
-    mutate(value = as.numeric(value))
+data <- filter_metric(all_data, "BlockEventAndTxsProcessingTime") %>%
+    mutate(value = value / 1e6)
 
-ggplot(data = data) +
-    geom_point(aes(x = block, y = value / 1e6, group = node, colour = factor(node))) +
-    ggtitle("Block Processing Time") + # chart title
-    xlab("Block Height") + # x-axis title
-    ylab("Block Processing Time [ms]") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+node_block_plot(data, "Block Processing Time", "Block Processing Time [ms]")
 ```
 
 While the individual sample points may provide the highest level of detail, the smoothed out trend lines of the following plot may provide a cleaner comparison between the processing times of individual nodes.
 
 ```{r block_processing_time_smooth, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-ggplot(data = data) +
-    geom_smooth(aes(x = block, y = value / 1.e6, group = node, colour = factor(node))) +
-    ggtitle("Block Processing Time") + # chart title
-    xlab("Block Height") + # x-axis title
-    ylab("Block Processing Time [ms]") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+node_block_plot(
+    data, "Block Processing Time", "Block Processing Time [ms]",
+    smooth = TRUE
+)
 ```
 
 
@@ -302,17 +282,8 @@ ggplot(data = data) +
 The following chart shows the time at which nodes have reached a given block height.
 
 ```{r block_height_per_node, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "NodeBlockStatus") %>% # filter metric of interest
-    mutate(value = as.numeric(value)) # convert value to int
-
-ggplot(data = data) +
-    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
-    ggtitle("Block Height over Time") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("Block Height") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "NodeBlockStatus") %>%
+    node_time_plot("Block Height over Time", "Block Height")
 ```
 
 ### Epoch per Node
@@ -320,17 +291,8 @@ ggplot(data = data) +
 The following chart shows the epoch number of each node over time.
 
 ```{r epoch_per_node, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "NodeEpochStatus") %>% # filter metric of interest
-    mutate(value = as.numeric(value)) # convert value to int
-
-ggplot(data = data) +
-    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
-    ggtitle("Epoch over Time") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("Epoch") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "NodeEpochStatus") %>%
+    node_time_plot("Epoch over Time", "Epoch")
 ```
 
 ### Validator Stakes
@@ -338,18 +300,14 @@ ggplot(data = data) +
 The following chart shows the received stake per validator over time.
 
 ```{r validator_stakes, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "ValidatorStake") %>%
-    mutate(value = as.numeric(value))
+data <- filter_metric(all_data, "ValidatorStake") %>%
+    mutate(value = value / 1e18)
 
 if (nrow(data) > 0) {
-    ggplot(data = data) +
-        geom_line(aes(x = elapsed_sec, y = value / 1e18, group = node, colour = factor(node))) +
-        ggtitle("Validator Stakes") +
-        xlab("Time [s]") +
-        ylab("Stake [S]") +
-        labs(colour = "Validator") +
-        theme(plot.title = element_text(hjust = 0.5))
+    node_time_plot(
+        data, "Validator Stakes", "Stake [S]",
+        xlab = "Time [s]", color_label = "Validator"
+    )
 }
 ```
 
@@ -359,77 +317,36 @@ The following charts show statistics of transaction pool.
 
 * The number of received transactions - accumulated count over time
 ```{r tx_pool_per_node_received_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "txpool_received") %>% # filter metric of interrest
-    mutate(value = as.numeric(value)) # convert value to int
-
-ggplot(data = data) +
-    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
-    ggtitle("TxPool Received Transactions over Time") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("Received Transactions") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "txpool_received") %>%
+    node_time_plot("TxPool Received Transactions over Time", "Received Transactions")
 ```
 
 * The number of valid transactions - accumulated count over time
 ```{r tx_pool_per_node_valid_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "txpool_valid") %>% # filter metric of interrest
-    mutate(value = as.numeric(value)) # convert value to int
-
-ggplot(data = data) +
-    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
-    ggtitle("TxPool Valid Transactions over Time") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("Valid Transactions") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "txpool_valid") %>%
+    node_time_plot("TxPool Valid Transactions over Time", "Valid Transactions")
 ```
 
 * The number of invalid transactions - accumulated count over time
 ```{r tx_pool_per_node_invalid_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "txpool_invalid") %>% # filter metric of interrest
-    mutate(value = as.numeric(value)) # convert value to int
-
-ggplot(data = data) +
-    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
-    ggtitle("TxPool Invalid Transactions over Time") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("Invalid Transactions") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "txpool_invalid") %>%
+    node_time_plot("TxPool Invalid Transactions over Time", "Invalid Transactions")
 ```
 
 * The number of underpriced transactions - accumulated count over time
 ```{r tx_pool_per_node_underpriced_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "txpool_underpriced") %>% # filter metric of interrest
-    mutate(value = as.numeric(value)) # convert value to int
-
-ggplot(data = data) +
-    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
-    ggtitle("TxPool Underpriced Transactions over Time") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("Underpriced Transactions") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "txpool_underpriced") %>%
+    node_time_plot(
+        "TxPool Underpriced Transactions over Time", "Underpriced Transactions"
+    )
 ```
 
 * The number of overflowed transactions - accumulated count over time
 ```{r tx_pool_per_node_overflowed_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "txpool_overflowed") %>% # filter metric of interrest
-    mutate(value = as.numeric(value)) # convert value to int
-
-ggplot(data = data) +
-    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
-    ggtitle("TxPool Overflowed Transactions over Time") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("Overflowed Transactions") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "txpool_overflowed") %>%
+    node_time_plot(
+        "TxPool Overflowed Transactions over Time", "Overflowed Transactions"
+    )
 ```
 
 #### TxPool - Queued to Pending Transitions
@@ -437,33 +354,15 @@ ggplot(data = data) +
 * The number of transactions in the queued state - current count over time
 
 ```{r tx_pool_per_node_quedued_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "txpool_queued") %>% # filter metric of interrest
-    mutate(value = as.numeric(value)) # convert value to int
-
-ggplot(data = data) +
-    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
-    ggtitle("TxPool Queued Transactions over Time") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("Queued Transactions") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "txpool_queued") %>%
+    node_time_plot("TxPool Queued Transactions over Time", "Queued Transactions")
 ```
 
 * The number of transactions in the pending state - current count over time
 
 ```{r tx_pool_per_node_pending_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "txpool_pending") %>% # filter metric of interrest
-    mutate(value = as.numeric(value)) # convert value to int
-
-ggplot(data = data) +
-    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
-    ggtitle("TxPool Pending Transactions over Time") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("Pending Transactions") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "txpool_pending") %>%
+    node_time_plot("TxPool Pending Transactions over Time", "Pending Transactions")
 ```
 
 ### Consumed Disk Space
@@ -474,31 +373,15 @@ and the total size of the Node data directory, which contains
 the State DB and other files. 
 
 ```{r state_db_size, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "statedb_disksize") %>% # filter metric of interrest
-    mutate(value = as.numeric(value) / 1024 / 1024) # convert value to int and MB
-
-ggplot(data = data) +
-    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
-    ggtitle("Actual Size of StateDB over Time") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("MB") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "statedb_disksize") %>%
+    mutate(value = value / 1024 / 1024) %>%
+    node_time_plot("Actual Size of StateDB over Time", "MB")
 ```
 
 ```{r total_db_size, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "db_size") %>% # filter metric of interrest
-    mutate(value = as.numeric(value) / 1024 / 1024) # convert value to int and MB
-
-ggplot(data = data) +
-    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
-    ggtitle("Actual Size of Data Dir including StateDB over Time") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("MB") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "db_size") %>%
+    mutate(value = value / 1024 / 1024) %>%
+    node_time_plot("Actual Size of Data Dir including StateDB over Time", "MB")
 ```
 
 ### System Properties
@@ -509,31 +392,14 @@ Following charts provide memory and CPU load of each Node.
 may grow above 100% depending on the number of cores. 
 
 ```{r system_cpu_procload, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "system_cpu_procload") %>% # filter metric of interrest
-    mutate(value = as.numeric(value)) # convert value to int
-
-ggplot(data = data) +
-    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
-    ggtitle("CPU Load") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("%") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "system_cpu_procload") %>%
+    node_time_plot("CPU Load", "%")
 ```
 
 ```{r system_memory_used, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "system_memory_used") %>% # filter metric of interrest
-    mutate(value = as.numeric(value) / 1024 / 1024) # convert value to MB
-
-ggplot(data = data) +
-    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
-    ggtitle("Memory Load") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("MB") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "system_memory_used") %>%
+    mutate(value = value / 1024 / 1024) %>%
+    node_time_plot("Memory Load", "MB")
 ```
 
 ## Application Metrics
@@ -543,77 +409,68 @@ ggplot(data = data) +
 The following chart shows the total number of sent and received transactions.
 
 ```{r send_and_received_transactions_per_app, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-# compute the send rate for each account
+# Per-account incremental send counts, reused by send_rate_per_account below
 sent_rate <- all_data %>%
-    dplyr::filter(metric == "SentTransactions") %>% # filter metric
-    select(elapsed_sec, app, workers, value) %>% # filter relevant columns
-    mutate(value = as.numeric(value)) %>% # convert value to integer
-    group_by(app, workers) %>% # one group per account
-    arrange(app, workers, elapsed_sec) %>% # sort by time in groups
-    reframe(
-        elapsed_sec = elapsed_sec, # preserve the time
-        rate = value - lag(value, default = 0) # change since last
-    )
+    dplyr::filter(metric == "SentTransactions") %>%
+    select(elapsed_sec, app, workers, value) %>%
+    compute_incremental_rate(c("app", "workers"))
 
-# compute the total number of send transactions per application
+# Cumulative sent total per application
 sent <- sent_rate %>%
-    group_by(app) %>% # group by application
-    arrange(app, elapsed_sec) %>% # sort by time in groups
-    reframe(elapsed_sec = elapsed_sec, total = cumsum(rate)) # compute prefix sum
+    group_by(app) %>%
+    arrange(app, elapsed_sec) %>%
+    reframe(elapsed_sec = elapsed_sec, total = cumsum(rate))
 
-# compute the number of received transactions
-received <- all_data %>%
-    dplyr::filter(metric == "ReceivedTransactions") %>% # filter metric
-    mutate(value = as.numeric(value)) # convert value to int
+# Received (committed) transactions per application
+received <- filter_metric(all_data, "ReceivedTransactions")
 
 ggplot() +
-    geom_line(data = sent, aes(x = elapsed_sec, y = total, group = app, colour = factor(paste(app, " sent")))) +
-    geom_line(data = received, aes(x = elapsed_sec, y = value, group = app, colour = factor(paste(app, " received")))) +
-    ggtitle("Sent and Received Transactions per App") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("Total Number of Transactions") + # y-axis title
-    labs(colour = "Apps") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+    geom_line(
+        data = sent,
+        aes(x = elapsed_sec, y = total, group = app,
+            colour = factor(paste(app, " sent")))
+    ) +
+    geom_line(
+        data = received,
+        aes(x = elapsed_sec, y = value, group = app,
+            colour = factor(paste(app, " received")))
+    ) +
+    ggtitle("Sent and Received Transactions per App") +
+    xlab("Time") +
+    ylab("Total Number of Transactions") +
+    labs(colour = "Apps") +
+    norma_theme()
 ```
 
 
 The following chart shows the cummulative number of transactions send per account  (legend omitted for clarity).
 
 ```{r sent_transactions_per_app, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "SentTransactions") %>% # filter metric
-    mutate(date = as_datetime(as.numeric(time) / 1e9)) %>% # UNIX time to date
-    mutate(value = as.numeric(value)) %>% # convert value to int
-    mutate(account = paste(app, "_", workers)) # add an user name
-
-ggplot(data = data) +
-    geom_line(
-        aes(x = elapsed_sec, y = value, group = account, colour = factor(account)),
-        show.legend = FALSE
-    ) +
-    ggtitle("Sent Transactions per User") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("Total Number of Transactions") + # y-axis title
-    labs(colour = "User") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "SentTransactions") %>%
+    mutate(account = paste(app, "_", workers)) %>%
+    ggplot(aes(x = elapsed_sec, y = value,
+               group = account, colour = factor(account))) +
+        geom_line(show.legend = FALSE) +
+        ggtitle("Sent Transactions per User") +
+        xlab("Time") +
+        ylab("Total Number of Transactions") +
+        labs(colour = "User") +
+        norma_theme()
 ```
 
 The following chart shows the send-rate of individual accounts (legend omitted for clarity).
 
 ```{r send_rate_per_account, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-sent_rate <- sent_rate %>%
-    mutate(account = paste(app, "_", workers)) # add an user name
-
-ggplot(data = sent_rate) +
-    geom_line(
-        aes(x = elapsed_sec, y = rate, group = account, colour = factor(account)),
-        show.legend = FALSE
-    ) +
-    ggtitle("Sent Rate of Transactions per User") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("Rate [Tx/s]") + # y-axis title
-    labs(colour = "User") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+sent_rate %>%
+    mutate(account = paste(app, "_", workers)) %>%
+    ggplot(aes(x = elapsed_sec, y = rate,
+               group = account, colour = factor(account))) +
+        geom_line(show.legend = FALSE) +
+        ggtitle("Sent Rate of Transactions per User") +
+        xlab("Time") +
+        ylab("Rate [Tx/s]") +
+        labs(colour = "User") +
+        norma_theme()
 ```
 
 ## Event Metrics
@@ -630,27 +487,17 @@ of event throttling mechanisms.
 - Dashed lines represent the number of events skipped due to throttling.
 
 ```{r emitter_events_per_node, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-emit_data <- all_data %>%
-    dplyr::filter(metric == "emitter_events") %>%
-    mutate(y = as.numeric(value))
+emit_data <- filter_metric(all_data, "emitter_events")
+throttling_data <- filter_metric(all_data, "emitter_skip_emission_throttle")
 
-throttling_data <- all_data %>%
-    dplyr::filter(metric == "emitter_skip_emission_throttle") %>%
-    mutate(y = as.numeric(value))
-
-ggplot(data = emit_data, aes(x = elapsed_sec, y = y, group = node, color = factor(node))) +
-    geom_line(
-        linetype = "solid",
-    ) +
-    geom_line(
-        data = throttling_data,
-        linetype = "dashed",
-    ) +
-    ggtitle("Emitted events over time") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("Events") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+ggplot(emit_data, aes(x = elapsed_sec, y = value, group = node, color = factor(node))) +
+    geom_line(linetype = "solid") +
+    geom_line(data = throttling_data, linetype = "dashed") +
+    ggtitle("Emitted events over time") +
+    xlab("Time") +
+    ylab("Events") +
+    labs(colour = "Nodes") +
+    norma_theme()
 ```
 
 ### Transactions in Emitted Events per Node
@@ -660,20 +507,8 @@ This metric can be used to identify whether nodes are effectively including tran
 in their emitted events.
 
 ```{r emitter_tx_per_node, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-emit_data <- all_data %>%
-    dplyr::filter(metric == "emitter_txs") %>% # filter metric of interrest
-    mutate(value = as.numeric(value)) # convert value to int
-
-ggplot() +
-    geom_line(
-        data = emit_data,
-        aes(x = elapsed_sec, y = value, group = node, colour = factor(node))
-    ) +
-    ggtitle("Transactions in emitted events over time") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("Transactions") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "emitter_txs") %>%
+    node_time_plot("Transactions in emitted events over time", "Transactions")
 ```
 
 ### Gas used by Emitted Events per Node
@@ -681,15 +516,6 @@ ggplot() +
 Shows the amount of gas used by transactions contained in emitted events by each node over time.
 
 ```{r emitter_gas_per_node, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-data <- all_data %>%
-    dplyr::filter(metric == "emitter_gas") %>% # filter metric of interrest
-    mutate(value = as.numeric(value)) # convert value to int
-
-ggplot(data = data) +
-    geom_line(aes(x = elapsed_sec, y = value, group = node, colour = factor(node))) +
-    ggtitle("Gas in emitted events over time") + # chart title
-    xlab("Time") + # x-axis title
-    ylab("Gas Used") + # y-axis title
-    labs(colour = "Nodes") + # legend title
-    theme(plot.title = element_text(hjust = 0.5)) # center title
+filter_metric(all_data, "emitter_gas") %>%
+    node_time_plot("Gas in emitted events over time", "Gas Used")
 ```
