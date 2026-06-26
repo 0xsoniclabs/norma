@@ -154,7 +154,6 @@ add_scenario_step_overlay <- function(event_data = scenario_step_data) {
         geom_vline(
             data = event_data,
             aes(xintercept = start_sec),
-            inherit.aes = FALSE,
             color = event_data$event_line_color,
             linetype = "dotted",
             linewidth = 0.3,
