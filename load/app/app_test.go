@@ -118,9 +118,7 @@ func TestGenerators(t *testing.T) {
 				Validators:   driver.DefaultValidators(t.Name()),
 				NetworkRules: rules,
 			})
-			if err != nil {
-				t.Fatalf("failed to create new local network: %v", err)
-			}
+			require.NoError(t, err, "failed to create new local network")
 			t.Cleanup(func() {
 				require.NoError(t, net.Shutdown(), "failed to shutdown network")
 			})
@@ -193,31 +191,21 @@ func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
 	transactions := []*types.Transaction{}
 	for range numTransactions {
 		tx, err := user.GenerateTx()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if tx == nil {
-			t.Fatal("generated transaction is nil")
-		}
+		require.NoError(t, err, "failed to generate transaction")
+		require.NotNil(t, tx, "generated transaction is nil")
 
-		if err := rpcClient.SendTransaction(t.Context(), tx); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, rpcClient.SendTransaction(t.Context(), tx), "failed to send transaction")
 		transactions = append(transactions, tx)
 	}
 
 	// wait for the transactions to be processed
 	for _, tx := range transactions {
 		receipt, err := ctxt.GetReceipt(tx.Hash())
-		if err != nil {
-			t.Fatal(err)
-		}
-		if receipt.Status != types.ReceiptStatusSuccessful {
-			t.Fatalf("transaction failed, receipt status: %v (gas limit %d used %d)", receipt.Status, tx.Gas(), receipt.GasUsed)
-		}
-		if tx.Gas() > 2*receipt.GasUsed {
-			t.Errorf("gas limit unnecessary high: limit %d used %d", tx.Gas(), receipt.GasUsed)
-		}
+		require.NoError(t, err, "failed to get transaction receipt")
+		require.Equalf(t, types.ReceiptStatusSuccessful, receipt.Status,
+			"transaction failed, receipt status: %v (gas limit %d used %d)", receipt.Status, tx.Gas(), receipt.GasUsed)
+		require.LessOrEqualf(t, tx.Gas(), 2*receipt.GasUsed,
+			"gas limit unnecessary high: limit %d used %d", tx.Gas(), receipt.GasUsed)
 	}
 	require.Equal(t, uint64(numTransactions), user.GetSentTransactions(), "invalid number of sent transactions reported")
 
