@@ -299,7 +299,12 @@ func TestSequential_Check(t *testing.T) {
 	scenario := parser.SequentialScenario{
 		Name: "Check",
 		Steps: []parser.Step{
-			{Function: parser.FuncCheckBlocksProduced},
+			{
+				Function: parser.FuncChecks,
+				SubChecks: []parser.CheckSpec{
+					{Function: parser.FuncCheckBlocksProduced},
+				},
+			},
 		},
 	}
 

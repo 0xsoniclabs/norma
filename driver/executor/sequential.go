@@ -229,16 +229,18 @@ func executeStep(
 		return waitForBlockProduction(ctx, net)
 	case parser.FuncWaitForEpoch:
 		return net.WaitForEpochChange()
-	case parser.FuncCheckBlocksProduced:
-		return execCheck(ctx, "blocks_rolling", step, checks)
-	case parser.FuncCheckBlocksHalted:
-		return execCheck(ctx, "blocks_halted", step, checks)
-	case parser.FuncCheckBlockHashes:
-		return execCheck(ctx, "blocks_hashes", step, checks)
-	case parser.FuncCheckBlockHeights:
-		return execCheck(ctx, "block_height", step, checks)
-	case parser.FuncCheckBlockGasRate:
-		return execCheck(ctx, "block_gas_rate", step, checks)
+	case parser.FuncChecks:
+		for i, spec := range step.SubChecks {
+			checkerName, ok := checkFunctionToCheckerName[spec.Function]
+			if !ok {
+				return fmt.Errorf("unknown check function: %q", spec.Function)
+			}
+			c := spec
+			if err := execCheck(ctx, checkerName, &c, checks); err != nil {
+				return fmt.Errorf("check %d (%s): %w", i+1, spec.Function, err)
+			}
+		}
+		return nil
 	case parser.FuncWaitFor:
 		slog.Info("waiting", "duration", step.Duration)
 		select {
@@ -511,8 +513,17 @@ func execUpdateRules(step *parser.Step, net driver.Network) error {
 	return nil
 }
 
-// execCheck runs a named checker with optional configuration from the step.
-func execCheck(ctx context.Context, checkerName string, step *parser.Step, checks checking.Checks) error {
+// checkFunctionToCheckerName maps check step functions to their checker names.
+var checkFunctionToCheckerName = map[parser.StepFunction]string{
+	parser.FuncCheckBlocksProduced: "blocks_rolling",
+	parser.FuncCheckBlocksHalted:   "blocks_halted",
+	parser.FuncCheckBlockHashes:    "blocks_hashes",
+	parser.FuncCheckBlockHeights:   "block_height",
+	parser.FuncCheckBlockGasRate:   "block_gas_rate",
+}
+
+// execCheck runs a named checker with configuration from the check spec.
+func execCheck(ctx context.Context, checkerName string, spec *parser.CheckSpec, checks checking.Checks) error {
 	if checks == nil {
 		slog.Warn("checks skipped (no checker configured)", "check", checkerName)
 		return nil
@@ -525,14 +536,14 @@ func execCheck(ctx context.Context, checkerName string, step *parser.Step, check
 
 	// Build configuration from step parameters.
 	config := checking.CheckerConfig{}
-	if step.Failing {
+	if spec.Failing {
 		config["failing"] = true
 	}
-	if step.Tolerance != nil {
-		config["tolerance"] = *step.Tolerance
+	if spec.Tolerance != nil {
+		config["tolerance"] = *spec.Tolerance
 	}
-	if step.Ceiling != nil {
-		config["ceiling"] = int(*step.Ceiling)
+	if spec.Ceiling != nil {
+		config["ceiling"] = int(*spec.Ceiling)
 	}
 
 	if len(config) > 0 {

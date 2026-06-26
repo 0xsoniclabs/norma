@@ -76,10 +76,7 @@ func (s *Step) Check() error {
 		return nil
 	case FuncAdvanceEpoch, FuncWaitForEpoch:
 		return nil
-	case FuncCheckBlocksProduced:
-		return nil // optional identifier
-	case FuncCheckBlocksHalted, FuncCheckBlockHashes,
-		FuncCheckBlockHeights, FuncCheckBlockGasRate:
+	case FuncChecks:
 		return nil
 	default:
 		return fmt.Errorf("unknown function: %q", s.Function)

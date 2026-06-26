@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/0xsoniclabs/norma/genesis"
@@ -33,23 +34,26 @@ import (
 type StepFunction string
 
 const (
-	FuncStartNode           StepFunction = "startNode"
-	FuncStopNode            StepFunction = "stopNode"
-	FuncUndelegate          StepFunction = "undelegate"
-	FuncUpdateRules         StepFunction = "updateRules"
-	FuncAdvanceEpoch        StepFunction = "advanceEpoch"
-	FuncWaitForEpoch        StepFunction = "waitForEpoch"
-	FuncRunApp              StepFunction = "runApp"
-	FuncStopApp             StepFunction = "stopApp"
+	FuncStartNode    StepFunction = "startNode"
+	FuncStopNode     StepFunction = "stopNode"
+	FuncUndelegate   StepFunction = "undelegate"
+	FuncUpdateRules  StepFunction = "updateRules"
+	FuncAdvanceEpoch StepFunction = "advanceEpoch"
+	FuncWaitForEpoch StepFunction = "waitForEpoch"
+	FuncRunApp       StepFunction = "runApp"
+	FuncStopApp      StepFunction = "stopApp"
+	FuncChecks       StepFunction = "checks"
+	FuncWaitFor      StepFunction = "waitFor"
+
+	// Check functions used as items inside a checks: step.
 	FuncCheckBlocksProduced StepFunction = "checkBlocksProduced"
 	FuncCheckBlocksHalted   StepFunction = "checkBlocksHalted"
 	FuncCheckBlockHashes    StepFunction = "checkBlockHashes"
 	FuncCheckBlockHeights   StepFunction = "checkBlockHeights"
 	FuncCheckBlockGasRate   StepFunction = "checkBlockGasRate"
-	FuncWaitFor             StepFunction = "waitFor"
 )
 
-// allStepFunctions lists every known step function constant.
+// allStepFunctions lists every known top-level step function constant.
 var allStepFunctions = [...]StepFunction{
 	FuncStartNode,
 	FuncStopNode,
@@ -59,12 +63,17 @@ var allStepFunctions = [...]StepFunction{
 	FuncWaitForEpoch,
 	FuncRunApp,
 	FuncStopApp,
+	FuncChecks,
+	FuncWaitFor,
+}
+
+// allCheckFunctions lists every check function valid as a sub-item of a checks: step.
+var allCheckFunctions = [...]StepFunction{
 	FuncCheckBlocksProduced,
 	FuncCheckBlocksHalted,
 	FuncCheckBlockHashes,
 	FuncCheckBlockHeights,
 	FuncCheckBlockGasRate,
-	FuncWaitFor,
 }
 
 // toStepFunction returns the StepFunction for a given string, or an error if not recognized.
@@ -75,6 +84,83 @@ func toStepFunction(s string) (StepFunction, error) {
 		}
 	}
 	return "", fmt.Errorf("unknown function: %q", s)
+}
+
+// toCheckFunction returns the StepFunction for a given check function string, or an error.
+func toCheckFunction(s string) (StepFunction, error) {
+	for _, fn := range allCheckFunctions {
+		if string(fn) == s {
+			return fn, nil
+		}
+	}
+	return "", fmt.Errorf("unknown check function: %q", s)
+}
+
+// CheckSpec represents a single check inside a checks: step.
+type CheckSpec struct {
+	Function  StepFunction
+	Ceiling   *float64
+	Tolerance *int
+	Failing   bool
+}
+
+// UnmarshalYAML implements custom YAML unmarshalling for CheckSpec.
+// A check can be either a plain function name string or a mapping with
+// the function name as key and optional parameters as siblings.
+func (c *CheckSpec) UnmarshalYAML(value *yaml.Node) error {
+	switch value.Kind {
+	case yaml.ScalarNode:
+		fn, err := toCheckFunction(value.Value)
+		if err != nil {
+			return fmt.Errorf("line %d: %w", value.Line, err)
+		}
+		c.Function = fn
+		return nil
+	case yaml.MappingNode:
+		return c.unmarshalCheckMapping(value)
+	default:
+		return fmt.Errorf("line %d: check must be a string or mapping", value.Line)
+	}
+}
+
+func (c *CheckSpec) unmarshalCheckMapping(node *yaml.Node) error {
+	for i := 0; i < len(node.Content); i += 2 {
+		keyNode := node.Content[i]
+		valNode := node.Content[i+1]
+		key := keyNode.Value
+
+		if fn, err := toCheckFunction(key); err == nil {
+			c.Function = fn
+			continue
+		}
+
+		switch key {
+		case "tolerance":
+			var v int
+			if err := valNode.Decode(&v); err != nil {
+				return fmt.Errorf("line %d: invalid tolerance: %w", keyNode.Line, err)
+			}
+			c.Tolerance = &v
+		case "ceiling":
+			var v float64
+			if err := valNode.Decode(&v); err != nil {
+				return fmt.Errorf("line %d: invalid ceiling: %w", keyNode.Line, err)
+			}
+			c.Ceiling = &v
+		case "failing":
+			var v bool
+			if err := valNode.Decode(&v); err != nil {
+				return fmt.Errorf("line %d: invalid failing: %w", keyNode.Line, err)
+			}
+			c.Failing = v
+		default:
+			return fmt.Errorf("line %d: unknown check parameter %q", keyNode.Line, key)
+		}
+	}
+	if c.Function == "" {
+		return fmt.Errorf("line %d: no known check function found in mapping", node.Line)
+	}
+	return nil
 }
 
 // SequentialScenario is the root element of a sequential scenario description.
@@ -109,9 +195,8 @@ type Step struct {
 	// Update rules parameters
 	Rules genesis.NetworkRulesPatch
 
-	// Check parameters
-	Ceiling   *float64
-	Tolerance *int
+	// Checks step parameters
+	SubChecks []CheckSpec
 
 	// WaitFor parameters
 	Duration time.Duration
@@ -213,6 +298,17 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 			return fmt.Errorf("waitFor duration must be positive, got %s", d)
 		}
 		s.Duration = d
+	case FuncChecks:
+		// Value is a sequence of check specifications.
+		if val.Kind == yaml.SequenceNode {
+			var specs []CheckSpec
+			if err := val.Decode(&specs); err != nil {
+				return fmt.Errorf("invalid checks list: %w", err)
+			}
+			s.SubChecks = specs
+		} else if val.Tag != "!!null" && val.Value != "" {
+			return fmt.Errorf("checks requires a list of check functions, got %q", val.Value)
+		}
 	default:
 		// Value is a string identifier (or null/empty for optional).
 		if val.Kind == yaml.ScalarNode && val.Tag != "!!null" && val.Value != "" {
@@ -224,20 +320,16 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 
 // stepFunctionDescriptions provides a human-readable description for each step function.
 var stepFunctionDescriptions = map[StepFunction]string{
-	FuncStartNode:           "Start a new network node (validator, observer, or rpc).",
-	FuncStopNode:            "Stop a running network node by name.",
-	FuncUndelegate:          "Undelegate stake from a validator node.",
-	FuncUpdateRules:         "Update one or more network rules (key/value pairs).",
-	FuncAdvanceEpoch:        "Advance the network to the next epoch by sending transactions.",
-	FuncWaitForEpoch:        "Wait until the network reaches the next epoch boundary.",
-	FuncRunApp:              "Start a load-generating application.",
-	FuncStopApp:             "Stop a running load-generating application by name.",
-	FuncCheckBlocksProduced: "Assert that all nodes have produced blocks within tolerance.",
-	FuncCheckBlocksHalted:   "Assert that block production has halted on the specified node.",
-	FuncCheckBlockHashes:    "Assert that all nodes agree on the same block hashes.",
-	FuncCheckBlockHeights:   "Assert that all nodes are within tolerance of the same block height.",
-	FuncCheckBlockGasRate:   "Assert that the block gas rate is at or below a ceiling.",
-	FuncWaitFor:             "Pause scenario execution for a fixed duration.",
+	FuncStartNode:    "Start a new network node (validator, observer, or rpc).",
+	FuncStopNode:     "Stop a running network node by name.",
+	FuncUndelegate:   "Undelegate stake from a validator node.",
+	FuncUpdateRules:  "Update one or more network rules (key/value pairs).",
+	FuncAdvanceEpoch: "Advance the network to the next epoch by sending transactions.",
+	FuncWaitForEpoch: "Wait until the network reaches the next epoch boundary.",
+	FuncRunApp:       "Start a load-generating application.",
+	FuncStopApp:      "Stop a running load-generating application by name.",
+	FuncChecks:       "Run one or more checks (checkBlocksProduced, checkBlocksHalted, checkBlockHashes, checkBlockHeights, checkBlockGasRate).",
+	FuncWaitFor:      "Pause scenario execution for a fixed duration.",
 }
 
 // paramDescriptions provides a human-readable description for each parameter key.
@@ -250,26 +342,20 @@ var paramDescriptions = map[string]string{
 	"failing":    "When true, the step is expected to fail; a passing result is treated as an error.",
 	"users":      "Number of concurrent user accounts the application should simulate.",
 	"rate":       "Transaction rate configuration for the application.",
-	"ceiling":    "Maximum allowed value (float64) for a check (e.g. gas rate ceiling).",
-	"tolerance":  "Allowed deviation (int, in blocks) between nodes for a height/production check.",
 }
 
 // allowedParams defines which parameter keys are valid for each step function.
 var allowedParams = map[StepFunction][]string{
-	FuncStartNode:           {"type", "imageName", "dataVolume", "stake", "instances", "failing"},
-	FuncStopNode:            {},
-	FuncRunApp:              {"type", "users", "rate"},
-	FuncStopApp:             {},
-	FuncUpdateRules:         {},
-	FuncUndelegate:          {},
-	FuncAdvanceEpoch:        {},
-	FuncWaitForEpoch:        {},
-	FuncWaitFor:             {},
-	FuncCheckBlocksProduced: {"tolerance", "failing"},
-	FuncCheckBlocksHalted:   {"failing"},
-	FuncCheckBlockHashes:    {"failing"},
-	FuncCheckBlockHeights:   {"tolerance", "failing"},
-	FuncCheckBlockGasRate:   {"ceiling", "failing"},
+	FuncStartNode:    {"type", "imageName", "dataVolume", "stake", "instances", "failing"},
+	FuncStopNode:     {},
+	FuncRunApp:       {"type", "users", "rate"},
+	FuncStopApp:      {},
+	FuncUpdateRules:  {},
+	FuncUndelegate:   {},
+	FuncAdvanceEpoch: {},
+	FuncWaitForEpoch: {},
+	FuncWaitFor:      {},
+	FuncChecks:       {},
 }
 
 // parseParam parses a single parameter key-value pair.
@@ -334,18 +420,6 @@ func (s *Step) parseParam(key string, val *yaml.Node) error {
 			return fmt.Errorf("invalid rate value: %w", err)
 		}
 		s.Rate = &r
-	case "ceiling":
-		var v float64
-		if err := val.Decode(&v); err != nil {
-			return fmt.Errorf("invalid ceiling value: %w", err)
-		}
-		s.Ceiling = &v
-	case "tolerance":
-		var v int
-		if err := val.Decode(&v); err != nil {
-			return fmt.Errorf("invalid tolerance value: %w", err)
-		}
-		s.Tolerance = &v
 	}
 	return nil
 }
@@ -392,20 +466,63 @@ func (s *SequentialScenario) setDefaults() {
 	}
 }
 
+// checkFunctionDescriptions provides a human-readable description for each sub-check function.
+var checkFunctionDescriptions = map[StepFunction]string{
+	FuncCheckBlocksProduced: "Assert that all nodes have produced blocks within tolerance.",
+	FuncCheckBlocksHalted:   "Assert that block production has halted.",
+	FuncCheckBlockHashes:    "Assert that all nodes agree on the same block hashes.",
+	FuncCheckBlockHeights:   "Assert that all nodes are within tolerance of the same block height.",
+	FuncCheckBlockGasRate:   "Assert that the block gas rate is at or below a ceiling.",
+}
+
+// checkFunctionParams lists the optional parameters accepted by each sub-check function.
+var checkFunctionParams = map[StepFunction][]string{
+	FuncCheckBlocksProduced: {"tolerance", "failing"},
+	FuncCheckBlocksHalted:   {"failing"},
+	FuncCheckBlockHashes:    {"failing"},
+	FuncCheckBlockHeights:   {"tolerance", "failing"},
+	FuncCheckBlockGasRate:   {"ceiling", "failing"},
+}
+
+// checkParamDescriptions provides a human-readable description for each sub-check parameter.
+var checkParamDescriptions = map[string]string{
+	"ceiling":   "Maximum allowed value (float64) for a gas rate check.",
+	"tolerance": "Allowed deviation (int, in blocks) between nodes for a height/production check.",
+	"failing":   "When true, the check is expected to fail; a passing result is treated as an error.",
+}
+
 // PrintSequentialHelp writes a formatted summary of all available sequential
 // scenario step functions, their descriptions, and accepted parameters to w.
 // It returns the first write error encountered, if any.
 func PrintSequentialHelp(w io.Writer) error {
+	stepFns := slices.SortedFunc(slices.Values(allStepFunctions[:]), func(a, b StepFunction) int {
+		return strings.Compare(string(a), string(b))
+	})
+	checkFns := slices.SortedFunc(slices.Values(allCheckFunctions[:]), func(a, b StepFunction) int {
+		return strings.Compare(string(a), string(b))
+	})
+
 	ew := &errWriter{w: w}
 	ew.printf("Sequential scenario step functions:\n\n")
-	for _, fn := range allStepFunctions {
+	for _, fn := range stepFns {
 		desc := stepFunctionDescriptions[fn]
 		params := allowedParams[fn]
 		ew.printf("  %-26s %s\n", fn, desc)
 		for _, p := range params {
 			ew.printf("      %-22s %s\n", p+":", paramDescriptions[p])
 		}
-		if len(params) > 0 {
+		if fn == FuncChecks {
+			ew.printf("\n    Available checks:\n")
+			for _, cfn := range checkFns {
+				cdesc := checkFunctionDescriptions[cfn]
+				cparams := checkFunctionParams[cfn]
+				ew.printf("      %-22s %s\n", cfn, cdesc)
+				for _, p := range cparams {
+					ew.printf("          %-18s %s\n", p+":", checkParamDescriptions[p])
+				}
+			}
+		}
+		if len(params) > 0 || fn == FuncChecks {
 			ew.printf("\n")
 		}
 	}

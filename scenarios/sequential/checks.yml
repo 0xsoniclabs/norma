@@ -19,21 +19,16 @@ Scenario:
 
   - waitFor: 15s
 
-  # Verify blocks are being produced (block height increases
-  # within a rolling window of samples).
-  - checkBlocksProduced:
-    tolerance: 10
-
-  # Verify all nodes agree on block hashes.
-  - checkBlockHashes
-
-  # Verify block heights across nodes are within tolerance.
-  - checkBlockHeights:
-    tolerance: 5
-
-  # Verify block gas rate does not exceed the ceiling.
-  - checkBlockGasRate:
-    ceiling: 1000000000000000
+  # Run health checks: blocks produced, hash agreement,
+  # height tolerance, and gas rate ceiling.
+  - checks:
+      - checkBlocksProduced:
+        tolerance: 10
+      - checkBlockGasRate:
+        ceiling: 1000000000000000
+      - checkBlockHashes
+      - checkBlockHeights:
+        tolerance: 5
 
   - stopApp: load
 
@@ -43,4 +38,5 @@ Scenario:
   - waitFor: 15s
 
   # Verify blocks have halted (monitoring data is stale after stopNode).
-  - checkBlocksHalted
+  - checks:
+      - checkBlocksHalted

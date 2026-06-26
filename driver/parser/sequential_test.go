@@ -260,68 +260,67 @@ func TestParseSequential_Checks(t *testing.T) {
 	input := `
 Name: Checks Test
 Scenario:
-  - checkBlocksProduced: my-node
-  - checkBlocksHalted:
-    failing: true
-  - checkBlockHeights:
-    tolerance: 5
-  - checkBlockGasRate:
-    ceiling: 16500000
-    failing: true
-  - checkBlockHashes:
+  - checks:
+      - checkBlocksHalted:
+        failing: true
+      - checkBlockHeights:
+        tolerance: 5
+      - checkBlockGasRate:
+        ceiling: 16500000
+        failing: true
+      - checkBlockHashes
 `
 	scenario, err := ParseSequentialBytes([]byte(input))
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
 
-	if len(scenario.Steps) != 5 {
-		t.Fatalf("expected 5 steps, got %d", len(scenario.Steps))
+	if len(scenario.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(scenario.Steps))
 	}
 
-	// checkBlocksProduced with identifier
 	step := scenario.Steps[0]
-	if step.Function != FuncCheckBlocksProduced {
-		t.Errorf("step 0: expected FuncCheckBlocksProduced, got %q", step.Function)
+	if step.Function != FuncChecks {
+		t.Errorf("expected FuncChecks, got %q", step.Function)
 	}
-	if step.Identifier != "my-node" {
-		t.Errorf("step 0: expected identifier 'my-node', got %q", step.Identifier)
+	if len(step.SubChecks) != 4 {
+		t.Fatalf("expected 4 sub-checks, got %d", len(step.SubChecks))
 	}
 
 	// checkBlocksHalted with failing
-	step = scenario.Steps[1]
-	if step.Function != FuncCheckBlocksHalted {
-		t.Errorf("step 1: expected FuncCheckBlocksHalted, got %q", step.Function)
+	check := step.SubChecks[0]
+	if check.Function != FuncCheckBlocksHalted {
+		t.Errorf("check 0: expected FuncCheckBlocksHalted, got %q", check.Function)
 	}
-	if !step.Failing {
-		t.Errorf("step 1: expected failing=true")
+	if !check.Failing {
+		t.Errorf("check 0: expected failing=true")
 	}
 
 	// checkBlockHeights with tolerance
-	step = scenario.Steps[2]
-	if step.Function != FuncCheckBlockHeights {
-		t.Errorf("step 2: expected FuncCheckBlockHeights, got %q", step.Function)
+	check = step.SubChecks[1]
+	if check.Function != FuncCheckBlockHeights {
+		t.Errorf("check 1: expected FuncCheckBlockHeights, got %q", check.Function)
 	}
-	if step.Tolerance == nil || *step.Tolerance != 5 {
-		t.Errorf("step 2: expected tolerance=5")
+	if check.Tolerance == nil || *check.Tolerance != 5 {
+		t.Errorf("check 1: expected tolerance=5")
 	}
 
 	// checkBlockGasRate with ceiling + failing
-	step = scenario.Steps[3]
-	if step.Function != FuncCheckBlockGasRate {
-		t.Errorf("step 3: expected FuncCheckBlockGasRate, got %q", step.Function)
+	check = step.SubChecks[2]
+	if check.Function != FuncCheckBlockGasRate {
+		t.Errorf("check 2: expected FuncCheckBlockGasRate, got %q", check.Function)
 	}
-	if step.Ceiling == nil || *step.Ceiling != 16500000 {
-		t.Errorf("step 3: expected ceiling=16500000")
+	if check.Ceiling == nil || *check.Ceiling != 16500000 {
+		t.Errorf("check 2: expected ceiling=16500000")
 	}
-	if !step.Failing {
-		t.Errorf("step 3: expected failing=true")
+	if !check.Failing {
+		t.Errorf("check 2: expected failing=true")
 	}
 
 	// checkBlockHashes
-	step = scenario.Steps[4]
-	if step.Function != FuncCheckBlockHashes {
-		t.Errorf("step 4: expected FuncCheckBlockHashes, got %q", step.Function)
+	check = step.SubChecks[3]
+	if check.Function != FuncCheckBlockHashes {
+		t.Errorf("check 3: expected FuncCheckBlockHashes, got %q", check.Function)
 	}
 }
 
@@ -466,18 +465,21 @@ Scenario:
   - startNode: validator-before-2
     type: validator
   - advanceEpoch
-  - checkBlocksProduced
+  - checks:
+      - checkBlocksProduced
   - stopNode: validator-before-1
   - stopNode: validator-before-2
-  - checkBlocksHalted
+  - checks:
+      - checkBlocksHalted
   - startNode: validator-before-1
     type: validator
   - startNode: validator-before-2
     type: validator
   - advanceEpoch
-  - checkBlocksProduced
-  - checkBlockHeights
-  - checkBlockHashes
+  - checks:
+      - checkBlocksProduced
+      - checkBlockHeights
+      - checkBlockHashes
   - stopApp: load
 `
 	scenario, err := ParseSequentialBytes([]byte(input))
@@ -488,7 +490,7 @@ Scenario:
 	if scenario.Name != "Single Proposer Blackout" {
 		t.Errorf("wrong name: %q", scenario.Name)
 	}
-	if len(scenario.Steps) != 17 {
+	if len(scenario.Steps) != 15 {
 		t.Errorf("expected 17 steps, got %d", len(scenario.Steps))
 	}
 
@@ -571,11 +573,11 @@ Scenario:
 `,
 		},
 		{
-			name: "ceiling on checkBlocksProduced",
+			name: "ceiling on checks step",
 			input: `
 Name: Test
 Scenario:
-  - checkBlocksProduced:
+  - checks:
     ceiling: 100
 `,
 		},
