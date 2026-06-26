@@ -184,6 +184,51 @@ func TestPeriodicSourceErrors(t *testing.T) {
 	}
 }
 
+func TestPeriodicSource_AddSameSubjectTwice(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	producer := monitoring.NewMockNodeLogProvider(ctrl)
+	producer.EXPECT().RegisterLogListener(gomock.Any()).AnyTimes()
+
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().RegisterListener(gomock.Any()).AnyTimes()
+	net.EXPECT().GetActiveNodes().AnyTimes().Return([]driver.Node{})
+
+	monitor, err := monitoring.NewMonitor(net, monitoring.MonitorConfig{OutputDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("failed to initiate monitor: %v", err)
+	}
+
+	testMetric := monitoring.Metric[monitoring.Node, monitoring.Series[monitoring.Time, int]]{
+		Name:        "TestMetric",
+		Description: "Test Metric",
+	}
+
+	source := NewPeriodicDataSourceWithPeriod[monitoring.Node, int](testMetric, monitor, 10*time.Millisecond)
+	node := monitoring.Node("validator-1")
+
+	first := &testSensor{}
+	if err := source.AddSubject(node, first); err != nil {
+		t.Fatalf("error to add subject first time: %s", err)
+	}
+
+	for first.count() < 2 {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	second := &testSensor{}
+	if err := source.AddSubject(node, second); err != nil {
+		t.Fatalf("error to add subject second time: %s", err)
+	}
+
+	for second.count() < 2 {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if err := source.Shutdown(); err != nil {
+		t.Fatalf("unexpected shutdown error: %v", err)
+	}
+}
+
 type testSensor struct {
 	counts atomic.Int32
 }
