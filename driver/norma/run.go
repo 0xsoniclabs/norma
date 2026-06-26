@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -213,10 +214,18 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 	if err != nil {
 		return err
 	}
+	var eventExecutions []executor.EventExecution
 	defer func() {
 		slog.Info("shutting down data monitor ...")
 		if err := monitor.Shutdown(); err != nil {
 			slog.Error("error during monitor shutdown", "error", err)
+		}
+		if err := appendScenarioEventTimings(
+			monitor.GetMeasurementFileName(),
+			label,
+			eventExecutions,
+		); err != nil {
+			slog.Warn("failed to export scenario event execution timings", "error", err)
 		}
 		slog.Info("monitoring data was written", "output", outputDir)
 		slog.Info("raw data was exported", "file", monitor.GetMeasurementFileName())
@@ -269,7 +278,13 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 	slog.Info("running scenario", "path", path)
 	logger := startProgressLogger(monitor, net)
 	defer logger.shutdown()
-	err = executor.Run(ctx, clock, net, &scenario, checks)
+	eventExecutions, err = executor.RunAndCaptureEventExecution(
+		ctx,
+		clock,
+		net,
+		&scenario,
+		checks,
+	)
 	if err != nil {
 		dumpNodeLogs(ctx, net)
 		return err
@@ -479,4 +494,41 @@ func dumpNodeLogs(ctx context.Context, net driver.Network) {
 		}
 		slog.Error("node log on failure", "node", node.GetLabel(), "log", string(data))
 	}
+}
+
+func appendScenarioEventTimings(
+	measurementFile string,
+	label string,
+	events []executor.EventExecution,
+) (err error) {
+	if len(events) == 0 {
+		return nil
+	}
+
+	file, err := os.OpenFile(measurementFile, os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, file.Close()) }()
+
+	for _, e := range events {
+		start := e.Start.UTC().UnixNano()
+		duration := e.End.Sub(e.Start).Nanoseconds()
+		record := monitoring.CsvRecord{
+			Record: monitoring.Record{
+				Network: "network",
+				App:     e.Name,
+				Time:    &start,
+				Value:   fmt.Sprintf("%d", duration),
+			},
+			Metric: "ScenarioEventExecutionDuration",
+			Run:    label,
+		}
+
+		if _, err := record.WriteTo(file); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
