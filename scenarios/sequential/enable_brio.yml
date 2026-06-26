@@ -7,13 +7,13 @@ InitialNetworkRules:
   UPGRADES_BRIO: false
 
 Scenario:
-  - startNode: validator-0
+  - startNode: validator-new
     type: validator
     instances: 5 # ensure the network continues after failures of other nodes
 
   - waitFor: 5s
 
-  - startNode: validator-1
+  - startNode: validator-old
     type: validator
     imageName: "sonic:v2.1.6"
     failing: true  # this node should stop working after the hardfork
@@ -25,7 +25,7 @@ Scenario:
 
   - waitFor: 5s
 
-  - startNode: validator-2
+  - startNode: validator-old-after-upgrade
     type: validator
     imageName: "sonic:v2.1.6"
     failing: true  # this node should not be able to sync when Brio is enabled

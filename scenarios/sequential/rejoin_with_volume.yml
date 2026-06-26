@@ -1,24 +1,26 @@
 Name: Rejoin With Volume Test
 
 Scenario:
-  - startNode: validator-0
+  - startNode: stable-validator
     type: validator
     instances: 3
 
   - waitForEpoch
 
-  - startNode: validator-1
+  - startNode: migrating-validator
     type: validator
     imageName: "sonic:v2.1.6"
-    dataVolume: validator-1-data
+    dataVolume: validator-data
 
   - waitForEpoch
 
-  - stopNode: validator-1
+  - waitFor: 15s
 
-  - startNode: validator-1
+  - stopNode: migrating-validator
+
+  - startNode: migrating-validator
     type: validator
     imageName: "sonic:local"
-    dataVolume: validator-1-data
+    dataVolume: validator-data
 
   - waitForEpoch
