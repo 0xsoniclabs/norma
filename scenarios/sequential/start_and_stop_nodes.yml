@@ -1,7 +1,7 @@
 Name: Start and Stop Nodes Test
 
 Scenario:
-  - startNode: validator-0
+  - startNode: background-validator 
     type: validator
     instances: 2
 
