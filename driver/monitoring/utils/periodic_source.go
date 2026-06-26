@@ -104,10 +104,11 @@ func (s *PeriodicDataSource[S, T]) Shutdown() error {
 }
 
 func (s *PeriodicDataSource[S, T]) AddSubject(subject S, sensor Sensor[T]) error {
-	data, err := s.NewSubject(subject)
-	if err != nil {
-		return err
+	if running, exists := s.subjects[subject]; exists {
+		_ = running.Stop()
 	}
+
+	data := s.GetOrAddSubject(subject)
 
 	subjectStop := process{make(chan bool), make(chan error, 1)}
 	s.subjects[subject] = subjectStop
