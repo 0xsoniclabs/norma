@@ -78,6 +78,9 @@ type LocalNetwork struct {
 	// a context for app management operations on the network
 	appContext app.AppContext
 
+	// appContextMu guards lazy initialization of appContext.
+	appContextMu sync.Mutex
+
 	// temporary host directory used while preparing genesis artifacts
 	genesisTmpDir string
 	// host path to the generated genesis.json file
@@ -120,70 +123,6 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 
 	// Let the RPC pool to start RPC workers when a node start.
 	net.RegisterListener(net.rpcWorkerPool)
-
-	// Start all validators.
-	type nodeResult struct {
-		idx int
-		err error
-	}
-	numValidators := config.Validators.GetNumValidators()
-	results := make(chan nodeResult, numValidators)
-	var idx int
-	for _, validator := range config.Validators {
-		for j := 0; j < validator.Instances; j++ {
-			image := validator.ImageName
-			label := fmt.Sprintf("validator-%d", j)
-			if len(validator.Name) != 0 {
-				label = fmt.Sprintf("%s-%d", validator.Name, j)
-			}
-			go func(idx int, label string) {
-				validatorId := idx + 1
-				nodeConfig := node.OperaNodeConfig{
-					ValidatorId:     &validatorId,
-					Failing:         validator.Failing,
-					Image:           image,
-					NetworkConfig:   config,
-					Label:           label,
-					GenesisJsonPath: &net.genesisJsonPath,
-					ExtraArguments:  validator.ExtraArguments,
-				}
-				_, err := net.createNode(ctx, &nodeConfig)
-				if err != nil {
-					err = fmt.Errorf("validator %q (idx=%d, image=%s): %w", label, idx, image, err)
-				}
-				results <- nodeResult{idx, err}
-			}(idx, label)
-			idx++
-		}
-	}
-
-	errs := make([]error, numValidators)
-	for i := 0; i < numValidators; i++ {
-		select {
-		case r := <-results:
-			errs[r.idx] = r.err
-		case <-ctx.Done():
-			return nil, errors.Join(
-				fmt.Errorf("context cancelled while waiting for validators to start: %w", ctx.Err()),
-				net.Shutdown(),
-			)
-		}
-	}
-
-	// If starting the validators failed, the network startup should fail.
-	if err := errors.Join(errs...); err != nil {
-		return nil, errors.Join(err, net.Shutdown())
-	}
-
-	// Setup infrastructure for managing applications on the network.
-	appContext, err := app.NewContext(net, primaryAccount, config.NetworkRules)
-	if err != nil {
-		return nil, errors.Join(
-			fmt.Errorf("failed to create app context; %w", err),
-			net.Shutdown(),
-		)
-	}
-	net.appContext = appContext
 
 	return net, nil
 }
@@ -449,7 +388,27 @@ func (a *localApplication) GetReceivedTransactions() (uint64, error) {
 	return a.controller.GetReceivedTransactions()
 }
 
+// ensureAppContext initializes the appContext lazily on first use.
+// It requires at least one node to be running (for RPC connectivity).
+func (n *LocalNetwork) ensureAppContext() error {
+	n.appContextMu.Lock()
+	defer n.appContextMu.Unlock()
+	if n.appContext != nil {
+		return nil
+	}
+	ctx, err := app.NewContext(n, n.primaryAccount, n.config.NetworkRules)
+	if err != nil {
+		return fmt.Errorf("failed to create app context: %w", err)
+	}
+	n.appContext = ctx
+	return nil
+}
+
 func (n *LocalNetwork) CreateApplication(ctx context.Context, config *driver.ApplicationConfig) (driver.Application, error) {
+	if err := n.ensureAppContext(); err != nil {
+		return nil, fmt.Errorf("failed to initialize app context; %v", err)
+	}
+
 	rpcClient, err := n.DialRandomRpc()
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to RPC to initialize the application; %v", err)

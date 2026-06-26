@@ -18,6 +18,7 @@ package executor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -43,16 +44,21 @@ func RunSequential(
 		checks,
 		&netBasedValidatorRegistry{net: network},
 		nil,
+		nil,
 	)
 }
 
 // RunSequentialAndCaptureEventExecution executes a sequential scenario and
 // returns wall-clock start/end intervals for every executed step.
+// genesisValidatorIds maps node labels to their pre-assigned validator IDs
+// (from genesis configuration); these nodes are started without on-chain
+// registration.
 func RunSequentialAndCaptureEventExecution(
 	ctx context.Context,
 	network driver.Network,
 	scenario *parser.SequentialScenario,
 	checks checking.Checks,
+	genesisValidatorIds map[string]int,
 ) ([]EventExecution, error) {
 	executions := make([]EventExecution, 0, len(scenario.Steps))
 	err := runSequentialWithObserver(
@@ -64,6 +70,7 @@ func RunSequentialAndCaptureEventExecution(
 		func(execution EventExecution) {
 			executions = append(executions, execution)
 		},
+		genesisValidatorIds,
 	)
 	return executions, err
 }
@@ -88,6 +95,7 @@ func runSequential(
 		checks,
 		registry,
 		nil,
+		nil,
 	)
 }
 
@@ -98,6 +106,7 @@ func runSequentialWithObserver(
 	checks checking.Checks,
 	registry validatorRegistry,
 	onStepExecuted func(EventExecution),
+	genesisValidatorIds map[string]int,
 ) error {
 	if err := scenario.Check(); err != nil {
 		return err
@@ -112,12 +121,8 @@ func runSequentialWithObserver(
 		nodeHistory:  make(map[string]bool),
 		validatorIds: make(map[string]int),
 	}
-
-	// Populate state with nodes already present in the network (bootstrap validators).
-	for _, node := range network.GetActiveNodes() {
-		label := node.GetLabel()
-		state.nodes[label] = node
-		state.nodeHistory[label] = true
+	for label, id := range genesisValidatorIds {
+		state.validatorIds[label] = id
 	}
 
 	for i, step := range scenario.Steps {
@@ -279,7 +284,11 @@ func execStartNode(
 	// We'll wait for new nodes to reach this height before proceeding.
 	targetBlock, err := getNetworkBlockHeight(ctx, net)
 	if err != nil {
-		slog.Warn("failed to get network block height; node sync target defaults to 0", "error", err)
+		if !errors.Is(err, driver.ErrEmptyNetwork) {
+			slog.Warn("failed to get network block height; node sync target defaults to 0", "error", err)
+		} else {
+			targetBlock = 0
+		}
 	}
 
 	var newNodes []driver.Node
@@ -290,14 +299,15 @@ func execStartNode(
 		}
 
 		var validatorId *int
-		if isValidator && !isRejoin {
-			id, err := registry.registerNewValidator()
-			if err != nil {
-				return fmt.Errorf("failed to register validator %s: %w", instanceName, err)
-			}
-			validatorId = &id
-		} else if isValidator && isRejoin {
+		if isValidator {
 			if id, ok := state.validatorIds[instanceName]; ok {
+				// Use pre-assigned ID (genesis validator or rejoin).
+				validatorId = &id
+			} else if !isRejoin {
+				id, err := registry.registerNewValidator()
+				if err != nil {
+					return fmt.Errorf("failed to register validator %s: %w", instanceName, err)
+				}
 				validatorId = &id
 			}
 		}
