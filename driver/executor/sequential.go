@@ -25,6 +25,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/checking"
 	"github.com/0xsoniclabs/norma/driver/parser"
+	"github.com/0xsoniclabs/norma/genesis"
 )
 
 // RunSequential executes a sequential scenario on the given network.
@@ -515,11 +516,12 @@ func execUpdateRules(step *parser.Step, net driver.Network) error {
 
 // checkFunctionToCheckerName maps check step functions to their checker names.
 var checkFunctionToCheckerName = map[parser.StepFunction]string{
-	parser.FuncCheckBlocksProduced: "blocks_rolling",
-	parser.FuncCheckBlocksHalted:   "blocks_halted",
+	parser.FuncCheckBlockGasRate:   "block_gas_rate",
 	parser.FuncCheckBlockHashes:    "blocks_hashes",
 	parser.FuncCheckBlockHeights:   "block_height",
-	parser.FuncCheckBlockGasRate:   "block_gas_rate",
+	parser.FuncCheckBlocksHalted:   "blocks_halted",
+	parser.FuncCheckBlocksProduced: "blocks_rolling",
+	parser.FuncCheckNetworkRules:   "network_rules",
 }
 
 // execCheck runs a named checker with configuration from the check spec.
@@ -544,6 +546,9 @@ func execCheck(ctx context.Context, checkerName string, spec *parser.CheckSpec, 
 	}
 	if spec.Ceiling != nil {
 		config["ceiling"] = int(*spec.Ceiling)
+	}
+	if spec.Rules != (genesis.NetworkRulesPatch{}) {
+		config["rules"] = spec.Rules
 	}
 
 	if len(config) > 0 {

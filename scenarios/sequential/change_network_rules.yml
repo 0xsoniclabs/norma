@@ -1,0 +1,50 @@
+Name: Change Network Rules Test
+
+InitialNetworkRules:
+  Epochs:
+    MaxEpochDuration: 10s
+    MaxEpochGas: 1500000000000
+  Blocks:
+    MaxBlockGas: 20500000000
+
+Scenario:
+  - startNode: local
+    type: validator
+    imageName: "sonic:local"
+
+  - startNode: v2.1.6
+    type: validator
+    imageName: "sonic:v2.1.6"
+
+  - waitFor: 10s
+
+  # Verify the initial rules are applied on all nodes.
+  - checks:
+      - checkBlocksProduced
+      - checkNetworkRules:
+        rules:
+          Epochs:
+            MaxEpochDuration: 10s
+            MaxEpochGas: 1500000000000
+          Blocks:
+            MaxBlockGas: 20500000000
+
+  # Change the block gas limit.
+  - updateRules:
+      Blocks:
+        MaxBlockGas: 10000000000
+
+  - waitForEpoch
+
+  - waitForEpoch
+
+  # Verify the updated rules are now active on all nodes.
+  - checks:
+      - checkBlocksProduced
+      - checkNetworkRules:
+        rules:
+          Epochs:
+            MaxEpochDuration: 10s
+            MaxEpochGas: 1500000000000
+          Blocks:
+            MaxBlockGas: 10000000000

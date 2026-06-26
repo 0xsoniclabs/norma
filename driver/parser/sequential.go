@@ -46,11 +46,12 @@ const (
 	FuncWaitFor      StepFunction = "waitFor"
 
 	// Check functions used as items inside a checks: step.
-	FuncCheckBlocksProduced StepFunction = "checkBlocksProduced"
-	FuncCheckBlocksHalted   StepFunction = "checkBlocksHalted"
+	FuncCheckBlockGasRate   StepFunction = "checkBlockGasRate"
 	FuncCheckBlockHashes    StepFunction = "checkBlockHashes"
 	FuncCheckBlockHeights   StepFunction = "checkBlockHeights"
-	FuncCheckBlockGasRate   StepFunction = "checkBlockGasRate"
+	FuncCheckBlocksHalted   StepFunction = "checkBlocksHalted"
+	FuncCheckBlocksProduced StepFunction = "checkBlocksProduced"
+	FuncCheckNetworkRules   StepFunction = "checkNetworkRules"
 )
 
 // allStepFunctions lists every known top-level step function constant.
@@ -69,11 +70,12 @@ var allStepFunctions = [...]StepFunction{
 
 // allCheckFunctions lists every check function valid as a sub-item of a checks: step.
 var allCheckFunctions = [...]StepFunction{
-	FuncCheckBlocksProduced,
-	FuncCheckBlocksHalted,
+	FuncCheckBlockGasRate,
 	FuncCheckBlockHashes,
 	FuncCheckBlockHeights,
-	FuncCheckBlockGasRate,
+	FuncCheckBlocksHalted,
+	FuncCheckBlocksProduced,
+	FuncCheckNetworkRules,
 }
 
 // toStepFunction returns the StepFunction for a given string, or an error if not recognized.
@@ -102,6 +104,7 @@ type CheckSpec struct {
 	Ceiling   *float64
 	Tolerance *int
 	Failing   bool
+	Rules     genesis.NetworkRulesPatch
 }
 
 // UnmarshalYAML implements custom YAML unmarshalling for CheckSpec.
@@ -153,6 +156,12 @@ func (c *CheckSpec) unmarshalCheckMapping(node *yaml.Node) error {
 				return fmt.Errorf("line %d: invalid failing: %w", keyNode.Line, err)
 			}
 			c.Failing = v
+		case "rules":
+			var patch genesis.NetworkRulesPatch
+			if err := valNode.Decode(&patch); err != nil {
+				return fmt.Errorf("line %d: invalid rules: %w", keyNode.Line, err)
+			}
+			c.Rules = patch
 		default:
 			return fmt.Errorf("line %d: unknown check parameter %q", keyNode.Line, key)
 		}
@@ -328,7 +337,7 @@ var stepFunctionDescriptions = map[StepFunction]string{
 	FuncWaitForEpoch: "Wait until the network reaches the next epoch boundary.",
 	FuncRunApp:       "Start a load-generating application.",
 	FuncStopApp:      "Stop a running load-generating application by name.",
-	FuncChecks:       "Run one or more checks (checkBlocksProduced, checkBlocksHalted, checkBlockHashes, checkBlockHeights, checkBlockGasRate).",
+	FuncChecks:       "Run one or more checks (see 'Available checks' below).",
 	FuncWaitFor:      "Pause scenario execution for a fixed duration.",
 }
 
@@ -468,27 +477,30 @@ func (s *SequentialScenario) setDefaults() {
 
 // checkFunctionDescriptions provides a human-readable description for each sub-check function.
 var checkFunctionDescriptions = map[StepFunction]string{
-	FuncCheckBlocksProduced: "Assert that all nodes have produced blocks within tolerance.",
-	FuncCheckBlocksHalted:   "Assert that block production has halted.",
+	FuncCheckBlockGasRate:   "Assert that the block gas rate is at or below a ceiling.",
 	FuncCheckBlockHashes:    "Assert that all nodes agree on the same block hashes.",
 	FuncCheckBlockHeights:   "Assert that all nodes are within tolerance of the same block height.",
-	FuncCheckBlockGasRate:   "Assert that the block gas rate is at or below a ceiling.",
+	FuncCheckBlocksHalted:   "Assert that block production has halted.",
+	FuncCheckBlocksProduced: "Assert that all nodes have produced blocks within tolerance.",
+	FuncCheckNetworkRules:   "Assert that the active network rules on all nodes match the expected rules patch.",
 }
 
 // checkFunctionParams lists the optional parameters accepted by each sub-check function.
 var checkFunctionParams = map[StepFunction][]string{
-	FuncCheckBlocksProduced: {"tolerance", "failing"},
-	FuncCheckBlocksHalted:   {"failing"},
+	FuncCheckBlockGasRate:   {"ceiling", "failing"},
 	FuncCheckBlockHashes:    {"failing"},
 	FuncCheckBlockHeights:   {"tolerance", "failing"},
-	FuncCheckBlockGasRate:   {"ceiling", "failing"},
+	FuncCheckBlocksHalted:   {"failing"},
+	FuncCheckBlocksProduced: {"tolerance", "failing"},
+	FuncCheckNetworkRules:   {"rules", "failing"},
 }
 
 // checkParamDescriptions provides a human-readable description for each sub-check parameter.
 var checkParamDescriptions = map[string]string{
 	"ceiling":   "Maximum allowed value (float64) for a gas rate check.",
-	"tolerance": "Allowed deviation (int, in blocks) between nodes for a height/production check.",
 	"failing":   "When true, the check is expected to fail; a passing result is treated as an error.",
+	"rules":     "Expected network rules patch (NetworkRulesPatch field structure).",
+	"tolerance": "Allowed deviation (int, in blocks) between nodes for a height/production check.",
 }
 
 // PrintSequentialHelp writes a formatted summary of all available sequential
