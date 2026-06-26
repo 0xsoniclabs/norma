@@ -352,10 +352,18 @@ func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScena
 	if err != nil {
 		return err
 	}
+	var stepExecutions []executor.EventExecution
 	defer func() {
 		slog.Info("shutting down data monitor ...")
 		if err := monitor.Shutdown(); err != nil {
 			slog.Error("error during monitor shutdown", "error", err)
+		}
+		if err := appendScenarioEventTimings(
+			monitor.GetMeasurementFileName(),
+			label,
+			stepExecutions,
+		); err != nil {
+			slog.Warn("failed to export scenario event execution timings", "error", err)
 		}
 		slog.Info("monitoring data was written", "output", outputDir)
 		slog.Info("raw data was exported", "file", monitor.GetMeasurementFileName())
@@ -407,7 +415,13 @@ func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScena
 	slog.Info("running scenario", "path", path)
 	logger := startProgressLogger(monitor, net)
 	defer logger.shutdown()
-	if err := executor.RunSequential(ctx, net, scenario, checks); err != nil {
+	stepExecutions, err = executor.RunSequentialAndCaptureEventExecution(
+		ctx,
+		net,
+		scenario,
+		checks,
+	)
+	if err != nil {
 		return err
 	}
 	slog.Info("execution completed successfully")

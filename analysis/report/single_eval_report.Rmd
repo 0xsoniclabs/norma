@@ -28,7 +28,7 @@ if (nrow(all_data) > 0) {
 scenario_event_data <- all_data %>%
     dplyr::filter(metric == "ScenarioEventExecutionDuration") %>%
     transmute(
-        event_name = app,
+        event_name = as.character(app),
         start_sec = elapsed_sec,
         duration_sec = as.numeric(value) / 1e9
     ) %>%
@@ -76,7 +76,12 @@ filter_metric <- function(data, metric_name) {
 
 # ggplot theme with a horizontally centered title.
 norma_theme <- function() {
-    theme(plot.title = element_text(hjust = 0.5))
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        plot.background = element_blank(),
+        panel.background = element_blank(),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
+    )
 }
 
 # Scatter plot of a block metric with a smooth trend line.
@@ -115,20 +120,22 @@ add_scenario_event_overlay <- function(event_data = scenario_event_data) {
         return(NULL)
     }
 
-    geom_rect(
-        data = event_data,
-        aes(
-            xmin = start_sec,
-            xmax = visible_end_sec,
-            ymin = -Inf,
-            ymax = Inf,
-            fill = event_fill
+    list(
+        geom_rect(
+            data = event_data,
+            aes(
+                xmin = start_sec,
+                xmax = visible_end_sec,
+                ymin = -Inf,
+                ymax = Inf,
+                fill = event_fill
+            ),
+            inherit.aes = FALSE,
+            alpha = 0.08,
+            show.legend = FALSE
         ),
-        inherit.aes = FALSE,
-        alpha = 0.08,
-        show.legend = FALSE
-    ) +
         scale_fill_manual(values = scenario_event_fill_colors, drop = FALSE)
+    )
 }
 
 # Plot of a per-node metric over block height.

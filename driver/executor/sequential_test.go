@@ -19,7 +19,9 @@ package executor
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/checking"
@@ -354,5 +356,42 @@ func TestSequential_MultiInstanceNode(t *testing.T) {
 
 	if err := runSequential(t.Context(), net, &scenario, nil, registry); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSequential_RunAndCaptureEventExecution_CapturesAllSteps(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return(nil)
+
+	scenario := parser.SequentialScenario{
+		Name: "Capture",
+		Steps: []parser.Step{
+			{Function: parser.FuncWaitFor, Duration: time.Millisecond},
+			{Function: parser.FuncWaitFor, Duration: 2 * time.Millisecond},
+		},
+	}
+
+	executions, err := RunSequentialAndCaptureEventExecution(
+		t.Context(),
+		net,
+		&scenario,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got, want := len(executions), len(scenario.Steps); got != want {
+		t.Fatalf("unexpected number of captured steps: got %d, want %d", got, want)
+	}
+
+	for i, execution := range executions {
+		if !execution.Start.Before(execution.End) && !execution.Start.Equal(execution.End) {
+			t.Fatalf("step %d has invalid timestamps: start=%v end=%v", i+1, execution.Start, execution.End)
+		}
+		if !strings.Contains(execution.Name, string(parser.FuncWaitFor)) {
+			t.Fatalf("step %d captured unexpected name: %q", i+1, execution.Name)
+		}
 	}
 }
