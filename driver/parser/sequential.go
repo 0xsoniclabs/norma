@@ -79,9 +79,10 @@ func toStepFunction(s string) (StepFunction, error) {
 // SequentialScenario is the root element of a sequential scenario description.
 // Unlike the time-based Scenario, it defines an ordered list of blocking steps.
 type SequentialScenario struct {
-	Name         string            `yaml:"Name"`
-	InitialRules map[string]string `yaml:"InitialNetworkRules"`
-	Steps        []Step            `yaml:"Scenario"`
+	Name             string            `yaml:"Name"`
+	InitialRules     map[string]string `yaml:"InitialNetworkRules"`
+	DisableEndChecks bool              `yaml:"DisableEndChecks,omitempty"`
+	Steps            []Step            `yaml:"Scenario"`
 }
 
 // Step is a single blocking operation in a sequential scenario.
@@ -389,6 +390,17 @@ func (s *SequentialScenario) setDefaults() {
 	}
 	if _, explicit := s.InitialRules["MAX_EPOCH_DURATION"]; !explicit {
 		s.InitialRules["MAX_EPOCH_DURATION"] = DefaultMaxEpochDuration
+	}
+
+	// if the scenario does not disable end checks, append the default end
+	// checks to the steps list
+	if !s.DisableEndChecks {
+		s.Steps = append(s.Steps,
+			Step{Function: FuncAdvanceEpoch},
+			Step{Function: FuncAdvanceEpoch},
+			Step{Function: FuncCheckBlockHashes},
+			Step{Function: FuncCheckBlockHeights},
+		)
 	}
 }
 
