@@ -20,8 +20,8 @@ func TestNetworkRulesChecker_ConfigureAndCheck_Success(t *testing.T) {
 
 	config := CheckerConfig{
 		"rules": map[string]any{
-			"blocks": map[string]any{
-				"max_block_gas": 20500000000,
+			"Blocks": map[string]any{
+				"MaxBlockGas": 20500000000,
 			},
 		},
 	}

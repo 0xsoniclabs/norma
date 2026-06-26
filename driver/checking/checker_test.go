@@ -12,7 +12,7 @@ func TestCheckerConfig_Success(t *testing.T) {
 		{"start": 1},
 		{"ceiling": 1},
 		{"slack": 1},
-		{"rules": map[string]any{"blocks": map[string]any{"max_block_gas": 1}}},
+		{"rules": map[string]any{"Blocks": map[string]any{"MaxBlockGas": 1}}},
 	}
 
 	for i, config := range configs {
