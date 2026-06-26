@@ -80,7 +80,9 @@ func newValidatorStakeSourceWithCollector(
 			case now := <-ticker.C:
 				stakes, err := res.collector()
 				if err != nil {
-					slog.Error("failed to fetch validator stakes", "metric", ValidatorStake.Name, "error", err)
+					if !errors.Is(err, driver.ErrEmptyNetwork) {
+						slog.Error("failed to fetch validator stakes", "metric", ValidatorStake.Name, "error", err)
+					}
 					continue
 				}
 

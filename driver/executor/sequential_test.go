@@ -34,7 +34,6 @@ import (
 func TestSequential_EmptyScenario(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().GetActiveNodes().Return(nil)
 
 	scenario := parser.SequentialScenario{
 		Name:  "Empty",
@@ -52,7 +51,6 @@ func TestSequential_StartAndStopNode(t *testing.T) {
 	registry := NewMockvalidatorRegistry(ctrl)
 	node := driver.NewMockNode(ctrl)
 
-	net.EXPECT().GetActiveNodes().Return(nil)
 	// DialRandomRpc returns error so sync wait is skipped.
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 	node.EXPECT().GetLabel().Return("validator-A").AnyTimes()
@@ -99,7 +97,6 @@ func TestSequential_StopNodeWithoutUndelegate(t *testing.T) {
 	registry := NewMockvalidatorRegistry(ctrl)
 	node := driver.NewMockNode(ctrl)
 
-	net.EXPECT().GetActiveNodes().Return(nil)
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 	node.EXPECT().GetLabel().Return("validator-A").AnyTimes()
 	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
@@ -142,7 +139,6 @@ func TestSequential_RejoinNode(t *testing.T) {
 	node1 := driver.NewMockNode(ctrl)
 	node2 := driver.NewMockNode(ctrl)
 
-	net.EXPECT().GetActiveNodes().Return(nil)
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 	node1.EXPECT().GetLabel().Return("validator-A").AnyTimes()
 	node1.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
@@ -198,7 +194,6 @@ func TestSequential_RejoinNode(t *testing.T) {
 func TestSequential_RunAndStopApp(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().GetActiveNodes().Return(nil)
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 	app := driver.NewMockApplication(ctrl)
 
@@ -235,7 +230,6 @@ func TestSequential_RunAndStopApp(t *testing.T) {
 func TestSequential_UpdateRules(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().GetActiveNodes().Return(nil)
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 	baseFee := genesis.BigIntValue(*big.NewInt(3000000000))
 
@@ -268,7 +262,6 @@ func TestSequential_AdvanceEpoch(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 
-	net.EXPECT().GetActiveNodes().Return(nil)
 	net.EXPECT().AdvanceEpoch(1).Return(nil)
 	// DialRandomRpc returns error so waitForBlockProduction is skipped.
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
@@ -288,7 +281,6 @@ func TestSequential_AdvanceEpoch(t *testing.T) {
 func TestSequential_Check(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().GetActiveNodes().Return(nil)
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 	checker := checking.NewMockChecker(ctrl)
 
@@ -316,7 +308,6 @@ func TestSequential_Check(t *testing.T) {
 func TestSequential_ContextCancellation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().GetActiveNodes().Return(nil)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // Cancel immediately.
@@ -341,7 +332,6 @@ func TestSequential_MultiInstanceNode(t *testing.T) {
 	node1 := driver.NewMockNode(ctrl)
 	node2 := driver.NewMockNode(ctrl)
 
-	net.EXPECT().GetActiveNodes().Return(nil)
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 	node1.EXPECT().GetLabel().Return("validators-0").AnyTimes()
 	node1.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
@@ -376,7 +366,6 @@ func TestSequential_MultiInstanceNode(t *testing.T) {
 func TestSequential_RunAndCaptureEventExecution_CapturesAllSteps(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().GetActiveNodes().Return(nil)
 
 	scenario := parser.SequentialScenario{
 		Name: "Capture",
@@ -390,6 +379,7 @@ func TestSequential_RunAndCaptureEventExecution_CapturesAllSteps(t *testing.T) {
 		t.Context(),
 		net,
 		&scenario,
+		nil,
 		nil,
 	)
 	if err != nil {
