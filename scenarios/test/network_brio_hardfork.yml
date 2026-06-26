@@ -11,10 +11,10 @@ duration: 180
 validators:
   - name: validators
     instances: 3 # 3 validators out of 4 can keep super-majority and run the network
-    imagename: "Sonic:latest"
+    imagename: "sonic:latest"
   - name: validator-v2.1.2
     failing: true
-    imagename: "Sonic:v2.1.2"   # this node should stop working after the hardfork
+    imagename: "sonic:v2.1.2"   # this node should stop working after the hardfork
 
 # Start with the hardfork disabled
 # while enabling the hardfork later

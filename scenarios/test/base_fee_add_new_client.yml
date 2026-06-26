@@ -24,7 +24,7 @@ network_rules:
 # Initial validator nodes in the network.
 validators:
   - name: validator-v2.0.2
-    imagename: "Sonic:v2.0.2"
+    imagename: "sonic:v2.0.2"
 
 # Append updated nodes in the network.
 nodes:

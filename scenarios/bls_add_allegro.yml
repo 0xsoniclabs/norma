@@ -9,14 +9,14 @@ duration: 60
 
 validators:
   - name: validator-local
-    imagename: "Sonic:local"
+    imagename: "sonic:local"
     instances: 2
 
   - name: validator-v216
-    imagename: "Sonic:v2.1.6"
+    imagename: "sonic:v2.1.6"
 
   - name: validator-v203
-    imagename: "Sonic:v2.0.3"
+    imagename: "sonic:v2.0.3"
     failing: true
 
 network_rules:
