@@ -207,6 +207,20 @@ func (mr *MockNetworkMockRecorder) UnregisterListener(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnregisterListener", reflect.TypeOf((*MockNetwork)(nil).UnregisterListener), arg0)
 }
 
+// WaitForEpochChange mocks base method.
+func (m *MockNetwork) WaitForEpochChange() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WaitForEpochChange")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WaitForEpochChange indicates an expected call of WaitForEpochChange.
+func (mr *MockNetworkMockRecorder) WaitForEpochChange() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForEpochChange", reflect.TypeOf((*MockNetwork)(nil).WaitForEpochChange))
+}
+
 // MockNetworkListener is a mock of NetworkListener interface.
 type MockNetworkListener struct {
 	ctrl     *gomock.Controller

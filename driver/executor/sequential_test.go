@@ -1,0 +1,358 @@
+// Copyright 2024 Fantom Foundation
+// This file is part of Norma System Testing Infrastructure for Sonic.
+//
+// Norma is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Norma is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Norma. If not, see <http://www.gnu.org/licenses/>.
+
+package executor
+
+import (
+	"context"
+	"fmt"
+	"testing"
+
+	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/checking"
+	"github.com/0xsoniclabs/norma/driver/parser"
+	"go.uber.org/mock/gomock"
+)
+
+func TestSequential_EmptyScenario(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return(nil)
+
+	scenario := parser.SequentialScenario{
+		Name:  "Empty",
+		Steps: []parser.Step{},
+	}
+
+	if err := runSequential(t.Context(), net, &scenario, nil, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSequential_StartAndStopNode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	net.EXPECT().GetActiveNodes().Return(nil)
+	// DialRandomRpc returns error so sync wait is skipped.
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	node.EXPECT().GetLabel().Return("validator-A").AnyTimes()
+	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+
+	validatorId := 2
+	gomock.InOrder(
+		registry.EXPECT().registerNewValidator().Return(validatorId, nil),
+		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
+		node.EXPECT().GetValidatorId().Return(&validatorId),
+		registry.EXPECT().unregisterValidator(validatorId).Return(nil),
+		net.EXPECT().RemoveNode(node).Return(nil),
+		node.EXPECT().Stop(gomock.Any()).Return(nil),
+		node.EXPECT().Cleanup(gomock.Any()).Return(nil),
+	)
+
+	scenario := parser.SequentialScenario{
+		Name: "Start Stop",
+		Steps: []parser.Step{
+			{
+				Function:   parser.FuncStartNode,
+				Identifier: "validator-A",
+				NodeType:   "validator",
+			},
+			{
+				Function:   parser.FuncUndelegate,
+				Identifier: "validator-A",
+			},
+			{
+				Function:   parser.FuncStopNode,
+				Identifier: "validator-A",
+			},
+		},
+	}
+
+	if err := runSequential(t.Context(), net, &scenario, nil, registry); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSequential_StopNodeWithoutUndelegate(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	net.EXPECT().GetActiveNodes().Return(nil)
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	node.EXPECT().GetLabel().Return("validator-A").AnyTimes()
+	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+
+	validatorId := 2
+	gomock.InOrder(
+		registry.EXPECT().registerNewValidator().Return(validatorId, nil),
+		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
+		// No unregister call expected
+		net.EXPECT().RemoveNode(node).Return(nil),
+		node.EXPECT().Stop(gomock.Any()).Return(nil),
+		node.EXPECT().Cleanup(gomock.Any()).Return(nil),
+	)
+
+	scenario := parser.SequentialScenario{
+		Name: "Leave",
+		Steps: []parser.Step{
+			{
+				Function:   parser.FuncStartNode,
+				Identifier: "validator-A",
+				NodeType:   "validator",
+			},
+			{
+				// Stop without undelegate
+				Function:   parser.FuncStopNode,
+				Identifier: "validator-A",
+			},
+		},
+	}
+
+	if err := runSequential(t.Context(), net, &scenario, nil, registry); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSequential_RejoinNode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node1 := driver.NewMockNode(ctrl)
+	node2 := driver.NewMockNode(ctrl)
+
+	net.EXPECT().GetActiveNodes().Return(nil)
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	node1.EXPECT().GetLabel().Return("validator-A").AnyTimes()
+	node1.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+	node2.EXPECT().GetLabel().Return("validator-A").AnyTimes()
+	node2.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+
+	validatorId := 2
+	gomock.InOrder(
+		// First start: registers as new validator
+		registry.EXPECT().registerNewValidator().Return(validatorId, nil),
+		net.EXPECT().CreateNode(gomock.Any()).Do(func(config *driver.NodeConfig) {
+			if config.ValidatorId == nil || *config.ValidatorId != validatorId {
+				t.Errorf("first start: expected ValidatorId=%d, got %v", validatorId, config.ValidatorId)
+			}
+		}).Return(node1, nil),
+		// Stop without undelegate
+		net.EXPECT().RemoveNode(node1).Return(nil),
+		node1.EXPECT().Stop(gomock.Any()).Return(nil),
+		node1.EXPECT().Cleanup(gomock.Any()).Return(nil),
+		// Rejoin: no registration, but validator ID is preserved
+		net.EXPECT().CreateNode(gomock.Any()).Do(func(config *driver.NodeConfig) {
+			if config.ValidatorId == nil || *config.ValidatorId != validatorId {
+				t.Errorf("rejoin: expected ValidatorId=%d, got %v", validatorId, config.ValidatorId)
+			}
+		}).Return(node2, nil),
+	)
+
+	scenario := parser.SequentialScenario{
+		Name: "Rejoin",
+		Steps: []parser.Step{
+			{
+				Function:   parser.FuncStartNode,
+				Identifier: "validator-A",
+				NodeType:   "validator",
+			},
+			{
+				Function:   parser.FuncStopNode,
+				Identifier: "validator-A",
+			},
+			{
+				Function:   parser.FuncStartNode,
+				Identifier: "validator-A",
+				NodeType:   "validator",
+			},
+		},
+	}
+
+	if err := runSequential(t.Context(), net, &scenario, nil, registry); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSequential_RunAndStopApp(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return(nil)
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	app := driver.NewMockApplication(ctrl)
+
+	rate := float32(10)
+
+	gomock.InOrder(
+		net.EXPECT().CreateApplication(gomock.Any(), gomock.Any()).Return(app, nil),
+		app.EXPECT().Start(gomock.Any()).Return(nil),
+		app.EXPECT().Stop().Return(nil),
+	)
+
+	scenario := parser.SequentialScenario{
+		Name: "App",
+		Steps: []parser.Step{
+			{
+				Function:   parser.FuncRunApp,
+				Identifier: "load",
+				AppType:    "counter",
+				Users:      New(50),
+				Rate:       &parser.Rate{Constant: &rate},
+			},
+			{
+				Function:   parser.FuncStopApp,
+				Identifier: "load",
+			},
+		},
+	}
+
+	if err := runSequential(t.Context(), net, &scenario, nil, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSequential_UpdateRules(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return(nil)
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+
+	net.EXPECT().ApplyNetworkRules(driver.NetworkRules(map[string]string{
+		"MIN_BASE_FEE": "3000000000",
+	})).Return(nil)
+
+	scenario := parser.SequentialScenario{
+		Name: "Rules",
+		Steps: []parser.Step{
+			{
+				Function: parser.FuncUpdateRules,
+				Rules:    map[string]string{"MIN_BASE_FEE": "3000000000"},
+			},
+		},
+	}
+
+	if err := runSequential(t.Context(), net, &scenario, nil, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSequential_AdvanceEpoch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+
+	net.EXPECT().GetActiveNodes().Return(nil)
+	net.EXPECT().AdvanceEpoch(1).Return(nil)
+	// DialRandomRpc returns error so waitForBlockProduction is skipped.
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+
+	scenario := parser.SequentialScenario{
+		Name: "Epoch",
+		Steps: []parser.Step{
+			{Function: parser.FuncAdvanceEpoch},
+		},
+	}
+
+	if err := runSequential(t.Context(), net, &scenario, nil, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSequential_Check(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return(nil)
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	checker := checking.NewMockChecker(ctrl)
+
+	checker.EXPECT().Check(gomock.Any()).Return(nil)
+
+	checks := checking.Checks{"blocks_rolling": checker}
+
+	scenario := parser.SequentialScenario{
+		Name: "Check",
+		Steps: []parser.Step{
+			{Function: parser.FuncCheckBlocksProduced},
+		},
+	}
+
+	if err := runSequential(t.Context(), net, &scenario, checks, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSequential_ContextCancellation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return(nil)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel() // Cancel immediately.
+
+	scenario := parser.SequentialScenario{
+		Name: "Cancelled",
+		Steps: []parser.Step{
+			{Function: parser.FuncAdvanceEpoch},
+		},
+	}
+
+	err := runSequential(ctx, net, &scenario, nil, nil)
+	if err == nil {
+		t.Fatal("expected error from cancelled context")
+	}
+}
+
+func TestSequential_MultiInstanceNode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node1 := driver.NewMockNode(ctrl)
+	node2 := driver.NewMockNode(ctrl)
+
+	net.EXPECT().GetActiveNodes().Return(nil)
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	node1.EXPECT().GetLabel().Return("validators-0").AnyTimes()
+	node1.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+	node2.EXPECT().GetLabel().Return("validators-1").AnyTimes()
+	node2.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+
+	gomock.InOrder(
+		registry.EXPECT().registerNewValidator().Return(2, nil),
+		net.EXPECT().CreateNode(gomock.Any()).Return(node1, nil),
+		registry.EXPECT().registerNewValidator().Return(3, nil),
+		net.EXPECT().CreateNode(gomock.Any()).Return(node2, nil),
+	)
+
+	instances := 2
+	scenario := parser.SequentialScenario{
+		Name: "Multi",
+		Steps: []parser.Step{
+			{
+				Function:   parser.FuncStartNode,
+				Identifier: "validators",
+				NodeType:   "validator",
+				Instances:  &instances,
+			},
+		},
+	}
+
+	if err := runSequential(t.Context(), net, &scenario, nil, registry); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
