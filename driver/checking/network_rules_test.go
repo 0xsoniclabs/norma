@@ -35,12 +35,12 @@ func TestNetworkRulesChecker_ConfigureAndCheck_Success(t *testing.T) {
 
 	net.EXPECT().GetActiveNodes().Return([]driver.Node{node})
 	node.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
-	node.EXPECT().DialRpc().Return(rpcClient, nil)
+	node.EXPECT().DialRpc(gomock.Any()).Return(rpcClient, nil)
 	rpcClient.EXPECT().GetNetworkRules("latest").Return(current, nil)
 	rpcClient.EXPECT().Close()
 
 	checker := (&networkRulesChecker{net: net}).Configure(config)
-	if err := checker.Check(); err != nil {
+	if err := checker.Check(t.Context()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -55,7 +55,7 @@ func TestNetworkRulesChecker_Check_FailsOnMismatch(t *testing.T) {
 
 	net.EXPECT().GetActiveNodes().Return([]driver.Node{node})
 	node.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
-	node.EXPECT().DialRpc().Return(rpcClient, nil)
+	node.EXPECT().DialRpc(gomock.Any()).Return(rpcClient, nil)
 	node.EXPECT().GetLabel().AnyTimes().Return("node-1")
 	rpcClient.EXPECT().GetNetworkRules("latest").Return(current, nil)
 	rpcClient.EXPECT().Close()
@@ -67,7 +67,7 @@ func TestNetworkRulesChecker_Check_FailsOnMismatch(t *testing.T) {
 		},
 	})
 
-	err := checker.Check()
+	err := checker.Check(t.Context())
 	if err == nil || !strings.Contains(err.Error(), "applied network rules mismatch") {
 		t.Fatalf("expected mismatch error, got: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestNetworkRulesChecker_Check_FailsOnLargeUint64Mismatch(t *testing.T) {
 
 	net.EXPECT().GetActiveNodes().Return([]driver.Node{node})
 	node.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
-	node.EXPECT().DialRpc().Return(rpcClient, nil)
+	node.EXPECT().DialRpc(gomock.Any()).Return(rpcClient, nil)
 	node.EXPECT().GetLabel().AnyTimes().Return("node-1")
 	rpcClient.EXPECT().GetNetworkRules("latest").Return(current, nil)
 	rpcClient.EXPECT().Close()
@@ -98,7 +98,7 @@ func TestNetworkRulesChecker_Check_FailsOnLargeUint64Mismatch(t *testing.T) {
 		},
 	})
 
-	err := checker.Check()
+	err := checker.Check(t.Context())
 	if err == nil || !strings.Contains(err.Error(), "applied network rules mismatch") {
 		t.Fatalf("expected mismatch error, got: %v", err)
 	}
@@ -129,13 +129,13 @@ func TestNetworkRulesChecker_Check_ExpectedFailingNode(t *testing.T) {
 	net.EXPECT().GetActiveNodes().Return([]driver.Node{node1, node2})
 
 	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
-	node1.EXPECT().DialRpc().Return(rpcClient1, nil)
+	node1.EXPECT().DialRpc(gomock.Any()).Return(rpcClient1, nil)
 	node1.EXPECT().GetLabel().AnyTimes().Return("node-1")
 	rpcClient1.EXPECT().GetNetworkRules("latest").Return(patched, nil)
 	rpcClient1.EXPECT().Close()
 
 	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
-	node2.EXPECT().DialRpc().Return(rpcClient2, nil)
+	node2.EXPECT().DialRpc(gomock.Any()).Return(rpcClient2, nil)
 	node2.EXPECT().GetLabel().AnyTimes().Return("node-2")
 	rpcClient2.EXPECT().GetNetworkRules("latest").Return(current, nil)
 	rpcClient2.EXPECT().Close()
@@ -147,7 +147,7 @@ func TestNetworkRulesChecker_Check_ExpectedFailingNode(t *testing.T) {
 		},
 	}
 
-	if err := checker.Check(); err != nil {
+	if err := checker.Check(t.Context()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -155,7 +155,7 @@ func TestNetworkRulesChecker_Check_ExpectedFailingNode(t *testing.T) {
 func TestNetworkRulesChecker_Configure_WithInvalidRulesConfig(t *testing.T) {
 	checker := (&networkRulesChecker{}).Configure(CheckerConfig{"rules": []any{"invalid"}})
 
-	err := checker.Check()
+	err := checker.Check(t.Context())
 	if err == nil || !strings.Contains(err.Error(), "failed to decode rules patch") {
 		t.Fatalf("expected configure error, got: %v", err)
 	}
@@ -177,12 +177,12 @@ func TestNetworkRulesChecker_Check_FailsOnExpectedFailureSetMismatch(t *testing.
 	net.EXPECT().GetActiveNodes().Return([]driver.Node{node})
 	node.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
 	node.EXPECT().GetLabel().AnyTimes().Return("node-1")
-	node.EXPECT().DialRpc().Return(rpcClient, nil)
+	node.EXPECT().DialRpc(gomock.Any()).Return(rpcClient, nil)
 	rpcClient.EXPECT().GetNetworkRules("latest").Return(current, nil)
 	rpcClient.EXPECT().Close()
 
 	checker := &networkRulesChecker{net: net, rulesPatch: genesis.NetworkRulesPatch{Blocks: &genesis.BlocksPatch{MaxBlockGas: new(uint64(20500000000))}}}
-	if err := checker.Check(); err == nil || !strings.Contains(err.Error(), "unexpected failure set") {
+	if err := checker.Check(t.Context()); err == nil || !strings.Contains(err.Error(), "unexpected failure set") {
 		t.Fatalf("expected failure-set mismatch, got: %v", err)
 	}
 }

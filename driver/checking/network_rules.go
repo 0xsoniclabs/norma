@@ -1,6 +1,7 @@
 package checking
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -56,7 +57,7 @@ func (c *networkRulesChecker) Configure(config CheckerConfig) Checker {
 	return configured
 }
 
-func (c *networkRulesChecker) Check() error {
+func (c *networkRulesChecker) Check(ctx context.Context) error {
 	if c.configureErr != nil {
 		return c.configureErr
 	}
@@ -74,7 +75,7 @@ func (c *networkRulesChecker) Check() error {
 			expectedFailures[node.GetLabel()] = struct{}{}
 		}
 
-		rpcClient, err := node.DialRpc()
+		rpcClient, err := node.DialRpc(ctx)
 		if err != nil {
 			if node.IsExpectedFailure() {
 				gotFailures[node.GetLabel()] = struct{}{}
