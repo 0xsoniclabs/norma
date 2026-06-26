@@ -297,10 +297,13 @@ func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScena
 	// Log initial rules.
 	fmt.Println(scenario.InitialRules.PrettyPrint()) // multi line print
 
-	// Startup network. The first "startNode" step with type=validator is used
-	// as the initial validators configuration (for genesis and bootstrap).
-	// That step is then removed from the scenario since those nodes are already running.
-	validators, scenario := extractBootstrapValidators(scenario)
+	// Startup network. Genesis is configured from all leading validator startNode
+	// steps, but those steps are NOT removed — nodes are started explicitly by
+	// the sequential runner so they appear in the report timeline.
+	validators, genesisIds, err := extractBootstrapValidators(scenario)
+	if err != nil {
+		return err
+	}
 	net, err := local.NewLocalNetwork(ctx, &driver.NetworkConfig{
 		Validators:   validators,
 		NetworkRules: scenario.InitialRules,
@@ -377,6 +380,7 @@ func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScena
 		net,
 		scenario,
 		checks,
+		genesisIds,
 	)
 	if err != nil {
 		return err
@@ -386,55 +390,51 @@ func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScena
 	return nil
 }
 
-// extractBootstrapValidators determines the initial validators for the network.
-// All leading "startNode" steps with type=validator at the beginning
-// of the scenario are extracted and used as bootstrap validators.
-// If no validators are found, a single default validator is used.
-func extractBootstrapValidators(scenario *parser.SequentialScenario) (driver.Validators, *parser.SequentialScenario) {
-	// Extract leading validator startNode steps.
-	var validators driver.Validators
-	var count int
-
-	for _, step := range scenario.Steps {
-		if step.Function != parser.FuncStartNode {
-			break // stop at first non-startNode step
-		}
-		if step.NodeType != "validator" {
-			break // stop at first non-validator startNode
-		}
-
-		instances := 1
-		if step.Instances != nil {
-			instances = *step.Instances
-		}
-		image := driver.ResolveClientImageName(step.ImageName)
-
-		var stake uint64
-		if step.Stake != nil {
-			stake = *step.Stake
-		}
-
-		validators = append(validators, driver.Validator{
-			Name:      step.Identifier,
-			Instances: instances,
-			ImageName: image,
-			Stake:     stake,
-		})
-		count++
+// extractBootstrapValidators reads only the first scenario step to configure
+// the network genesis validator set. The first step must be startNode.
+func extractBootstrapValidators(scenario *parser.SequentialScenario) (driver.Validators, map[string]int, error) {
+	if len(scenario.Steps) == 0 {
+		return nil, nil, fmt.Errorf("sequential scenario has no steps")
 	}
 
-	if len(validators) == 0 {
-		// No validator step found; use a single default validator.
-		return driver.NewDefaultValidators(1), scenario
+	step := scenario.Steps[0]
+	if step.Function != parser.FuncStartNode {
+		return nil, nil, fmt.Errorf("first step must be %q, got %q", parser.FuncStartNode, step.Function)
+	}
+	if step.NodeType != "validator" {
+		return nil, nil, fmt.Errorf("first startNode must be validator, got %q", step.NodeType)
 	}
 
-	// Return a copy of the scenario with the bootstrap steps removed.
-	remaining := make([]parser.Step, 0, len(scenario.Steps)-count)
-	remaining = append(remaining, scenario.Steps[count:]...)
+	instances := 1
+	if step.Instances != nil {
+		instances = *step.Instances
+	}
+	image := driver.ResolveClientImageName(step.ImageName)
 
-	modified := *scenario
-	modified.Steps = remaining
-	return validators, &modified
+	var stake uint64
+	if step.Stake != nil {
+		stake = *step.Stake
+	}
+
+	validators := driver.Validators{{
+		Name:      step.Identifier,
+		Instances: instances,
+		ImageName: image,
+		Stake:     stake,
+	}}
+
+	// Build the genesis label→validatorId map using the same naming convention
+	// as execStartNode: no "-N" suffix for single-instance nodes.
+	genesisIds := make(map[string]int)
+	for j := range instances {
+		label := step.Identifier
+		if instances > 1 {
+			label = fmt.Sprintf("%s-%d", step.Identifier, j)
+		}
+		genesisIds[label] = j + 1
+	}
+
+	return validators, genesisIds, nil
 }
 
 func openBrowser(s string) error {
