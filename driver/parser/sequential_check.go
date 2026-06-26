@@ -169,7 +169,7 @@ func (s *Step) checkUpdateRules() error {
 
 	b, err := json.Marshal(s.Rules)
 	if err != nil || string(b) == "{}" {
-		errs = append(errs, fmt.Errorf("Update rules requires at least one rule"))
+		errs = append(errs, fmt.Errorf("update rules requires at least one rule"))
 	}
 
 	return errors.Join(errs...)
