@@ -1,0 +1,9 @@
+Name: Start n instances 
+
+Scenario:
+  - startNode: validator
+    type: validator
+    instances: 5 # ensure the network continues after failures of other nodes
+
+  - waitFor: 15s
+
