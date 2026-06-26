@@ -19,6 +19,7 @@ package executor
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/checking"
 	"github.com/0xsoniclabs/norma/driver/parser"
+	"github.com/0xsoniclabs/norma/genesis"
 	"go.uber.org/mock/gomock"
 )
 
@@ -235,17 +237,24 @@ func TestSequential_UpdateRules(t *testing.T) {
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().GetActiveNodes().Return(nil)
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	baseFee := genesis.BigIntValue(*big.NewInt(3000000000))
 
-	net.EXPECT().ApplyNetworkRules(driver.NetworkRules(map[string]string{
-		"MIN_BASE_FEE": "3000000000",
-	})).Return(nil)
+	net.EXPECT().ApplyNetworkRules(driver.NetworkRules{
+		Economy: &genesis.EconomyPatch{
+			MinBaseFee: &baseFee,
+		},
+	}).Return(nil)
 
 	scenario := parser.SequentialScenario{
 		Name: "Rules",
 		Steps: []parser.Step{
 			{
 				Function: parser.FuncUpdateRules,
-				Rules:    map[string]string{"MIN_BASE_FEE": "3000000000"},
+				Rules: genesis.NetworkRulesPatch{
+					Economy: &genesis.EconomyPatch{
+						MinBaseFee: &baseFee,
+					},
+				},
 			},
 		},
 	}

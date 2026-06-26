@@ -318,9 +318,7 @@ func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScena
 	}
 
 	// Log initial rules.
-	for k, v := range scenario.InitialRules {
-		slog.Info("network Rule", "key", k, "value", v)
-	}
+	fmt.Println(scenario.InitialRules.PrettyPrint()) // multi line print
 
 	// Startup network. The first "startNode" step with type=validator is used
 	// as the initial validators configuration (for genesis and bootstrap).
@@ -328,7 +326,7 @@ func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScena
 	validators, scenario := extractBootstrapValidators(scenario)
 	net, err := local.NewLocalNetwork(ctx, &driver.NetworkConfig{
 		Validators:   validators,
-		NetworkRules: driver.NetworkRules(maps.Clone(scenario.InitialRules)),
+		NetworkRules: scenario.InitialRules,
 		OutputDir:    outputDir,
 	})
 	if err != nil {
