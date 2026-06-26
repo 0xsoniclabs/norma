@@ -168,6 +168,9 @@ func TestGenerators_Subsidies(t *testing.T) {
 		NetworkRules: rules,
 	})
 	require.NoError(t, err, "failed to create new local network")
+	t.Cleanup(func() {
+		require.NoError(t, net.Shutdown(), "failed to shutdown network")
+	})
 
 	primaryAccount, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
 	require.NoError(t, err, "failed to create primary account")
