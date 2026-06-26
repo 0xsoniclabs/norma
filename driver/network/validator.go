@@ -78,7 +78,6 @@ func UnregisterValidatorNode(client rpc.Client, validatorId int) error {
 		return fmt.Errorf("failed to get SFC contract representation; %v", err)
 	}
 
-	originalRules := opera.FakeNetRules(opera.GetSonicUpgrades())
 	key := evmcore.FakeKey(uint32(validatorId))
 	txOpts, err := bind.NewKeyedTransactorWithChainID(key, big.NewInt(int64(opera.FakeNetRules(opera.GetSonicUpgrades()).NetworkID)))
 	if err != nil {
