@@ -43,7 +43,7 @@ scenario_step_data <- all_data %>%
             event_name
         ),
         event_idx = row_number(),
-        event_fill = paste0(sprintf("%03d", event_idx), " ", event_label)
+        event_fill = event_label
     )
 
 scenario_step_fill_levels <- character(0)
