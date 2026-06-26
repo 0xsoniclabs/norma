@@ -36,9 +36,36 @@ func RunSequential(
 	scenario *parser.SequentialScenario,
 	checks checking.Checks,
 ) error {
-	return runSequential(ctx, network, scenario, checks, &netBasedValidatorRegistry{
-		net: network,
-	})
+	return runSequentialWithObserver(
+		ctx,
+		network,
+		scenario,
+		checks,
+		&netBasedValidatorRegistry{net: network},
+		nil,
+	)
+}
+
+// RunSequentialAndCaptureEventExecution executes a sequential scenario and
+// returns wall-clock start/end intervals for every executed step.
+func RunSequentialAndCaptureEventExecution(
+	ctx context.Context,
+	network driver.Network,
+	scenario *parser.SequentialScenario,
+	checks checking.Checks,
+) ([]EventExecution, error) {
+	executions := make([]EventExecution, 0, len(scenario.Steps))
+	err := runSequentialWithObserver(
+		ctx,
+		network,
+		scenario,
+		checks,
+		&netBasedValidatorRegistry{net: network},
+		func(execution EventExecution) {
+			executions = append(executions, execution)
+		},
+	)
+	return executions, err
 }
 
 // defaultScenarioTimeout is the maximum time a sequential scenario is
@@ -53,6 +80,24 @@ func runSequential(
 	scenario *parser.SequentialScenario,
 	checks checking.Checks,
 	registry validatorRegistry,
+) error {
+	return runSequentialWithObserver(
+		ctx,
+		network,
+		scenario,
+		checks,
+		registry,
+		nil,
+	)
+}
+
+func runSequentialWithObserver(
+	ctx context.Context,
+	network driver.Network,
+	scenario *parser.SequentialScenario,
+	checks checking.Checks,
+	registry validatorRegistry,
+	onStepExecuted func(EventExecution),
 ) error {
 	if err := scenario.Check(); err != nil {
 		return err
@@ -90,13 +135,23 @@ func runSequential(
 		)
 
 		start := time.Now()
-		if err := executeStep(ctx, &step, network, checks, registry, state); err != nil {
+		err := executeStep(ctx, &step, network, checks, registry, state)
+		end := time.Now()
+		if onStepExecuted != nil {
+			onStepExecuted(EventExecution{
+				Name:  formatSequentialStepExecutionName(i+1, &step),
+				Start: start,
+				End:   end,
+			})
+		}
+
+		if err != nil {
 			slog.Error("step failed",
 				"step", i+1,
 				"function", step.Function,
 				"identifier", step.Identifier,
 				"error", err,
-				"duration", time.Since(start),
+				"duration", end.Sub(start),
 			)
 			return fmt.Errorf("step %d (%s %s) failed: %w", i+1, step.Function, step.Identifier, err)
 		}
@@ -104,7 +159,7 @@ func runSequential(
 		slog.Info("step completed",
 			"step", i+1,
 			"function", step.Function,
-			"duration", time.Since(start),
+			"duration", end.Sub(start),
 		)
 
 		// Wait for block production after steps that actively modify the
@@ -120,6 +175,13 @@ func runSequential(
 
 	slog.Info("sequential scenario completed successfully")
 	return nil
+}
+
+func formatSequentialStepExecutionName(stepNum int, step *parser.Step) string {
+	if step.Identifier == "" {
+		return fmt.Sprintf("step %d: %s", stepNum, step.Function)
+	}
+	return fmt.Sprintf("step %d: %s %s", stepNum, step.Function, step.Identifier)
 }
 
 // sequentialState tracks runtime state during sequential execution.
