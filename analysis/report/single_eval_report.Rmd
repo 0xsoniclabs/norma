@@ -25,8 +25,8 @@ if (nrow(all_data) > 0) {
     all_data$elapsed_sec <- 0
 }
 
-scenario_event_data <- all_data %>%
-    dplyr::filter(metric == "ScenarioEventExecutionDuration") %>%
+scenario_step_data <- all_data %>%
+    dplyr::filter(metric %in% c("ScenarioStepExecutionDuration", "ScenarioEventExecutionDuration")) %>%
     transmute(
         event_name = as.character(app),
         start_sec = elapsed_sec,
@@ -46,23 +46,23 @@ scenario_event_data <- all_data %>%
         event_fill = paste0(sprintf("%03d", event_idx), " ", event_label)
     )
 
-scenario_event_fill_levels <- character(0)
-scenario_event_fill_colors <- c()
+scenario_step_fill_levels <- character(0)
+scenario_step_fill_colors <- c()
 
-if (nrow(scenario_event_data) > 0) {
-    event_span <- max(scenario_event_data$end_sec, na.rm = TRUE) -
-        min(scenario_event_data$start_sec, na.rm = TRUE)
+if (nrow(scenario_step_data) > 0) {
+    event_span <- max(scenario_step_data$end_sec, na.rm = TRUE) -
+        min(scenario_step_data$start_sec, na.rm = TRUE)
     min_band_width_sec <- max(0.05, event_span * 0.002)
-    scenario_event_fill_levels <- unique(scenario_event_data$event_fill)
-    scenario_event_fill_colors <- setNames(
-        hcl.colors(length(scenario_event_fill_levels), palette = "Set 2"),
-        scenario_event_fill_levels
+    scenario_step_fill_levels <- unique(scenario_step_data$event_fill)
+    scenario_step_fill_colors <- setNames(
+        hcl.colors(length(scenario_step_fill_levels), palette = "Set 2"),
+        scenario_step_fill_levels
     )
-    scenario_event_data <- scenario_event_data %>%
-        mutate(event_fill = factor(event_fill, levels = scenario_event_fill_levels)) %>%
+    scenario_step_data <- scenario_step_data %>%
+        mutate(event_fill = factor(event_fill, levels = scenario_step_fill_levels)) %>%
         mutate(visible_end_sec = pmax(end_sec, start_sec + min_band_width_sec))
 } else {
-    scenario_event_data$visible_end_sec <- numeric()
+    scenario_step_data$visible_end_sec <- numeric()
 }
 
 # --- Helper functions ---
@@ -113,9 +113,9 @@ node_time_plot <- function(data, title, ylab,
         norma_theme()
 }
 
-# Overlay faded scenario-event bands in the background for time-based charts.
+# Overlay faded scenario-step bands in the background for time-based charts.
 # The overlay intentionally hides its own legend to avoid visual clutter.
-add_scenario_event_overlay <- function(event_data = scenario_event_data) {
+add_scenario_step_overlay <- function(event_data = scenario_step_data) {
     if (nrow(event_data) == 0) {
         return(NULL)
     }
@@ -134,7 +134,7 @@ add_scenario_event_overlay <- function(event_data = scenario_event_data) {
             alpha = 0.08,
             show.legend = FALSE
         ),
-        scale_fill_manual(values = scenario_event_fill_colors, drop = FALSE)
+        scale_fill_manual(values = scenario_step_fill_colors, drop = FALSE)
     )
 }
 
@@ -211,12 +211,12 @@ This report summarizes the monitoring results of an execution of a Norma scenari
 ## Scenario Execution Timeline
 
 The following chart represents scenario execution as colored vertical bands. Each
-band corresponds to one triggered scenario event; the width of the band is the
-event execution duration on the driver wall clock.
+band corresponds to one triggered scenario step; the width of the band is the
+step execution duration on the driver wall clock.
 
 ```{r scenario_execution_timeline, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
-if (nrow(scenario_event_data) > 0) {
-    ggplot(scenario_event_data) +
+if (nrow(scenario_step_data) > 0) {
+    ggplot(scenario_step_data) +
         geom_rect(aes(
             xmin = start_sec,
             xmax = visible_end_sec,
@@ -224,11 +224,11 @@ if (nrow(scenario_event_data) > 0) {
             ymax = 1,
             fill = event_fill
         ), alpha = 0.85) +
-        ggtitle("Scenario Event Timeline") +
+        ggtitle("Scenario Step Timeline") +
         xlab("Execution Time [s]") +
         ylab(NULL) +
-        labs(fill = "Events") +
-        scale_fill_manual(values = scenario_event_fill_colors, drop = FALSE) +
+        labs(fill = "Steps") +
+        scale_fill_manual(values = scenario_step_fill_colors, drop = FALSE) +
         scale_y_continuous(breaks = NULL) +
         theme(
             axis.text.y = element_blank(),
@@ -334,7 +334,7 @@ ggplot() +
     xlab("Time (s)") +
     ylab("Tx/s") +
     norma_theme() +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 
@@ -350,7 +350,7 @@ filter_metric(all_data, "NumberOfNodes") %>%
         xlab("Time") +
         ylab("Number of Nodes") +
     norma_theme() +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 
@@ -386,7 +386,7 @@ The following chart shows the time at which nodes have reached a given block hei
 ```{r block_height_per_node, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 filter_metric(all_data, "NodeBlockStatus") %>%
     node_time_plot("Block Height over Time", "Block Height") +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 ### Epoch per Node
@@ -396,7 +396,7 @@ The following chart shows the epoch number of each node over time.
 ```{r epoch_per_node, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 filter_metric(all_data, "NodeEpochStatus") %>%
     node_time_plot("Epoch over Time", "Epoch") +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 ### Validator Stakes
@@ -412,7 +412,7 @@ if (nrow(data) > 0) {
         data, "Validator Stakes", "Stake [S]",
         xlab = "Time [s]", color_label = "Validator"
     ) +
-        add_scenario_event_overlay()
+        add_scenario_step_overlay()
 }
 ```
 
@@ -424,21 +424,21 @@ The following charts show statistics of transaction pool.
 ```{r tx_pool_per_node_received_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 filter_metric(all_data, "txpool_received") %>%
     node_time_plot("TxPool Received Transactions over Time", "Received Transactions") +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 * The number of valid transactions - accumulated count over time
 ```{r tx_pool_per_node_valid_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 filter_metric(all_data, "txpool_valid") %>%
     node_time_plot("TxPool Valid Transactions over Time", "Valid Transactions") +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 * The number of invalid transactions - accumulated count over time
 ```{r tx_pool_per_node_invalid_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 filter_metric(all_data, "txpool_invalid") %>%
     node_time_plot("TxPool Invalid Transactions over Time", "Invalid Transactions") +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 * The number of underpriced transactions - accumulated count over time
@@ -447,7 +447,7 @@ filter_metric(all_data, "txpool_underpriced") %>%
     node_time_plot(
         "TxPool Underpriced Transactions over Time", "Underpriced Transactions"
     ) +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 * The number of overflowed transactions - accumulated count over time
@@ -456,7 +456,7 @@ filter_metric(all_data, "txpool_overflowed") %>%
     node_time_plot(
         "TxPool Overflowed Transactions over Time", "Overflowed Transactions"
     ) +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 #### TxPool - Queued to Pending Transitions
@@ -466,7 +466,7 @@ filter_metric(all_data, "txpool_overflowed") %>%
 ```{r tx_pool_per_node_quedued_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 filter_metric(all_data, "txpool_queued") %>%
     node_time_plot("TxPool Queued Transactions over Time", "Queued Transactions") +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 * The number of transactions in the pending state - current count over time
@@ -474,7 +474,7 @@ filter_metric(all_data, "txpool_queued") %>%
 ```{r tx_pool_per_node_pending_txs, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 filter_metric(all_data, "txpool_pending") %>%
     node_time_plot("TxPool Pending Transactions over Time", "Pending Transactions") +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 ### Consumed Disk Space
@@ -488,14 +488,14 @@ the State DB and other files.
 filter_metric(all_data, "statedb_disksize") %>%
     mutate(value = value / 1024 / 1024) %>%
     node_time_plot("Actual Size of StateDB over Time", "MB") +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 ```{r total_db_size, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 filter_metric(all_data, "db_size") %>%
     mutate(value = value / 1024 / 1024) %>%
     node_time_plot("Actual Size of Data Dir including StateDB over Time", "MB") +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 ### System Properties
@@ -508,14 +508,14 @@ may grow above 100% depending on the number of cores.
 ```{r system_cpu_procload, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 filter_metric(all_data, "system_cpu_procload") %>%
     node_time_plot("CPU Load", "%") +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 ```{r system_memory_used, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 filter_metric(all_data, "system_memory_used") %>%
     mutate(value = value / 1024 / 1024) %>%
     node_time_plot("Memory Load", "MB") +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 ## Application Metrics
@@ -556,7 +556,7 @@ ggplot() +
     ylab("Total Number of Transactions") +
     labs(colour = "Apps") +
     norma_theme() +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 
@@ -573,7 +573,7 @@ filter_metric(all_data, "SentTransactions") %>%
         ylab("Total Number of Transactions") +
         labs(colour = "User") +
     norma_theme() +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 The following chart shows the send-rate of individual accounts (legend omitted for clarity).
@@ -589,7 +589,7 @@ sent_rate %>%
         ylab("Rate [Tx/s]") +
         labs(colour = "User") +
     norma_theme() +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 ## Event Metrics
@@ -617,7 +617,7 @@ ggplot(emit_data, aes(x = elapsed_sec, y = value, group = node, color = factor(n
     ylab("Events") +
     labs(colour = "Nodes") +
     norma_theme() +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 ### Transactions in Emitted Events per Node
@@ -629,7 +629,7 @@ in their emitted events.
 ```{r emitter_tx_per_node, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 filter_metric(all_data, "emitter_txs") %>%
     node_time_plot("Transactions in emitted events over time", "Transactions") +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```
 
 ### Gas used by Emitted Events per Node
@@ -639,5 +639,5 @@ Shows the amount of gas used by transactions contained in emitted events by each
 ```{r emitter_gas_per_node, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 filter_metric(all_data, "emitter_gas") %>%
     node_time_plot("Gas in emitted events over time", "Gas Used") +
-    add_scenario_event_overlay()
+    add_scenario_step_overlay()
 ```

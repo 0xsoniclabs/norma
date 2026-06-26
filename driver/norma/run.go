@@ -220,12 +220,12 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 		if err := monitor.Shutdown(); err != nil {
 			slog.Error("error during monitor shutdown", "error", err)
 		}
-		if err := appendScenarioEventTimings(
+		if err := appendScenarioStepTimings(
 			monitor.GetMeasurementFileName(),
 			label,
 			eventExecutions,
 		); err != nil {
-			slog.Warn("failed to export scenario event execution timings", "error", err)
+			slog.Warn("failed to export scenario step execution timings", "error", err)
 		}
 		slog.Info("monitoring data was written", "output", outputDir)
 		slog.Info("raw data was exported", "file", monitor.GetMeasurementFileName())
@@ -358,12 +358,12 @@ func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScena
 		if err := monitor.Shutdown(); err != nil {
 			slog.Error("error during monitor shutdown", "error", err)
 		}
-		if err := appendScenarioEventTimings(
+		if err := appendScenarioStepTimings(
 			monitor.GetMeasurementFileName(),
 			label,
 			stepExecutions,
 		); err != nil {
-			slog.Warn("failed to export scenario event execution timings", "error", err)
+			slog.Warn("failed to export scenario step execution timings", "error", err)
 		}
 		slog.Info("monitoring data was written", "output", outputDir)
 		slog.Info("raw data was exported", "file", monitor.GetMeasurementFileName())
@@ -510,7 +510,7 @@ func dumpNodeLogs(ctx context.Context, net driver.Network) {
 	}
 }
 
-func appendScenarioEventTimings(
+func appendScenarioStepTimings(
 	measurementFile string,
 	label string,
 	events []executor.EventExecution,
@@ -535,7 +535,7 @@ func appendScenarioEventTimings(
 				Time:    &start,
 				Value:   fmt.Sprintf("%d", duration),
 			},
-			Metric: "ScenarioEventExecutionDuration",
+			Metric: "ScenarioStepExecutionDuration",
 			Run:    label,
 		}
 
