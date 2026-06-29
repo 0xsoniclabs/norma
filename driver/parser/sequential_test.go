@@ -17,6 +17,7 @@
 package parser
 
 import (
+	"math/big"
 	"os"
 	"strings"
 	"testing"
@@ -188,7 +189,10 @@ Scenario:
 		t.Errorf("expected FuncUpdateRules, got %q", step.Function)
 	}
 	if step.Rules.Economy == nil || step.Rules.Economy.MinBaseFee == nil {
-		t.Errorf("expected Economy.MinBaseFee to be set")
+		t.Fatal("expected Economy.MinBaseFee to be set")
+	}
+	if got := big.Int(*step.Rules.Economy.MinBaseFee); got.Cmp(big.NewInt(3000000000)) != 0 {
+		t.Errorf("expected Economy.MinBaseFee=3000000000, got %s", got.String())
 	}
 	if step.Rules.Blocks == nil || step.Rules.Blocks.MaxBlockGas == nil || *step.Rules.Blocks.MaxBlockGas != 100000 {
 		t.Errorf("expected Blocks.MaxBlockGas=100000")
