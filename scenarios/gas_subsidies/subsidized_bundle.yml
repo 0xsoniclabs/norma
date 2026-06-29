@@ -4,11 +4,11 @@ duration: 50
 
 network_rules:
   genesis:
-    upgrades:
-      allegro: true
-      brio: true
-      gas_subsidies: true
-      transaction_bundles: true
+    Upgrades:
+      Allegro: true
+      Brio: true
+      GasSubsidies: true
+      TransactionBundles: true
 
 validators:
   - name: local

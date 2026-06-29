@@ -22,18 +22,18 @@ validators:
 # Update the base fee on the network.
 network_rules:
   genesis:
-    epochs:
-      max_epoch_duration: 1h        # there will be only one epoch within the scenario
-    economy:
-      min_base_fee: 2000000000
-    upgrades:
-      sonic: true
-      allegro: false   # the older client does not support Allegro
+    Epochs:
+      MaxEpochDuration: 1h        # there will be only one epoch within the scenario
+    Economy:
+      MinBaseFee: 2000000000
+    Upgrades:
+      Sonic: true
+      Allegro: false   # the older client does not support Allegro
   updates:
     - time: 60
       rules:
-        economy:
-          min_base_fee: 3000000000
+        Economy:
+          MinBaseFee: 3000000000
 
 # In the network, there is a few applications producing the load.
 applications:
