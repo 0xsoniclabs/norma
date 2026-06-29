@@ -62,11 +62,16 @@ func (s *Step) Check() error {
 	case FuncUpdateRules:
 		return s.checkUpdateRules()
 	case FuncUndelegate:
-		if s.Identifier == "" {
-			return fmt.Errorf("undelegate requires a node name")
+		if len(s.UndelegateTargets) == 0 {
+			return fmt.Errorf("undelegate requires at least one target")
 		}
-		if !NamePattern.Match([]byte(s.Identifier)) {
-			return fmt.Errorf("node name must match %v, got %v", namePatternStr, s.Identifier)
+		for i, t := range s.UndelegateTargets {
+			if t.Node == "" {
+				return fmt.Errorf("undelegate target %d: missing required 'node' field", i+1)
+			}
+			if !NamePattern.Match([]byte(t.Node)) {
+				return fmt.Errorf("undelegate target %d: node name must match %v, got %v", i+1, namePatternStr, t.Node)
+			}
 		}
 		return nil
 	case FuncWaitFor:
