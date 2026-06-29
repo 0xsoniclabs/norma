@@ -686,3 +686,110 @@ Scenario:
 		t.Errorf("expected empty NodeType, got %q", step.NodeType)
 	}
 }
+
+func TestParseSequential_RulesPatchAllCategories(t *testing.T) {
+	input := `
+Name: Full Patch Test
+InitialNetworkRules:
+  Epochs:
+    MaxEpochGas: 5000000000
+    MaxEpochDuration: 30s
+  Blocks:
+    MaxBlockGas: 20500000000
+    MaxEmptyBlockSkipPeriod: 3s
+  Economy:
+    MinBaseFee: "1000000000"
+    MinGasPrice: "500000000"
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: false
+Scenario:
+  - startNode: validator
+    type: validator
+  - updateRules:
+      Blocks:
+        MaxBlockGas: 30000000000
+      Economy:
+        MinBaseFee: "2000000000"
+      Upgrades:
+        Brio: true
+`
+	scenario, err := ParseSequentialBytes([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	r := scenario.InitialRules
+
+	// Epochs
+	if r.Epochs == nil {
+		t.Fatal("expected Epochs to be set")
+	}
+	if got, want := *r.Epochs.MaxEpochGas, uint64(5000000000); got != want {
+		t.Errorf("MaxEpochGas: got %d, want %d", got, want)
+	}
+	if got, want := int64(*r.Epochs.MaxEpochDuration), int64(30*time.Second); got != want {
+		t.Errorf("MaxEpochDuration: got %d, want %d", got, want)
+	}
+
+	// Blocks
+	if r.Blocks == nil {
+		t.Fatal("expected Blocks to be set")
+	}
+	if got, want := *r.Blocks.MaxBlockGas, uint64(20500000000); got != want {
+		t.Errorf("MaxBlockGas: got %d, want %d", got, want)
+	}
+	if got, want := int64(*r.Blocks.MaxEmptyBlockSkipPeriod), int64(3*time.Second); got != want {
+		t.Errorf("MaxEmptyBlockSkipPeriod: got %d, want %d", got, want)
+	}
+
+	// Economy (BigIntValue fields)
+	if r.Economy == nil || r.Economy.MinBaseFee == nil {
+		t.Fatal("expected Economy.MinBaseFee to be set")
+	}
+	if r.Economy.MinGasPrice == nil {
+		t.Fatal("expected Economy.MinGasPrice to be set")
+	}
+
+	// Upgrades
+	if r.Upgrades == nil {
+		t.Fatal("expected Upgrades to be set")
+	}
+	if r.Upgrades.Sonic == nil || !*r.Upgrades.Sonic {
+		t.Error("expected Upgrades.Sonic=true")
+	}
+	if r.Upgrades.Allegro == nil || !*r.Upgrades.Allegro {
+		t.Error("expected Upgrades.Allegro=true")
+	}
+	if r.Upgrades.Brio == nil || *r.Upgrades.Brio {
+		t.Error("expected Upgrades.Brio=false")
+	}
+
+	// Unset categories should be nil
+	if r.Dag != nil {
+		t.Error("expected Dag to be nil")
+	}
+	if r.Emitter != nil {
+		t.Error("expected Emitter to be nil")
+	}
+
+	// Verify updateRules step
+	step := scenario.Steps[1]
+	if step.Function != FuncUpdateRules {
+		t.Fatalf("expected FuncUpdateRules, got %q", step.Function)
+	}
+	if step.Rules.Blocks == nil || *step.Rules.Blocks.MaxBlockGas != 30000000000 {
+		t.Error("expected updateRules Blocks.MaxBlockGas=30000000000")
+	}
+	if step.Rules.Economy == nil || step.Rules.Economy.MinBaseFee == nil {
+		t.Error("expected updateRules Economy.MinBaseFee to be set")
+	}
+	if step.Rules.Upgrades == nil || step.Rules.Upgrades.Brio == nil || !*step.Rules.Upgrades.Brio {
+		t.Error("expected updateRules Upgrades.Brio=true")
+	}
+	// Fields not in the update should remain nil
+	if step.Rules.Epochs != nil {
+		t.Error("expected updateRules Epochs to be nil")
+	}
+}
