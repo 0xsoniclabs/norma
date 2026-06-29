@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -416,39 +417,47 @@ func execStopNode(
 	net driver.Network,
 	state *sequentialState,
 ) error {
-	name := step.Identifier
+	base := step.Identifier
+	prefix := base + "-"
 
-	// Find the node (try exact name first, then single-instance pattern).
-	node, ok := state.nodes[name]
-	if !ok {
-		// Try with -0 suffix for single-instance nodes created with instances > 1.
-		node, ok = state.nodes[name+"-0"]
-		if !ok {
-			return fmt.Errorf("node %q not found in active nodes", name)
+	type stopTarget struct {
+		name string
+		node driver.Node
+	}
+	targets := make([]stopTarget, 0)
+	for name, node := range state.nodes {
+		if name == base || strings.HasPrefix(name, prefix) {
+			targets = append(targets, stopTarget{name: name, node: node})
 		}
-		name = name + "-0"
 	}
 
-	if err := net.RemoveNode(node); err != nil {
-		return fmt.Errorf("failed to remove node %s: %w", name, err)
-	}
-	if err := node.Stop(ctx); err != nil {
-		return fmt.Errorf("failed to stop node %s: %w", name, err)
-	}
-	if err := node.Cleanup(ctx); err != nil {
-		return fmt.Errorf("failed to cleanup node %s: %w", name, err)
+	if len(targets) == 0 {
+		return fmt.Errorf("node %q not found in active nodes", base)
 	}
 
-	delete(state.nodes, name)
+	g, gctx := errgroup.WithContext(ctx)
+	for _, target := range targets {
+		target := target
+		g.Go(func() error {
+			if err := net.RemoveNode(target.node); err != nil {
+				return fmt.Errorf("failed to remove node %s: %w", target.name, err)
+			}
+			if err := target.node.Stop(gctx); err != nil {
+				return fmt.Errorf("failed to stop node %s: %w", target.name, err)
+			}
+			if err := target.node.Cleanup(gctx); err != nil {
+				return fmt.Errorf("failed to cleanup node %s: %w", target.name, err)
+			}
+			return nil
+		})
+	}
 
-	// Also stop all instances if this was a multi-instance node.
-	for key, n := range state.nodes {
-		if len(key) > len(step.Identifier)+1 && key[:len(step.Identifier)+1] == step.Identifier+"-" {
-			_ = net.RemoveNode(n)
-			_ = n.Stop(ctx)
-			_ = n.Cleanup(ctx)
-			delete(state.nodes, key)
-		}
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	for _, target := range targets {
+		delete(state.nodes, target.name)
 	}
 
 	return nil
