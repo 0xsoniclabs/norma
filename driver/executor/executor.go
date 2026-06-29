@@ -374,7 +374,7 @@ func scheduleValidatorEvents(
 // validatorRegistry abstracts how an executor registers and unregisters
 // validator nodes with the network.
 type validatorRegistry interface {
-	registerNewValidator() (int, error)
+	registerNewValidator(stake uint64) (int, error)
 	unregisterValidator(validatorId int) error
 }
 
@@ -432,7 +432,7 @@ func scheduleNodeEvents(
 					// instances = 3, client.validatorId = 10 will get 10, 11, 12.
 					var validatorID *int
 					if nodeIsValidator {
-						id, err := registry.registerNewValidator()
+						id, err := registry.registerNewValidator(0)
 						if err != nil {
 							return fmt.Errorf("failed to register validator node; %v", err)
 						}
@@ -551,13 +551,13 @@ type netBasedValidatorRegistry struct {
 	net driver.Network
 }
 
-func (a netBasedValidatorRegistry) registerNewValidator() (int, error) {
+func (a netBasedValidatorRegistry) registerNewValidator(stake uint64) (int, error) {
 	rpcClient, err := a.net.DialRandomRpc()
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect to RPC; %v", err)
 	}
 	defer rpcClient.Close()
-	id, err := network.RegisterValidatorNode(rpcClient)
+	id, err := network.RegisterValidatorNode(rpcClient, stake)
 	if err != nil {
 		return 0, fmt.Errorf("failed to register validator node; %v", err)
 	}
