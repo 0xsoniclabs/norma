@@ -181,7 +181,7 @@ func TestExecutor_Validator_StartEndRejoinLeave(t *testing.T) {
 	node1 := driver.NewMockNode(ctrl)
 	gomock.InOrder(
 		// start = expect register
-		registry.EXPECT().registerNewValidator().Return(two, nil),
+		registry.EXPECT().registerNewValidator(gomock.Any()).Return(two, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node1, nil),
 		// leave = no unregister
 		net.EXPECT().RemoveNode(node1),
@@ -193,7 +193,7 @@ func TestExecutor_Validator_StartEndRejoinLeave(t *testing.T) {
 	node2 := driver.NewMockNode(ctrl)
 	gomock.InOrder(
 		// start = expect register
-		registry.EXPECT().registerNewValidator().Return(three, nil),
+		registry.EXPECT().registerNewValidator(gomock.Any()).Return(three, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node2, nil),
 		// end = expect unregister
 		node2.EXPECT().GetValidatorId().Return(&three),
