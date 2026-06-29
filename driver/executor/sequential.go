@@ -120,10 +120,11 @@ func runSequentialWithObserver(
 	defer cancel()
 
 	state := &sequentialState{
-		nodes:        make(map[string]driver.Node),
-		apps:         make(map[string]driver.Application),
-		nodeHistory:  make(map[string]bool),
-		validatorIds: make(map[string]int),
+		nodes:           make(map[string]driver.Node),
+		apps:            make(map[string]driver.Application),
+		nodeHistory:     make(map[string]bool),
+		validatorIds:    make(map[string]int),
+		validatorStakes: make(map[string]uint64),
 	}
 	for label, id := range genesisValidatorIds {
 		state.validatorIds[label] = id
@@ -204,6 +205,10 @@ type sequentialState struct {
 	// validatorIds preserves validator IDs for nodes that were stopped,
 	// so they can be reused on rejoin.
 	validatorIds map[string]int
+	// validatorStakes records the stake amount (in S) used when registering
+	// each validator, keyed by instance name. Required to issue the correct
+	// undelegate amount when undelegating.
+	validatorStakes map[string]uint64
 }
 
 // executeStep dispatches a single step to the appropriate handler.
@@ -317,14 +322,15 @@ func execStartNode(
 		instanceNames[instance] = instanceName
 
 		if isValidator {
+			var stakeAmount uint64
+			if step.Stake != nil {
+				stakeAmount = *step.Stake
+			}
+			state.validatorStakes[instanceName] = stakeAmount
 			if id, ok := state.validatorIds[instanceName]; ok {
 				// Use pre-assigned ID (genesis validator or rejoin).
 				validatorIds[instance] = &id
 			} else if !isRejoin {
-				var stakeAmount uint64
-				if step.Stake != nil {
-					stakeAmount = *step.Stake
-				}
 				id, err := registry.registerNewValidator(stakeAmount)
 				if err != nil {
 					return fmt.Errorf(
@@ -499,30 +505,33 @@ func execStopNode(
 	return nil
 }
 
-// execUndelegate undelegates a validator's stake from the SFC.
+// execUndelegate undelegates stake from one or more validator nodes.
 func execUndelegate(
 	step *parser.Step,
 	registry validatorRegistry,
 	state *sequentialState,
 ) error {
-	name := step.Identifier
-
-	node, ok := state.nodes[name]
-	if !ok {
-		node, ok = state.nodes[name+"-0"]
+	for _, target := range step.UndelegateTargets {
+		node, ok := state.nodes[target.Node]
 		if !ok {
-			return fmt.Errorf("node %q not found in active nodes", name)
+			if _, hasInstance := state.nodes[target.Node+"-0"]; hasInstance {
+				return fmt.Errorf("node %q has multiple instances; use an explicit instance name (e.g. %q)", target.Node, target.Node+"-0")
+			}
+			return fmt.Errorf("node %q not found in active nodes", target.Node)
+		}
+		id := node.GetValidatorId()
+		if id == nil {
+			return fmt.Errorf("node %q is not a validator", target.Node)
+		}
+		var stakeAmount uint64
+		if target.Stake != nil {
+			stakeAmount = *target.Stake
+		}
+		// stakeAmount=0 → UnregisterValidatorNode queries self-stake on-chain
+		if err := registry.unregisterValidator(*id, stakeAmount); err != nil {
+			return fmt.Errorf("failed to unregister validator %s: %w", target.Node, err)
 		}
 	}
-
-	if id := node.GetValidatorId(); id != nil {
-		if err := registry.unregisterValidator(*id); err != nil {
-			return fmt.Errorf("failed to unregister validator %s: %w", name, err)
-		}
-	} else {
-		return fmt.Errorf("node %q is not a validator", name)
-	}
-
 	return nil
 }
 

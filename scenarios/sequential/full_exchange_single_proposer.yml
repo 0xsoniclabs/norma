@@ -36,7 +36,8 @@ Scenario:
 
   - advanceEpoch  # val-g2-1 joined
 
-  - undelegate: val-g1-1
+  - undelegate:
+    - node: val-g1-1
 
   - stopNode: val-g1-1
 
@@ -47,7 +48,8 @@ Scenario:
 
   - advanceEpoch  # val-g2-2 joined
 
-  - undelegate: val-g1-2
+  - undelegate:
+    - node: val-g1-2
 
   - stopNode: val-g1-2
 
@@ -58,7 +60,8 @@ Scenario:
 
   - advanceEpoch  # val-g2-3 joined
 
-  - undelegate: val-g1-3
+  - undelegate:
+    - node: val-g1-3
 
   - stopNode: val-g1-3
 

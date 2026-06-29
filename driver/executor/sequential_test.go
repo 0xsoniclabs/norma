@@ -62,7 +62,7 @@ func TestSequential_StartAndStopNode(t *testing.T) {
 		registry.EXPECT().registerNewValidator(gomock.Any()).Return(validatorId, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
 		node.EXPECT().GetValidatorId().Return(&validatorId),
-		registry.EXPECT().unregisterValidator(validatorId).Return(nil),
+		registry.EXPECT().unregisterValidator(validatorId, gomock.Any()).Return(nil),
 		net.EXPECT().RemoveNode(node).Return(nil),
 		node.EXPECT().Stop(gomock.Any()).Return(nil),
 		node.EXPECT().Cleanup(gomock.Any()).Return(nil),
@@ -79,7 +79,7 @@ func TestSequential_StartAndStopNode(t *testing.T) {
 			},
 			{
 				Function:   parser.FuncUndelegate,
-				Identifier: "validator-A",
+				UndelegateTargets: []parser.UndelegateTarget{{Node: "validator-A"}},
 			},
 			{
 				Function:   parser.FuncStopNode,
@@ -90,6 +90,49 @@ func TestSequential_StartAndStopNode(t *testing.T) {
 
 	if err := runSequential(t.Context(), net, &scenario, nil, registry); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSequential_UndelegateMultiInstanceValidator_ReturnsError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node0 := driver.NewMockNode(ctrl)
+	node1 := driver.NewMockNode(ctrl)
+
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	node0.EXPECT().GetLabel().Return("validators-0").AnyTimes()
+	node0.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+	node1.EXPECT().GetLabel().Return("validators-1").AnyTimes()
+	node1.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+
+	instances := 2
+	gomock.InOrder(
+		registry.EXPECT().registerNewValidator(gomock.Any()).Return(2, nil),
+		registry.EXPECT().registerNewValidator(gomock.Any()).Return(3, nil),
+		net.EXPECT().CreateNode(gomock.Any()).Return(node0, nil).AnyTimes(),
+		net.EXPECT().CreateNode(gomock.Any()).Return(node1, nil).AnyTimes(),
+	)
+
+	scenario := parser.SequentialScenario{
+		Name: "Undelegate Multi Instance",
+		Steps: []parser.Step{
+			{
+				Function:   parser.FuncStartNode,
+				Identifier: "validators",
+				NodeType:   "validator",
+				Instances:  &instances,
+			},
+			{
+				Function:          parser.FuncUndelegate,
+				UndelegateTargets: []parser.UndelegateTarget{{Node: "validators"}},
+			},
+		},
+	}
+
+	err := runSequential(t.Context(), net, &scenario, nil, registry)
+	if err == nil {
+		t.Fatal("expected error when undelegating multi-instance validator by base name, got nil")
 	}
 }
 

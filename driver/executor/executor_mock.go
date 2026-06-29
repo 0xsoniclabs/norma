@@ -122,15 +122,15 @@ func (mr *MockvalidatorRegistryMockRecorder) registerNewValidator(stake any) *go
 }
 
 // unregisterValidator mocks base method.
-func (m *MockvalidatorRegistry) unregisterValidator(validatorId int) error {
+func (m *MockvalidatorRegistry) unregisterValidator(validatorId int, stake uint64) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "unregisterValidator", validatorId)
+	ret := m.ctrl.Call(m, "unregisterValidator", validatorId, stake)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // unregisterValidator indicates an expected call of unregisterValidator.
-func (mr *MockvalidatorRegistryMockRecorder) unregisterValidator(validatorId any) *gomock.Call {
+func (mr *MockvalidatorRegistryMockRecorder) unregisterValidator(validatorId, stake any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "unregisterValidator", reflect.TypeOf((*MockvalidatorRegistry)(nil).unregisterValidator), validatorId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "unregisterValidator", reflect.TypeOf((*MockvalidatorRegistry)(nil).unregisterValidator), validatorId, stake)
 }

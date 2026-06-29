@@ -209,8 +209,18 @@ type Step struct {
 	// Checks step parameters
 	SubChecks []CheckSpec
 
+	// Undelegate parameters
+	UndelegateTargets []UndelegateTarget
+
 	// WaitFor parameters
 	Duration time.Duration
+}
+
+// UndelegateTarget specifies a single validator node to undelegate from.
+// Stake is optional; if omitted (nil), the full self-stake is queried on-chain.
+type UndelegateTarget struct {
+	Node  string  `yaml:"node"`
+	Stake *uint64 `yaml:"stake,omitempty"`
 }
 
 // UnmarshalYAML implements custom YAML unmarshalling for Step.
@@ -291,6 +301,26 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 		} else if val.Tag != "!!null" && val.Value != "" {
 			return fmt.Errorf("updateRules value must be a mapping, got %q", val.Value)
 		}
+	case FuncUndelegate:
+		switch val.Kind {
+		case yaml.ScalarNode:
+			// Shorthand single-target form: `- undelegate: nodename`
+			if val.Tag == "!!null" || val.Value == "" {
+				return fmt.Errorf("undelegate requires at least one target")
+			}
+			s.UndelegateTargets = []UndelegateTarget{{Node: val.Value}}
+		case yaml.SequenceNode:
+			// List form: `- undelegate:\n  - node: foo\n    stake: 1000`
+			for i, item := range val.Content {
+				var target UndelegateTarget
+				if err := item.Decode(&target); err != nil {
+					return fmt.Errorf("undelegate target %d: %w", i+1, err)
+				}
+				s.UndelegateTargets = append(s.UndelegateTargets, target)
+			}
+		default:
+			return fmt.Errorf("undelegate value must be a node name or a list of targets")
+		}
 	case FuncAdvanceEpoch, FuncWaitForEpoch:
 		// These take no value (or null).
 		if val.Kind != yaml.ScalarNode || (val.Tag != "!!null" && val.Value != "" && val.Value != "null") {
@@ -331,9 +361,20 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 
 // stepFunctionDescriptions provides a human-readable description for each step function.
 var stepFunctionDescriptions = map[StepFunction]string{
-	FuncStartNode:    "Start a new network node (validator, observer, or rpc).",
-	FuncStopNode:     "Stop a running network node by name.",
-	FuncUndelegate:   "Undelegate stake from a validator node.",
+	FuncStartNode: "Start a new network node (validator, observer, or rpc).",
+	FuncStopNode:  "Stop a running network node by name.",
+	FuncUndelegate: `Undelegate stake from one or more validator nodes.
+    Each target in the list has two fields:
+      node:  (required) name of the validator node to undelegate from.
+      stake: (optional) amount in S to undelegate; if omitted, the full
+             self-stake is queried on-chain and undelegated.
+    Shorthand: a bare node name may be used instead of a list when
+    undelegating a single node with its full stake.
+    Example:
+      - undelegate:
+        - node: val-1
+        - node: val-2
+          stake: 1000000`,
 	FuncUpdateRules:  "Update one or more network rules (key/value pairs).",
 	FuncAdvanceEpoch: "Advance the network to the next epoch by sending transactions.",
 	FuncWaitForEpoch: "Wait until the network reaches the next epoch boundary.",
@@ -348,7 +389,7 @@ var paramDescriptions = map[string]string{
 	"type":       "Node type (\"validator\", \"observer\", \"rpc\") for startNode; application type for runApp.",
 	"imageName":  "Docker image name to use for the node.",
 	"dataVolume": "Docker volume name to mount as the node data directory.",
-	"stake":      "Initial stake amount (uint64) for a validator node.",
+	"stake":      "Initial stake amount in S (uint64) for a validator node. Used for both registration and undelegation. Defaults to 5,000,000 S if not specified.",
 	"instances":  "Number of node instances to start.",
 	"failing":    "When true, the step is expected to fail; a passing result is treated as an error.",
 	"users":      "Number of concurrent user accounts the application should simulate.",
