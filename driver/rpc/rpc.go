@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/0xsoniclabs/sonic/api/sonicapi"
@@ -112,7 +113,7 @@ func (r Impl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
 	delay := time.Millisecond
 	for time.Since(begin) < r.txReceiptTimeout {
 		receipt, err := r.transactionReceipt(txHash)
-		if errors.Is(err, ethereum.NotFound) {
+		if errors.Is(err, ethereum.NotFound) || isTransientError(err) {
 			time.Sleep(delay)
 			delay = 2 * delay
 			if delay > maxDelay {
@@ -208,6 +209,19 @@ func (r Impl) transactionReceipt(txHash common.Hash) (*types.Receipt, error) {
 	}
 
 	return receipt, nil
+}
+
+// isTransientError returns true if the error is a transient network error that
+// should be retried (e.g. connection refused, connection reset, EOF).
+func isTransientError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "EOF") ||
+		strings.Contains(msg, "broken pipe")
 }
 
 // TxPoolStatus represents the presence of a transaction in the transaction pool.
