@@ -674,8 +674,8 @@ func TestLocalNetworkAdvanceEpoch_Success(t *testing.T) {
 func TestLocalNetwork_FailingFlagPropagated(t *testing.T) {
 	t.Parallel()
 	config := driver.NetworkConfig{Validators: []driver.Validator{
-		{Name: "validator-ok", Failing: false, Instances: 1, ImageName: driver.DefaultClientDockerImageName},
-		{Name: "validator-failing", Failing: true, Instances: 1, ImageName: driver.DefaultClientDockerImageName},
+		{Name: t.Name() + "-validator-ok", Failing: false, Instances: 1, ImageName: driver.DefaultClientDockerImageName},
+		{Name: t.Name() + "-failing", Failing: true, Instances: 1, ImageName: driver.DefaultClientDockerImageName},
 	}}
 	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
@@ -688,7 +688,7 @@ func TestLocalNetwork_FailingFlagPropagated(t *testing.T) {
 	})
 
 	if _, err := net.CreateNode(&driver.NodeConfig{
-		Name:    "node",
+		Name:    t.Name() + "-failing-late",
 		Failing: true,
 		Image:   driver.DefaultClientDockerImageName,
 	}); err != nil {
@@ -718,7 +718,10 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	t.Parallel()
 	temp := t.TempDir()
 
-	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name()), OutputDir: temp}
+	config := driver.NetworkConfig{
+		Validators: driver.DefaultValidators(t.Name() + "-1"),
+		OutputDir:  temp,
+	}
 	net, err := NewLocalNetwork(t.Context(), &config)
 	if err != nil {
 		t.Fatalf("failed to create new local network: %v", err)
@@ -731,7 +734,7 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 
 	dataVolume := "abcd"
 	node, err := net.CreateNode(&driver.NodeConfig{
-		Name:       "node",
+		Name:       t.Name() + "-2",
 		DataVolume: &dataVolume,
 		Image:      driver.DefaultClientDockerImageName,
 	})
@@ -783,7 +786,7 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 
 	// re-run another node on the same data volume
 	if _, err := net.CreateNode(&driver.NodeConfig{
-		Name:       "node2",
+		Name:       t.Name() + "-3",
 		DataVolume: &dataVolume,
 		Image:      driver.DefaultClientDockerImageName,
 	}); err != nil {
