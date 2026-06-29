@@ -96,9 +96,6 @@ func (s *Scenario) Check() error {
 		if rule.Time < 0 {
 			errs = append(errs, fmt.Errorf("network rule update time must be >= 0, is %f", rule.Time))
 		}
-		if err := genesis.ValidateNetworkRulesPatch(rule.Rules); err != nil {
-			errs = append(errs, fmt.Errorf("invalid timed network rules patch at time %f: %w", rule.Time, err))
-		}
 	}
 
 	for _, adv := range s.AdvanceEpoch {
