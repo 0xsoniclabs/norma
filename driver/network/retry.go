@@ -3,6 +3,7 @@ package network
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 )
 
@@ -39,6 +40,8 @@ func RetryReturn[Out any](
 		if errors.Is(err, ErrPermanent) {
 			return out, err // don't retry when the error is permanent
 		}
+
+		slog.Debug("query failed, retrying", "error", err, "attempt", i+1, "max_attempts", numAttempts)
 		select {
 		case <-ctx.Done():
 			return out, ctx.Err()
