@@ -372,6 +372,112 @@ func TestSequential_MultiInstanceNode(t *testing.T) {
 	}
 }
 
+func TestExecStopNode_SingleInstanceSuffix(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	state := &sequentialState{
+		nodes: map[string]driver.Node{
+			"validator-A-0": node,
+		},
+	}
+
+	step := &parser.Step{
+		Function:   parser.FuncStopNode,
+		Identifier: "validator-A",
+	}
+
+	net.EXPECT().RemoveNode(node).Return(nil)
+	node.EXPECT().Stop(gomock.Any()).Return(nil)
+	node.EXPECT().Cleanup(gomock.Any()).Return(nil)
+
+	if err := execStopNode(t.Context(), step, net, state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, ok := state.nodes["validator-A-0"]; ok {
+		t.Fatalf("expected node validator-A-0 to be removed from state")
+	}
+}
+
+func TestExecStopNode_MultipleInstances(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	node0 := driver.NewMockNode(ctrl)
+	node1 := driver.NewMockNode(ctrl)
+	other := driver.NewMockNode(ctrl)
+
+	state := &sequentialState{
+		nodes: map[string]driver.Node{
+			"validators-0": node0,
+			"validators-1": node1,
+			"other":        other,
+		},
+	}
+
+	step := &parser.Step{
+		Function:   parser.FuncStopNode,
+		Identifier: "validators",
+	}
+
+	net.EXPECT().RemoveNode(node0).Return(nil)
+	node0.EXPECT().Stop(gomock.Any()).Return(nil)
+	node0.EXPECT().Cleanup(gomock.Any()).Return(nil)
+
+	net.EXPECT().RemoveNode(node1).Return(nil)
+	node1.EXPECT().Stop(gomock.Any()).Return(nil)
+	node1.EXPECT().Cleanup(gomock.Any()).Return(nil)
+
+	if err := execStopNode(t.Context(), step, net, state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, ok := state.nodes["validators-0"]; ok {
+		t.Fatalf("expected node validators-0 to be removed from state")
+	}
+	if _, ok := state.nodes["validators-1"]; ok {
+		t.Fatalf("expected node validators-1 to be removed from state")
+	}
+	if _, ok := state.nodes["other"]; !ok {
+		t.Fatalf("expected unrelated node to remain in state")
+	}
+}
+
+func TestExecStopNode_IgnoresNonNumericSuffix(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	node := driver.NewMockNode(ctrl)
+	unrelated := driver.NewMockNode(ctrl)
+
+	state := &sequentialState{
+		nodes: map[string]driver.Node{
+			"validator-0":     node,
+			"validator-extra": unrelated,
+		},
+	}
+
+	step := &parser.Step{
+		Function:   parser.FuncStopNode,
+		Identifier: "validator",
+	}
+
+	net.EXPECT().RemoveNode(node).Return(nil)
+	node.EXPECT().Stop(gomock.Any()).Return(nil)
+	node.EXPECT().Cleanup(gomock.Any()).Return(nil)
+
+	if err := execStopNode(t.Context(), step, net, state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, ok := state.nodes["validator-0"]; ok {
+		t.Fatalf("expected validator-0 to be removed")
+	}
+	if _, ok := state.nodes["validator-extra"]; !ok {
+		t.Fatalf("expected validator-extra to remain (non-numeric suffix)")
+	}
+}
+
 func TestSequential_RunAndCaptureEventExecution_CapturesAllSteps(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
