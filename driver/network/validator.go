@@ -17,8 +17,12 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+// defaultStakePerValidator is the default stake used when no stake is specified.
+const defaultStakePerValidator = uint64(5_000_000)
+
 // RegisterValidatorNode registers a validator in the SFC contract.
-func RegisterValidatorNode(backend ContractBackend) (int, error) {
+// If stake is 0, the default stake of 5,000,000 S is used.
+func RegisterValidatorNode(backend ContractBackend, stake uint64) (int, error) {
 	// get a representation of the deployed contract
 	SFCContract, err := sfc100.NewContract(sfc.ContractAddress, backend)
 	if err != nil {
@@ -40,7 +44,7 @@ func RegisterValidatorNode(backend ContractBackend) (int, error) {
 	txOpts.GasTipCap = systemTxGasTipCap
 	txOpts.GasLimit = systemTxGasLimit
 
-	txOpts.Value = getStakePerValidator()
+	txOpts.Value = stakeToWei(stake)
 
 	validatorPubKey := validatorpk.PubKey{
 		Raw:  crypto.FromECDSAPub(&privateKeyECDSA.PublicKey),
@@ -86,7 +90,7 @@ func UnregisterValidatorNode(client rpc.Client, validatorId int) error {
 	txOpts.GasTipCap = systemTxGasTipCap
 	txOpts.GasLimit = systemTxGasLimit
 
-	stake := getStakePerValidator()
+	stake := stakeToWei(0)
 
 	// withdraw ID must be unique, so we use the current time in nanoseconds
 	withdrawId := big.NewInt(time.Now().UnixNano())
@@ -112,7 +116,11 @@ func UnregisterValidatorNode(client rpc.Client, validatorId int) error {
 	return nil
 }
 
-func getStakePerValidator() *big.Int {
-	// 5_000_000 S
-	return new(big.Int).Mul(big.NewInt(5_000_000), big.NewInt(1e18))
+// stakeToWei converts a stake value in S to wei. If stake is 0, the default
+// stake of 5,000,000 S is used.
+func stakeToWei(stake uint64) *big.Int {
+	if stake == 0 {
+		stake = defaultStakePerValidator
+	}
+	return new(big.Int).Mul(new(big.Int).SetUint64(stake), big.NewInt(1e18))
 }

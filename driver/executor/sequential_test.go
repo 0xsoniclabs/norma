@@ -59,7 +59,7 @@ func TestSequential_StartAndStopNode(t *testing.T) {
 
 	validatorId := 2
 	gomock.InOrder(
-		registry.EXPECT().registerNewValidator().Return(validatorId, nil),
+		registry.EXPECT().registerNewValidator(gomock.Any()).Return(validatorId, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
 		node.EXPECT().GetValidatorId().Return(&validatorId),
 		registry.EXPECT().unregisterValidator(validatorId).Return(nil),
@@ -105,7 +105,7 @@ func TestSequential_StopNodeWithoutUndelegate(t *testing.T) {
 
 	validatorId := 2
 	gomock.InOrder(
-		registry.EXPECT().registerNewValidator().Return(validatorId, nil),
+		registry.EXPECT().registerNewValidator(gomock.Any()).Return(validatorId, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
 		// No unregister call expected
 		net.EXPECT().RemoveNode(node).Return(nil),
@@ -151,7 +151,7 @@ func TestSequential_RejoinNode(t *testing.T) {
 	validatorId := 2
 	gomock.InOrder(
 		// First start: registers as new validator
-		registry.EXPECT().registerNewValidator().Return(validatorId, nil),
+		registry.EXPECT().registerNewValidator(gomock.Any()).Return(validatorId, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Do(func(config *driver.NodeConfig) {
 			if config.ValidatorId == nil || *config.ValidatorId != validatorId {
 				t.Errorf("first start: expected ValidatorId=%d, got %v", validatorId, config.ValidatorId)
@@ -348,10 +348,23 @@ func TestSequential_MultiInstanceNode(t *testing.T) {
 	node2.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 
 	// Validators are registered sequentially, then nodes created in parallel.
-	first := registry.EXPECT().registerNewValidator().Return(2, nil)
-	registry.EXPECT().registerNewValidator().Return(3, nil).After(first)
-	net.EXPECT().CreateNode(gomock.Any()).Return(node1, nil)
-	net.EXPECT().CreateNode(gomock.Any()).Return(node2, nil)
+	ids := make(chan int, 2)
+	ids <- 2
+	ids <- 3
+	registry.EXPECT().registerNewValidator(gomock.Any()).DoAndReturn(func(stake uint64) (int, error) {
+		return <-ids, nil
+	}).Times(2)
+
+	net.EXPECT().CreateNode(gomock.Any()).DoAndReturn(func(config *driver.NodeConfig) (driver.Node, error) {
+		switch config.Name {
+		case "validators-0":
+			return node1, nil
+		case "validators-1":
+			return node2, nil
+		default:
+			return nil, fmt.Errorf("unexpected node name %q", config.Name)
+		}
+	}).Times(2)
 
 	instances := 2
 	scenario := parser.SequentialScenario{
