@@ -293,14 +293,22 @@ func execStartNode(
 		}
 
 		var validatorId *int
-		if isValidator && !isRejoin {
-			id, err := registry.registerNewValidator()
-			if err != nil {
-				return fmt.Errorf("failed to register validator %s: %w", instanceName, err)
-			}
-			validatorId = &id
-		} else if isValidator && isRejoin {
+		if isValidator {
 			if id, ok := state.validatorIds[instanceName]; ok {
+				// Use pre-assigned ID (genesis validator or rejoin).
+				validatorId = &id
+			} else if !isRejoin {
+				var stakeAmount uint64
+				if step.Stake != nil {
+					stakeAmount = *step.Stake
+				}
+				id, err := registry.registerNewValidator(stakeAmount)
+				if err != nil {
+					return fmt.Errorf(
+						"failed to register validator %s: %w",
+						instanceName, err,
+					)
+				}
 				validatorId = &id
 			}
 		}
