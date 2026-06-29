@@ -19,6 +19,7 @@ package parser
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseEmpty(t *testing.T) {
@@ -222,15 +223,15 @@ func TestNetwork_Rules(t *testing.T) {
 		t.Fatalf("parsing of input failed: %v", err)
 	}
 
-	if got, want := scenario.NetworkRules.Genesis["MAX_BLOCK_GAS"], "20500000000"; got != want {
+	if got, want := *scenario.NetworkRules.Genesis.Blocks.MaxBlockGas, uint64(20500000000); got != want {
 		t.Errorf("unexpected value: got: %v, want: %v", got, want)
 	}
 
-	if got, want := scenario.NetworkRules.Genesis["MAX_EPOCH_GAS"], "1500000000000"; got != want {
+	if got, want := *scenario.NetworkRules.Genesis.Epochs.MaxEpochGas, uint64(1500000000000); got != want {
 		t.Errorf("unexpected value: got: %v, want: %v", got, want)
 	}
 
-	if got, want := scenario.NetworkRules.Genesis["MAX_EPOCH_DURATION"], "123s"; got != want {
+	if got, want := int64(*scenario.NetworkRules.Genesis.Epochs.MaxEpochDuration), int64(123*time.Second); got != want {
 		t.Errorf("unexpected value: got: %v, want: %v", got, want)
 	}
 
@@ -238,7 +239,7 @@ func TestNetwork_Rules(t *testing.T) {
 		t.Errorf("unexpected value: got: %v, want: %v", got, want)
 	}
 
-	if got, want := scenario.NetworkRules.Updates[0].Rules["MAX_BLOCK_GAS"], "20500000001"; got != want {
+	if got, want := *scenario.NetworkRules.Updates[0].Rules.Blocks.MaxBlockGas, uint64(20500000001); got != want {
 		t.Errorf("unexpected value: got: %v, want: %v", got, want)
 	}
 
@@ -246,11 +247,11 @@ func TestNetwork_Rules(t *testing.T) {
 		t.Errorf("unexpected value: got: %v, want: %v", got, want)
 	}
 
-	if got, want := scenario.NetworkRules.Updates[1].Rules["MAX_EPOCH_GAS"], "1500000000002"; got != want {
+	if got, want := *scenario.NetworkRules.Updates[1].Rules.Epochs.MaxEpochGas, uint64(1500000000002); got != want {
 		t.Errorf("unexpected value: got: %v, want: %v", got, want)
 	}
 
-	if got, want := scenario.NetworkRules.Updates[1].Rules["MAX_EPOCH_DURATION"], "10s"; got != want {
+	if got, want := int64(*scenario.NetworkRules.Updates[1].Rules.Epochs.MaxEpochDuration), int64(10*time.Second); got != want {
 		t.Errorf("unexpected value: got: %v, want: %v", got, want)
 	}
 }
@@ -260,20 +261,21 @@ name: Network Rules Example
 
 network_rules:
   genesis:
-      MAX_BLOCK_GAS: 20500000000
-      MAX_EPOCH_GAS: 1500000000000
-      MAX_EPOCH_DURATION: 123s
-      YET_ANOTHER_RULE: abcd
+      Blocks:
+        MaxBlockGas: 20500000000
+      Epochs:
+        MaxEpochGas: 1500000000000
+        MaxEpochDuration: 123s
   updates:
       - time: 10
         rules:
-          MAX_BLOCK_GAS: 20500000001
-          YET_ANOTHER_RULE: abcde
+          Blocks:
+            MaxBlockGas: 20500000001
       - time: 30
         rules:
-          MAX_EPOCH_GAS: 1500000000002
-          MAX_EPOCH_DURATION: 10s
-          YET_ANOTHER_RULE: abcdef
+          Epochs:
+            MaxEpochGas: 1500000000002
+            MaxEpochDuration: 10s
 
 `
 
@@ -286,7 +288,7 @@ duration: 10
 		t.Fatalf("parsing of input failed: %v", err)
 	}
 
-	if got, want := scenario.NetworkRules.Genesis["MAX_EPOCH_DURATION"], "15s"; got != want {
+	if got, want := int64(*scenario.NetworkRules.Genesis.Epochs.MaxEpochDuration), int64(15*time.Second); got != want {
 		t.Errorf("unexpected value: got: %v, want: %v", got, want)
 	}
 }

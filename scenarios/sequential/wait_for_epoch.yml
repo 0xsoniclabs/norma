@@ -5,7 +5,8 @@
 Name: Wait For Epoch Test
 
 InitialNetworkRules:
-  MAX_EPOCH_DURATION: 5s
+  Epochs:
+    MaxEpochDuration: 5s
 
 Scenario:
   - startNode: validator

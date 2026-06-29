@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
-	"golang.org/x/exp/maps"
 
 	"github.com/0xsoniclabs/norma/analysis/report"
 	"github.com/0xsoniclabs/norma/driver"
@@ -186,14 +185,12 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 
 	// Startup network.
 	slog.Info("network RoundTripTime", "value", scenario.GetRoundTripTime())
-	for k, v := range scenario.NetworkRules.Genesis {
-		slog.Info("network Rule", "key", k, "value", v)
-	}
+	fmt.Println(scenario.NetworkRules.Genesis.PrettyPrint()) // multi line print
 
 	net, err := local.NewLocalNetwork(ctx, &driver.NetworkConfig{
 		Validators:    driver.NewValidators(scenario.Validators),
 		RoundTripTime: scenario.GetRoundTripTime(),
-		NetworkRules:  driver.NetworkRules(maps.Clone(scenario.NetworkRules.Genesis)),
+		NetworkRules:  scenario.NetworkRules.Genesis,
 		OutputDir:     outputDir,
 	})
 	if err != nil {
@@ -321,9 +318,7 @@ func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScena
 	}
 
 	// Log initial rules.
-	for k, v := range scenario.InitialRules {
-		slog.Info("network Rule", "key", k, "value", v)
-	}
+	fmt.Println(scenario.InitialRules.PrettyPrint()) // multi line print
 
 	// Startup network. The first "startNode" step with type=validator is used
 	// as the initial validators configuration (for genesis and bootstrap).
@@ -331,7 +326,7 @@ func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScena
 	validators, scenario := extractBootstrapValidators(scenario)
 	net, err := local.NewLocalNetwork(ctx, &driver.NetworkConfig{
 		Validators:   validators,
-		NetworkRules: driver.NetworkRules(maps.Clone(scenario.InitialRules)),
+		NetworkRules: scenario.InitialRules,
 		OutputDir:    outputDir,
 	})
 	if err != nil {

@@ -282,7 +282,7 @@ func (n *LocalNetwork) prepareGenesis() error {
 	}
 
 	rules := opera.FakeNetRules(opera.GetSonicUpgrades())
-	if err := genesis.ConfigureNetworkRulesMap(&rules, n.config.NetworkRules); err != nil {
+	if err := genesis.ApplyNetworkRulesPatch(&rules, n.config.NetworkRules); err != nil {
 		return errors.Join(fmt.Errorf("failed to apply network rules to genesis: %w", err), os.RemoveAll(tmpDir))
 	}
 
@@ -370,7 +370,7 @@ func (n *LocalNetwork) ApplyNetworkRules(rules driver.NetworkRules) error {
 	}
 	defer client.Close()
 
-	return network.ApplyNetworkRules(client, genesis.NetworkRules(rules))
+	return network.ApplyNetworkRules(client, rules)
 }
 
 func (n *LocalNetwork) AdvanceEpoch(epochIncrement int) error {

@@ -22,6 +22,7 @@ import (
 	"math/big"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
+	"github.com/0xsoniclabs/norma/genesis"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -38,7 +39,7 @@ import (
 type AppContext interface {
 	GetClient() rpc.Client
 	GetTreasure() *Account
-	GetNetworkRules() map[string]string
+	GetNetworkRules() genesis.NetworkRulesPatch
 	GetTransactOptions(account *Account) (*bind.TransactOpts, error)
 	GetReceipt(txHash common.Hash) (*types.Receipt, error)
 	Run(operation func(*bind.TransactOpts) (*types.Transaction, error)) (*types.Receipt, error)
@@ -50,7 +51,9 @@ type RpcClientFactory interface {
 	DialRandomRpc() (rpc.Client, error)
 }
 
-func NewContext(factory RpcClientFactory, treasury *Account, networkRules map[string]string) (AppContext, error) {
+// NewContext initializes an application context bound to a random RPC client,
+// treasury account, and the scenario network rules patch.
+func NewContext(factory RpcClientFactory, treasury *Account, networkRules genesis.NetworkRulesPatch) (AppContext, error) {
 	rpcClient, err := factory.DialRandomRpc()
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to network: %w", err)
@@ -70,7 +73,7 @@ type appContext struct {
 	rpcClient    rpc.Client       // < access to the network
 	treasury     *Account         // < the account paying for management tasks
 	helper       *contract.Helper // < a contract used for on-chain operations
-	networkRules map[string]string
+	networkRules genesis.NetworkRulesPatch
 }
 
 func (c *appContext) Close() {
@@ -85,7 +88,8 @@ func (c *appContext) GetTreasure() *Account {
 	return c.treasury
 }
 
-func (c *appContext) GetNetworkRules() map[string]string {
+// GetNetworkRules returns the network rules patch configured for this test run.
+func (c *appContext) GetNetworkRules() genesis.NetworkRulesPatch {
 	return c.networkRules
 }
 

@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	rpc "github.com/0xsoniclabs/norma/driver/rpc"
+	genesis "github.com/0xsoniclabs/norma/genesis"
 	bind "github.com/ethereum/go-ethereum/accounts/abi/bind"
 	common "github.com/ethereum/go-ethereum/common"
 	types "github.com/ethereum/go-ethereum/core/types"
@@ -85,10 +86,10 @@ func (mr *MockAppContextMockRecorder) GetClient() *gomock.Call {
 }
 
 // GetNetworkRules mocks base method.
-func (m *MockAppContext) GetNetworkRules() map[string]string {
+func (m *MockAppContext) GetNetworkRules() genesis.NetworkRulesPatch {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNetworkRules")
-	ret0, _ := ret[0].(map[string]string)
+	ret0, _ := ret[0].(genesis.NetworkRulesPatch)
 	return ret0
 }
 

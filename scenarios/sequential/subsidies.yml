@@ -1,9 +1,11 @@
 Name: Subsidies Test
 
 InitialNetworkRules:
-  MAX_EPOCH_DURATION: 10s
-  UPGRADES_ALLEGRO: true
-  UPGRADES_GAS_SUBSIDIES: true
+  Upgrades:
+    Allegro: true
+    GasSubsidies: true
+  Epochs:
+    MaxEpochDuration: 10s
 
 Scenario:
   - startNode: validator-0

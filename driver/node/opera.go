@@ -30,8 +30,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/exp/maps"
-
 	"github.com/0xsoniclabs/norma/driver/parser"
 	rpcdriver "github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/norma/genesis"
@@ -197,7 +195,7 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		tempDirs = append(tempDirs, tmpDir)
 
 		rules := opera.FakeNetRules(opera.GetSonicUpgrades())
-		if err := genesis.ConfigureNetworkRulesMap(&rules, config.NetworkConfig.NetworkRules); err != nil {
+		if err := genesis.ApplyNetworkRulesPatch(&rules, config.NetworkConfig.NetworkRules); err != nil {
 			return nil, fmt.Errorf("failed to configure rules for temporary genesis: %w", err)
 		}
 
@@ -275,8 +273,6 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 					*keystoreBinding = fmt.Sprintf("%s:%s/keystore:ro", keystorePath, dataDir)
 				}
 			}
-
-			maps.Copy(envs, config.NetworkConfig.NetworkRules) // put in the network rules
 
 			return client.Start(ctx,
 				&docker.ContainerConfig{

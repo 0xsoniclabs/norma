@@ -24,6 +24,7 @@ import (
 	"github.com/0xsoniclabs/carmen/go/common"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/driver/rpc"
+	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -118,7 +119,14 @@ type NetworkConfig struct {
 }
 
 // NetworkRules defines a set of network rules that can be applied to the network.
-type NetworkRules map[string]string
+// Network rules contains all the fields in sonic's opera.Rules, but all fields
+// are optional and only the non-nil fields will be applied to the network.
+//
+// This type is used to define the initial rule set in the genesis, by applying
+// the diff to the default rules: opera.FakeNetRules(opera.GetSonicUpgrades())
+// Additionally it can be sent serialized using json to change the network rules
+// during execution.
+type NetworkRules = genesis.NetworkRulesPatch
 
 // NetworkListener can be registered to networks to get callbacks whenever there
 // are changes in the network.

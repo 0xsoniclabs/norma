@@ -18,8 +18,8 @@ import (
 
 func TestGenerators_Bundles(t *testing.T) {
 	rules := getCumulativeUpgrades("UPGRADES_BRIO")
-	rules["UPGRADES_TRANSACTION_BUNDLES"] = "true"
-	rules["UPGRADES_GAS_SUBSIDIES"] = "true"
+	rules.Upgrades.TransactionBundles = new(true)
+	rules.Upgrades.GasSubsidies = new(true)
 	net, err := local.NewLocalNetwork(t.Context(), &driver.NetworkConfig{
 		Validators:   driver.DefaultValidators(t.Name()),
 		NetworkRules: rules,

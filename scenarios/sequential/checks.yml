@@ -3,7 +3,8 @@
 Name: All Checks Test
 
 InitialNetworkRules:
-  MAX_EPOCH_DURATION: 10s
+  Epochs:
+    MaxEpochDuration: 10s
 
 Scenario:
   - startNode: validator
