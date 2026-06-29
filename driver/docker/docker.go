@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand"
 	"os"
 	"strings"
@@ -279,6 +280,10 @@ func (c *Container) Cleanup(ctx context.Context) error {
 	if c.cleaned {
 		return nil
 	}
+	start := time.Now()
+	defer func() {
+		slog.Debug("container cleanup completed", "container", c.id, "duration", time.Since(start))
+	}()
 	if err := c.Stop(ctx); err != nil {
 		return err
 	}
