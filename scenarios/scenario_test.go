@@ -41,7 +41,7 @@ func TestCheckScenarios(t *testing.T) {
 				require.NoError(
 					t,
 					seqScenario.Check(),
-					"sequential scenario check failed for: %s", file,
+					"sequential scenario check failed for file", file,
 				)
 				return
 			}
@@ -50,9 +50,9 @@ func TestCheckScenarios(t *testing.T) {
 			require.NoError(
 				t,
 				err,
-				"failed to parse file: %s\n  sequential: %v", file, seqErr,
+				"failed to parse file", file, "sequential error:", seqErr,
 			)
-			require.NoError(t, scenario.Check(), "scenario check failed for: %s", file)
+			require.NoError(t, scenario.Check(), "scenario check failed for file", file)
 		})
 	}
 }
