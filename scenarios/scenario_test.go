@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver/parser"
+	"github.com/stretchr/testify/require"
 )
 
 // TestCheckScenarios iterates through all scenarios in this directory
@@ -30,30 +31,28 @@ import (
 // define valid scenarios.
 func TestCheckScenarios(t *testing.T) {
 	files, err := listAll()
-	if err != nil {
-		t.Fatalf("failed to get list of all scenario files: %v", err)
-	}
-	if len(files) == 0 {
-		t.Fatalf("failed to locate any scenario files!")
-	}
+	require.NoError(t, err, "failed to get list of all scenario files")
+	require.NotEmpty(t, files, "failed to locate any scenario files")
 	for _, file := range files {
 		t.Run(file, func(t *testing.T) {
 			// Try sequential format first, fall back to legacy format.
 			seqScenario, seqErr := parser.ParseSequentialFile(file)
 			if seqErr == nil {
-				if err := seqScenario.Check(); err != nil {
-					t.Fatalf("sequential scenario check failed for: %s: %v", file, err)
-				}
+				require.NoError(
+					t,
+					seqScenario.Check(),
+					"sequential scenario check failed for: %s", file,
+				)
 				return
 			}
 
 			scenario, err := parser.ParseFile(file)
-			if err != nil {
-				t.Fatalf("failed to parse file: %s\n  sequential: %v\n  legacy: %v", file, seqErr, err)
-			}
-			if err = scenario.Check(); err != nil {
-				t.Fatalf("scenario check failed for: %s: %v", file, err)
-			}
+			require.NoError(
+				t,
+				err,
+				"failed to parse file: %s\n  sequential: %v", file, seqErr,
+			)
+			require.NoError(t, scenario.Check(), "scenario check failed for: %s", file)
 		})
 	}
 }
