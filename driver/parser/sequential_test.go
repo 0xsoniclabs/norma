@@ -74,8 +74,8 @@ Scenario:
 	if scenario.Name != "Minimal Test" {
 		t.Errorf("expected name 'Minimal Test', got %q", scenario.Name)
 	}
-	if len(scenario.Steps) != 5 {
-		t.Fatalf("expected 5 steps, got %d", len(scenario.Steps))
+	if len(scenario.Steps) != 9 {
+		t.Fatalf("expected 9 steps, got %d", len(scenario.Steps))
 	}
 
 	// Verify step 1: startNode
@@ -180,8 +180,8 @@ Scenario:
 		t.Fatalf("unexpected parse error: %v", err)
 	}
 
-	if len(scenario.Steps) != 2 {
-		t.Fatalf("expected 2 steps, got %d", len(scenario.Steps))
+	if len(scenario.Steps) != 6 {
+		t.Fatalf("expected 6 steps, got %d", len(scenario.Steps))
 	}
 
 	step := scenario.Steps[1]
@@ -275,8 +275,8 @@ Scenario:
 		t.Fatalf("unexpected parse error: %v", err)
 	}
 
-	if len(scenario.Steps) != 1 {
-		t.Fatalf("expected 1 step, got %d", len(scenario.Steps))
+	if len(scenario.Steps) != 5 {
+		t.Fatalf("expected 5 steps, got %d", len(scenario.Steps))
 	}
 
 	step := scenario.Steps[0]
@@ -370,6 +370,40 @@ Scenario:
 	if scenario.InitialRules.Epochs == nil || scenario.InitialRules.Epochs.MaxEpochDuration == nil ||
 		int64(*scenario.InitialRules.Epochs.MaxEpochDuration) != int64(15*time.Second) {
 		t.Errorf("expected default Epochs.MaxEpochDuration=15s")
+	}
+
+	if len(scenario.Steps) != 5 {
+		t.Fatalf("expected 5 steps with default implicit end-checks, got %d", len(scenario.Steps))
+	}
+
+	if scenario.Steps[1].Function != FuncAdvanceEpoch {
+		t.Errorf("expected implicit step 2 to be advanceEpoch, got %q", scenario.Steps[1].Function)
+	}
+	if scenario.Steps[2].Function != FuncAdvanceEpoch {
+		t.Errorf("expected implicit step 3 to be advanceEpoch, got %q", scenario.Steps[2].Function)
+	}
+	if scenario.Steps[3].Function != FuncCheckBlockHashes {
+		t.Errorf("expected implicit step 4 to be checkBlockHashes, got %q", scenario.Steps[3].Function)
+	}
+	if scenario.Steps[4].Function != FuncCheckBlockHeights {
+		t.Errorf("expected implicit step 5 to be checkBlockHeights, got %q", scenario.Steps[4].Function)
+	}
+}
+
+func TestParseSequential_DisableEndChecks(t *testing.T) {
+	input := `
+Name: Disable End Checks Test
+DisableEndChecks: true
+Scenario:
+  - advanceEpoch
+`
+	scenario, err := ParseSequentialBytes([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	if len(scenario.Steps) != 1 {
+		t.Fatalf("expected 1 step when DisableEndChecks=true, got %d", len(scenario.Steps))
 	}
 }
 
@@ -490,8 +524,8 @@ Scenario:
 	if scenario.Name != "Single Proposer Blackout" {
 		t.Errorf("wrong name: %q", scenario.Name)
 	}
-	if len(scenario.Steps) != 15 {
-		t.Errorf("expected 15 steps, got %d", len(scenario.Steps))
+	if len(scenario.Steps) != 19 {
+		t.Errorf("expected 19 steps, got %d", len(scenario.Steps))
 	}
 
 	// Verify the rejoin pattern: validator-before-1 is started, stopped, then started again
