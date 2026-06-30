@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/sonic/api/sonicapi"
+	"github.com/0xsoniclabs/sonic/opera"
 	"github.com/ethereum/go-ethereum"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -69,6 +70,9 @@ type Client interface {
 	// executed or the context is cancelled. Returns nil, nil if the context
 	// expires before the bundle is executed.
 	WaitForBundleInfo(ctx context.Context, planHash common.Hash) (*sonicapi.RPCBundleInfo, error)
+
+	// GetNetworkRules calls eth_getRules for the given block selector, such as "latest".
+	GetNetworkRules(block string) (opera.Rules, error)
 }
 
 func WrapRpcClient(rpcClient *rpc.Client) *Impl {
@@ -169,6 +173,20 @@ func (r Impl) WaitForBundleInfo(ctx context.Context, planHash common.Hash) (*son
 			}
 		}
 	}
+}
+
+// GetNetworkRules fetches rules for the requested block selector using
+// eth_getRules and defaults to "latest" when no block is provided.
+func (r Impl) GetNetworkRules(block string) (opera.Rules, error) {
+	if block == "" {
+		block = "latest"
+	}
+
+	var rules opera.Rules
+	if err := r.Call(&rules, "eth_getRules", block); err != nil {
+		return opera.Rules{}, fmt.Errorf("failed to get network rules: %w", err)
+	}
+	return rules, nil
 }
 
 func (r Impl) transactionReceipt(txHash common.Hash) (*types.Receipt, error) {

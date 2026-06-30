@@ -10,6 +10,7 @@
 package network
 
 import (
+	context "context"
 	io "io"
 	reflect "reflect"
 
@@ -41,31 +42,31 @@ func (m *MockHost) EXPECT() *MockHostMockRecorder {
 }
 
 // CheckRunning mocks base method.
-func (m *MockHost) CheckRunning() error {
+func (m *MockHost) CheckRunning(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CheckRunning")
+	ret := m.ctrl.Call(m, "CheckRunning", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CheckRunning indicates an expected call of CheckRunning.
-func (mr *MockHostMockRecorder) CheckRunning() *gomock.Call {
+func (mr *MockHostMockRecorder) CheckRunning(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckRunning", reflect.TypeOf((*MockHost)(nil).CheckRunning))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckRunning", reflect.TypeOf((*MockHost)(nil).CheckRunning), ctx)
 }
 
 // Cleanup mocks base method.
-func (m *MockHost) Cleanup() error {
+func (m *MockHost) Cleanup(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Cleanup")
+	ret := m.ctrl.Call(m, "Cleanup", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Cleanup indicates an expected call of Cleanup.
-func (mr *MockHostMockRecorder) Cleanup() *gomock.Call {
+func (mr *MockHostMockRecorder) Cleanup(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cleanup", reflect.TypeOf((*MockHost)(nil).Cleanup))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cleanup", reflect.TypeOf((*MockHost)(nil).Cleanup), ctx)
 }
 
 // GetAddressForService mocks base method.
@@ -111,44 +112,44 @@ func (mr *MockHostMockRecorder) IsRunning() *gomock.Call {
 }
 
 // SaveLogTo mocks base method.
-func (m *MockHost) SaveLogTo(directory string) error {
+func (m *MockHost) SaveLogTo(ctx context.Context, directory string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SaveLogTo", directory)
+	ret := m.ctrl.Call(m, "SaveLogTo", ctx, directory)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SaveLogTo indicates an expected call of SaveLogTo.
-func (mr *MockHostMockRecorder) SaveLogTo(directory any) *gomock.Call {
+func (mr *MockHostMockRecorder) SaveLogTo(ctx, directory any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveLogTo", reflect.TypeOf((*MockHost)(nil).SaveLogTo), directory)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveLogTo", reflect.TypeOf((*MockHost)(nil).SaveLogTo), ctx, directory)
 }
 
 // Stop mocks base method.
-func (m *MockHost) Stop() error {
+func (m *MockHost) Stop(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stop")
+	ret := m.ctrl.Call(m, "Stop", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Stop indicates an expected call of Stop.
-func (mr *MockHostMockRecorder) Stop() *gomock.Call {
+func (mr *MockHostMockRecorder) Stop(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockHost)(nil).Stop))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockHost)(nil).Stop), ctx)
 }
 
 // StreamLog mocks base method.
-func (m *MockHost) StreamLog() (io.ReadCloser, error) {
+func (m *MockHost) StreamLog(ctx context.Context) (io.ReadCloser, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StreamLog")
+	ret := m.ctrl.Call(m, "StreamLog", ctx)
 	ret0, _ := ret[0].(io.ReadCloser)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // StreamLog indicates an expected call of StreamLog.
-func (mr *MockHostMockRecorder) StreamLog() *gomock.Call {
+func (mr *MockHostMockRecorder) StreamLog(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StreamLog", reflect.TypeOf((*MockHost)(nil).StreamLog))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StreamLog", reflect.TypeOf((*MockHost)(nil).StreamLog), ctx)
 }

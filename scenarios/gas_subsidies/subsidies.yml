@@ -4,7 +4,8 @@ duration: 50
 
 network_rules:
   genesis:
-    UPGRADES_GAS_SUBSIDIES: true
+    Upgrades:
+      GasSubsidies: true
 
 validators:
   - name: local

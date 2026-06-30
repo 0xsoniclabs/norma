@@ -20,6 +20,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/0xsoniclabs/norma/genesis"
 )
 
 func TestTimeRange_UnconstrainedInputIsAccepted(t *testing.T) {
@@ -498,43 +500,6 @@ func TestScenario_CheatIssuesAreDetected(t *testing.T) {
 	}
 }
 
-func TestScenario_UnknownNetworkRuleInGenesisIsDetected(t *testing.T) {
-	scenario := Scenario{
-		Name:     "Test",
-		Duration: 60,
-		NetworkRules: NetworkRules{
-			Genesis: map[string]string{
-				"UNKNOWN_RULE": "value",
-			},
-		},
-	}
-	err := scenario.Check()
-	if err == nil || !strings.Contains(err.Error(), "unknown network rule") {
-		t.Errorf("unknown network rule in genesis was not detected")
-	}
-}
-
-func TestScenario_UnknownNetworkRuleInUpdatesIsDetected(t *testing.T) {
-	scenario := Scenario{
-		Name:     "Test",
-		Duration: 60,
-		NetworkRules: NetworkRules{
-			Updates: []NetworkRulesUpdate{
-				{
-					Time: 10,
-					Rules: map[string]string{
-						"UNKNOWN_RULE": "value",
-					},
-				},
-			},
-		},
-	}
-	err := scenario.Check()
-	if err == nil || !strings.Contains(err.Error(), "unknown network rule") {
-		t.Errorf("unknown network rule in updates was not detected")
-	}
-}
-
 func TestScenario_NegativeNetworkRuleUpdateTimeIsDetected(t *testing.T) {
 	scenario := Scenario{
 		Name:     "Test",
@@ -543,8 +508,10 @@ func TestScenario_NegativeNetworkRuleUpdateTimeIsDetected(t *testing.T) {
 			Updates: []NetworkRulesUpdate{
 				{
 					Time: -1,
-					Rules: map[string]string{
-						"MAX_BLOCK_GAS": "2000000",
+					Rules: networkRules{
+						Blocks: &genesis.BlocksPatch{
+							MaxBlockGas: new(uint64(2000000)),
+						},
 					},
 				},
 			},

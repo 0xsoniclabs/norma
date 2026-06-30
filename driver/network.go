@@ -17,12 +17,14 @@
 package driver
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/0xsoniclabs/carmen/go/common"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/driver/rpc"
+	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -65,7 +67,7 @@ type Network interface {
 
 	// CreateApplication creates a new application in this network, ready to
 	// produce load as defined by its configuration.
-	CreateApplication(config *ApplicationConfig) (Application, error)
+	CreateApplication(context.Context, *ApplicationConfig) (Application, error)
 
 	// GetActiveNodes obtains a list of active nodes in the network.
 	GetActiveNodes() []Node
@@ -98,6 +100,9 @@ type Network interface {
 
 	// AdvanceEpoch advances an epoch by the given number.
 	AdvanceEpoch(epochIncrement int) error
+
+	// WaitForEpochChange waits until the epoch changes.
+	WaitForEpochChange() error
 }
 
 // NetworkConfig is a collection of network parameters to be used by factories
@@ -114,7 +119,14 @@ type NetworkConfig struct {
 }
 
 // NetworkRules defines a set of network rules that can be applied to the network.
-type NetworkRules map[string]string
+// Network rules contains all the fields in sonic's opera.Rules, but all fields
+// are optional and only the non-nil fields will be applied to the network.
+//
+// This type is used to define the initial rule set in the genesis, by applying
+// the diff to the default rules: opera.FakeNetRules(opera.GetSonicUpgrades())
+// Additionally it can be sent serialized using json to change the network rules
+// during execution.
+type NetworkRules = genesis.NetworkRulesPatch
 
 // NetworkListener can be registered to networks to get callbacks whenever there
 // are changes in the network.

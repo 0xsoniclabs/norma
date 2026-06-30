@@ -11,6 +11,7 @@ require (
 	github.com/ethereum/go-ethereum v1.17.1
 	github.com/holiman/uint256 v1.3.2
 	github.com/jupp0r/go-priority-queue v0.0.0-20160601094913-ab1073853bde
+	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli/v2 v2.27.5
 	go.uber.org/mock v0.6.0
 	golang.org/x/exp v0.0.0-20241204233417-43b7b7cde48d
@@ -37,7 +38,7 @@ require (
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
 	github.com/crate-crypto/go-eth-kzg v1.5.0 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
@@ -83,6 +84,7 @@ require (
 	github.com/pion/transport/v2 v2.2.1 // indirect
 	github.com/pion/transport/v3 v3.0.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.20.4 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.59.1 // indirect

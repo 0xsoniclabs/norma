@@ -17,6 +17,7 @@
 package checking
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -29,9 +30,10 @@ import (
 )
 
 func init() {
-	RegisterNetworkCheck("blocks_hashes", func(net driver.Network, monitor *monitoring.Monitor) Checker {
-		return &blocksHashesChecker{net: net}
-	})
+	RegisterNetworkCheck("blocks_hashes",
+		func(net driver.Network, monitor *monitoring.Monitor) Checker {
+			return &blocksHashesChecker{net: net}
+		})
 }
 
 // blocksHashesChecker is a Checker checking if all Opera nodes provides the same hashes for all blocks/stateRoots.
@@ -44,7 +46,7 @@ func (c *blocksHashesChecker) Configure(config CheckerConfig) Checker {
 	return c
 }
 
-func (c *blocksHashesChecker) Check() (err error) {
+func (c *blocksHashesChecker) Check(ctx context.Context) (err error) {
 	nodes := c.net.GetActiveNodes()
 	slog.Info("checking hashes for nodes", "count", len(nodes))
 
@@ -62,7 +64,7 @@ func (c *blocksHashesChecker) Check() (err error) {
 		if n.IsExpectedFailure() {
 			expectedFailures[n.GetLabel()] = struct{}{}
 		}
-		rpcClients[i], err = n.DialRpc()
+		rpcClients[i], err = n.DialRpc(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to dial RPC for node %s; %v", n.GetLabel(), err)
 		}

@@ -17,8 +17,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/0xsoniclabs/norma/driver/globalflags"
 	"github.com/urfave/cli/v2"
@@ -27,6 +31,7 @@ import (
 // Run with `go run ./driver/norma`
 
 func main() {
+
 	app := &cli.App{
 		Name:      "Norma Network Runner",
 		HelpName:  "norma",
@@ -45,7 +50,15 @@ func main() {
 		Before: globalflags.ProcessGlobalFlags,
 	}
 
-	if err := app.Run(os.Args); err != nil {
+	stoppableCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		<-stoppableCtx.Done()
+		slog.Info("stopping...")
+		stop() // second Ctrl+C will force-kill
+	}()
+
+	if err := app.RunContext(stoppableCtx, os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/0xsoniclabs/norma/analysis/report"
 	"github.com/urfave/cli/v2"
@@ -31,6 +32,9 @@ var renderCommand = cli.Command{
 	Action: render,
 	Name:   "render",
 	Usage:  "renders a report for given monitoring data",
+	Flags: []cli.Flag{
+		&openReport,
+	},
 }
 
 func render(ctx *cli.Context) error {
@@ -40,6 +44,7 @@ func render(ctx *cli.Context) error {
 	}
 
 	input := args.First()
+	shouldOpenReport := ctx.Bool(openReport.Name)
 	currentDir, err := os.Getwd()
 	if err != nil {
 		return err
@@ -50,5 +55,10 @@ func render(ctx *cli.Context) error {
 	}
 
 	slog.Info("rendered report at", "path", fmt.Sprintf("file://%s/%s", currentDir, result))
+	if shouldOpenReport {
+		if err := openBrowser(filepath.Join(currentDir, result)); err != nil {
+			slog.Warn("failed to open report in browser", "error", err)
+		}
+	}
 	return nil
 }

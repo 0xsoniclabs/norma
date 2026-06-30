@@ -1,10 +1,11 @@
 Name: Single Block Proposer Test
 
 InitialNetworkRules:
-  UPGRADES_SONIC: true
-  UPGRADES_ALLEGRO: true
-  UPGRADES_GAS_SUBSIDIES: true
-  UPGRADES_BRIO: false
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    GasSubsidies: true
+    Brio: false
 
 Scenario:
   - startNode: validator-0
@@ -21,7 +22,8 @@ Scenario:
   - waitFor: 5s
 
   - updateRules:
-      UPGRADES_BRIO: true  # hardfork enabled
+      Upgrades:
+        Brio: true  # hardfork enabled
 
   - waitFor: 5s
 

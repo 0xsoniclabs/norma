@@ -32,17 +32,46 @@ import (
 
 //go:generate mockgen -source executor.go -destination executor_mock.go -package executor
 
+// EventExecution captures the observed execution interval of one scenario
+// event on the driver process wall clock.
+type EventExecution struct {
+	Name       string
+	Start, End time.Time
+}
+
 // Run executes the given scenario on the given network using the provided clock
 // as a time source. Execution will fail (fast) if the scenario is not valid (see
 // Scenario's Check() function). The context can be used to abort the execution.
 func Run(ctx context.Context, clock Clock, network driver.Network, scenario *parser.Scenario, checks checking.Checks) error {
-	return run(ctx, clock, network, scenario, checks, &netBasedValidatorRegistry{
+	return runWithObserver(ctx, clock, network, scenario, checks, &netBasedValidatorRegistry{
 		net: network,
-	})
+	}, nil)
 }
 
-// run is the internal implementation of the Run function, allowing to
-// inject a validatorRegistry for testing purposes.
+// RunAndCaptureEventExecution runs the scenario and returns wall-clock start/end
+// intervals for every processed event.
+func RunAndCaptureEventExecution(
+	ctx context.Context,
+	clock Clock,
+	network driver.Network,
+	scenario *parser.Scenario,
+	checks checking.Checks,
+) ([]EventExecution, error) {
+	executions := make([]EventExecution, 0)
+	err := runWithObserver(
+		ctx,
+		clock,
+		network,
+		scenario,
+		checks,
+		&netBasedValidatorRegistry{net: network},
+		func(execution EventExecution) {
+			executions = append(executions, execution)
+		},
+	)
+	return executions, err
+}
+
 func run(
 	ctx context.Context,
 	clock Clock,
@@ -50,6 +79,18 @@ func run(
 	scenario *parser.Scenario,
 	checks checking.Checks,
 	registry validatorRegistry,
+) error {
+	return runWithObserver(ctx, clock, network, scenario, checks, registry, nil)
+}
+
+func runWithObserver(
+	ctx context.Context,
+	clock Clock,
+	network driver.Network,
+	scenario *parser.Scenario,
+	checks checking.Checks,
+	registry validatorRegistry,
+	onEventExecuted func(EventExecution),
 ) error {
 	if err := scenario.Check(); err != nil {
 		return err
@@ -71,7 +112,7 @@ func run(
 			// Schedule default consistency checks 2 seconds after the scenario end (after the epoch sealing).
 			queue.add(toSingleEvent(Seconds(scenario.Duration+2), "consistency check", func() error {
 				slog.Info("checking network consistency ...")
-				return checks.Check()
+				return checks.Check(ctx)
 			}))
 		} else {
 			// Schedule custom checks defined in the scenario.
@@ -87,7 +128,7 @@ func run(
 				}
 				configured := checking.NewFailingChecker(checker).Configure(config)
 
-				scheduleCheckEvents(c.Time, c.Check, configured, queue, network)
+				scheduleCheckEvents(ctx, c.Time, c.Check, configured, queue, network)
 			}
 		}
 	} else {
@@ -95,9 +136,9 @@ func run(
 	}
 
 	// Schedule all operations listed in the scenario.
-	scheduleValidatorEvents(scenario.Validators, queue, network, registry)
+	scheduleValidatorEvents(ctx, scenario.Validators, queue, network, registry)
 	for _, node := range scenario.Nodes {
-		scheduleNodeEvents(&node, queue, network, endTime, registry)
+		scheduleNodeEvents(ctx, &node, queue, network, endTime, registry)
 	}
 	for _, app := range scenario.Applications {
 		if err := scheduleApplicationEvents(ctx, &app, queue, network, endTime); err != nil {
@@ -157,18 +198,26 @@ func run(
 		// Execute the event and schedule successors.
 		start := time.Now()
 		successors, err := event.run()
+		end := time.Now()
+		if onEventExecuted != nil {
+			onEventExecuted(EventExecution{
+				Name:  event.name(),
+				Start: start,
+				End:   end,
+			})
+		}
 		if err != nil {
 			slog.Error("event execution failed",
 				"time", clock.Now(),
 				"name", event.name(),
 				"event_time", event.time(),
 				"error", err,
-				"duration", time.Since(start).Round(time.Millisecond),
+				"duration", end.Sub(start).Round(time.Millisecond),
 			)
 			return err
 		}
 
-		duration := time.Since(start)
+		duration := end.Sub(start)
 
 		level := slog.LevelInfo
 		msg := "processing of event completed"
@@ -265,6 +314,7 @@ func toSingleEvent(time Time, name string, action func() error) event {
 // scheduleValidatorEvents schedules activities to be performed on the set
 // of validators established during network startup.
 func scheduleValidatorEvents(
+	ctx context.Context,
 	validators []parser.Validator,
 	queue *eventQueue,
 	net driver.Network,
@@ -308,10 +358,10 @@ func scheduleValidatorEvents(
 					if err := net.RemoveNode(node); err != nil {
 						return fmt.Errorf("failed to remove validator %s; %v", name, err)
 					}
-					if err := node.Stop(); err != nil {
+					if err := node.Stop(ctx); err != nil {
 						return fmt.Errorf("failed to stop validator %s; %v", name, err)
 					}
-					if err := node.Cleanup(); err != nil {
+					if err := node.Cleanup(ctx); err != nil {
 						return fmt.Errorf("failed to cleanup validator %s; %v", name, err)
 					}
 					return nil
@@ -333,6 +383,7 @@ type validatorRegistry interface {
 // given node description, and actions are applied to the given network.
 // Node Lifecycle: create -> timer sim events {start, rejoin, end, leave} -> remove
 func scheduleNodeEvents(
+	ctx context.Context,
 	node *parser.Node,
 	queue *eventQueue,
 	net driver.Network,
@@ -450,10 +501,10 @@ func scheduleNodeEvents(
 					if err := net.RemoveNode(instance); err != nil {
 						return err
 					}
-					if err := instance.Stop(); err != nil {
+					if err := instance.Stop(ctx); err != nil {
 						return err
 					}
-					if err := instance.Cleanup(); err != nil {
+					if err := instance.Cleanup(ctx); err != nil {
 						return err
 					}
 					return nil
@@ -483,10 +534,10 @@ func scheduleNodeEvents(
 					if err := net.RemoveNode(instance); err != nil {
 						return err
 					}
-					if err := instance.Stop(); err != nil {
+					if err := instance.Stop(ctx); err != nil {
 						return err
 					}
-					if err := instance.Cleanup(); err != nil {
+					if err := instance.Cleanup(ctx); err != nil {
 						return err
 					}
 					return nil
@@ -553,7 +604,7 @@ func scheduleApplicationEvents(ctx context.Context, source *parser.Application, 
 			return ctx.Err()
 		}
 		name := fmt.Sprintf("%s-%d", source.Name, i)
-		newApp, err := net.CreateApplication(&driver.ApplicationConfig{
+		newApp, err := net.CreateApplication(ctx, &driver.ApplicationConfig{
 			Name:  name,
 			Type:  source.Type,
 			Rate:  &source.Rate,
@@ -563,7 +614,7 @@ func scheduleApplicationEvents(ctx context.Context, source *parser.Application, 
 			return err
 		}
 		queue.add(toSingleEvent(startTime, fmt.Sprintf("starting app %s", name), func() error {
-			return newApp.Start()
+			return newApp.Start(ctx)
 		}))
 		queue.add(toSingleEvent(endTime, fmt.Sprintf("stopping app %s", name), func() error {
 			return newApp.Stop()
@@ -601,8 +652,8 @@ func scheduleAdvanceEpochEvents(timing float32, epochIncrement int, queue *event
 }
 
 // scheduleCheckEvents schedules an event to send perform corresponding check
-func scheduleCheckEvents(timing float32, name string, check checking.Checker, queue *eventQueue, network driver.Network) {
+func scheduleCheckEvents(ctx context.Context, timing float32, name string, check checking.Checker, queue *eventQueue, network driver.Network) {
 	queue.add(toSingleEvent(Seconds(timing), fmt.Sprintf("Check [%s]", name), func() error {
-		return check.Check()
+		return check.Check(ctx)
 	}))
 }

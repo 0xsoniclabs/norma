@@ -16,7 +16,10 @@
 
 package network
 
-import "io"
+import (
+	context "context"
+	"io"
+)
 
 //go:generate mockgen -destination host_mock.go -package network . Host
 
@@ -36,7 +39,7 @@ type Host interface {
 
 	// CheckRunning returns an error if the host process is no longer running,
 	// either because it exited on its own or because its state cannot be determined.
-	CheckRunning() error
+	CheckRunning(ctx context.Context) error
 
 	// GetAddressForService returns the address of a service running on this
 	// host, or nil if such a service is not offered.
@@ -45,10 +48,10 @@ type Host interface {
 	// Stop shuts down the services running on the host gracefully, using
 	// their regular shutdown procedure (not killed). After stopping the
 	// service, no more interactions are expected to succeed.
-	Stop() error
+	Stop(ctx context.Context) error
 
 	// SaveLogTo transfers the logs of the host to the given file directory.
-	SaveLogTo(directory string) error
+	SaveLogTo(ctx context.Context, directory string) error
 
 	// StreamLog provides a reader that is continuously providing the host log.
 	// The log is tailed via the reader and blocked until next log lines are ready.
@@ -58,9 +61,9 @@ type Host interface {
 	// If this method is called many times, it should dispatch the log to all returned
 	// readers, i.e. all of them see the same output.
 	// It is up to the caller to close the stream.
-	StreamLog() (io.ReadCloser, error)
+	StreamLog(ctx context.Context) (io.ReadCloser, error)
 
 	// Cleanup releases all underlying resources. After the cleanup no more
 	// operations on this host are expected to succeed.
-	Cleanup() error
+	Cleanup(ctx context.Context) error
 }

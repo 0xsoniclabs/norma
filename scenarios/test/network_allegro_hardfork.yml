@@ -20,13 +20,16 @@ validators:
 # while enabling the hardfork later
 network_rules:
   genesis:
-    UPGRADES_SONIC: true
-    UPGRADES_ALLEGRO: false
-    MAX_EPOCH_DURATION: 3s
+    Upgrades:
+      Sonic: true
+      Allegro: false
+    Epochs:
+      MaxEpochDuration: 3s
   updates:
     - time: 60
       rules:
-        UPGRADES_ALLEGRO: true  # hardfork enabled
+        Upgrades:
+          Allegro: true  # hardfork enabled
 
 nodes:
   - name: node-v202

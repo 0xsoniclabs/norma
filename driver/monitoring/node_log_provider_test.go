@@ -17,6 +17,7 @@
 package monitoring
 
 import (
+	"context"
 	"io"
 	"os"
 	"strings"
@@ -44,9 +45,15 @@ func TestRegisterLogParser(t *testing.T) {
 	node2.EXPECT().GetLabel().AnyTimes().Return(string(Node2TestId))
 	node3.EXPECT().GetLabel().AnyTimes().Return(string(Node3TestId))
 
-	node1.EXPECT().StreamLog().AnyTimes().DoAndReturn(func() (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(Node1TestLog)), nil })
-	node2.EXPECT().StreamLog().AnyTimes().DoAndReturn(func() (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(Node2TestLog)), nil })
-	node3.EXPECT().StreamLog().AnyTimes().DoAndReturn(func() (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(Node3TestLog)), nil })
+	node1.EXPECT().StreamLog(gomock.Any()).AnyTimes().DoAndReturn(func(context.Context) (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader(Node1TestLog)), nil
+	})
+	node2.EXPECT().StreamLog(gomock.Any()).AnyTimes().DoAndReturn(func(context.Context) (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader(Node2TestLog)), nil
+	})
+	node3.EXPECT().StreamLog(gomock.Any()).AnyTimes().DoAndReturn(func(context.Context) (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader(Node3TestLog)), nil
+	})
 
 	// simulate existing nodes
 	net.EXPECT().RegisterListener(gomock.Any())

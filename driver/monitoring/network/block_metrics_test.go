@@ -17,6 +17,7 @@
 package netmon
 
 import (
+	"context"
 	"io"
 	"strings"
 	"testing"
@@ -67,9 +68,15 @@ func TestIntegrateRegistryWithShutdown(t *testing.T) {
 	node2.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&urlB)
 	node3.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&urlC)
 
-	node1.EXPECT().StreamLog().AnyTimes().DoAndReturn(func() (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(monitoring.Node1TestLog)), nil })
-	node2.EXPECT().StreamLog().AnyTimes().DoAndReturn(func() (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(monitoring.Node2TestLog)), nil })
-	node3.EXPECT().StreamLog().AnyTimes().DoAndReturn(func() (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(monitoring.Node3TestLog)), nil })
+	node1.EXPECT().StreamLog(gomock.Any()).AnyTimes().DoAndReturn(func(context.Context) (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader(monitoring.Node1TestLog)), nil
+	})
+	node2.EXPECT().StreamLog(gomock.Any()).AnyTimes().DoAndReturn(func(context.Context) (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader(monitoring.Node2TestLog)), nil
+	})
+	node3.EXPECT().StreamLog(gomock.Any()).AnyTimes().DoAndReturn(func(context.Context) (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader(monitoring.Node3TestLog)), nil
+	})
 
 	url1 := driver.URL("node1")
 	url2 := driver.URL("node2")

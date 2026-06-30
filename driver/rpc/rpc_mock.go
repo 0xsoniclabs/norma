@@ -15,6 +15,7 @@ import (
 	reflect "reflect"
 
 	sonicapi "github.com/0xsoniclabs/sonic/api/sonicapi"
+	opera "github.com/0xsoniclabs/sonic/opera"
 	ethereum "github.com/ethereum/go-ethereum"
 	common "github.com/ethereum/go-ethereum/common"
 	types "github.com/ethereum/go-ethereum/core/types"
@@ -194,6 +195,21 @@ func (m *MockClient) GetBundleInfo(planHash common.Hash) (*sonicapi.RPCBundleInf
 func (mr *MockClientMockRecorder) GetBundleInfo(planHash any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleInfo", reflect.TypeOf((*MockClient)(nil).GetBundleInfo), planHash)
+}
+
+// GetNetworkRules mocks base method.
+func (m *MockClient) GetNetworkRules(block string) (opera.Rules, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNetworkRules", block)
+	ret0, _ := ret[0].(opera.Rules)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNetworkRules indicates an expected call of GetNetworkRules.
+func (mr *MockClientMockRecorder) GetNetworkRules(block any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkRules", reflect.TypeOf((*MockClient)(nil).GetNetworkRules), block)
 }
 
 // GetTransactionPoolStatus mocks base method.

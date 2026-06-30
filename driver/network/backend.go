@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"strings"
 
+	"github.com/0xsoniclabs/sonic/opera"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -33,6 +34,9 @@ type ContractBackend interface {
 	// WaitTransactionReceipt waits for the receipt of the given transaction hash to be available.
 	// The function times out after 10 seconds.
 	WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
+
+	// GetNetworkRules returns network rules for the selected block (for example: "latest").
+	GetNetworkRules(block string) (opera.Rules, error)
 }
 
 // convertContractBytecode converts a contract hex string to bytecode.

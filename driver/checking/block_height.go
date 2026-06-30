@@ -17,6 +17,7 @@
 package checking
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -60,7 +61,7 @@ func (c *blockHeightChecker) Configure(config CheckerConfig) Checker {
 	return &blockHeightChecker{net: c.net, slack: slack}
 }
 
-func (c *blockHeightChecker) Check() error {
+func (c *blockHeightChecker) Check(ctx context.Context) error {
 	nodes := c.net.GetActiveNodes()
 	slog.Info("checking block heights for nodes", "count", len(nodes))
 	heights := make([]int64, len(nodes))
@@ -71,7 +72,7 @@ func (c *blockHeightChecker) Check() error {
 			expectedFailures[n.GetLabel()] = struct{}{}
 		}
 
-		height, err := getBlockHeight(n)
+		height, err := getBlockHeight(ctx, n)
 		if err != nil {
 			return fmt.Errorf("failed to get block height of node %s; %v", n.GetLabel(), err)
 		}
@@ -106,8 +107,8 @@ func (c *blockHeightChecker) Check() error {
 	return nil
 }
 
-func getBlockHeight(n driver.Node) (int64, error) {
-	rpcClient, err := n.DialRpc()
+func getBlockHeight(ctx context.Context, n driver.Node) (int64, error) {
+	rpcClient, err := n.DialRpc(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to dial node RPC; %v", err)
 	}

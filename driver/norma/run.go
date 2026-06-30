@@ -18,25 +18,22 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
-	"golang.org/x/exp/maps"
 
 	"github.com/0xsoniclabs/norma/analysis/report"
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/executor"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	_ "github.com/0xsoniclabs/norma/driver/monitoring/app"
-	prometheusmon "github.com/0xsoniclabs/norma/driver/monitoring/prometheus"
 	_ "github.com/0xsoniclabs/norma/driver/monitoring/user"
 	"github.com/0xsoniclabs/norma/driver/network/local"
 	"github.com/0xsoniclabs/norma/driver/parser"
@@ -51,7 +48,6 @@ var runCommand = cli.Command{
 	Usage:  "runs a scenario",
 	Flags: []cli.Flag{
 		&evalLabel,
-		&keepPrometheusRunning,
 		&numValidators,
 		&skipChecks,
 		&skipReportRendering,
@@ -71,11 +67,6 @@ var (
 		Usage:   "define a directory at which the monitoring artifact will be saved.",
 		Value:   "",
 		Aliases: []string{"o"},
-	}
-	keepPrometheusRunning = cli.BoolFlag{
-		Name:    "keep-prometheus-running",
-		Usage:   "if set, the Prometheus instance will not be shut down after the run is complete.",
-		Aliases: []string{"kpr"},
 	}
 	numValidators = cli.IntFlag{
 		Name:  "num-validators",
@@ -102,37 +93,25 @@ func run(ctx *cli.Context) (err error) {
 	}
 
 	outputDir := ctx.String(outputDirectory.Name)
-	keepPrometheusRunning := ctx.Bool(keepPrometheusRunning.Name)
 	skipChecks := ctx.Bool(skipChecks.Name)
 	skipReportRendering := ctx.Bool(skipReportRendering.Name)
 	openReport := ctx.Bool(openReport.Name)
 
 	path := args.First()
 
-	// Create a context that is cancelled on SIGINT/SIGTERM so that both
-	// network startup and scenario execution can be interrupted cleanly,
-	// allowing all deferred shutdowns to execute.
-	stoppableCtx, stop := signal.NotifyContext(ctx.Context, os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	go func() {
-		<-stoppableCtx.Done()
-		slog.Info("stopping...")
-		stop() // second Ctrl+C will force-kill
-	}()
-
 	files, err := collectScenarioFiles(path)
 	if err != nil {
 		return fmt.Errorf("failed to collect scenario files: %w", err)
 	}
 	for _, file := range files {
-		if stoppableCtx.Err() != nil {
-			return stoppableCtx.Err()
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 		label := ctx.String(evalLabel.Name)
 		if label == "" {
 			label = fmt.Sprintf("eval_%d", time.Now().Unix())
 		}
-		if err := runScenario(stoppableCtx, file, outputDir, label, keepPrometheusRunning, skipChecks, skipReportRendering, openReport); err != nil {
+		if err := runScenario(ctx.Context, file, outputDir, label, skipChecks, skipReportRendering, openReport); err != nil {
 			return fmt.Errorf("failed to run scenario %q: %w", file, err)
 		}
 	}
@@ -140,7 +119,7 @@ func run(ctx *cli.Context) (err error) {
 	return nil
 }
 
-func runScenario(ctx context.Context, path, outputDir, label string, keepPrometheusRunning, skipChecks, skipReportRendering, openReport bool) error {
+func runScenario(ctx context.Context, path, outputDir, label string, skipChecks, skipReportRendering, openReport bool) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -150,10 +129,19 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 		return fmt.Errorf("couldn't create temp dir for output; %w", err)
 	}
 
+	// Try sequential format first.
+	seqScenario, seqErr := parser.ParseSequentialFile(path)
+	if seqErr == nil {
+		if err := seqScenario.Check(); err != nil {
+			return err
+		}
+		return runSequentialScenario(ctx, &seqScenario, path, outputDir, label, skipChecks, skipReportRendering, openReport)
+	}
+
 	slog.Info("reading scenario file", "path", path)
 	scenario, err := parser.ParseFile(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to parse scenario file:\n  sequential: %w\n  legacy: %w", seqErr, err)
 	}
 
 	if err := scenario.Check(); err != nil {
@@ -189,14 +177,12 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 
 	// Startup network.
 	slog.Info("network RoundTripTime", "value", scenario.GetRoundTripTime())
-	for k, v := range scenario.NetworkRules.Genesis {
-		slog.Info("network Rule", "key", k, "value", v)
-	}
+	fmt.Println(scenario.NetworkRules.Genesis.PrettyPrint()) // multi line print
 
 	net, err := local.NewLocalNetwork(ctx, &driver.NetworkConfig{
 		Validators:    driver.NewValidators(scenario.Validators),
 		RoundTripTime: scenario.GetRoundTripTime(),
-		NetworkRules:  driver.NetworkRules(maps.Clone(scenario.NetworkRules.Genesis)),
+		NetworkRules:  scenario.NetworkRules.Genesis,
 		OutputDir:     outputDir,
 	})
 	if err != nil {
@@ -217,10 +203,18 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 	if err != nil {
 		return err
 	}
+	var eventExecutions []executor.EventExecution
 	defer func() {
 		slog.Info("shutting down data monitor ...")
 		if err := monitor.Shutdown(); err != nil {
 			slog.Error("error during monitor shutdown", "error", err)
+		}
+		if err := appendScenarioStepTimings(
+			monitor.GetMeasurementFileName(),
+			label,
+			eventExecutions,
+		); err != nil {
+			slog.Warn("failed to export scenario step execution timings", "error", err)
 		}
 		slog.Info("monitoring data was written", "output", outputDir)
 		slog.Info("raw data was exported", "file", monitor.GetMeasurementFileName())
@@ -248,21 +242,6 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 		return err
 	}
 
-	// Run prometheus.
-	slog.Info("starting Prometheus ...")
-	prom, err := prometheusmon.Start(net, net.GetDockerNetwork())
-	if err != nil {
-		slog.Error("error starting Prometheus", "error", err)
-	}
-	defer func() {
-		if !keepPrometheusRunning && prom != nil {
-			slog.Info("shutting down Prometheus ...")
-			if err := prom.Shutdown(); err != nil {
-				slog.Error("error during Prometheus shutdown", "error", err)
-			}
-		}
-	}()
-
 	var checks map[string]checking.Checker
 	if !skipChecks {
 		// Initialize network consistency checks.
@@ -273,14 +252,189 @@ func runScenario(ctx context.Context, path, outputDir, label string, keepPrometh
 	slog.Info("running scenario", "path", path)
 	logger := startProgressLogger(monitor, net)
 	defer logger.shutdown()
-	err = executor.Run(ctx, clock, net, &scenario, checks)
+	eventExecutions, err = executor.RunAndCaptureEventExecution(
+		ctx,
+		clock,
+		net,
+		&scenario,
+		checks,
+	)
 	if err != nil {
-		dumpNodeLogs(net)
+		dumpNodeLogs(ctx, net)
 		return err
 	}
 	slog.Info("execution completed successfully")
 
 	return nil
+}
+
+// runSequentialScenario handles execution of the new sequential scenario format.
+func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScenario, path, outputDir, label string, skipChecks, skipReportRendering, openReport bool) error {
+	slog.Info("running sequential scenario", "path", path, "name", scenario.Name)
+
+	// create symlink as qol (_latest => _####) where #### is the randomly generated name
+	symlink := filepath.Join(filepath.Dir(outputDir), fmt.Sprintf("norma_data_%s_latest", label))
+	if _, lstatErr := os.Lstat(symlink); lstatErr == nil {
+		if err := os.Remove(symlink); err != nil {
+			return fmt.Errorf("failed to remove existing _latest symlink: %w", err)
+		}
+	}
+	if err := os.Symlink(outputDir, symlink); err != nil {
+		return fmt.Errorf("failed to create _latest symlink: %w", err)
+	}
+
+	slog.Info("monitoring data is written", "output", outputDir)
+
+	// Copy scenario yml to outputDir as well to provide context
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(outputDir, filepath.Base(path)), data, 0644); err != nil {
+		return err
+	}
+
+	// Log initial rules.
+	fmt.Println(scenario.InitialRules.PrettyPrint()) // multi line print
+
+	// Startup network. The first "startNode" step with type=validator is used
+	// as the initial validators configuration (for genesis and bootstrap).
+	// That step is then removed from the scenario since those nodes are already running.
+	validators, scenario := extractBootstrapValidators(scenario)
+	net, err := local.NewLocalNetwork(ctx, &driver.NetworkConfig{
+		Validators:   validators,
+		NetworkRules: scenario.InitialRules,
+		OutputDir:    outputDir,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		slog.Info("shutting down network ...")
+		if err := net.Shutdown(); err != nil {
+			slog.Error("error during network shutdown", "error", err)
+		}
+	}()
+
+	// Initialize monitoring environment.
+	monitor, err := monitoring.NewMonitor(net, monitoring.MonitorConfig{
+		EvaluationLabel: label,
+		OutputDir:       outputDir,
+	})
+	if err != nil {
+		return err
+	}
+	var stepExecutions []executor.EventExecution
+	defer func() {
+		slog.Info("shutting down data monitor ...")
+		if err := monitor.Shutdown(); err != nil {
+			slog.Error("error during monitor shutdown", "error", err)
+		}
+		if err := appendScenarioStepTimings(
+			monitor.GetMeasurementFileName(),
+			label,
+			stepExecutions,
+		); err != nil {
+			slog.Warn("failed to export scenario step execution timings", "error", err)
+		}
+		slog.Info("monitoring data was written", "output", outputDir)
+		slog.Info("raw data was exported", "file", monitor.GetMeasurementFileName())
+
+		if !skipReportRendering && ctx.Err() == nil {
+			slog.Info("rendering summary report ...")
+			if file, err := report.SingleEvalReport.Render(monitor.GetMeasurementFileName(), outputDir, scenario.Name); err != nil {
+				slog.Error("report generation failed", "error", err)
+			} else {
+				slog.Info("summary report was exported", "file", fmt.Sprintf("file://%s/%s", outputDir, file))
+				if openReport {
+					if err := openBrowser(filepath.Join(outputDir, file)); err != nil {
+						slog.Warn("failed to open report in browser", "error", err)
+					}
+				}
+			}
+		} else {
+			slog.Info("report rendering skipped")
+			slog.Info(fmt.Sprintf("To render report run `norma render %s`", monitor.GetMeasurementFileName()))
+		}
+	}()
+
+	// Install monitoring sensory.
+	if err := monitoring.InstallAllRegisteredSources(monitor); err != nil {
+		return err
+	}
+
+	var checks map[string]checking.Checker
+	if !skipChecks {
+		checks = checking.InitNetworkChecks(net, monitor)
+	}
+
+	// Run the sequential scenario.
+	slog.Info("running scenario", "path", path)
+	logger := startProgressLogger(monitor, net)
+	defer logger.shutdown()
+	stepExecutions, err = executor.RunSequentialAndCaptureEventExecution(
+		ctx,
+		net,
+		scenario,
+		checks,
+	)
+	if err != nil {
+		return err
+	}
+	slog.Info("execution completed successfully")
+
+	return nil
+}
+
+// extractBootstrapValidators determines the initial validators for the network.
+// All leading "startNode" steps with type=validator at the beginning
+// of the scenario are extracted and used as bootstrap validators.
+// If no validators are found, a single default validator is used.
+func extractBootstrapValidators(scenario *parser.SequentialScenario) (driver.Validators, *parser.SequentialScenario) {
+	// Extract leading validator startNode steps.
+	var validators driver.Validators
+	var count int
+
+	for _, step := range scenario.Steps {
+		if step.Function != parser.FuncStartNode {
+			break // stop at first non-startNode step
+		}
+		if step.NodeType != "validator" {
+			break // stop at first non-validator startNode
+		}
+
+		instances := 1
+		if step.Instances != nil {
+			instances = *step.Instances
+		}
+		image := driver.ResolveClientImageName(step.ImageName)
+
+		var stake uint64
+		if step.Stake != nil {
+			stake = *step.Stake
+		}
+
+		validators = append(validators, driver.Validator{
+			Name:      step.Identifier,
+			Instances: instances,
+			ImageName: image,
+			Stake:     stake,
+		})
+		count++
+	}
+
+	if len(validators) == 0 {
+		// No validator step found; use a single default validator.
+		return driver.NewDefaultValidators(1), scenario
+	}
+
+	// Return a copy of the scenario with the bootstrap steps removed.
+	remaining := make([]parser.Step, 0, len(scenario.Steps)-count)
+	remaining = append(remaining, scenario.Steps[count:]...)
+
+	modified := *scenario
+	modified.Steps = remaining
+	return validators, &modified
 }
 
 func openBrowser(s string) error {
@@ -295,10 +449,10 @@ func openBrowser(s string) error {
 }
 
 // dumpNodeLogs prints the logs of all active nodes to help diagnose failures.
-func dumpNodeLogs(net driver.Network) {
+func dumpNodeLogs(ctx context.Context, net driver.Network) {
 	nodes := net.GetActiveNodes()
 	for _, node := range nodes {
-		reader, err := node.StreamLog()
+		reader, err := node.StreamLog(ctx)
 		if err != nil {
 			slog.Error("failed to stream log", "node", node.GetLabel(), "error", err)
 			continue
@@ -311,4 +465,41 @@ func dumpNodeLogs(net driver.Network) {
 		}
 		slog.Error("node log on failure", "node", node.GetLabel(), "log", string(data))
 	}
+}
+
+func appendScenarioStepTimings(
+	measurementFile string,
+	label string,
+	events []executor.EventExecution,
+) (err error) {
+	if len(events) == 0 {
+		return nil
+	}
+
+	file, err := os.OpenFile(measurementFile, os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, file.Close()) }()
+
+	for _, e := range events {
+		start := e.Start.UTC().UnixNano()
+		duration := e.End.Sub(e.Start).Nanoseconds()
+		record := monitoring.CsvRecord{
+			Record: monitoring.Record{
+				Network: "network",
+				App:     e.Name,
+				Time:    &start,
+				Value:   fmt.Sprintf("%d", duration),
+			},
+			Metric: "ScenarioStepExecutionDuration",
+			Run:    label,
+		}
+
+		if _, err := record.WriteTo(file); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

@@ -1,6 +1,7 @@
 package network
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -14,18 +15,18 @@ import (
 )
 
 // ApplyNetworkRules updates the network rules on the network.
-func ApplyNetworkRules(backend ContractBackend, rules genesis.NetworkRules) error {
+func ApplyNetworkRules(backend ContractBackend, rules genesis.NetworkRulesPatch) error {
 	// Bind contract to update network rules
 	contract, err := driverauth100.NewContract(driverauth.ContractAddress, backend)
 	if err != nil {
 		return fmt.Errorf("failed to get driver auth contract representation; %v", err)
 	}
 
-	originalRules := opera.FakeNetRules(opera.GetSonicUpgrades())
-	diff, err := genesis.GenerateJsonNetworkRulesUpdates(originalRules, rules)
+	patchJSON, err := json.Marshal(rules)
 	if err != nil {
-		return fmt.Errorf("failed to generate network rules updates; %v", err)
+		return fmt.Errorf("failed to marshal network rules patch; %v", err)
 	}
+	originalRules := opera.FakeNetRules(opera.GetSonicUpgrades())
 
 	// Use Fake ID for the network
 	// Driver owner is the first validator from the list i.e., index 1 (defined in genesis export in genesis.GenerateJsonGenesis)
@@ -36,7 +37,7 @@ func ApplyNetworkRules(backend ContractBackend, rules genesis.NetworkRules) erro
 	txOpts.GasTipCap = systemTxGasTipCap
 	txOpts.GasLimit = systemTxGasLimit
 
-	tx, err := contract.UpdateNetworkRules(txOpts, []byte(diff))
+	tx, err := contract.UpdateNetworkRules(txOpts, []byte(patchJSON))
 	if err != nil {
 		return fmt.Errorf("failed to update network rules; %v", err)
 	}

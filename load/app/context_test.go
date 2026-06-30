@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
+	"github.com/0xsoniclabs/norma/genesis"
 	"go.uber.org/mock/gomock"
 )
 
@@ -20,7 +21,7 @@ func TestNewContext_DoesNotDeployHelperContract(t *testing.T) {
 	// NewContext should succeed without any contract deployment calls.
 	// If it tried to deploy, it would call GetTransactOptions which needs
 	// ChainID, SuggestGasPrice, PendingNonceAt — none of which are mocked.
-	ctx, err := NewContext(factory, nil, nil)
+	ctx, err := NewContext(factory, nil, genesis.NetworkRulesPatch{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -40,7 +41,7 @@ func TestFundAccounts_AttemptsToDeployHelperOnFirstCall(t *testing.T) {
 	factory := NewMockRpcClientFactory(ctrl)
 	factory.EXPECT().DialRandomRpc().Return(mockRpc, nil)
 
-	ctx, err := NewContext(factory, nil, nil)
+	ctx, err := NewContext(factory, nil, genesis.NetworkRulesPatch{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

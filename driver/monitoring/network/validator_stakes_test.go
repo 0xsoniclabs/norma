@@ -35,7 +35,7 @@ func TestValidatorStakeSource_CollectsDataPeriodically(t *testing.T) {
 	net.EXPECT().GetActiveNodes().AnyTimes().DoAndReturn(func() []driver.Node {
 		node := driver.NewMockNode(ctrl)
 		node.EXPECT().GetLabel().AnyTimes().Return("node-a")
-		node.EXPECT().StreamLog().AnyTimes().Return(io.NopCloser(strings.NewReader(monitoring.Node1TestLog)), nil)
+		node.EXPECT().StreamLog(gomock.Any()).AnyTimes().Return(io.NopCloser(strings.NewReader(monitoring.Node1TestLog)), nil)
 		url := driver.URL("node-a")
 		node.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&url)
 		return []driver.Node{node}

@@ -10,6 +10,7 @@
 package driver
 
 import (
+	context "context"
 	reflect "reflect"
 
 	rpc "github.com/0xsoniclabs/norma/driver/rpc"
@@ -70,18 +71,18 @@ func (mr *MockNetworkMockRecorder) ApplyNetworkRules(rules any) *gomock.Call {
 }
 
 // CreateApplication mocks base method.
-func (m *MockNetwork) CreateApplication(config *ApplicationConfig) (Application, error) {
+func (m *MockNetwork) CreateApplication(arg0 context.Context, arg1 *ApplicationConfig) (Application, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateApplication", config)
+	ret := m.ctrl.Call(m, "CreateApplication", arg0, arg1)
 	ret0, _ := ret[0].(Application)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateApplication indicates an expected call of CreateApplication.
-func (mr *MockNetworkMockRecorder) CreateApplication(config any) *gomock.Call {
+func (mr *MockNetworkMockRecorder) CreateApplication(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateApplication", reflect.TypeOf((*MockNetwork)(nil).CreateApplication), config)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateApplication", reflect.TypeOf((*MockNetwork)(nil).CreateApplication), arg0, arg1)
 }
 
 // CreateNode mocks base method.
@@ -204,6 +205,20 @@ func (m *MockNetwork) UnregisterListener(arg0 NetworkListener) {
 func (mr *MockNetworkMockRecorder) UnregisterListener(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnregisterListener", reflect.TypeOf((*MockNetwork)(nil).UnregisterListener), arg0)
+}
+
+// WaitForEpochChange mocks base method.
+func (m *MockNetwork) WaitForEpochChange() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WaitForEpochChange")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WaitForEpochChange indicates an expected call of WaitForEpochChange.
+func (mr *MockNetworkMockRecorder) WaitForEpochChange() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForEpochChange", reflect.TypeOf((*MockNetwork)(nil).WaitForEpochChange))
 }
 
 // MockNetworkListener is a mock of NetworkListener interface.

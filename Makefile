@@ -22,7 +22,6 @@ all: \
     norma \
     pull-hello-world-image \
     pull-alpine-image \
-    pull-prometheus-image \
 	build-r-renderer-image
 
 pull-hello-world-image:
@@ -30,9 +29,6 @@ pull-hello-world-image:
 
 pull-alpine-image:
 	DOCKER_BUILDKIT=1 docker image pull alpine
-
-pull-prometheus-image:
-	DOCKER_BUILDKIT=1 docker image pull prom/prometheus:v2.44.0
 
 build-r-renderer-image:
 	DOCKER_BUILDKIT=1 docker build analysis/report/ -t norma-r-renderer
@@ -103,7 +99,7 @@ generate-mocks: # requires installed mockgen
 norma:
 	go build -o $(BUILD_DIR)/norma ./driver/norma
 
-test: pull-hello-world-image pull-alpine-image pull-prometheus-image build-r-renderer-image
+test: pull-hello-world-image pull-alpine-image build-r-renderer-image
 	go test ./... -v
 
 clean:

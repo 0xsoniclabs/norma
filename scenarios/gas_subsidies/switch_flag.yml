@@ -6,11 +6,13 @@ duration: 60
 
 network_rules:
   genesis:
-    UPGRADES_GAS_SUBSIDIES: false
+    Upgrades:
+      GasSubsidies: false
   updates:
     - time: 10
       rules:
-        UPGRADES_GAS_SUBSIDIES: true
+        Upgrades:
+          GasSubsidies: true
 
 # Activate gas subsidies at timestamp 15
 advance_epoch:

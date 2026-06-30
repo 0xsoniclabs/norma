@@ -24,6 +24,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver/checking"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/genesis"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/parser"
@@ -71,8 +72,8 @@ func TestExecutor_RunSingleNodeScenario(t *testing.T) {
 	gomock.InOrder(
 		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
 		net.EXPECT().RemoveNode(node),
-		node.EXPECT().Stop(),
-		node.EXPECT().Cleanup(),
+		node.EXPECT().Stop(gomock.Any()),
+		node.EXPECT().Cleanup(gomock.Any()),
 	)
 
 	if err := Run(t.Context(), clock, net, &scenario, nil); err != nil {
@@ -108,14 +109,14 @@ func TestExecutor_RunMultipleNodeScenario(t *testing.T) {
 	gomock.InOrder(
 		net.EXPECT().CreateNode(gomock.Any()).Return(node1, nil),
 		net.EXPECT().RemoveNode(newIs(node1)),
-		node1.EXPECT().Stop(),
-		node1.EXPECT().Cleanup(),
+		node1.EXPECT().Stop(gomock.Any()),
+		node1.EXPECT().Cleanup(gomock.Any()),
 	)
 	gomock.InOrder(
 		net.EXPECT().CreateNode(gomock.Any()).Return(node2, nil),
 		net.EXPECT().RemoveNode(newIs(node2)),
-		node2.EXPECT().Stop(),
-		node2.EXPECT().Cleanup(),
+		node2.EXPECT().Stop(gomock.Any()),
+		node2.EXPECT().Cleanup(gomock.Any()),
 	)
 
 	if err := Run(t.Context(), clock, net, &scenario, nil); err != nil {
@@ -185,8 +186,8 @@ func TestExecutor_Validator_StartEndRejoinLeave(t *testing.T) {
 		net.EXPECT().CreateNode(gomock.Any()).Return(node1, nil),
 		// leave = no unregister
 		net.EXPECT().RemoveNode(node1),
-		node1.EXPECT().Stop(),
-		node1.EXPECT().Cleanup(),
+		node1.EXPECT().Stop(gomock.Any()),
+		node1.EXPECT().Cleanup(gomock.Any()),
 	)
 
 	// node2 starts with no id, get assigned 3
@@ -199,8 +200,8 @@ func TestExecutor_Validator_StartEndRejoinLeave(t *testing.T) {
 		node2.EXPECT().GetValidatorId().Return(&three),
 		registry.EXPECT().unregisterValidator(three).Return(nil),
 		net.EXPECT().RemoveNode(node2),
-		node2.EXPECT().Stop(),
-		node2.EXPECT().Cleanup(),
+		node2.EXPECT().Stop(gomock.Any()),
+		node2.EXPECT().Cleanup(gomock.Any()),
 	)
 
 	// node3 rejoins with id=2
@@ -210,8 +211,8 @@ func TestExecutor_Validator_StartEndRejoinLeave(t *testing.T) {
 		net.EXPECT().CreateNode(gomock.Any()).Return(node3, nil),
 		// leave = no unregister
 		net.EXPECT().RemoveNode(node3),
-		node3.EXPECT().Stop(),
-		node3.EXPECT().Cleanup(),
+		node3.EXPECT().Stop(gomock.Any()),
+		node3.EXPECT().Cleanup(gomock.Any()),
 	)
 
 	// node4 rejoins with id=2
@@ -223,8 +224,8 @@ func TestExecutor_Validator_StartEndRejoinLeave(t *testing.T) {
 		node4.EXPECT().GetValidatorId().Return(&two),
 		registry.EXPECT().unregisterValidator(two).Return(nil),
 		net.EXPECT().RemoveNode(node4),
-		node4.EXPECT().Stop(),
-		node4.EXPECT().Cleanup(),
+		node4.EXPECT().Stop(gomock.Any()),
+		node4.EXPECT().Cleanup(gomock.Any()),
 	)
 
 	if err := run(t.Context(), clock, net, &scenario, nil, registry); err != nil {
@@ -273,8 +274,8 @@ func TestExecutor_ObserverNodes_HaveNilValidatorID(t *testing.T) {
 			return node1, nil
 		})
 	net.EXPECT().RemoveNode(node1)
-	node1.EXPECT().Stop()
-	node1.EXPECT().Cleanup()
+	node1.EXPECT().Stop(gomock.Any())
+	node1.EXPECT().Cleanup(gomock.Any())
 
 	net.EXPECT().CreateNode(gomock.AssignableToTypeOf(&driver.NodeConfig{})).DoAndReturn(func(cfg *driver.NodeConfig) (driver.Node, error) {
 		if cfg.ValidatorId != nil {
@@ -283,8 +284,8 @@ func TestExecutor_ObserverNodes_HaveNilValidatorID(t *testing.T) {
 		return node2, nil
 	})
 	net.EXPECT().RemoveNode(node2)
-	node2.EXPECT().Stop()
-	node2.EXPECT().Cleanup()
+	node2.EXPECT().Stop(gomock.Any())
+	node2.EXPECT().Cleanup(gomock.Any())
 
 	if err := run(t.Context(), clock, net, &scenario, nil, registry); err != nil {
 		t.Errorf("failed to run scenario: %v", err)
@@ -312,8 +313,8 @@ func TestExecutor_RunSingleApplicationScenario(t *testing.T) {
 	app := driver.NewMockApplication(ctrl)
 
 	// In this scenario, an application is expected to be created and shut down.
-	net.EXPECT().CreateApplication(gomock.Any()).Return(app, nil)
-	app.EXPECT().Start()
+	net.EXPECT().CreateApplication(gomock.Any(), gomock.Any()).Return(app, nil)
+	app.EXPECT().Start(t.Context())
 	app.EXPECT().Stop()
 
 	if err := Run(t.Context(), clock, net, &scenario, nil); err != nil {
@@ -348,11 +349,11 @@ func TestExecutor_RunMultipleApplicationScenario(t *testing.T) {
 	app2 := driver.NewMockApplication(ctrl)
 
 	// In this scenario, an application is expected to be created and shut down.
-	net.EXPECT().CreateApplication(gomock.Any()).Return(app1, nil)
-	net.EXPECT().CreateApplication(gomock.Any()).Return(app2, nil)
-	app1.EXPECT().Start()
+	net.EXPECT().CreateApplication(gomock.Any(), gomock.Any()).Return(app1, nil)
+	net.EXPECT().CreateApplication(gomock.Any(), gomock.Any()).Return(app2, nil)
+	app1.EXPECT().Start(gomock.Any())
 	app1.EXPECT().Stop()
-	app2.EXPECT().Start()
+	app2.EXPECT().Start(gomock.Any())
 	app2.EXPECT().Stop()
 
 	if err := Run(t.Context(), clock, net, &scenario, nil); err != nil {
@@ -426,13 +427,18 @@ func TestExecutor_RunScenarioWithDefaultChecks(t *testing.T) {
 	checking.RegisterNetworkCheck("block_gas_rate", func(driver.Network, *monitoring.Monitor) checking.Checker {
 		return checkBlockGasRate
 	})
+	checkBlocksHalted := checking.NewMockChecker(ctrl)
+	checking.RegisterNetworkCheck("blocks_halted", func(driver.Network, *monitoring.Monitor) checking.Checker {
+		return checkBlocksHalted
+	})
 
-	net.EXPECT().AdvanceEpoch(2).Return(nil)
+	net.EXPECT().AdvanceEpoch(2)
 
-	checkBlockHeight.EXPECT().Check().Return(nil)
-	checkBlocksHashes.EXPECT().Check().Return(nil)
-	checkBlocksRolling.EXPECT().Check().Return(nil)
-	checkBlockGasRate.EXPECT().Check().Return(nil)
+	checkBlockHeight.EXPECT().Check(gomock.Any())
+	checkBlocksHashes.EXPECT().Check(gomock.Any())
+	checkBlocksRolling.EXPECT().Check(gomock.Any())
+	checkBlockGasRate.EXPECT().Check(gomock.Any())
+	checkBlocksHalted.EXPECT().Check(gomock.Any()).Return(nil)
 
 	checks := checking.InitNetworkChecks(net, nil)
 	if err := Run(t.Context(), clock, net, &scenario, checks); err != nil {
@@ -451,8 +457,8 @@ func TestExecutor_scheduleNetworkRulesEvents(t *testing.T) {
 		Duration: 10,
 		NetworkRules: parser.NetworkRules{
 			Updates: []parser.NetworkRulesUpdate{
-				{Time: 2, Rules: map[string]string{"MAX_BLOCK_GAS": "20500000000"}},
-				{Time: 6, Rules: map[string]string{"MAX_EPOCH_GAS": "1500000000000"}},
+				{Time: 2, Rules: genesis.NetworkRulesPatch{Blocks: &genesis.BlocksPatch{MaxBlockGas: New[uint64](20500000000)}}},
+				{Time: 6, Rules: genesis.NetworkRulesPatch{Epochs: &genesis.EpochsPatch{MaxEpochGas: New[uint64](1500000000000)}}},
 			},
 		},
 	}
@@ -460,8 +466,8 @@ func TestExecutor_scheduleNetworkRulesEvents(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	gomock.InOrder(
-		net.EXPECT().ApplyNetworkRules(map[string]string{"MAX_BLOCK_GAS": "20500000000"}),
-		net.EXPECT().ApplyNetworkRules(map[string]string{"MAX_EPOCH_GAS": "1500000000000"}),
+		net.EXPECT().ApplyNetworkRules(driver.NetworkRules{Blocks: &genesis.BlocksPatch{MaxBlockGas: New[uint64](20500000000)}}),
+		net.EXPECT().ApplyNetworkRules(driver.NetworkRules{Epochs: &genesis.EpochsPatch{MaxEpochGas: New[uint64](1500000000000)}}),
 	)
 
 	if err := Run(t.Context(), clock, net, &scenario, nil); err != nil {

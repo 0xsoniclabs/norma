@@ -19,16 +19,20 @@ validators:
 # and updates of the rules during the network run.
 network_rules:
   genesis:
-    MAX_BLOCK_GAS: 20500000000
-    MAX_EPOCH_GAS: 1500000000000
+    Blocks:
+      MaxBlockGas: 20500000000
+    Epochs:
+      MaxEpochGas: 1500000000000
   updates:
     - time: 10
       rules:
-        MAX_BLOCK_GAS: 20500000001
+        Blocks:
+          MaxBlockGas: 20500000001
     - time: 30
       rules:
-        MAX_EPOCH_GAS: 1500000000002
-        MAX_EPOCH_DURATION: 10s
+        Epochs:
+          MaxEpochGas: 1500000000002
+          MaxEpochDuration: 10s
 
 # In the network there is a single application producing constant load.
 applications:

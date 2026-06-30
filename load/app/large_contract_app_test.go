@@ -23,6 +23,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/network/local"
+	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/0xsoniclabs/norma/load/app"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -34,10 +35,12 @@ import (
 // LargeContractCounter and LargeContract on a network without the Brio upgrade
 // fails due to the contract code size exceeding the pre-Brio limits.
 func TestLargeContractDeploymentFailsWithoutBrio(t *testing.T) {
-	rules := map[string]string{
-		"UPGRADES_SONIC":   "true",
-		"UPGRADES_ALLEGRO": "true",
-		// UPGRADES_BRIO omitted intentionally - deployment of large contracts should fail
+	rules := driver.NetworkRules{
+		Upgrades: &genesis.UpgradesPatch{
+			Sonic:   new(true),
+			Allegro: new(true),
+			// Brio intentionally omitted - deployment of large contracts should fail.
+		},
 	}
 	net, err := local.NewLocalNetwork(t.Context(), &driver.NetworkConfig{
 		Validators:   driver.DefaultValidators(t.Name()),

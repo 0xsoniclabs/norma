@@ -9,8 +9,9 @@ duration: 15
 
 network_rules:
   genesis:
-    UPGRADES_SONIC: true
-    UPGRADES_ALLEGRO: true
+    Upgrades:
+      Sonic: true
+      Allegro: true
 
 # Initial validator nodes in the network.
 validators:

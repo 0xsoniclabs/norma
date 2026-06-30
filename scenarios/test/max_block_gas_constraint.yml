@@ -13,12 +13,15 @@ duration: 60
 # Start with shorted epoch duration to reflect the network rules updates.
 network_rules:
   genesis:
-    MAX_EPOCH_DURATION: 10s
-    UPGRADES_ALLEGRO: true
+    Epochs:
+      MaxEpochDuration: 10s
+    Upgrades:
+      Allegro: true
   updates:
     - time: 25
       rules:
-        MAX_BLOCK_GAS: 100000  # this limit is too low
+        Blocks:
+          MaxBlockGas: 100000  # this limit is too low
 
 
 # In the network, there is a few applications producing the load.

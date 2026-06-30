@@ -1,6 +1,7 @@
 package checking
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -48,7 +49,7 @@ func (c *blocksRollingChecker) Configure(config CheckerConfig) Checker {
 	}
 }
 
-func (c *blocksRollingChecker) Check() error {
+func (c *blocksRollingChecker) Check(ctx context.Context) error {
 	nodes := c.monitor.GetNodes()
 	// This function iterates through all nodes in the network and verifies whether their block height increases.
 	// A node with a stagnant block height indicates it is not actively participating in block production.

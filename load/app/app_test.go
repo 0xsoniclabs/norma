@@ -17,6 +17,7 @@
 package app_test
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"testing"
@@ -25,8 +26,10 @@ import (
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/network"
 	"github.com/0xsoniclabs/norma/driver/network/local"
+	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/0xsoniclabs/norma/load/app"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/stretchr/testify/require"
 )
 
 const PrivateKey = "163f5f0f9a621d72fedd85ffca3d08d131ab4e812181e0d30ffd1c885d20aac7" // Fakenet validator 1
@@ -116,24 +119,16 @@ func TestGenerators(t *testing.T) {
 				Validators:   driver.DefaultValidators(t.Name()),
 				NetworkRules: rules,
 			})
-			if err != nil {
-				t.Fatalf("failed to create new local network: %v", err)
-			}
+			require.NoError(t, err, "failed to create new local network")
 			t.Cleanup(func() {
-				if err := net.Shutdown(); err != nil {
-					t.Fatalf("failed to shutdown network: %v", err)
-				}
+				require.NoError(t, net.Shutdown(), "failed to shutdown network")
 			})
 
 			primaryAccount, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err, "failed to create primary account")
 
 			appCtx, err := app.NewContext(net, primaryAccount, rules)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err, "failed to create application context")
 
 			for name, test := range tests {
 				if !slices.Contains(test.availableInUpgrades, upgrade) {
@@ -141,9 +136,7 @@ func TestGenerators(t *testing.T) {
 				}
 				t.Run(name, func(t *testing.T) {
 					application, err := app.NewApplication(name, appCtx, 0, 0)
-					if err != nil {
-						t.Fatal(err)
-					}
+					require.NoError(t, err, "failed to create application")
 					testGenerator(t, application, appCtx)
 				})
 			}
@@ -154,61 +147,62 @@ func TestGenerators(t *testing.T) {
 // getCumulativeUpgrades returns a map of upgrades that are enabled
 // up to and including the lastSupported upgrade.
 // This function is needed because upgrades should be cumulative, not exclusive.
-func getCumulativeUpgrades(lastSupported string) map[string]string {
-	upgrades := map[string][]string{
-		"UPGRADES_SONIC":   {"UPGRADES_SONIC"},
-		"UPGRADES_ALLEGRO": {"UPGRADES_SONIC", "UPGRADES_ALLEGRO"},
-		"UPGRADES_BRIO":    {"UPGRADES_SONIC", "UPGRADES_ALLEGRO", "UPGRADES_BRIO"},
+func getCumulativeUpgrades(lastSupported string) driver.NetworkRules {
+	sonic := false
+	allegro := false
+	brio := false
+
+	switch lastSupported {
+	case "UPGRADES_SONIC":
+		sonic = true
+	case "UPGRADES_ALLEGRO":
+		sonic = true
+		allegro = true
+	case "UPGRADES_BRIO":
+		sonic = true
+		allegro = true
+		brio = true
 	}
-	result := make(map[string]string)
-	for _, upgrade := range upgrades[lastSupported] {
-		result[upgrade] = "true"
+
+	return driver.NetworkRules{
+		Upgrades: &genesis.UpgradesPatch{
+			Sonic:   new(sonic),
+			Allegro: new(allegro),
+			Brio:    new(brio),
+		},
 	}
-	return result
 }
 
 func TestGenerators_Subsidies(t *testing.T) {
-	rules := map[string]string{
-		"UPGRADES_GAS_SUBSIDIES": "true",
+	rules := driver.NetworkRules{
+		Upgrades: &genesis.UpgradesPatch{
+			GasSubsidies: new(true),
+		},
 	}
 	net, err := local.NewLocalNetwork(t.Context(), &driver.NetworkConfig{
 		Validators:   driver.DefaultValidators(t.Name()),
 		NetworkRules: rules,
 	})
-	if err != nil {
-		t.Fatalf("failed to create new local network: %v", err)
-	}
+	require.NoError(t, err, "failed to create new local network")
 	t.Cleanup(func() {
-		if err := net.Shutdown(); err != nil {
-			t.Fatalf("failed to shutdown network: %v", err)
-		}
+		require.NoError(t, net.Shutdown(), "failed to shutdown network")
 	})
 
 	primaryAccount, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "failed to create primary account")
 
 	appCtx, err := app.NewContext(net, primaryAccount, rules)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "failed to create application context")
 
 	subsidiesApp, err := app.NewSubsidiesApplication(appCtx, 0, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "failed to create subsidies application")
 	testGenerator(t, subsidiesApp, appCtx)
 }
 
 func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
 	users, err := app.CreateUsers(ctxt, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(users) != 1 {
-		t.Fatalf("unexpected number of users created, wanted 1, got %d", len(users))
-	}
+	require.NoError(t, err, "failed to create users for application")
+	require.Len(t, users, 1, "unexpected number of users created")
 	user := users[0]
 
 	rpcClient := ctxt.GetClient()
@@ -216,48 +210,34 @@ func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
 	transactions := []*types.Transaction{}
 	for range numTransactions {
 		tx, err := user.GenerateTx()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if tx == nil {
-			t.Fatal("generated transaction is nil")
-		}
+		require.NoError(t, err, "failed to generate transaction")
+		require.NotNil(t, tx, "generated transaction is nil")
 
-		if err := rpcClient.SendTransaction(t.Context(), tx); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, rpcClient.SendTransaction(t.Context(), tx), "failed to send transaction")
 		transactions = append(transactions, tx)
 	}
 
 	// wait for the transactions to be processed
 	for _, tx := range transactions {
 		receipt, err := ctxt.GetReceipt(tx.Hash())
-		if err != nil {
-			t.Fatal(err)
-		}
-		if receipt.Status != types.ReceiptStatusSuccessful {
-			t.Fatalf("transaction failed, receipt status: %v (gas limit %d used %d)", receipt.Status, tx.Gas(), receipt.GasUsed)
-		}
-		if tx.Gas() > 2*receipt.GasUsed {
-			t.Errorf("gas limit unnecessary high: limit %d used %d", tx.Gas(), receipt.GasUsed)
-		}
+		require.NoError(t, err, "failed to get transaction receipt")
+		require.Equalf(t, types.ReceiptStatusSuccessful, receipt.Status,
+			"transaction failed, receipt status: %v (gas limit %d used %d)", receipt.Status, tx.Gas(), receipt.GasUsed)
+		require.LessOrEqualf(t, tx.Gas(), 2*receipt.GasUsed,
+			"gas limit unnecessary high: limit %d used %d", tx.Gas(), receipt.GasUsed)
 	}
+	require.Equal(t, uint64(numTransactions), user.GetSentTransactions(), "invalid number of sent transactions reported")
 
-	if got, want := user.GetSentTransactions(), numTransactions; got != uint64(want) {
-		t.Errorf("invalid number of sent transactions reported, wanted %d, got %d", want, got)
-	}
-
-	err = network.Retry(t.Context(), network.DefaultRetryAttempts, 1*time.Second, func() error {
-		received, err := app.GetReceivedTransactions(rpcClient)
-		if err != nil {
-			return fmt.Errorf("unable to get amount of received txs; %v", err)
-		}
-		if received != 10 {
-			return fmt.Errorf("unexpected amount of txs in chain (%d)", received)
-		}
-		return nil
-	})
-	if err != nil {
-		t.Error(err)
-	}
+	err = network.Retry(t.Context(), network.DefaultRetryAttempts, 1*time.Second,
+		func(ctx context.Context) error {
+			received, err := app.GetReceivedTransactions(rpcClient)
+			if err != nil {
+				return fmt.Errorf("unable to get amount of received txs; %v", err)
+			}
+			if received != 10 {
+				return fmt.Errorf("unexpected amount of txs in chain (%d)", received)
+			}
+			return nil
+		})
+	require.NoError(t, err, "transactions were not processed in time")
 }

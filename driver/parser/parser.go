@@ -23,6 +23,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/0xsoniclabs/norma/genesis"
 	"gopkg.in/yaml.v3"
 )
 
@@ -48,8 +49,8 @@ func (s *Scenario) GetRoundTripTime() time.Duration {
 	return 0
 }
 
-// networkRules defines a set of network rules as a key value mapping.
-type networkRules map[string]string
+// networkRules defines a subset patch of network rules.
+type networkRules = genesis.NetworkRulesPatch
 
 // NetworkRules defines a set of network rules that can be applied to the network.
 // It distinguishes between the genesis rules and a set of updates that can be applied at a specific time.

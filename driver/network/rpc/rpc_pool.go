@@ -36,8 +36,8 @@ type RpcWorkerPool struct {
 	cancel  context.CancelFunc
 }
 
-func NewRpcWorkerPool() *RpcWorkerPool {
-	ctx, cancel := context.WithCancel(context.Background())
+func NewRpcWorkerPool(ctx context.Context) *RpcWorkerPool {
+	ctx, cancel := context.WithCancel(ctx)
 
 	return &RpcWorkerPool{
 		txs:     make(chan transactionWithSource, 100),
@@ -164,7 +164,7 @@ func (p *worker) runRpcSenderLoop() error {
 		p.ctx,
 		network.DefaultRetryAttempts,
 		1*time.Second,
-		func() (*ethclient.Client, error) {
+		func(ctx context.Context) (*ethclient.Client, error) {
 			return ethclient.Dial(string(p.rpcUrl))
 		})
 

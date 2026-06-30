@@ -21,14 +21,16 @@ validators:
 
 network_rules:
   genesis:
-    UPGRADES_SONIC: true
-    UPGRADES_ALLEGRO: false
-    UPGRADES_BRIO: false
+    Upgrades:
+      Sonic: true
+      Allegro: false
+      Brio: false
   updates:
     # Upgrade to Allegro
     - time: 30
       rules:
-        UPGRADES_ALLEGRO: true
+        Upgrades:
+          Allegro: true
 
 # In the network there is a single application producing constant load.
 applications:

@@ -10,6 +10,7 @@
 package checking
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -40,17 +41,17 @@ func (m *MockChecker) EXPECT() *MockCheckerMockRecorder {
 }
 
 // Check mocks base method.
-func (m *MockChecker) Check() error {
+func (m *MockChecker) Check(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Check")
+	ret := m.ctrl.Call(m, "Check", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Check indicates an expected call of Check.
-func (mr *MockCheckerMockRecorder) Check() *gomock.Call {
+func (mr *MockCheckerMockRecorder) Check(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockChecker)(nil).Check))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockChecker)(nil).Check), ctx)
 }
 
 // Configure mocks base method.
