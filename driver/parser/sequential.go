@@ -46,12 +46,12 @@ const (
 	FuncWaitFor      StepFunction = "waitFor"
 
 	// Check functions used as items inside a checks: step.
-	FuncCheckBlockGasRate   StepFunction = "checkBlockGasRate"
-	FuncCheckBlockHashes    StepFunction = "checkBlockHashes"
-	FuncCheckBlockHeights   StepFunction = "checkBlockHeights"
-	FuncCheckBlocksHalted   StepFunction = "checkBlocksHalted"
-	FuncCheckBlocksProduced StepFunction = "checkBlocksProduced"
-	FuncCheckNetworkRules   StepFunction = "checkNetworkRules"
+	FuncCheckBlockGasRate   StepFunction = "blockGasRate"
+	FuncCheckBlockHashes    StepFunction = "blockHashes"
+	FuncCheckBlockHeights   StepFunction = "blockHeights"
+	FuncCheckBlocksHalted   StepFunction = "blocksHalted"
+	FuncCheckBlocksProduced StepFunction = "blocksProduced"
+	FuncCheckNetworkRules   StepFunction = "networkRules"
 )
 
 // allStepFunctions lists every known top-level step function constant.

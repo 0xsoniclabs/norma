@@ -16,7 +16,7 @@ import (
 )
 
 func init() {
-	RegisterNetworkCheck("network_rules", func(net driver.Network, monitor *monitoring.Monitor) Checker {
+	RegisterNetworkCheck("networkRules", func(net driver.Network, monitor *monitoring.Monitor) Checker {
 		return &networkRulesChecker{net: net}
 	})
 }

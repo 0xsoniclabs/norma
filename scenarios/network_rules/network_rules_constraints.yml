@@ -31,7 +31,7 @@ advance_epoch:
 
 checks:
   - time: 28
-    check: network_rules
+    check: networkRules
     config:
       rules:
         Dag:

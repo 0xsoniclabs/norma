@@ -10,7 +10,7 @@ import (
 )
 
 func init() {
-	RegisterNetworkCheck("blocks_halted", func(net driver.Network, monitor *monitoring.Monitor) Checker {
+	RegisterNetworkCheck("blocksHalted", func(net driver.Network, monitor *monitoring.Monitor) Checker {
 		return &blocksHaltedChecker{
 			monitor:          &monitoringDataAdapter{monitor},
 			toleranceSamples: defaultToleranceSamples,

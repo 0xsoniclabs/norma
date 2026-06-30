@@ -516,12 +516,12 @@ func execUpdateRules(step *parser.Step, net driver.Network) error {
 
 // checkFunctionToCheckerName maps check step functions to their checker names.
 var checkFunctionToCheckerName = map[parser.StepFunction]string{
-	parser.FuncCheckBlockGasRate:   "block_gas_rate",
-	parser.FuncCheckBlockHashes:    "blocks_hashes",
-	parser.FuncCheckBlockHeights:   "block_height",
-	parser.FuncCheckBlocksHalted:   "blocks_halted",
-	parser.FuncCheckBlocksProduced: "blocks_rolling",
-	parser.FuncCheckNetworkRules:   "network_rules",
+	parser.FuncCheckBlockGasRate:   "blockGasRate",
+	parser.FuncCheckBlockHashes:    "blocksHashes",
+	parser.FuncCheckBlockHeights:   "blockHeight",
+	parser.FuncCheckBlocksHalted:   "blocksHalted",
+	parser.FuncCheckBlocksProduced: "blocksRolling",
+	parser.FuncCheckNetworkRules:   "networkRules",
 }
 
 // execCheck runs a named checker with configuration from the check spec.

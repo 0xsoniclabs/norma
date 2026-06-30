@@ -22,12 +22,12 @@ Scenario:
   # Run health checks: blocks produced, hash agreement,
   # height tolerance, and gas rate ceiling.
   - checks:
-      - checkBlocksProduced:
+      - blocksProduced:
         tolerance: 10
-      - checkBlockGasRate:
+      - blockGasRate:
         ceiling: 1000000000000000
-      - checkBlockHashes
-      - checkBlockHeights:
+      - blockHashes
+      - blockHeights:
         tolerance: 5
 
   - stopApp: load
@@ -39,4 +39,4 @@ Scenario:
 
   # Verify blocks have halted (monitoring data is stale after stopNode).
   - checks:
-      - checkBlocksHalted
+      - blocksHalted

@@ -261,14 +261,14 @@ func TestParseSequential_Checks(t *testing.T) {
 Name: Checks Test
 Scenario:
   - checks:
-      - checkBlocksHalted:
+      - blocksHalted:
         failing: true
-      - checkBlockHeights:
+      - blockHeights:
         tolerance: 5
-      - checkBlockGasRate:
+      - blockGasRate:
         ceiling: 16500000
         failing: true
-      - checkBlockHashes
+      - blockHashes
 `
 	scenario, err := ParseSequentialBytes([]byte(input))
 	if err != nil {
@@ -287,7 +287,7 @@ Scenario:
 		t.Fatalf("expected 4 sub-checks, got %d", len(step.SubChecks))
 	}
 
-	// checkBlocksHalted with failing
+	// blocksHalted with failing
 	check := step.SubChecks[0]
 	if check.Function != FuncCheckBlocksHalted {
 		t.Errorf("check 0: expected FuncCheckBlocksHalted, got %q", check.Function)
@@ -296,7 +296,7 @@ Scenario:
 		t.Errorf("check 0: expected failing=true")
 	}
 
-	// checkBlockHeights with tolerance
+	// blockHeights with tolerance
 	check = step.SubChecks[1]
 	if check.Function != FuncCheckBlockHeights {
 		t.Errorf("check 1: expected FuncCheckBlockHeights, got %q", check.Function)
@@ -305,7 +305,7 @@ Scenario:
 		t.Errorf("check 1: expected tolerance=5")
 	}
 
-	// checkBlockGasRate with ceiling + failing
+	// blockGasRate with ceiling + failing
 	check = step.SubChecks[2]
 	if check.Function != FuncCheckBlockGasRate {
 		t.Errorf("check 2: expected FuncCheckBlockGasRate, got %q", check.Function)
@@ -317,7 +317,7 @@ Scenario:
 		t.Errorf("check 2: expected failing=true")
 	}
 
-	// checkBlockHashes
+	// blockHashes
 	check = step.SubChecks[3]
 	if check.Function != FuncCheckBlockHashes {
 		t.Errorf("check 3: expected FuncCheckBlockHashes, got %q", check.Function)
@@ -466,20 +466,20 @@ Scenario:
     type: validator
   - advanceEpoch
   - checks:
-      - checkBlocksProduced
+      - blocksProduced
   - stopNode: validator-before-1
   - stopNode: validator-before-2
   - checks:
-      - checkBlocksHalted
+      - blocksHalted
   - startNode: validator-before-1
     type: validator
   - startNode: validator-before-2
     type: validator
   - advanceEpoch
   - checks:
-      - checkBlocksProduced
-      - checkBlockHeights
-      - checkBlockHashes
+      - blocksProduced
+      - blockHeights
+      - blockHashes
   - stopApp: load
 `
 	scenario, err := ParseSequentialBytes([]byte(input))
@@ -573,11 +573,12 @@ Scenario:
 `,
 		},
 		{
-			name: "ceiling on checks step",
+			name: "ceiling on checks blocks produced",
 			input: `
 Name: Test
 Scenario:
   - checks:
+    blocksProduced:
     ceiling: 100
 `,
 		},

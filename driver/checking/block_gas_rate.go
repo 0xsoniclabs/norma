@@ -28,7 +28,7 @@ import (
 const defaultCeiling float64 = math.MaxFloat64
 
 func init() {
-	RegisterNetworkCheck("block_gas_rate",
+	RegisterNetworkCheck("blockGasRate",
 		func(net driver.Network, monitor *monitoring.Monitor) Checker {
 			return &blockGasRateChecker{
 				monitor: &monitoringDataAdapter{monitor},

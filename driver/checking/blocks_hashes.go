@@ -30,7 +30,7 @@ import (
 )
 
 func init() {
-	RegisterNetworkCheck("blocks_hashes",
+	RegisterNetworkCheck("blocksHashes",
 		func(net driver.Network, monitor *monitoring.Monitor) Checker {
 			return &blocksHashesChecker{net: net}
 		})

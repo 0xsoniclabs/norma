@@ -16,5 +16,5 @@ Scenario:
   - waitForEpoch
 
   - checks:
-      - checkBlocksProduced:
+      - blocksProduced:
         tolerance: 10
