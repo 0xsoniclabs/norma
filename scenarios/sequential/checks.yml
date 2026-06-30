@@ -1,10 +1,14 @@
 # This scenario demonstrates all available check functions.
 
-Name: All Checks Test
+Name: Checks Test
 
 InitialNetworkRules:
   Epochs:
     MaxEpochDuration: 10s
+
+# this scenario is intended to halt the network, therefore usual 
+# end-of-scenario checks are disabled to avoid false failures.
+DisableEndChecks: true
 
 Scenario:
   - startNode: validator
