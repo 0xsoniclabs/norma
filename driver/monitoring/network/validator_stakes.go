@@ -17,6 +17,7 @@
 package netmon
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -108,6 +109,9 @@ func (s *validatorStakeSource) Shutdown() error {
 func fetchValidatorStakes(network driver.Network) (map[int]string, error) {
 	rpcClient, err := network.DialRandomRpc()
 	if err != nil {
+		if errors.Is(err, driver.ErrEmptyNetwork) {
+			return map[int]string{}, nil
+		}
 		return nil, fmt.Errorf("failed to connect to RPC: %w", err)
 	}
 	defer rpcClient.Close()
