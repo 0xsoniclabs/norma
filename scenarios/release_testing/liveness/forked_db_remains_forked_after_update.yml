@@ -1,0 +1,64 @@
+# Summary: Verify a validator that forked before upgrade remains forked after restart with a newer binary on the same data volume.
+# Expected outcomes:
+# - A v2.1.6 validator forks/fails after Brio activation.
+# - After restart as sonic:local on the same volume, that node remains forked/failing.
+# - The remaining supermajority continues producing blocks.
+
+Name: Liveness Forked DB Remains Forked After Update
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: false
+
+Scenario:
+  - startNode: validator-stable
+    type: validator
+    imageName: "sonic:local"
+    stake: 9000000
+
+  - startNode: validator-forked
+    type: validator
+    imageName: "sonic:v2.1.6"
+    dataVolume: validator-forked-data
+    stake: 1000000
+    failing: true
+
+  - runApp: baseline
+    type: counter
+    users: 20
+    rate:
+      constant: 20
+
+  - waitFor: 20s
+
+  - updateRules:
+      Upgrades:
+        Brio: true
+
+  - waitFor: 20s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+
+  - stopNode: validator-forked
+
+  - waitFor: 10s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+
+  - startNode: validator-forked
+    type: validator
+    imageName: "sonic:local"
+    dataVolume: validator-forked-data
+    failing: true
+
+  - waitFor: 20s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10

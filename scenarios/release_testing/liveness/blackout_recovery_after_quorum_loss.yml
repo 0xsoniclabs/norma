@@ -1,0 +1,47 @@
+# Summary: Verify network blackout and recovery when quorum is lost after one validator leaves and restored after it rejoins.
+# Expected outcomes:
+# - Stopping one high-stake validator causes block production to halt.
+# - While quorum is lost, the stalled state is explicitly observed.
+# - Restarting the validator restores block production.
+
+Name: Liveness Blackout Recovery After Quorum Loss
+
+Scenario:
+  - startNode: validator-majority
+    type: validator
+    imageName: "sonic:local"
+    stake: 7000000
+
+  - startNode: validator-minority
+    type: validator
+    imageName: "sonic:local"
+    stake: 3000000
+
+  - runApp: blackout-load
+    type: counter
+    users: 20
+    rate:
+      constant: 20
+
+  - waitFor: 20s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+
+  - stopNode: validator-majority
+
+  - waitFor: 15s
+
+  - checks:
+      - blocksHalted
+
+  - startNode: validator-majority
+    type: validator
+    imageName: "sonic:local"
+
+  - waitFor: 20s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
