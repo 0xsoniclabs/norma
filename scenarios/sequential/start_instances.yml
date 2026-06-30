@@ -1,4 +1,4 @@
-Name: Start n instances 
+Name: Start n instances
 
 Scenario:
   - startNode: validator

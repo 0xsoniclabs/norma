@@ -87,6 +87,30 @@ type LocalNetwork struct {
 	genesisJsonPath string
 }
 
+// NewLocalLegacyNetwork creates a network and starts all validators
+// defined in the configuration. It also eagerly initializes the app
+// context. Use this for the legacy (time-based) executor and tests
+// that expect nodes to be running immediately after construction.
+func NewLocalLegacyNetwork(
+	ctx context.Context,
+	config *driver.NetworkConfig,
+) (*LocalNetwork, error) {
+	net, err := NewLocalNetwork(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := net.startGenesisValidators(ctx); err != nil {
+		return nil, errors.Join(err, net.Shutdown())
+	}
+
+	if err := net.ensureAppContext(); err != nil {
+		return nil, errors.Join(err, net.Shutdown())
+	}
+
+	return net, nil
+}
+
 func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalNetwork, error) {
 	client, err := docker.NewClient()
 	if err != nil {
@@ -125,6 +149,40 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 	net.RegisterListener(net.rpcWorkerPool)
 
 	return net, nil
+}
+
+// startGenesisValidators boots all validators defined in the network
+// configuration sequentially, matching the genesis validator IDs.
+func (n *LocalNetwork) startGenesisValidators(
+	ctx context.Context,
+) error {
+	var idx int
+	for _, validator := range n.config.Validators {
+		for j := range validator.Instances {
+			label := fmt.Sprintf("validator-%d", j)
+			if len(validator.Name) != 0 {
+				label = fmt.Sprintf("%s-%d", validator.Name, j)
+			}
+			validatorId := idx + 1
+			cfg := node.OperaNodeConfig{
+				ValidatorId:     &validatorId,
+				Failing:         validator.Failing,
+				Image:           validator.ImageName,
+				NetworkConfig:   &n.config,
+				Label:           label,
+				GenesisJsonPath: &n.genesisJsonPath,
+				ExtraArguments:  validator.ExtraArguments,
+			}
+			if _, err := n.createNode(ctx, &cfg); err != nil {
+				return fmt.Errorf(
+					"validator %q (idx=%d, image=%s): %w",
+					label, idx, validator.ImageName, err,
+				)
+			}
+			idx++
+		}
+	}
+	return nil
 }
 
 // addNodeIntoNetwork connects the node with other nodes in the network, adds it into the list of nodes.

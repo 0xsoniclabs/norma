@@ -179,7 +179,7 @@ func runScenario(ctx context.Context, path, outputDir, label string, skipChecks,
 	slog.Info("network RoundTripTime", "value", scenario.GetRoundTripTime())
 	fmt.Println(scenario.NetworkRules.Genesis.PrettyPrint()) // multi line print
 
-	net, err := local.NewLocalNetwork(ctx, &driver.NetworkConfig{
+	net, err := local.NewLocalLegacyNetwork(ctx, &driver.NetworkConfig{
 		Validators:    driver.NewValidators(scenario.Validators),
 		RoundTripTime: scenario.GetRoundTripTime(),
 		NetworkRules:  scenario.NetworkRules.Genesis,
@@ -297,9 +297,9 @@ func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScena
 	// Log initial rules.
 	fmt.Println(scenario.InitialRules.PrettyPrint()) // multi line print
 
-	// Startup network. Genesis is configured from all leading validator startNode
-	// steps, but those steps are NOT removed — nodes are started explicitly by
-	// the sequential runner so they appear in the report timeline.
+	// Startup network. Genesis is configured from the first startNode step,
+	// which must be a validator. The step is NOT removed — nodes are started
+	// explicitly by the sequential runner so they appear in the report timeline.
 	validators, genesisIds, err := extractBootstrapValidators(scenario)
 	if err != nil {
 		return err

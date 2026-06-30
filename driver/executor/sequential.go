@@ -336,6 +336,7 @@ func execStartNode(
 	// Create nodes in parallel — all on-chain state has been settled above.
 	g, _ := errgroup.WithContext(ctx)
 	for instance := range instances {
+		instance := instance
 		g.Go(func() error {
 			node, err := net.CreateNode(&driver.NodeConfig{
 				Name:        instanceNames[instance],
