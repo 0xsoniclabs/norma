@@ -33,7 +33,7 @@ import (
 const defaultSlack = 5
 
 func init() {
-	RegisterNetworkCheck("block_height", func(net driver.Network, monitor *monitoring.Monitor) Checker {
+	RegisterNetworkCheck("blockHeight", func(net driver.Network, monitor *monitoring.Monitor) Checker {
 		return &blockHeightChecker{net: net, slack: defaultSlack}
 	})
 }

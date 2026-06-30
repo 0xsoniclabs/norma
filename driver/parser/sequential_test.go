@@ -260,68 +260,67 @@ func TestParseSequential_Checks(t *testing.T) {
 	input := `
 Name: Checks Test
 Scenario:
-  - checkBlocksProduced: my-node
-  - checkBlocksHalted:
-    failing: true
-  - checkBlockHeights:
-    tolerance: 5
-  - checkBlockGasRate:
-    ceiling: 16500000
-    failing: true
-  - checkBlockHashes:
+  - checks:
+      - blocksHalted:
+        failing: true
+      - blockHeights:
+        tolerance: 5
+      - blockGasRate:
+        ceiling: 16500000
+        failing: true
+      - blockHashes
 `
 	scenario, err := ParseSequentialBytes([]byte(input))
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
 
-	if len(scenario.Steps) != 5 {
-		t.Fatalf("expected 5 steps, got %d", len(scenario.Steps))
+	if len(scenario.Steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(scenario.Steps))
 	}
 
-	// checkBlocksProduced with identifier
 	step := scenario.Steps[0]
-	if step.Function != FuncCheckBlocksProduced {
-		t.Errorf("step 0: expected FuncCheckBlocksProduced, got %q", step.Function)
+	if step.Function != FuncChecks {
+		t.Errorf("expected FuncChecks, got %q", step.Function)
 	}
-	if step.Identifier != "my-node" {
-		t.Errorf("step 0: expected identifier 'my-node', got %q", step.Identifier)
-	}
-
-	// checkBlocksHalted with failing
-	step = scenario.Steps[1]
-	if step.Function != FuncCheckBlocksHalted {
-		t.Errorf("step 1: expected FuncCheckBlocksHalted, got %q", step.Function)
-	}
-	if !step.Failing {
-		t.Errorf("step 1: expected failing=true")
+	if len(step.SubChecks) != 4 {
+		t.Fatalf("expected 4 sub-checks, got %d", len(step.SubChecks))
 	}
 
-	// checkBlockHeights with tolerance
-	step = scenario.Steps[2]
-	if step.Function != FuncCheckBlockHeights {
-		t.Errorf("step 2: expected FuncCheckBlockHeights, got %q", step.Function)
+	// blocksHalted with failing
+	check := step.SubChecks[0]
+	if check.Function != FuncCheckBlocksHalted {
+		t.Errorf("check 0: expected FuncCheckBlocksHalted, got %q", check.Function)
 	}
-	if step.Tolerance == nil || *step.Tolerance != 5 {
-		t.Errorf("step 2: expected tolerance=5")
-	}
-
-	// checkBlockGasRate with ceiling + failing
-	step = scenario.Steps[3]
-	if step.Function != FuncCheckBlockGasRate {
-		t.Errorf("step 3: expected FuncCheckBlockGasRate, got %q", step.Function)
-	}
-	if step.Ceiling == nil || *step.Ceiling != 16500000 {
-		t.Errorf("step 3: expected ceiling=16500000")
-	}
-	if !step.Failing {
-		t.Errorf("step 3: expected failing=true")
+	if !check.Failing {
+		t.Errorf("check 0: expected failing=true")
 	}
 
-	// checkBlockHashes
-	step = scenario.Steps[4]
-	if step.Function != FuncCheckBlockHashes {
-		t.Errorf("step 4: expected FuncCheckBlockHashes, got %q", step.Function)
+	// blockHeights with tolerance
+	check = step.SubChecks[1]
+	if check.Function != FuncCheckBlockHeights {
+		t.Errorf("check 1: expected FuncCheckBlockHeights, got %q", check.Function)
+	}
+	if check.Tolerance == nil || *check.Tolerance != 5 {
+		t.Errorf("check 1: expected tolerance=5")
+	}
+
+	// blockGasRate with ceiling + failing
+	check = step.SubChecks[2]
+	if check.Function != FuncCheckBlockGasRate {
+		t.Errorf("check 2: expected FuncCheckBlockGasRate, got %q", check.Function)
+	}
+	if check.Ceiling == nil || *check.Ceiling != 16500000 {
+		t.Errorf("check 2: expected ceiling=16500000")
+	}
+	if !check.Failing {
+		t.Errorf("check 2: expected failing=true")
+	}
+
+	// blockHashes
+	check = step.SubChecks[3]
+	if check.Function != FuncCheckBlockHashes {
+		t.Errorf("check 3: expected FuncCheckBlockHashes, got %q", check.Function)
 	}
 }
 
@@ -466,18 +465,21 @@ Scenario:
   - startNode: validator-before-2
     type: validator
   - advanceEpoch
-  - checkBlocksProduced
+  - checks:
+      - blocksProduced
   - stopNode: validator-before-1
   - stopNode: validator-before-2
-  - checkBlocksHalted
+  - checks:
+      - blocksHalted
   - startNode: validator-before-1
     type: validator
   - startNode: validator-before-2
     type: validator
   - advanceEpoch
-  - checkBlocksProduced
-  - checkBlockHeights
-  - checkBlockHashes
+  - checks:
+      - blocksProduced
+      - blockHeights
+      - blockHashes
   - stopApp: load
 `
 	scenario, err := ParseSequentialBytes([]byte(input))
@@ -488,8 +490,8 @@ Scenario:
 	if scenario.Name != "Single Proposer Blackout" {
 		t.Errorf("wrong name: %q", scenario.Name)
 	}
-	if len(scenario.Steps) != 17 {
-		t.Errorf("expected 17 steps, got %d", len(scenario.Steps))
+	if len(scenario.Steps) != 15 {
+		t.Errorf("expected 15 steps, got %d", len(scenario.Steps))
 	}
 
 	// Verify the rejoin pattern: validator-before-1 is started, stopped, then started again
@@ -571,11 +573,12 @@ Scenario:
 `,
 		},
 		{
-			name: "ceiling on checkBlocksProduced",
+			name: "ceiling on checks blocks produced",
 			input: `
 Name: Test
 Scenario:
-  - checkBlocksProduced:
+  - checks:
+    blocksProduced:
     ceiling: 100
 `,
 		},
@@ -795,5 +798,38 @@ Scenario:
 	// Fields not in the update should remain nil
 	if step.Rules.Epochs != nil {
 		t.Error("expected updateRules Epochs to be nil")
+	}
+}
+
+func TestSequentialCheck_EmptySubChecks(t *testing.T) {
+	scenario := SequentialScenario{
+		Name: "Test",
+		Steps: []Step{{
+			Function:  FuncChecks,
+			SubChecks: nil,
+		}},
+	}
+	err := scenario.Check()
+	if err == nil {
+		t.Fatal("expected error for empty sub-checks")
+	}
+	if !strings.Contains(err.Error(), "at least one sub-check") {
+		t.Fatalf("expected 'at least one sub-check' error, got: %v", err)
+	}
+}
+
+func TestParseSequential_UnknownCheckFunction(t *testing.T) {
+	input := `
+Name: Bad Check
+Scenario:
+  - checks:
+      - unknownCheck
+`
+	_, err := ParseSequentialBytes([]byte(input))
+	if err == nil {
+		t.Fatal("expected error for unknown check function")
+	}
+	if !strings.Contains(err.Error(), "unknown check function") {
+		t.Fatalf("expected 'unknown check function' error, got: %v", err)
 	}
 }

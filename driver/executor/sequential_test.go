@@ -294,12 +294,17 @@ func TestSequential_Check(t *testing.T) {
 
 	checker.EXPECT().Check(gomock.Any()).Return(nil)
 
-	checks := checking.Checks{"blocks_rolling": checker}
+	checks := checking.Checks{"blocksRolling": checker}
 
 	scenario := parser.SequentialScenario{
 		Name: "Check",
 		Steps: []parser.Step{
-			{Function: parser.FuncCheckBlocksProduced},
+			{
+				Function: parser.FuncChecks,
+				SubChecks: []parser.CheckSpec{
+					{Function: parser.FuncCheckBlocksProduced},
+				},
+			},
 		},
 	}
 

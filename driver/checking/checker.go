@@ -23,6 +23,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/genesis"
 )
 
 // Factory is a function that creates a Checker.
@@ -108,6 +109,13 @@ func (config *CheckerConfig) Check() error {
 
 	isBool := func(v any) bool { _, ok := v.(bool); return ok }
 	isPositiveInt := func(v any) bool { i, ok := v.(int); return ok && i >= 0 }
+	isRulesPatch := func(v any) bool {
+		if _, ok := v.(map[string]any); ok {
+			return true
+		}
+		_, ok := v.(genesis.NetworkRulesPatch)
+		return ok
+	}
 
 	checks := map[string]func(any) bool{
 		"failing":   isBool,
@@ -115,6 +123,7 @@ func (config *CheckerConfig) Check() error {
 		"start":     isPositiveInt,
 		"ceiling":   isPositiveInt,
 		"slack":     isPositiveInt,
+		"rules":     isRulesPatch,
 	}
 
 	for key, check := range checks {

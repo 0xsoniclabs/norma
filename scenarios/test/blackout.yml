@@ -42,19 +42,19 @@ nodes:
 checks:
   # since we're enabling custom checks, these must be specified manually
   - time: 199
-    check: block_height
+    check: blockHeight
   - time: 199
-    check: blocks_hashes
+    check: blocksHashes
   # custom checks for blackout
   - time: 80
-    check: blocks_rolling
+    check: blocksRolling
   - time: 140
-    check: blocks_rolling
+    check: blocksRolling
     config:
       failing: true
       start: 81
   - time: 199
-    check: blocks_rolling
+    check: blocksRolling
     config:
       start: 141
 
