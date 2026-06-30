@@ -23,7 +23,7 @@ network_rules:
     - time: 25
       rules:
         Dag:
-          maxParents: 3
+          MaxParents: 3
 
 # Network rule updates are applied on epoch transition.
 advance_epoch:
@@ -31,11 +31,11 @@ advance_epoch:
 
 checks:
   - time: 28
-    check: network_rules
+    check: networkRules
     config:
       rules:
         Dag:
-          maxParents: 3
+          MaxParents: 3
 
 
 # In the network, there is a few applications producing the load.

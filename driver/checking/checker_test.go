@@ -3,6 +3,8 @@ package checking
 import (
 	"fmt"
 	"testing"
+
+	"github.com/0xsoniclabs/norma/genesis"
 )
 
 func TestCheckerConfig_Success(t *testing.T) {
@@ -12,6 +14,8 @@ func TestCheckerConfig_Success(t *testing.T) {
 		{"start": 1},
 		{"ceiling": 1},
 		{"slack": 1},
+		{"rules": map[string]any{"Blocks": map[string]any{"MaxBlockGas": 1}}},
+		{"rules": genesis.NetworkRulesPatch{Blocks: &genesis.BlocksPatch{MaxBlockGas: new(uint64(1))}}},
 	}
 
 	for i, config := range configs {
@@ -30,6 +34,7 @@ func TestCheckerConfig_Failure(t *testing.T) {
 		{"tolerance": 1.0},
 		{"start": -1},
 		{"ceiling": nil},
+		{"rules": []any{"invalid"}},
 	}
 
 	for i, config := range configs {

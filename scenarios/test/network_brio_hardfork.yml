@@ -29,6 +29,7 @@ network_rules:
     - time: 60
       rules:
         Upgrades:
+          Allegro: true
           Brio: true  # hardfork enabled
 
 nodes:

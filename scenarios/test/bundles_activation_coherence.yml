@@ -35,6 +35,7 @@ network_rules:
     - time: 50
       rules:
         Upgrades:
+          Allegro: true
           Brio: true
           TransactionBundles: true
 

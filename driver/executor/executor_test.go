@@ -412,23 +412,23 @@ func TestExecutor_RunScenarioWithDefaultChecks(t *testing.T) {
 
 	// Mock Default Checks
 	checkBlockHeight := checking.NewMockChecker(ctrl)
-	checking.RegisterNetworkCheck("block_height", func(driver.Network, *monitoring.Monitor) checking.Checker {
+	checking.RegisterNetworkCheck("blockHeight", func(driver.Network, *monitoring.Monitor) checking.Checker {
 		return checkBlockHeight
 	})
 	checkBlocksHashes := checking.NewMockChecker(ctrl)
-	checking.RegisterNetworkCheck("blocks_hashes", func(driver.Network, *monitoring.Monitor) checking.Checker {
+	checking.RegisterNetworkCheck("blocksHashes", func(driver.Network, *monitoring.Monitor) checking.Checker {
 		return checkBlocksHashes
 	})
 	checkBlocksRolling := checking.NewMockChecker(ctrl)
-	checking.RegisterNetworkCheck("blocks_rolling", func(driver.Network, *monitoring.Monitor) checking.Checker {
+	checking.RegisterNetworkCheck("blocksRolling", func(driver.Network, *monitoring.Monitor) checking.Checker {
 		return checkBlocksRolling
 	})
 	checkBlockGasRate := checking.NewMockChecker(ctrl)
-	checking.RegisterNetworkCheck("block_gas_rate", func(driver.Network, *monitoring.Monitor) checking.Checker {
+	checking.RegisterNetworkCheck("blockGasRate", func(driver.Network, *monitoring.Monitor) checking.Checker {
 		return checkBlockGasRate
 	})
 	checkBlocksHalted := checking.NewMockChecker(ctrl)
-	checking.RegisterNetworkCheck("blocks_halted", func(driver.Network, *monitoring.Monitor) checking.Checker {
+	checking.RegisterNetworkCheck("blocksHalted", func(driver.Network, *monitoring.Monitor) checking.Checker {
 		return checkBlocksHalted
 	})
 
