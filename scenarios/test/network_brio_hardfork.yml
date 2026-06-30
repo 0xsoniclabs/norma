@@ -11,20 +11,20 @@ duration: 180
 validators:
   - name: validators
     instances: 3 # 3 validators out of 4 can keep super-majority and run the network
-    imagename: "Sonic:latest"
+    imagename: "sonic:latest"
   - name: validator-v2.1.2
     failing: true
-    imagename: "Sonic:v2.1.2"   # this node should stop working after the hardfork
+    imagename: "sonic:v2.1.2"   # this node should stop working after the hardfork
 
 # Start with the hardfork disabled
 # while enabling the hardfork later
 network_rules:
   genesis:
-    upgrades:
-      allegro: true
-      brio: false
-    epochs:
-      max_epoch_duration: 3s
+    Upgrades:
+      Allegro: true
+      Brio: false
+    Epochs:
+      MaxEpochDuration: 3s
   updates:
     - time: 60
       rules:
@@ -37,7 +37,7 @@ nodes:
       start: 30
       failing: true
       client:
-        imagename: Sonic:v2.1.2 # this node should stop working after the hardfork
+        imagename: sonic:v2.1.2 # this node should stop working after the hardfork
     - name: node-latest
       start: 30
 

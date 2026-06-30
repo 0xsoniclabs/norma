@@ -9,28 +9,28 @@ duration: 60
 
 validators:
   - name: validator-local
-    imagename: "Sonic:local"
+    imagename: "sonic:local"
     instances: 2
 
   - name: validator-v216
-    imagename: "Sonic:v2.1.6"
+    imagename: "sonic:v2.1.6"
 
   - name: validator-v203
-    imagename: "Sonic:v2.0.3"
+    imagename: "sonic:v2.0.3"
     failing: true
 
 network_rules:
   genesis:
-    upgrades:
-      sonic: true
-      allegro: false
-      brio: false
+    Upgrades:
+      Sonic: true
+      Allegro: false
+      Brio: false
   updates:
     # Upgrade to Allegro
     - time: 30
       rules:
-        upgrades:
-          allegro: true
+        Upgrades:
+          Allegro: true
 
 # In the network there is a single application producing constant load.
 applications:

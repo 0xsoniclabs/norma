@@ -10,18 +10,18 @@ duration: 180
 # Older client versions does not support Allegro, i.e., we must disable it.
 network_rules:
   genesis:
-    upgrades:
-      sonic: true
-      allegro: false
+    Upgrades:
+      Sonic: true
+      Allegro: false
 
 # Initial validator nodes in the network.
 validators:
   - name: validator-v2.0.2
-    imagename: "Sonic:v2.0.2"
+    imagename: "sonic:v2.0.2"
   - name: validator-v2.0.1
-    imagename: "Sonic:v2.0.1"
+    imagename: "sonic:v2.0.1"
   - name: validator-v2.0.0
-    imagename: "Sonic:v2.0.0"
+    imagename: "sonic:v2.0.0"
 
 # Append updated nodes in the network.
 nodes:
@@ -29,14 +29,14 @@ nodes:
     instances: 1
     start: 60
     client:
-      imagename: "Sonic:latest"
+      imagename: "sonic:latest"
       type: validator
 
   - name: node-latest-observer
     instances: 2
     start: 60
     client:
-      imagename: "Sonic:latest"
+      imagename: "sonic:latest"
 
 
 # In the network, there is a few applications producing the load.

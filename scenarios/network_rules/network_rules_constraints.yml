@@ -17,8 +17,8 @@ validators:
 # Start with shorted epoch duration to reflect the network rules updates.
 network_rules:
   genesis:
-    epochs:
-      max_epoch_duration: 10s
+    Epochs:
+      MaxEpochDuration: 10s
   updates:
     - time: 25
       rules:

@@ -11,18 +11,18 @@ duration: 180
 # Older client versions does not support Allegro, i.e., we must disable it.
 network_rules:
   genesis:
-    upgrades:
-      sonic: true
-      allegro: false
+    Upgrades:
+      Sonic: true
+      Allegro: false
 
 # Initial validator nodes in the network.
 validators:
   - name: validator-dev
   - name: validator-v2.0.2
-    imagename: "Sonic:v2.0.2"
+    imagename: "sonic:v2.0.2"
   - name: validator-v2.0.1
     instances: 2
-    imagename: "Sonic:v2.0.1"
+    imagename: "sonic:v2.0.1"
   - name: validator-latest
     instances: 3
     imagename: "sonic"

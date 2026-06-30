@@ -14,10 +14,10 @@ validators:
 
 network_rules:
   genesis:
-    blocks:
-      max_block_gas: 20500000000
-    epochs:
-      max_epoch_gas: 1500000000000
+    Blocks:
+      MaxBlockGas: 20500000000
+    Epochs:
+      MaxEpochGas: 1500000000000
 
 #
 # checks are specified in a scenario like this:
