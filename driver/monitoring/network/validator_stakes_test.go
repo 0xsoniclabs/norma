@@ -17,6 +17,7 @@
 package netmon
 
 import (
+	"fmt"
 	"io"
 	"math"
 	"strings"
@@ -83,5 +84,33 @@ func TestValidatorStakeSource_CollectsDataPeriodically(t *testing.T) {
 	}
 	if ticks < 2 {
 		t.Fatalf("expected at least two collection ticks, got %d", ticks)
+	}
+}
+
+func TestFetchValidatorStakes_ReturnsEmptyWhenNetworkIsEmpty(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork)
+
+	stakes, err := fetchValidatorStakes(net)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(stakes) != 0 {
+		t.Fatalf("expected empty stakes, got %d entries", len(stakes))
+	}
+}
+
+func TestFetchValidatorStakes_ReturnsErrorForDialFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("boom"))
+
+	stakes, err := fetchValidatorStakes(net)
+	if err == nil {
+		t.Fatalf("expected an error")
+	}
+	if stakes != nil {
+		t.Fatalf("expected nil stakes on error")
 	}
 }
