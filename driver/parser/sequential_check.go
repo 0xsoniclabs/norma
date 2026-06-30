@@ -77,7 +77,7 @@ func (s *Step) Check() error {
 	case FuncAdvanceEpoch, FuncWaitForEpoch:
 		return nil
 	case FuncChecks:
-		return nil
+		return s.checkSubChecks()
 	default:
 		return fmt.Errorf("unknown function: %q", s.Function)
 	}
@@ -167,6 +167,29 @@ func (s *Step) checkUpdateRules() error {
 	b, err := json.Marshal(s.Rules)
 	if err != nil || string(b) == "{}" {
 		errs = append(errs, fmt.Errorf("update rules requires at least one rule"))
+	}
+
+	return errors.Join(errs...)
+}
+
+func (s *Step) checkSubChecks() error {
+	if len(s.SubChecks) == 0 {
+		return fmt.Errorf("checks step requires at least one sub-check")
+	}
+
+	errs := []error{}
+	for i, check := range s.SubChecks {
+		if check.Function == "" {
+			errs = append(errs, fmt.Errorf("sub-check %d: missing check function", i+1))
+			continue
+		}
+
+		// Validate that rules patches are valid when provided.
+		if check.Function == FuncCheckNetworkRules && check.Rules != (genesis.NetworkRulesPatch{}) {
+			if err := genesis.ValidateNetworkRulesPatch(check.Rules); err != nil {
+				errs = append(errs, fmt.Errorf("sub-check %d (%s): invalid rules: %w", i+1, check.Function, err))
+			}
+		}
 	}
 
 	return errors.Join(errs...)

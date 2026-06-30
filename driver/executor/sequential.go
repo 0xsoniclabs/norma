@@ -542,7 +542,11 @@ func execCheck(ctx context.Context, checkerName string, spec *parser.CheckSpec, 
 		config["failing"] = true
 	}
 	if spec.Tolerance != nil {
-		config["tolerance"] = *spec.Tolerance
+		if spec.Function == parser.FuncCheckBlockHeights {
+			config["slack"] = *spec.Tolerance
+		} else {
+			config["tolerance"] = *spec.Tolerance
+		}
 	}
 	if spec.Ceiling != nil {
 		config["ceiling"] = int(*spec.Ceiling)

@@ -491,7 +491,7 @@ Scenario:
 		t.Errorf("wrong name: %q", scenario.Name)
 	}
 	if len(scenario.Steps) != 15 {
-		t.Errorf("expected 17 steps, got %d", len(scenario.Steps))
+		t.Errorf("expected 15 steps, got %d", len(scenario.Steps))
 	}
 
 	// Verify the rejoin pattern: validator-before-1 is started, stopped, then started again
@@ -798,5 +798,38 @@ Scenario:
 	// Fields not in the update should remain nil
 	if step.Rules.Epochs != nil {
 		t.Error("expected updateRules Epochs to be nil")
+	}
+}
+
+func TestSequentialCheck_EmptySubChecks(t *testing.T) {
+	scenario := SequentialScenario{
+		Name: "Test",
+		Steps: []Step{{
+			Function:  FuncChecks,
+			SubChecks: nil,
+		}},
+	}
+	err := scenario.Check()
+	if err == nil {
+		t.Fatal("expected error for empty sub-checks")
+	}
+	if !strings.Contains(err.Error(), "at least one sub-check") {
+		t.Fatalf("expected 'at least one sub-check' error, got: %v", err)
+	}
+}
+
+func TestParseSequential_UnknownCheckFunction(t *testing.T) {
+	input := `
+Name: Bad Check
+Scenario:
+  - checks:
+      - unknownCheck
+`
+	_, err := ParseSequentialBytes([]byte(input))
+	if err == nil {
+		t.Fatal("expected error for unknown check function")
+	}
+	if !strings.Contains(err.Error(), "unknown check function") {
+		t.Fatalf("expected 'unknown check function' error, got: %v", err)
 	}
 }

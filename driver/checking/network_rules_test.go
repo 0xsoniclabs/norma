@@ -1,6 +1,7 @@
 package checking
 
 import (
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -184,5 +185,37 @@ func TestNetworkRulesChecker_Check_FailsOnExpectedFailureSetMismatch(t *testing.
 	checker := &networkRulesChecker{net: net, rulesPatch: genesis.NetworkRulesPatch{Blocks: &genesis.BlocksPatch{MaxBlockGas: new(uint64(20500000000))}}}
 	if err := checker.Check(t.Context()); err == nil || !strings.Contains(err.Error(), "unexpected failure set") {
 		t.Fatalf("expected failure-set mismatch, got: %v", err)
+	}
+}
+
+func TestNetworkRulesChecker_Check_EmptyPatchReturnsNil(t *testing.T) {
+	checker := &networkRulesChecker{
+		rulesPatch: genesis.NetworkRulesPatch{},
+	}
+	if err := checker.Check(t.Context()); err != nil {
+		t.Fatalf("expected nil error for empty rules patch, got: %v", err)
+	}
+}
+
+func TestNetworkRulesChecker_Check_DialRpcFailsOnNonFailingNode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{node})
+	node.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
+	node.EXPECT().GetLabel().AnyTimes().Return("node-1")
+	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("connection refused"))
+
+	checker := &networkRulesChecker{
+		net: net,
+		rulesPatch: genesis.NetworkRulesPatch{
+			Blocks: &genesis.BlocksPatch{MaxBlockGas: new(uint64(20500000000))},
+		},
+	}
+
+	err := checker.Check(t.Context())
+	if err == nil || !strings.Contains(err.Error(), "failed to dial node RPC") {
+		t.Fatalf("expected dial error, got: %v", err)
 	}
 }
