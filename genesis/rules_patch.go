@@ -50,10 +50,6 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 // BigIntValue accepts YAML scalar values for big integers.
 type BigIntValue big.Int
 
-func NewBigIntValue(i int64) BigIntValue {
-	return BigIntValue(*big.NewInt(i))
-}
-
 func (b *BigIntValue) UnmarshalYAML(node *yaml.Node) error {
 	if node.Kind != yaml.ScalarNode {
 		return fmt.Errorf("big integer must be a scalar value")
@@ -119,10 +115,6 @@ func NewRulesPatchFromOperaRules(rules opera.Rules) (NetworkRulesPatch, error) {
 }
 
 func (p *NetworkRulesPatch) UnmarshalYAML(node *yaml.Node) error {
-	if node.Kind != yaml.MappingNode {
-		return fmt.Errorf("network rules patch must be a map")
-	}
-
 	type alias NetworkRulesPatch
 	var decoded alias
 	if err := node.Decode(&decoded); err != nil {

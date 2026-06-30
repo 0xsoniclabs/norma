@@ -4,13 +4,13 @@ duration: 50
 
 network_rules:
   genesis:
-    upgrades:
-      gas_subsidies: true
+    Upgrades:
+      GasSubsidies: true
 
 validators:
   - name: local
     instances: 2
-    imagename: "Sonic:local" # local submodule, used to test different versions
+    imagename: "sonic:local" # local submodule, used to test different versions
 
 applications:
 

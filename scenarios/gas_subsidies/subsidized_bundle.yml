@@ -4,16 +4,16 @@ duration: 50
 
 network_rules:
   genesis:
-    upgrades:
-      allegro: true
-      brio: true
-      gas_subsidies: true
-      transaction_bundles: true
+    Upgrades:
+      Allegro: true
+      Brio: true
+      GasSubsidies: true
+      TransactionBundles: true
 
 validators:
   - name: local
     instances: 2
-    imagename: "Sonic:local" # local submodule, used to test different versions
+    imagename: "sonic:local" # local submodule, used to test different versions
 
 applications:
 

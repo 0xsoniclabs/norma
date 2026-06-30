@@ -10,16 +10,16 @@ duration: 180
 # There was a min base fee behaviour update between client versions
 network_rules:
   genesis:
-    upgrades:
-      sonic: true
-      allegro: false
-    economy:
-      min_base_fee: 1000000000
+    Upgrades:
+      Sonic: true
+      Allegro: false
+    Economy:
+      MinBaseFee: 1000000000
   updates:
     - time: 20
       rules:
-        economy:
-          min_base_fee: 1000000000000
+        Economy:
+          MinBaseFee: 1000000000000
 
 # Initial validator nodes in the network.
 validators:
@@ -32,7 +32,7 @@ nodes:
     instances: 1
     start: 60   # will start when the base fee is already updated
     client:
-      imagename: "Sonic:v2.0.2"
+      imagename: "sonic:v2.0.2"
       type: validator
 
 # In the network, there is a few applications producing the load.

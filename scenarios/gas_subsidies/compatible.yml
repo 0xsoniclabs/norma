@@ -8,16 +8,16 @@ duration: 5
 
 network_rules:
   genesis:
-    upgrades:
-      gas_subsidies: true
+    Upgrades:
+      GasSubsidies: true
 
 validators:
   - name: local # local branch, used to test different versions
-    imagename: "Sonic:local"
+    imagename: "sonic:local"
   - name: v2.1 # release branch
-    imagename: "Sonic:v2.1"
+    imagename: "sonic:v2.1"
   - name: v2.1.2 # first version with gas subsidies
-    imagename: "Sonic:v2.1.2"
+    imagename: "sonic:v2.1.2"
 
 applications:
 
