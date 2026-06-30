@@ -61,7 +61,7 @@ fi
 # round-trip time, the one-way latency has to be half of it.
 # To check, run `docker exec <src-container-id> ping <dst-container-id>` on host.
 echo "NETWORK_LATENCY=${NETWORK_LATENCY}"
-if [[ -n "${NETWORK_LATENCY:-}" && "${NETWORK_LATENCY}" != "0" && "${NETWORK_LATENCY}" != "0s" ]]; then
+if [[ -n "${NETWORK_LATENCY}" ]]; then
   echo "Adding network latency .."
   tc qdisc add dev eth0 root netem delay "${NETWORK_LATENCY}"
   if ip link show eth1 &>/dev/null; then # if eth1 exists
