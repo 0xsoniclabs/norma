@@ -7,7 +7,6 @@ require (
 	github.com/0xsoniclabs/sonic v0.0.0-20260505152818-400acf397f1a
 	github.com/Fantom-foundation/lachesis-base v0.0.0-20240116072301-a75735c4ef00
 	github.com/docker/docker v27.3.1+incompatible
-	github.com/docker/go-connections v0.5.0
 	github.com/ethereum/go-ethereum v1.17.1
 	github.com/holiman/uint256 v1.3.2
 	github.com/jupp0r/go-priority-queue v0.0.0-20160601094913-ab1073853bde
@@ -42,6 +41,7 @@ require (
 	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
+	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/emicklei/dot v1.6.2 // indirect
 	github.com/ethereum/c-kzg-4844/v2 v2.1.6 // indirect

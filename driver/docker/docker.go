@@ -32,7 +32,6 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	dockerNetwork "github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
-	"github.com/docker/go-connections/nat"
 )
 
 // projectLabel is the label used to identify objects created by norma.
@@ -66,6 +65,7 @@ type Network struct {
 // *Container implements the driver.Host interface.
 type Container struct {
 	id      string
+	ip      string
 	client  *Client
 	config  *ContainerConfig
 	stopped bool
@@ -77,7 +77,6 @@ type ContainerConfig struct {
 	Hostname        string
 	ImageName       string
 	ShutdownTimeout *time.Duration
-	PortForwarding  map[network.Port]network.Port // Container Port => Host Port
 	Environment     map[string]string
 	Entrypoint      []string // Entrypoint to run when starting the container. Optional.
 	Network         *Network // Docker network to join, nil to join bridge network
@@ -142,21 +141,13 @@ func (c *Client) Close() error {
 
 // Start creates and runs one Container. The provided configuration allows
 // to configure the Docker image to run inside the container -- and thus the
-// services to be offered -- and port-forwarding specifications to make those
-// services reachable from outside the Docker container (e.g. by the
-// application running this code).
+// services to be offered. When a Network is provided, the container's IP on
+// that network is resolved and used to reach services directly, without
+// port forwarding.
 func (c *Client) Start(ctx context.Context, config *ContainerConfig) (*Container, error) {
 	envVars := []string{}
 	for key, value := range config.Environment {
 		envVars = append(envVars, fmt.Sprintf("%s=%s", key, value))
-	}
-
-	portMapping := nat.PortMap{}
-	for inner, outer := range config.PortForwarding {
-		portMapping[nat.Port(fmt.Sprintf("%d/tcp", inner))] = []nat.PortBinding{{
-			HostIP:   "0.0.0.0",
-			HostPort: fmt.Sprintf("%d/tcp", outer),
-		}}
 	}
 
 	var binds []string
@@ -182,21 +173,16 @@ func (c *Client) Start(ctx context.Context, config *ContainerConfig) (*Container
 		},
 		StopTimeout: &stopTimeout,
 	}, &container.HostConfig{
-		PortBindings: portMapping,
-		Init:         &init,
-		CapAdd:       []string{"NET_ADMIN"},
-		Binds:        binds,
+		Init:   &init,
+		CapAdd: []string{"NET_ADMIN"},
+		Binds:  binds,
 	}, nil, nil, config.Hostname)
 	if err != nil {
 		return nil, err
 	}
 
-	// connect to custom network if specified
-	// this way the container will be connected to bridge network and
-	// custom network at the same time (otherwise on network cleanup the
-	// forwarded ports would be lost)
 	if config.Network != nil {
-		err = c.cli.NetworkConnect(ctx, config.Network.id, resp.ID, nil)
+		err := c.cli.NetworkConnect(ctx, config.Network.id, resp.ID, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -209,7 +195,21 @@ func (c *Client) Start(ctx context.Context, config *ContainerConfig) (*Container
 		return nil, err
 	}
 
-	return &Container{resp.ID, c, config, false, false}, nil
+	ctr := &Container{
+		id:      resp.ID,
+		client:  c,
+		config:  config,
+		stopped: false,
+		cleaned: false,
+	}
+
+	if config.Network != nil {
+		if err := ctr.resolveIP(); err != nil {
+			return nil, err
+		}
+	}
+
+	return ctr, nil
 }
 
 // CreateBridgeNetwork creates a new Docker bridge network.
@@ -292,18 +292,43 @@ func (c *Container) Cleanup(ctx context.Context) error {
 }
 
 // GetAddressForService retrieves the Address of a service running in this
-// Container and being exported to the Docker's host environment. If there is
-// no such service (e.g., because it was not marked as to be exported during
-// the Start of the Container), nil will be returned.
+// Container. Services are reached via the container's IP on the Docker
+// network using the service's internal port. If the IP was not resolved
+// at start time, it is looked up on demand via container inspection.
 func (c *Container) GetAddressForService(service *network.ServiceDescription) *network.AddressPort {
-	// All services inside the container are reached through port-forwarding
-	// on the localhost. Non-forwarded services are not supported.
-	port, ok := c.config.PortForwarding[service.Port]
-	if !ok {
+	if c.ip == "" {
+		if err := c.resolveIP(); err != nil {
+			slog.Error("failed to resolve container IP", "error", err)
+			return nil
+		}
+	}
+	res := network.AddressPort(fmt.Sprintf("%s:%d", c.ip, service.Port))
+	return &res
+}
+
+// resolveIP inspects the container and populates c.ip. When the
+// container was started with a specific network, only that network is
+// considered; otherwise the first available IP is used.
+func (c *Container) resolveIP() error {
+	info, err := c.client.cli.ContainerInspect(context.Background(), c.id)
+	if err != nil {
+		return fmt.Errorf("failed to inspect container: %w", err)
+	}
+	if c.config.Network != nil {
+		ep, ok := info.NetworkSettings.Networks[c.config.Network.name]
+		if !ok || ep.IPAddress == "" {
+			return fmt.Errorf("container has no IP on network %s", c.config.Network.name)
+		}
+		c.ip = ep.IPAddress
 		return nil
 	}
-	res := network.AddressPort(fmt.Sprintf("%s:%d", "0.0.0.0", port))
-	return &res
+	for _, ep := range info.NetworkSettings.Networks {
+		if ep.IPAddress != "" {
+			c.ip = ep.IPAddress
+			return nil
+		}
+	}
+	return fmt.Errorf("container %s has no IP address", c.id)
 }
 
 // SaveLogTo fetches the log of the container and saves it to the given directory.
