@@ -1,4 +1,8 @@
 Name: Run Application Test
+Description: >-
+  Starts multiple load-generating applications with
+  different types and rates to verify transaction
+  processing.
 
 Scenario:
   - startNode: validator-0

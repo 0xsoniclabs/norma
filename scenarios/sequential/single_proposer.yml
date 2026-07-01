@@ -1,4 +1,7 @@
 Name: Single Block Proposer Test
+Description: >-
+  Verifies block production under single proposer
+  block formation mode with multiple validators.
 
 InitialNetworkRules:
   Upgrades:

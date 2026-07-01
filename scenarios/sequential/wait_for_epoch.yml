@@ -3,6 +3,9 @@
 # change occurs naturally, then uses waitForEpoch to block until it happens.
 
 Name: Wait For Epoch Test
+Description: >-
+  Verifies that waitForEpoch correctly blocks until a
+  natural epoch transition occurs.
 
 InitialNetworkRules:
   Epochs:

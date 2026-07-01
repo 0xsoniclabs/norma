@@ -1,6 +1,10 @@
 # This scenario demonstrates all available check functions.
 
 Name: Checks Test
+Description: >-
+  Demonstrates all available check functions including
+  halted detection, block heights, gas rate, and hash
+  consistency.
 
 InitialNetworkRules:
   Epochs:

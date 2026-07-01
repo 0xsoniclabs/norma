@@ -33,6 +33,9 @@ func (s *SequentialScenario) Check() error {
 	if strings.TrimSpace(s.Name) == "" {
 		errs = append(errs, fmt.Errorf("scenario name must not be empty"))
 	}
+	if strings.TrimSpace(s.Description) == "" {
+		errs = append(errs, fmt.Errorf("scenario description must not be empty"))
+	}
 	// Validate initial network rules.
 	if err := genesis.ValidateNetworkRulesPatch(s.InitialRules); err != nil {
 		errs = append(errs, fmt.Errorf("invalid initial network rules: %w", err))
