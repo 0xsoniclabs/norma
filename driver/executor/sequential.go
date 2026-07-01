@@ -18,14 +18,18 @@ package executor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/checking"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/genesis"
+	"golang.org/x/sync/errgroup"
 )
 
 // RunSequential executes a sequential scenario on the given network.
@@ -44,16 +48,21 @@ func RunSequential(
 		checks,
 		&netBasedValidatorRegistry{net: network},
 		nil,
+		nil,
 	)
 }
 
 // RunSequentialAndCaptureEventExecution executes a sequential scenario and
 // returns wall-clock start/end intervals for every executed step.
+// genesisValidatorIds maps node labels to their pre-assigned validator IDs
+// (from genesis configuration); these nodes are started without on-chain
+// registration.
 func RunSequentialAndCaptureEventExecution(
 	ctx context.Context,
 	network driver.Network,
 	scenario *parser.SequentialScenario,
 	checks checking.Checks,
+	genesisValidatorIds map[string]int,
 ) ([]EventExecution, error) {
 	executions := make([]EventExecution, 0, len(scenario.Steps))
 	err := runSequentialWithObserver(
@@ -65,6 +74,7 @@ func RunSequentialAndCaptureEventExecution(
 		func(execution EventExecution) {
 			executions = append(executions, execution)
 		},
+		genesisValidatorIds,
 	)
 	return executions, err
 }
@@ -89,6 +99,7 @@ func runSequential(
 		checks,
 		registry,
 		nil,
+		nil,
 	)
 }
 
@@ -99,6 +110,7 @@ func runSequentialWithObserver(
 	checks checking.Checks,
 	registry validatorRegistry,
 	onStepExecuted func(EventExecution),
+	genesisValidatorIds map[string]int,
 ) error {
 	if err := scenario.Check(); err != nil {
 		return err
@@ -113,12 +125,8 @@ func runSequentialWithObserver(
 		nodeHistory:  make(map[string]bool),
 		validatorIds: make(map[string]int),
 	}
-
-	// Populate state with nodes already present in the network (bootstrap validators).
-	for _, node := range network.GetActiveNodes() {
-		label := node.GetLabel()
-		state.nodes[label] = node
-		state.nodeHistory[label] = true
+	for label, id := range genesisValidatorIds {
+		state.validatorIds[label] = id
 	}
 
 	for i, step := range scenario.Steps {
@@ -282,47 +290,87 @@ func execStartNode(
 	// We'll wait for new nodes to reach this height before proceeding.
 	targetBlock, err := getNetworkBlockHeight(ctx, net)
 	if err != nil {
-		slog.Warn("failed to get network block height; node sync target defaults to 0", "error", err)
+		if !errors.Is(err, driver.ErrEmptyNetwork) {
+			slog.Warn("failed to get network block height; node sync target defaults to 0", "error", err)
+		} else {
+			targetBlock = 0
+		}
 	}
 
-	var newNodes []driver.Node
+	type nodeResult struct {
+		instanceName string
+		node         driver.Node
+		validatorId  *int
+	}
+	results := make([]nodeResult, instances)
+
+	// Pre-compute instance names and register validators sequentially.
+	// Registration involves on-chain reads (LastValidatorID) that are not
+	// safe for concurrent use, so we do this before the parallel fan-out.
+	instanceNames := make([]string, instances)
+	validatorIds := make([]*int, instances)
 	for instance := range instances {
 		instanceName := name
 		if instances > 1 {
 			instanceName = fmt.Sprintf("%s-%d", name, instance)
 		}
+		instanceNames[instance] = instanceName
 
-		var validatorId *int
-		if isValidator && !isRejoin {
-			id, err := registry.registerNewValidator()
-			if err != nil {
-				return fmt.Errorf("failed to register validator %s: %w", instanceName, err)
-			}
-			validatorId = &id
-		} else if isValidator && isRejoin {
+		if isValidator {
 			if id, ok := state.validatorIds[instanceName]; ok {
-				validatorId = &id
+				// Use pre-assigned ID (genesis validator or rejoin).
+				validatorIds[instance] = &id
+			} else if !isRejoin {
+				id, err := registry.registerNewValidator()
+				if err != nil {
+					return fmt.Errorf(
+						"failed to register validator %s: %w",
+						instanceName, err,
+					)
+				}
+				validatorIds[instance] = &id
 			}
 		}
+	}
 
-		node, err := net.CreateNode(&driver.NodeConfig{
-			Name:        instanceName,
-			Failing:     step.Failing,
-			Image:       image,
-			Validator:   isValidator,
-			ValidatorId: validatorId,
-			DataVolume:  dataVolumePtr(step.DataVolume),
+	// Create nodes in parallel — all on-chain state has been settled above.
+	g, _ := errgroup.WithContext(ctx)
+	for instance := range instances {
+		instance := instance
+		g.Go(func() error {
+			node, err := net.CreateNode(&driver.NodeConfig{
+				Name:        instanceNames[instance],
+				Failing:     step.Failing,
+				Image:       image,
+				Validator:   isValidator,
+				ValidatorId: validatorIds[instance],
+				DataVolume:  dataVolumePtr(step.DataVolume),
+			})
+			if err != nil {
+				return fmt.Errorf(
+					"failed to create node %s: %w",
+					instanceNames[instance], err,
+				)
+			}
+
+			results[instance] = nodeResult{
+				instanceNames[instance], node, validatorIds[instance],
+			}
+			return nil
 		})
-		if err != nil {
-			return fmt.Errorf("failed to create node %s: %w", instanceName, err)
-		}
+	}
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("failed to create nodes for %s: %w", name, err)
+	}
 
-		state.nodes[instanceName] = node
-		state.nodeHistory[instanceName] = true
-		if validatorId != nil {
-			state.validatorIds[instanceName] = *validatorId
+	var newNodes []driver.Node
+	for _, r := range results {
+		state.nodes[r.instanceName] = r.node
+		state.nodeHistory[r.instanceName] = true
+		if r.validatorId != nil {
+			state.validatorIds[r.instanceName] = *r.validatorId
 		}
-		newNodes = append(newNodes, node)
+		newNodes = append(newNodes, r.node)
 	}
 
 	// Also mark the base name in history for single-instance nodes.
@@ -390,39 +438,57 @@ func execStopNode(
 	net driver.Network,
 	state *sequentialState,
 ) error {
-	name := step.Identifier
+	base := step.Identifier
+	prefix := base + "-"
 
-	// Find the node (try exact name first, then single-instance pattern).
-	node, ok := state.nodes[name]
-	if !ok {
-		// Try with -0 suffix for single-instance nodes created with instances > 1.
-		node, ok = state.nodes[name+"-0"]
-		if !ok {
-			return fmt.Errorf("node %q not found in active nodes", name)
+	type stopTarget struct {
+		name string
+		node driver.Node
+	}
+	targets := make([]stopTarget, 0)
+	for name, node := range state.nodes {
+		if name == base {
+			targets = append(targets, stopTarget{name: name, node: node})
+		} else if strings.HasPrefix(name, prefix) {
+			// Only match instances with a numeric suffix (e.g. "base-0",
+			// "base-1"), not unrelated nodes that share the prefix
+			// (e.g. "base-extra").
+			suffix := name[len(prefix):]
+			if _, err := strconv.Atoi(suffix); err == nil {
+				targets = append(targets, stopTarget{
+					name: name, node: node,
+				})
+			}
 		}
-		name = name + "-0"
 	}
 
-	if err := net.RemoveNode(node); err != nil {
-		return fmt.Errorf("failed to remove node %s: %w", name, err)
-	}
-	if err := node.Stop(ctx); err != nil {
-		return fmt.Errorf("failed to stop node %s: %w", name, err)
-	}
-	if err := node.Cleanup(ctx); err != nil {
-		return fmt.Errorf("failed to cleanup node %s: %w", name, err)
+	if len(targets) == 0 {
+		return fmt.Errorf("node %q not found in active nodes", base)
 	}
 
-	delete(state.nodes, name)
+	g, gctx := errgroup.WithContext(ctx)
+	for _, target := range targets {
+		target := target
+		g.Go(func() error {
+			if err := net.RemoveNode(target.node); err != nil {
+				return fmt.Errorf("failed to remove node %s: %w", target.name, err)
+			}
+			if err := target.node.Stop(gctx); err != nil {
+				return fmt.Errorf("failed to stop node %s: %w", target.name, err)
+			}
+			if err := target.node.Cleanup(gctx); err != nil {
+				return fmt.Errorf("failed to cleanup node %s: %w", target.name, err)
+			}
+			return nil
+		})
+	}
 
-	// Also stop all instances if this was a multi-instance node.
-	for key, n := range state.nodes {
-		if len(key) > len(step.Identifier)+1 && key[:len(step.Identifier)+1] == step.Identifier+"-" {
-			_ = net.RemoveNode(n)
-			_ = n.Stop(ctx)
-			_ = n.Cleanup(ctx)
-			delete(state.nodes, key)
-		}
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	for _, target := range targets {
+		delete(state.nodes, target.name)
 	}
 
 	return nil

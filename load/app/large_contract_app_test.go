@@ -42,7 +42,7 @@ func TestLargeContractDeploymentFailsWithoutBrio(t *testing.T) {
 			// Brio intentionally omitted - deployment of large contracts should fail.
 		},
 	}
-	net, err := local.NewLocalNetwork(t.Context(), &driver.NetworkConfig{
+	net, err := local.NewLocalLegacyNetwork(t.Context(), &driver.NetworkConfig{
 		Validators:   driver.DefaultValidators(t.Name()),
 		NetworkRules: rules,
 	})
