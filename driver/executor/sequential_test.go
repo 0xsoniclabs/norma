@@ -59,7 +59,7 @@ func TestSequential_StartAndStopNode(t *testing.T) {
 
 	validatorId := 2
 	gomock.InOrder(
-		registry.EXPECT().registerNewValidator(gomock.Any()).Return(validatorId, nil),
+		registry.EXPECT().registerNewValidator(uint64(0)).Return(validatorId, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
 		node.EXPECT().GetValidatorId().Return(&validatorId),
 		registry.EXPECT().unregisterValidator(validatorId, gomock.Any()).Return(nil),
@@ -78,7 +78,7 @@ func TestSequential_StartAndStopNode(t *testing.T) {
 				NodeType:   "validator",
 			},
 			{
-				Function:   parser.FuncUndelegate,
+				Function:          parser.FuncUndelegate,
 				UndelegateTargets: []parser.UndelegateTarget{{Node: "validator-A"}},
 			},
 			{
@@ -93,6 +93,84 @@ func TestSequential_StartAndStopNode(t *testing.T) {
 	}
 }
 
+func TestSequential_StartNode_ForwardsCustomStake(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	net.EXPECT().DialRandomRpc().
+		Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	node.EXPECT().GetLabel().Return("heavy").AnyTimes()
+	node.EXPECT().DialRpc(gomock.Any()).
+		Return(nil, fmt.Errorf("not ready")).AnyTimes()
+
+	customStake := uint64(10_000_000)
+	validatorId := 2
+
+	gomock.InOrder(
+		registry.EXPECT().
+			registerNewValidator(customStake).
+			Return(validatorId, nil),
+		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
+	)
+
+	stake := customStake
+	scenario := parser.SequentialScenario{
+		Name:             "Custom Stake",
+		Description:      "Test scenario.",
+		DisableEndChecks: true,
+		Steps: []parser.Step{
+			{
+				Function:   parser.FuncStartNode,
+				Identifier: "heavy",
+				NodeType:   "validator",
+				Stake:      &stake,
+			},
+		},
+	}
+
+	if err := runSequential(
+		t.Context(), net, &scenario, nil, registry,
+	); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSequential_UndelegateSingleInstanceWithSuffix(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	// Simulate a bootstrap validator stored with "-0" suffix.
+	node.EXPECT().GetLabel().Return("heavy-0").AnyTimes()
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{node})
+
+	validatorId := 1
+	node.EXPECT().GetValidatorId().Return(&validatorId)
+	registry.EXPECT().unregisterValidator(validatorId, uint64(0)).Return(nil)
+	net.EXPECT().DialRandomRpc().
+		Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+
+	scenario := parser.SequentialScenario{
+		Name:             "Undelegate Bootstrap",
+		DisableEndChecks: true,
+		Steps: []parser.Step{
+			{
+				Function:          parser.FuncUndelegate,
+				UndelegateTargets: []parser.UndelegateTarget{{Node: "heavy"}},
+			},
+		},
+	}
+
+	if err := runSequential(
+		t.Context(), net, &scenario, nil, registry,
+	); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestSequential_UndelegateMultiInstanceValidator_ReturnsError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
@@ -100,6 +178,7 @@ func TestSequential_UndelegateMultiInstanceValidator_ReturnsError(t *testing.T) 
 	node0 := driver.NewMockNode(ctrl)
 	node1 := driver.NewMockNode(ctrl)
 
+	net.EXPECT().GetActiveNodes().Return(nil)
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 	node0.EXPECT().GetLabel().Return("validators-0").AnyTimes()
 	node0.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
@@ -394,7 +473,7 @@ func TestSequential_MultiInstanceNode(t *testing.T) {
 	ids := make(chan int, 2)
 	ids <- 2
 	ids <- 3
-	registry.EXPECT().registerNewValidator(gomock.Any()).DoAndReturn(func(stake uint64) (int, error) {
+	registry.EXPECT().registerNewValidator(uint64(0)).DoAndReturn(func(stake uint64) (int, error) {
 		return <-ids, nil
 	}).Times(2)
 

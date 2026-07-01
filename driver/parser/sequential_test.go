@@ -189,14 +189,35 @@ func TestParseSequential_Undelegate(t *testing.T) {
 	input := `
 Name: Stop Node Test
 Scenario:
-  - undelegate: validator-A
+  - startNode: validator-A
+    type: validator
+
+  - undelegate:
+    - node: validator-A
+
+  - undelegate:
+    - node: validator-A
+      stake: 2_000_000
 `
 	scenario, err := ParseSequentialBytes([]byte(input))
 	require.NoError(t, err)
 
 	step := scenario.Steps[0]
-	require.Equal(t, FuncUndelegate, step.Function)
+	require.Equal(t, FuncStartNode, step.Function)
 	require.Equal(t, "validator-A", step.Identifier)
+
+	step = scenario.Steps[1]
+	require.Equal(t, FuncUndelegate, step.Function)
+	require.Len(t, step.UndelegateTargets, 1)
+	require.Equal(t, "validator-A", step.UndelegateTargets[0].Node)
+	require.Nil(t, step.UndelegateTargets[0].Stake)
+
+	step = scenario.Steps[2]
+	require.Equal(t, FuncUndelegate, step.Function)
+	require.Len(t, step.UndelegateTargets, 1)
+	require.Equal(t, "validator-A", step.UndelegateTargets[0].Node)
+	require.NotNil(t, step.UndelegateTargets[0].Stake)
+	require.EqualValues(t, 2_000_000, *step.UndelegateTargets[0].Stake)
 }
 
 func TestParseSequential_Checks(t *testing.T) {

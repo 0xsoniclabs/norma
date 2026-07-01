@@ -120,11 +120,10 @@ func runSequentialWithObserver(
 	defer cancel()
 
 	state := &sequentialState{
-		nodes:           make(map[string]driver.Node),
-		apps:            make(map[string]driver.Application),
-		nodeHistory:     make(map[string]bool),
-		validatorIds:    make(map[string]int),
-		validatorStakes: make(map[string]uint64),
+		nodes:        make(map[string]driver.Node),
+		apps:         make(map[string]driver.Application),
+		nodeHistory:  make(map[string]bool),
+		validatorIds: make(map[string]int),
 	}
 	for label, id := range genesisValidatorIds {
 		state.validatorIds[label] = id
@@ -205,10 +204,6 @@ type sequentialState struct {
 	// validatorIds preserves validator IDs for nodes that were stopped,
 	// so they can be reused on rejoin.
 	validatorIds map[string]int
-	// validatorStakes records the stake amount (in S) used when registering
-	// each validator, keyed by instance name. Required to issue the correct
-	// undelegate amount when undelegating.
-	validatorStakes map[string]uint64
 }
 
 // executeStep dispatches a single step to the appropriate handler.
@@ -326,15 +321,17 @@ func execStartNode(
 			if step.Stake != nil {
 				stakeAmount = *step.Stake
 			}
-			state.validatorStakes[instanceName] = stakeAmount
 			if id, ok := state.validatorIds[instanceName]; ok {
 				// Use pre-assigned ID (genesis validator or rejoin).
 				validatorIds[instance] = &id
-			} else if !isRejoin {
+			} else if isRejoin {
+				return fmt.Errorf("validator %s is rejoining but has no preserved validator ID",
+					instanceName,
+				)
+			} else {
 				id, err := registry.registerNewValidator(stakeAmount)
 				if err != nil {
-					return fmt.Errorf(
-						"failed to register validator %s: %w",
+					return fmt.Errorf("failed to register validator %s: %w",
 						instanceName, err,
 					)
 				}
@@ -514,10 +511,19 @@ func execUndelegate(
 	for _, target := range step.UndelegateTargets {
 		node, ok := state.nodes[target.Node]
 		if !ok {
-			if _, hasInstance := state.nodes[target.Node+"-0"]; hasInstance {
-				return fmt.Errorf("node %q has multiple instances; use an explicit instance name (e.g. %q)", target.Node, target.Node+"-0")
+			node, ok = state.nodes[target.Node+"-0"]
+			if !ok {
+				return fmt.Errorf("node %q not found in active nodes", target.Node)
 			}
-			return fmt.Errorf("node %q not found in active nodes", target.Node)
+			// Ensure it is truly a single-instance node. If
+			// other numbered instances exist, require an
+			// explicit instance name.
+			if hasMultipleInstances(state, target.Node) {
+				return fmt.Errorf(
+					"node %q has multiple instances; use an explicit instance name (e.g. %q)",
+					target.Node, target.Node+"-0",
+				)
+			}
 		}
 		id := node.GetValidatorId()
 		if id == nil {
@@ -533,6 +539,26 @@ func execUndelegate(
 		}
 	}
 	return nil
+}
+
+// hasMultipleInstances reports whether state contains more than one
+// numbered instance for the given base name (e.g. "name-0", "name-1").
+func hasMultipleInstances(
+	state *sequentialState,
+	baseName string,
+) bool {
+	prefix := baseName + "-"
+	count := 0
+	for key := range state.nodes {
+		if len(key) > len(prefix) &&
+			key[:len(prefix)] == prefix {
+			count++
+			if count > 1 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // execRunApp creates and starts an application.

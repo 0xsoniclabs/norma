@@ -26,7 +26,7 @@ Scenario:
   - advanceEpoch
 
   # partial undelegation
-  - undelegate: 
+  - undelegate:
     - node: heavy
       stake: 1_000_000
 
@@ -43,5 +43,5 @@ Scenario:
     - node: light-1
       stake: 500_000
 
-  - stopNode: light
+  - stopNode: light-0
   
