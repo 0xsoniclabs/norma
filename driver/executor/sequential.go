@@ -360,7 +360,7 @@ func execStartNode(
 		})
 	}
 	if err := g.Wait(); err != nil {
-		return err
+		return fmt.Errorf("failed to create nodes for %s: %w", name, err)
 	}
 
 	var newNodes []driver.Node
