@@ -312,8 +312,19 @@ Scenario:
 
 func TestSequentialCheck_EmptyName(t *testing.T) {
 	scenario := SequentialScenario{
-		Name:  "",
-		Steps: []Step{{Function: FuncAdvanceEpoch}},
+		Name:        "",
+		Description: "A test scenario.",
+		Steps:       []Step{{Function: FuncAdvanceEpoch}},
+	}
+	err := scenario.Check()
+	require.Error(t, err)
+}
+
+func TestSequentialCheck_EmptyDescription(t *testing.T) {
+	scenario := SequentialScenario{
+		Name:        "Test",
+		Description: "",
+		Steps:       []Step{{Function: FuncAdvanceEpoch}},
 	}
 	err := scenario.Check()
 	require.Error(t, err)
@@ -321,7 +332,8 @@ func TestSequentialCheck_EmptyName(t *testing.T) {
 
 func TestSequentialCheck_InvalidNodeName(t *testing.T) {
 	scenario := SequentialScenario{
-		Name: "Test",
+		Name:        "Test",
+		Description: "A test scenario.",
 		Steps: []Step{{
 			Function:   FuncStartNode,
 			Identifier: "invalid name with spaces",
@@ -334,7 +346,8 @@ func TestSequentialCheck_InvalidNodeName(t *testing.T) {
 
 func TestSequentialCheck_RunAppMissingRate(t *testing.T) {
 	scenario := SequentialScenario{
-		Name: "Test",
+		Name:        "Test",
+		Description: "A test scenario.",
 		Steps: []Step{{
 			Function:   FuncRunApp,
 			Identifier: "load",
@@ -347,7 +360,8 @@ func TestSequentialCheck_RunAppMissingRate(t *testing.T) {
 
 func TestSequentialCheck_UpdateRulesEmpty(t *testing.T) {
 	scenario := SequentialScenario{
-		Name: "Test",
+		Name:        "Test",
+		Description: "A test scenario.",
 		Steps: []Step{{
 			Function: FuncUpdateRules,
 			Rules:    genesis.NetworkRulesPatch{},
@@ -668,7 +682,8 @@ Scenario:
 
 func TestSequentialCheck_EmptySubChecks(t *testing.T) {
 	scenario := SequentialScenario{
-		Name: "Test",
+		Name:        "Test",
+		Description: "A test scenario.",
 		Steps: []Step{{
 			Function:  FuncChecks,
 			SubChecks: nil,

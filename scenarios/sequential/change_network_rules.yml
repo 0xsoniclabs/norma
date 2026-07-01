@@ -1,4 +1,7 @@
 Name: Change Network Rules Test
+Description: >-
+  Verifies that network rules can be updated at runtime
+  and that the changes take effect across nodes.
 
 InitialNetworkRules:
   Epochs:

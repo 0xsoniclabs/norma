@@ -11,6 +11,9 @@
 # - MAX_EPOCH_GAS is set high enough to not be exhausted by event overhead
 
 Name: Advance Epoch Test
+Description: >-
+  Verifies epoch advancement behavior and confirms
+  exactly one epoch transition occurs during the scenario.
 
 InitialNetworkRules:
   Epochs:

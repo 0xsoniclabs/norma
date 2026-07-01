@@ -37,8 +37,9 @@ func TestSequential_EmptyScenario(t *testing.T) {
 	net.EXPECT().GetActiveNodes().Return(nil)
 
 	scenario := parser.SequentialScenario{
-		Name:  "Empty",
-		Steps: []parser.Step{},
+		Name:        "Empty",
+		Description: "Test scenario.",
+		Steps:       []parser.Step{},
 	}
 
 	if err := runSequential(t.Context(), net, &scenario, nil, nil); err != nil {
@@ -70,7 +71,8 @@ func TestSequential_StartAndStopNode(t *testing.T) {
 	)
 
 	scenario := parser.SequentialScenario{
-		Name: "Start Stop",
+		Name:        "Start Stop",
+		Description: "Test scenario.",
 		Steps: []parser.Step{
 			{
 				Function:   parser.FuncStartNode,
@@ -115,7 +117,8 @@ func TestSequential_StopNodeWithoutUndelegate(t *testing.T) {
 	)
 
 	scenario := parser.SequentialScenario{
-		Name: "Leave",
+		Name:        "Leave",
+		Description: "Test scenario.",
 		Steps: []parser.Step{
 			{
 				Function:   parser.FuncStartNode,
@@ -171,7 +174,8 @@ func TestSequential_RejoinNode(t *testing.T) {
 	)
 
 	scenario := parser.SequentialScenario{
-		Name: "Rejoin",
+		Name:        "Rejoin",
+		Description: "Test scenario.",
 		Steps: []parser.Step{
 			{
 				Function:   parser.FuncStartNode,
@@ -211,7 +215,8 @@ func TestSequential_RunAndStopApp(t *testing.T) {
 	)
 
 	scenario := parser.SequentialScenario{
-		Name: "App",
+		Name:        "App",
+		Description: "Test scenario.",
 		Steps: []parser.Step{
 			{
 				Function:   parser.FuncRunApp,
@@ -246,7 +251,8 @@ func TestSequential_UpdateRules(t *testing.T) {
 	}).Return(nil)
 
 	scenario := parser.SequentialScenario{
-		Name: "Rules",
+		Name:        "Rules",
+		Description: "Test scenario.",
 		Steps: []parser.Step{
 			{
 				Function: parser.FuncUpdateRules,
@@ -274,7 +280,8 @@ func TestSequential_AdvanceEpoch(t *testing.T) {
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 
 	scenario := parser.SequentialScenario{
-		Name: "Epoch",
+		Name:        "Epoch",
+		Description: "Test scenario.",
 		Steps: []parser.Step{
 			{Function: parser.FuncAdvanceEpoch},
 		},
@@ -297,7 +304,8 @@ func TestSequential_Check(t *testing.T) {
 	checks := checking.Checks{"blocksRolling": checker}
 
 	scenario := parser.SequentialScenario{
-		Name: "Check",
+		Name:        "Check",
+		Description: "Test scenario.",
 		Steps: []parser.Step{
 			{
 				Function: parser.FuncChecks,
@@ -322,7 +330,8 @@ func TestSequential_ContextCancellation(t *testing.T) {
 	cancel() // Cancel immediately.
 
 	scenario := parser.SequentialScenario{
-		Name: "Cancelled",
+		Name:        "Cancelled",
+		Description: "Test scenario.",
 		Steps: []parser.Step{
 			{Function: parser.FuncAdvanceEpoch},
 		},
@@ -357,7 +366,8 @@ func TestSequential_MultiInstanceNode(t *testing.T) {
 
 	instances := 2
 	scenario := parser.SequentialScenario{
-		Name: "Multi",
+		Name:        "Multi",
+		Description: "Test scenario.",
 		Steps: []parser.Step{
 			{
 				Function:   parser.FuncStartNode,
@@ -379,7 +389,8 @@ func TestSequential_RunAndCaptureEventExecution_CapturesAllSteps(t *testing.T) {
 	net.EXPECT().GetActiveNodes().Return(nil)
 
 	scenario := parser.SequentialScenario{
-		Name: "Capture",
+		Name:        "Capture",
+		Description: "Test scenario.",
 		Steps: []parser.Step{
 			{Function: parser.FuncWaitFor, Duration: time.Millisecond},
 			{Function: parser.FuncWaitFor, Duration: 2 * time.Millisecond},

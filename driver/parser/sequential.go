@@ -176,6 +176,7 @@ func (c *CheckSpec) unmarshalCheckMapping(node *yaml.Node) error {
 // Unlike the time-based Scenario, it defines an ordered list of blocking steps.
 type SequentialScenario struct {
 	Name             string                    `yaml:"Name"`
+	Description      string                    `yaml:"Description"`
 	InitialRules     genesis.NetworkRulesPatch `yaml:"InitialNetworkRules"`
 	DisableEndChecks bool                      `yaml:"DisableEndChecks,omitempty"`
 	Steps            []Step                    `yaml:"Scenario"`

@@ -1,4 +1,7 @@
 Name: Single Proposer Gradual Exchange Test
+Description: >-
+  Gradually replaces validators one by one under single
+  proposer mode while maintaining network liveness.
 
 InitialNetworkRules:
   Upgrades:

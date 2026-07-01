@@ -1,4 +1,7 @@
 Name: Start and Stop Nodes Test
+Description: >-
+  Tests starting, stopping, and rejoining validator
+  nodes while the network continues producing blocks.
 
 Scenario:
   - startNode: background-validator 

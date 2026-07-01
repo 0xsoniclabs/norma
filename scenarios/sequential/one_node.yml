@@ -1,4 +1,7 @@
 Name: Single Node Test
+Description: >-
+  Runs a minimal network with a single validator to
+  verify basic block production.
 
 Scenario:
   - startNode: validator-latest

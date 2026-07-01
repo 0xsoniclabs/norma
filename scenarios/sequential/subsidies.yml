@@ -1,4 +1,7 @@
 Name: Subsidies Test
+Description: >-
+  Runs a gas subsidies load application to verify
+  subsidized transactions are processed correctly.
 
 InitialNetworkRules:
   Upgrades:

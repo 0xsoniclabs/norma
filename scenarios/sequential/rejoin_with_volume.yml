@@ -1,4 +1,7 @@
 Name: Rejoin With Volume Test
+Description: >-
+  Tests that a validator can be stopped, upgraded, and
+  rejoined using a persistent data volume.
 
 Scenario:
   - startNode: stable-validator

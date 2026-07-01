@@ -1,4 +1,8 @@
 Name: Distributed Proposer Gradual Exchange Test
+Description: >-
+  Gradually replaces validators one by one under
+  distributed proposer mode while maintaining network
+  liveness.
 
 InitialNetworkRules:
   Upgrades:

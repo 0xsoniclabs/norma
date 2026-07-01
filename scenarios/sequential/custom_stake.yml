@@ -3,6 +3,9 @@
 # in the consensus, reflected in the stake distribution shown in progress logs.
 
 Name: Custom Stake Test
+Description: >-
+  Tests validators with different stake amounts and
+  verifies partial and full undelegation.
 
 Scenario:
   - startNode: heavy

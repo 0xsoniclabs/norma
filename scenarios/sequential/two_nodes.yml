@@ -1,4 +1,7 @@
 Name: Two Nodes Test
+Description: >-
+  Runs two validator nodes with different images to
+  verify multi-node consensus and compatibility.
 
 Scenario:
   - startNode: validator-0
