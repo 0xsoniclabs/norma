@@ -107,30 +107,30 @@ func (m *MockvalidatorRegistry) EXPECT() *MockvalidatorRegistryMockRecorder {
 }
 
 // registerNewValidator mocks base method.
-func (m *MockvalidatorRegistry) registerNewValidator() (int, error) {
+func (m *MockvalidatorRegistry) registerNewValidator(stake uint64) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "registerNewValidator")
+	ret := m.ctrl.Call(m, "registerNewValidator", stake)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // registerNewValidator indicates an expected call of registerNewValidator.
-func (mr *MockvalidatorRegistryMockRecorder) registerNewValidator() *gomock.Call {
+func (mr *MockvalidatorRegistryMockRecorder) registerNewValidator(stake any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "registerNewValidator", reflect.TypeOf((*MockvalidatorRegistry)(nil).registerNewValidator))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "registerNewValidator", reflect.TypeOf((*MockvalidatorRegistry)(nil).registerNewValidator), stake)
 }
 
 // unregisterValidator mocks base method.
-func (m *MockvalidatorRegistry) unregisterValidator(validatorId int) error {
+func (m *MockvalidatorRegistry) unregisterValidator(validatorId int, stake uint64) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "unregisterValidator", validatorId)
+	ret := m.ctrl.Call(m, "unregisterValidator", validatorId, stake)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // unregisterValidator indicates an expected call of unregisterValidator.
-func (mr *MockvalidatorRegistryMockRecorder) unregisterValidator(validatorId any) *gomock.Call {
+func (mr *MockvalidatorRegistryMockRecorder) unregisterValidator(validatorId, stake any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "unregisterValidator", reflect.TypeOf((*MockvalidatorRegistry)(nil).unregisterValidator), validatorId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "unregisterValidator", reflect.TypeOf((*MockvalidatorRegistry)(nil).unregisterValidator), validatorId, stake)
 }
