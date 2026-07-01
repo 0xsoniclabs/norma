@@ -388,7 +388,7 @@ var paramDescriptions = map[string]string{
 	"type":       "Node type (\"validator\", \"observer\", \"rpc\") for startNode; application type for runApp.",
 	"imageName":  "Docker image name to use for the node.",
 	"dataVolume": "Docker volume name to mount as the node data directory.",
-	"stake":      "Initial stake amount in S (uint64) for a validator node. Used for both registration and undelegation. Defaults to 5,000,000 S if not specified.",
+	"stake":      "Stake amount in S (uint64). For startNode it defaults to 5,000,000 S; for undelegate targets, omit to use full self-stake.",
 	"instances":  "Number of node instances to start.",
 	"failing":    "When true, the step is expected to fail; a passing result is treated as an error.",
 	"users":      "Number of concurrent user accounts the application should simulate.",
