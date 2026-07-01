@@ -1,0 +1,80 @@
+# Summary: Validate coherent bundle activation when a validator is registered after bundles are enabled and already executing.
+# Expected outcomes:
+# - Network rules switch to enable Brio and TransactionBundles at runtime.
+# - Subsidized bundle traffic is accepted and blocks keep rolling.
+# - A validator started after activation joins, connects, and stays in sync with existing validators.
+
+Name: Release Features Bundles Activation Late Registration Sync
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    GasSubsidies: true
+    Brio: false
+    TransactionBundles: false
+
+Scenario:
+  - startNode: validator-majority
+    type: validator
+    imageName: "sonic:local"
+    stake: 8000000
+
+  - startNode: validator-peer
+    type: validator
+    imageName: "sonic:local"
+    stake: 2000000
+
+  - runApp: baseline
+    type: counter
+    users: 20
+    rate:
+      constant: 10
+
+  - waitFor: 15s
+
+  - updateRules:
+      Upgrades:
+        Brio: true
+        TransactionBundles: true
+
+  - waitForEpoch
+
+  - checks:
+      - networkRules:
+          rules:
+            Upgrades:
+              Sonic: true
+              Allegro: true
+              GasSubsidies: true
+              Brio: true
+              TransactionBundles: true
+      - blocksProduced:
+          tolerance: 10
+
+  - runApp: bundles-live
+    type: subsidizedbundle
+    users: 10
+    rate:
+      constant: 5
+
+  - waitFor: 20s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - blockHashes
+
+  - startNode: validator-late
+    type: validator
+    imageName: "sonic:local"
+    stake: 1000000
+
+  - waitFor: 30s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - blockHashes
+      - blockHeights:
+          tolerance: 5

@@ -1,0 +1,25 @@
+# Summary: Single-validator stress test with one transaction payload and sloping load.
+# Expected outcomes:
+# - A single validator sustains rising counter traffic.
+# - Block production remains active during the stress window.
+
+Name: Release Stress Single Node Single Payload Slope
+
+Scenario:
+  - startNode: validator-0
+    type: validator
+    imageName: "sonic:local"
+
+  - runApp: counter-slope
+    type: counter
+    users: 50
+    rate:
+      slope:
+        start: 10
+        increment: 2
+
+  - waitFor: 60s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10

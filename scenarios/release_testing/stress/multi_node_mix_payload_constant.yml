@@ -1,0 +1,40 @@
+# Summary: Multi-validator stress test with mixed transaction payloads at constant rates.
+# Expected outcomes:
+# - Mixed counter, erc20, and uniswap traffic runs concurrently.
+# - The network remains live and keeps producing blocks under mixed constant load.
+
+Name: Release Stress Multi Node Mix Payload Constant
+
+Scenario:
+  - startNode: validator-old
+    type: validator
+    imageName: "sonic:v2.1.6"
+
+  - startNode: validators
+    type: validator
+    imageName: "sonic:local"
+    instances: 3
+
+  - runApp: counter-constant
+    type: counter
+    users: 80
+    rate:
+      constant: 20
+
+  - runApp: erc20-constant
+    type: erc20
+    users: 80
+    rate:
+      constant: 20
+
+  - runApp: uniswap-constant
+    type: uniswap
+    users: 80
+    rate:
+      constant: 20
+
+  - waitFor: 90s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10

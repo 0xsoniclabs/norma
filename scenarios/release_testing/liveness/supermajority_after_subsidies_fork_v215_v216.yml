@@ -36,6 +36,8 @@ Scenario:
       Upgrades:
         GasSubsidies: true
 
+  - waitForEpoch
+
   - runApp: subsidies
     type: subsidies
     users: 20
