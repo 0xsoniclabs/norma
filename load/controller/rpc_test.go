@@ -33,7 +33,7 @@ const FakeNetworkID = 0xfa3
 
 func TestTrafficGenerating(t *testing.T) {
 	// run local network of one node
-	net, err := local.NewLocalNetwork(t.Context(),
+	net, err := local.NewLocalLegacyNetwork(t.Context(),
 		&driver.NetworkConfig{
 			Validators: driver.DefaultValidators(t.Name()),
 		},

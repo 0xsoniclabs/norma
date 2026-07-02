@@ -1,0 +1,12 @@
+Name: Start n instances
+Description: >-
+  Verifies that multiple validator instances can be started
+  from a single startNode declaration using the instances parameter.
+
+Scenario:
+  - startNode: validator
+    type: validator
+    instances: 5 # ensure the network continues after failures of other nodes
+
+  - waitFor: 15s
+

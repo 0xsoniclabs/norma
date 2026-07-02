@@ -42,9 +42,22 @@ func check(ctx *cli.Context) (err error) {
 	path := args.First()
 	slog.Info("trying to parse", "path", path)
 
+	// Try sequential format first.
+	seqScenario, seqErr := parser.ParseSequentialFile(path)
+	if seqErr == nil {
+		if err := seqScenario.Check(); err != nil {
+			return err
+		}
+		slog.Info("all checks passed!", "path", path)
+		return nil
+	}
+
 	scenario, err := parser.ParseFile(path)
 	if err != nil {
-		return err
+		return fmt.Errorf(
+			"failed to parse scenario file:\n  sequential: %w\n  legacy: %w",
+			seqErr, err,
+		)
 	}
 
 	err = scenario.Check()

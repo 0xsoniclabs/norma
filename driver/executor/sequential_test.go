@@ -34,7 +34,6 @@ import (
 func TestSequential_EmptyScenario(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().GetActiveNodes().Return(nil)
 
 	scenario := parser.SequentialScenario{
 		Name:        "Empty",
@@ -53,7 +52,6 @@ func TestSequential_StartAndStopNode(t *testing.T) {
 	registry := NewMockvalidatorRegistry(ctrl)
 	node := driver.NewMockNode(ctrl)
 
-	net.EXPECT().GetActiveNodes().Return(nil)
 	// DialRandomRpc returns error so sync wait is skipped.
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 	node.EXPECT().GetLabel().Return("validator-A").AnyTimes()
@@ -101,7 +99,6 @@ func TestSequential_StopNodeWithoutUndelegate(t *testing.T) {
 	registry := NewMockvalidatorRegistry(ctrl)
 	node := driver.NewMockNode(ctrl)
 
-	net.EXPECT().GetActiveNodes().Return(nil)
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 	node.EXPECT().GetLabel().Return("validator-A").AnyTimes()
 	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
@@ -145,7 +142,6 @@ func TestSequential_RejoinNode(t *testing.T) {
 	node1 := driver.NewMockNode(ctrl)
 	node2 := driver.NewMockNode(ctrl)
 
-	net.EXPECT().GetActiveNodes().Return(nil)
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 	node1.EXPECT().GetLabel().Return("validator-A").AnyTimes()
 	node1.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
@@ -202,7 +198,6 @@ func TestSequential_RejoinNode(t *testing.T) {
 func TestSequential_RunAndStopApp(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().GetActiveNodes().Return(nil)
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 	app := driver.NewMockApplication(ctrl)
 
@@ -240,7 +235,6 @@ func TestSequential_RunAndStopApp(t *testing.T) {
 func TestSequential_UpdateRules(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().GetActiveNodes().Return(nil)
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 	baseFee := genesis.BigIntValue(*big.NewInt(3000000000))
 
@@ -274,7 +268,6 @@ func TestSequential_AdvanceEpoch(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 
-	net.EXPECT().GetActiveNodes().Return(nil)
 	net.EXPECT().AdvanceEpoch(1).Return(nil)
 	// DialRandomRpc returns error so waitForBlockProduction is skipped.
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
@@ -295,7 +288,6 @@ func TestSequential_AdvanceEpoch(t *testing.T) {
 func TestSequential_Check(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().GetActiveNodes().Return(nil)
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 	checker := checking.NewMockChecker(ctrl)
 
@@ -324,7 +316,6 @@ func TestSequential_Check(t *testing.T) {
 func TestSequential_ContextCancellation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().GetActiveNodes().Return(nil)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // Cancel immediately.
@@ -350,19 +341,17 @@ func TestSequential_MultiInstanceNode(t *testing.T) {
 	node1 := driver.NewMockNode(ctrl)
 	node2 := driver.NewMockNode(ctrl)
 
-	net.EXPECT().GetActiveNodes().Return(nil)
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 	node1.EXPECT().GetLabel().Return("validators-0").AnyTimes()
 	node1.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 	node2.EXPECT().GetLabel().Return("validators-1").AnyTimes()
 	node2.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 
-	gomock.InOrder(
-		registry.EXPECT().registerNewValidator().Return(2, nil),
-		net.EXPECT().CreateNode(gomock.Any()).Return(node1, nil),
-		registry.EXPECT().registerNewValidator().Return(3, nil),
-		net.EXPECT().CreateNode(gomock.Any()).Return(node2, nil),
-	)
+	// Validators are registered sequentially, then nodes created in parallel.
+	first := registry.EXPECT().registerNewValidator().Return(2, nil)
+	registry.EXPECT().registerNewValidator().Return(3, nil).After(first)
+	net.EXPECT().CreateNode(gomock.Any()).Return(node1, nil)
+	net.EXPECT().CreateNode(gomock.Any()).Return(node2, nil)
 
 	instances := 2
 	scenario := parser.SequentialScenario{
@@ -383,10 +372,115 @@ func TestSequential_MultiInstanceNode(t *testing.T) {
 	}
 }
 
+func TestExecStopNode_SingleInstanceSuffix(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	state := &sequentialState{
+		nodes: map[string]driver.Node{
+			"validator-A-0": node,
+		},
+	}
+
+	step := &parser.Step{
+		Function:   parser.FuncStopNode,
+		Identifier: "validator-A",
+	}
+
+	net.EXPECT().RemoveNode(node).Return(nil)
+	node.EXPECT().Stop(gomock.Any()).Return(nil)
+	node.EXPECT().Cleanup(gomock.Any()).Return(nil)
+
+	if err := execStopNode(t.Context(), step, net, state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, ok := state.nodes["validator-A-0"]; ok {
+		t.Fatalf("expected node validator-A-0 to be removed from state")
+	}
+}
+
+func TestExecStopNode_MultipleInstances(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	node0 := driver.NewMockNode(ctrl)
+	node1 := driver.NewMockNode(ctrl)
+	other := driver.NewMockNode(ctrl)
+
+	state := &sequentialState{
+		nodes: map[string]driver.Node{
+			"validators-0": node0,
+			"validators-1": node1,
+			"other":        other,
+		},
+	}
+
+	step := &parser.Step{
+		Function:   parser.FuncStopNode,
+		Identifier: "validators",
+	}
+
+	net.EXPECT().RemoveNode(node0).Return(nil)
+	node0.EXPECT().Stop(gomock.Any()).Return(nil)
+	node0.EXPECT().Cleanup(gomock.Any()).Return(nil)
+
+	net.EXPECT().RemoveNode(node1).Return(nil)
+	node1.EXPECT().Stop(gomock.Any()).Return(nil)
+	node1.EXPECT().Cleanup(gomock.Any()).Return(nil)
+
+	if err := execStopNode(t.Context(), step, net, state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, ok := state.nodes["validators-0"]; ok {
+		t.Fatalf("expected node validators-0 to be removed from state")
+	}
+	if _, ok := state.nodes["validators-1"]; ok {
+		t.Fatalf("expected node validators-1 to be removed from state")
+	}
+	if _, ok := state.nodes["other"]; !ok {
+		t.Fatalf("expected unrelated node to remain in state")
+	}
+}
+
+func TestExecStopNode_IgnoresNonNumericSuffix(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	node := driver.NewMockNode(ctrl)
+	unrelated := driver.NewMockNode(ctrl)
+
+	state := &sequentialState{
+		nodes: map[string]driver.Node{
+			"validator-0":     node,
+			"validator-extra": unrelated,
+		},
+	}
+
+	step := &parser.Step{
+		Function:   parser.FuncStopNode,
+		Identifier: "validator",
+	}
+
+	net.EXPECT().RemoveNode(node).Return(nil)
+	node.EXPECT().Stop(gomock.Any()).Return(nil)
+	node.EXPECT().Cleanup(gomock.Any()).Return(nil)
+
+	if err := execStopNode(t.Context(), step, net, state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, ok := state.nodes["validator-0"]; ok {
+		t.Fatalf("expected validator-0 to be removed")
+	}
+	if _, ok := state.nodes["validator-extra"]; !ok {
+		t.Fatalf("expected validator-extra to remain (non-numeric suffix)")
+	}
+}
+
 func TestSequential_RunAndCaptureEventExecution_CapturesAllSteps(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().GetActiveNodes().Return(nil)
 
 	scenario := parser.SequentialScenario{
 		Name:        "Capture",
@@ -401,6 +495,7 @@ func TestSequential_RunAndCaptureEventExecution_CapturesAllSteps(t *testing.T) {
 		t.Context(),
 		net,
 		&scenario,
+		nil,
 		nil,
 	)
 	if err != nil {

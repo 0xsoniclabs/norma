@@ -39,7 +39,7 @@ func TestBls12AddApplication(t *testing.T) {
 			Allegro: new(true),
 		},
 	}
-	net, err := local.NewLocalNetwork(t.Context(), &driver.NetworkConfig{
+	net, err := local.NewLocalLegacyNetwork(t.Context(), &driver.NetworkConfig{
 		Validators:   driver.DefaultValidators(t.Name()),
 		NetworkRules: rules,
 	})
