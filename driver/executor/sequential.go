@@ -221,7 +221,7 @@ func executeStep(
 	case parser.FuncStopNode:
 		return execStopNode(ctx, step, net, state)
 	case parser.FuncUndelegate:
-		return execUndelegate(step, registry, state)
+		return execUndelegate(step, net, registry, state)
 	case parser.FuncRunApp:
 		return execRunApp(ctx, step, net, state)
 	case parser.FuncStopApp:
@@ -322,7 +322,7 @@ func execStartNode(
 				stakeAmount = *step.Stake
 			}
 			if id, ok := state.validatorIds[instanceName]; ok {
-				// Use pre-assigned ID (genesis validator or rejoin).
+				// Reuse existing ID (genesis validator or rejoin).
 				validatorIds[instance] = &id
 			} else if isRejoin {
 				return fmt.Errorf("validator %s is rejoining but has no preserved validator ID",
@@ -335,7 +335,6 @@ func execStartNode(
 						instanceName, err,
 					)
 				}
-				// Use pre-assigned ID (genesis validator or rejoin).
 				validatorIds[instance] = &id
 			}
 		}
@@ -505,6 +504,7 @@ func execStopNode(
 // execUndelegate undelegates stake from one or more validator nodes.
 func execUndelegate(
 	step *parser.Step,
+	net driver.Network,
 	registry validatorRegistry,
 	state *sequentialState,
 ) error {
@@ -514,15 +514,16 @@ func execUndelegate(
 			node, ok = state.nodes[target.Node+"-0"]
 			if !ok {
 				return fmt.Errorf("node %q not found in active nodes", target.Node)
-			}
-			// Ensure it is truly a single-instance node. If
-			// other numbered instances exist, require an
-			// explicit instance name.
-			if hasMultipleInstances(state, target.Node) {
-				return fmt.Errorf(
-					"node %q has multiple instances; use an explicit instance name (e.g. %q)",
-					target.Node, target.Node+"-0",
-				)
+			} else {
+				// Ensure it is truly a single-instance node. If
+				// other numbered instances exist, require an
+				// explicit instance name.
+				if hasMultipleInstances(state, target.Node) {
+					return fmt.Errorf(
+						"node %q has multiple instances; use an explicit instance name (e.g. %q)",
+						target.Node, target.Node+"-0",
+					)
+				}
 			}
 		}
 		id := node.GetValidatorId()

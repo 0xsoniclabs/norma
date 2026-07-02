@@ -143,20 +143,34 @@ func TestSequential_UndelegateSingleInstanceWithSuffix(t *testing.T) {
 	registry := NewMockvalidatorRegistry(ctrl)
 	node := driver.NewMockNode(ctrl)
 
-	// Simulate a bootstrap validator stored with "-0" suffix.
-	node.EXPECT().GetLabel().Return("heavy-0").AnyTimes()
-	net.EXPECT().GetActiveNodes().Return([]driver.Node{node})
-
-	validatorId := 1
-	node.EXPECT().GetValidatorId().Return(&validatorId)
-	registry.EXPECT().unregisterValidator(validatorId, uint64(0)).Return(nil)
 	net.EXPECT().DialRandomRpc().
 		Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	node.EXPECT().GetLabel().Return("heavy-0").AnyTimes()
+	node.EXPECT().DialRpc(gomock.Any()).
+		Return(nil, fmt.Errorf("not ready")).AnyTimes()
 
+	validatorId := 2
+	gomock.InOrder(
+		registry.EXPECT().registerNewValidator(uint64(0)).
+			Return(validatorId, nil),
+		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
+		node.EXPECT().GetValidatorId().Return(&validatorId),
+		registry.EXPECT().
+			unregisterValidator(validatorId, uint64(0)).Return(nil),
+	)
+
+	instances := 1
 	scenario := parser.SequentialScenario{
-		Name:             "Undelegate Bootstrap",
+		Name:             "Undelegate Single Instance With Suffix",
+		Description:      "Test scenario.",
 		DisableEndChecks: true,
 		Steps: []parser.Step{
+			{
+				Function:   parser.FuncStartNode,
+				Identifier: "heavy",
+				NodeType:   "validator",
+				Instances:  &instances,
+			},
 			{
 				Function:          parser.FuncUndelegate,
 				UndelegateTargets: []parser.UndelegateTarget{{Node: "heavy"}},
@@ -171,47 +185,77 @@ func TestSequential_UndelegateSingleInstanceWithSuffix(t *testing.T) {
 	}
 }
 
-func TestSequential_UndelegateMultiInstanceValidator_ReturnsError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	net := driver.NewMockNetwork(ctrl)
-	registry := NewMockvalidatorRegistry(ctrl)
-	node0 := driver.NewMockNode(ctrl)
-	node1 := driver.NewMockNode(ctrl)
-
-	net.EXPECT().GetActiveNodes().Return(nil)
-	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
-	node0.EXPECT().GetLabel().Return("validators-0").AnyTimes()
-	node0.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
-	node1.EXPECT().GetLabel().Return("validators-1").AnyTimes()
-	node1.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
-
-	instances := 2
-	gomock.InOrder(
-		registry.EXPECT().registerNewValidator(gomock.Any()).Return(2, nil),
-		registry.EXPECT().registerNewValidator(gomock.Any()).Return(3, nil),
-		net.EXPECT().CreateNode(gomock.Any()).Return(node0, nil).AnyTimes(),
-		net.EXPECT().CreateNode(gomock.Any()).Return(node1, nil).AnyTimes(),
-	)
-
-	scenario := parser.SequentialScenario{
-		Name: "Undelegate Multi Instance",
-		Steps: []parser.Step{
-			{
-				Function:   parser.FuncStartNode,
-				Identifier: "validators",
-				NodeType:   "validator",
-				Instances:  &instances,
-			},
-			{
-				Function:          parser.FuncUndelegate,
-				UndelegateTargets: []parser.UndelegateTarget{{Node: "validators"}},
-			},
+func TestSequential_UndelegateMultiInstance(t *testing.T) {
+	cases := map[string]struct {
+		target    string
+		expectErr bool
+	}{
+		"base name returns error": {
+			target:    "validators",
+			expectErr: true,
+		},
+		"explicit instance name succeeds": {
+			target:    "validators-0",
+			expectErr: false,
 		},
 	}
 
-	err := runSequential(t.Context(), net, &scenario, nil, registry)
-	if err == nil {
-		t.Fatal("expected error when undelegating multi-instance validator by base name, got nil")
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			net := driver.NewMockNetwork(ctrl)
+			registry := NewMockvalidatorRegistry(ctrl)
+			node0 := driver.NewMockNode(ctrl)
+			node1 := driver.NewMockNode(ctrl)
+
+			net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+			node0.EXPECT().GetLabel().Return("validators-0").AnyTimes()
+			node0.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+			node1.EXPECT().GetLabel().Return("validators-1").AnyTimes()
+			node1.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+
+			instances := 2
+			registry.EXPECT().registerNewValidator(gomock.Any()).Return(2, nil)
+			registry.EXPECT().registerNewValidator(gomock.Any()).Return(3, nil)
+			net.EXPECT().CreateNode(gomock.Any()).DoAndReturn(func(config *driver.NodeConfig) (driver.Node, error) {
+				if config.Name == "validators-0" {
+					return node0, nil
+				}
+				return node1, nil
+			}).Times(2)
+
+			if !tc.expectErr {
+				validatorId0 := 2
+				node0.EXPECT().GetValidatorId().Return(&validatorId0)
+				registry.EXPECT().unregisterValidator(validatorId0, uint64(0)).Return(nil)
+			}
+
+			scenario := parser.SequentialScenario{
+				Name:             "Undelegate Multi Instance",
+				Description:      "Test scenario.",
+				DisableEndChecks: true,
+				Steps: []parser.Step{
+					{
+						Function:   parser.FuncStartNode,
+						Identifier: "validators",
+						NodeType:   "validator",
+						Instances:  &instances,
+					},
+					{
+						Function:          parser.FuncUndelegate,
+						UndelegateTargets: []parser.UndelegateTarget{{Node: tc.target}},
+					},
+				},
+			}
+
+			err := runSequential(t.Context(), net, &scenario, nil, registry)
+			if tc.expectErr && err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !tc.expectErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 
