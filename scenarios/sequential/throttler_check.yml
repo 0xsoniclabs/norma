@@ -1,0 +1,32 @@
+Name: Release Features Event Throttler Load With Different Stakes
+
+Description: >-
+  Verifies that the event throttler correctly limits event emission
+  for minor validators under asymmetric stakes. The dominant validator
+  produces the majority of events while minor validator is throttled.
+
+Scenario:
+  - startNode: validator-dominant
+    type: validator
+    stake: 9_000_000
+    extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag" # required for event throttler check
+
+  - startNode: validator-non-dominant
+    type: validator
+    stake: 1_000_000
+    extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
+    instances: 2
+
+  - runApp: load
+    type: counter
+    users: 30
+    rate:
+      constant: 15
+
+  - waitFor: 45s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - eventThrottled:
+          ceiling: 10
