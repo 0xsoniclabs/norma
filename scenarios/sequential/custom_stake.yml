@@ -44,4 +44,3 @@ Scenario:
       stake: 500_000
 
   - stopNode: light-0
-  

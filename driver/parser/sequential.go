@@ -191,12 +191,13 @@ type Step struct {
 	Identifier string
 
 	// Node parameters
-	NodeType   string // "validator", "observer", "rpc"
-	ImageName  string
-	DataVolume string
-	Stake      *uint64
-	Instances  *int
-	Failing    bool
+	NodeType       string // "validator", "observer", "rpc"
+	ImageName      string
+	DataVolume     string
+	Stake          *uint64
+	Instances      *int
+	Failing        bool
+	ExtraArguments string
 
 	// App parameters
 	AppType string
@@ -386,19 +387,20 @@ var stepFunctionDescriptions = map[StepFunction]string{
 
 // paramDescriptions provides a human-readable description for each parameter key.
 var paramDescriptions = map[string]string{
-	"type":       "Node type (\"validator\", \"observer\", \"rpc\") for startNode; application type for runApp.",
-	"imageName":  "Docker image name to use for the node.",
-	"dataVolume": "Docker volume name to mount as the node data directory.",
-	"stake":      "Stake in S (uint64). Defaults to 5,000,000 S during node start and the full self-stake when undelegating.",
-	"instances":  "Number of node instances to start.",
-	"failing":    "When true, the step is expected to fail; a passing result is treated as an error.",
-	"users":      "Number of concurrent user accounts the application should simulate.",
-	"rate":       "Transaction rate configuration for the application.",
+	"type":           "Node type (\"validator\", \"observer\", \"rpc\") for startNode; application type for runApp.",
+	"imageName":      "Docker image name to use for the node.",
+	"dataVolume":     "Docker volume name to mount as the node data directory.",
+	"stake":          "Stake in S (uint64). Defaults to 5,000,000 S during node start and the full self-stake when undelegating.",
+	"instances":      "Number of node instances to start.",
+	"failing":        "When true, the step is expected to fail; a passing result is treated as an error.",
+	"extraArguments": "Extra command line arguments for sonicd.",
+	"users":          "Number of concurrent user accounts the application should simulate.",
+	"rate":           "Transaction rate configuration for the application.",
 }
 
 // allowedParams defines which parameter keys are valid for each step function.
 var allowedParams = map[StepFunction][]string{
-	FuncStartNode:    {"type", "imageName", "dataVolume", "stake", "instances", "failing"},
+	FuncStartNode:    {"type", "imageName", "dataVolume", "stake", "instances", "failing", "extraArguments"},
 	FuncStopNode:     {},
 	FuncRunApp:       {"type", "users", "rate"},
 	FuncStopApp:      {},
@@ -460,6 +462,12 @@ func (s *Step) parseParam(key string, val *yaml.Node) error {
 			return fmt.Errorf("invalid failing value: %w", err)
 		}
 		s.Failing = v
+	case "extraArguments":
+		var v string
+		if err := val.Decode(&v); err != nil {
+			return fmt.Errorf("invalid extraArguments value: %w", err)
+		}
+		s.ExtraArguments = v
 	case "users":
 		var v int
 		if err := val.Decode(&v); err != nil {

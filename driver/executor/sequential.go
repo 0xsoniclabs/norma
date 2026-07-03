@@ -346,12 +346,13 @@ func execStartNode(
 		instance := instance
 		g.Go(func() error {
 			node, err := net.CreateNode(&driver.NodeConfig{
-				Name:        instanceNames[instance],
-				Failing:     step.Failing,
-				Image:       image,
-				Validator:   isValidator,
-				ValidatorId: validatorIds[instance],
-				DataVolume:  dataVolumePtr(step.DataVolume),
+				Name:           instanceNames[instance],
+				Failing:        step.Failing,
+				Image:          image,
+				Validator:      isValidator,
+				ValidatorId:    validatorIds[instance],
+				DataVolume:     dataVolumePtr(step.DataVolume),
+				ExtraArguments: step.ExtraArguments,
 			})
 			if err != nil {
 				return fmt.Errorf(
