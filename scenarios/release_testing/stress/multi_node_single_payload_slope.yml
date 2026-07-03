@@ -1,9 +1,9 @@
-# Summary: Multi-validator stress test with one transaction payload and sloping load.
-# Expected outcomes:
-# - A 4-validator network sustains rising erc20 traffic.
-# - The network remains live while throughput pressure increases.
-
 Name: Release Stress Multi Node Single Payload Slope
+
+Description: >-
+  Multi-validator stress test with one transaction payload and
+  sloping load. The network remains live while throughput pressure
+  increases.
 
 Scenario:
   - startNode: validator-old

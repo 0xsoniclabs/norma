@@ -1,9 +1,9 @@
-# Summary: Verify a validator set with mixed client versions (v2.1.6 and local) sustains normal load for 60 seconds.
-# Expectations:
-# - The mixed-version validator network remains online for the full 60 seconds.
-# - Blocks continue to be produced and block hashes remain consistent across nodes.
-
 Name: Release Validators Mixed Versions v2.1.6 and Local
+
+Description: >-
+  Verifies a validator set with mixed client versions (v2.1.6 and
+  local) sustains normal load for 60 seconds with consistent block
+  hashes.
 
 Scenario:
   - startNode: validator-v216

@@ -1,10 +1,8 @@
-# Summary: Toggle GasSubsidies off and on while keeping the network live.
-# Expected outcomes:
-# - GasSubsidies can be disabled and enabled again at runtime.
-# - Load generators are stopped between disable and re-enable.
-# - Subsidies traffic runs again after re-enabling the feature.
-
 Name: Release Rules Enable Subsidies
+
+Description: >-
+  Toggles GasSubsidies off and on while keeping the network live.
+  Subsidies traffic runs again after re-enabling the feature.
 
 InitialNetworkRules:
   Upgrades:

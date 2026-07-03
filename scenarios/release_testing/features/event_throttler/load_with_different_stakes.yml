@@ -1,13 +1,9 @@
-# This scenario checks that nodes with different stakes behave correctly with
-# the event throttler enabled. The dominant validator should suppress events
-# from minor validators, while minor validators should still be able to produce
-# events at a reduced rate.
-# Expected outcomes:
-# - The dominant validator produces the majority of events.
-# - Minor validators with less stake are throttled and emit fewer events.
-# - The network remains live under sustained load with asymmetric stakes.
-
 Name: Release Features Event Throttler Load With Different Stakes
+
+Description: >-
+  Verifies that the event throttler correctly limits event emission
+  for minor validators under asymmetric stakes. The dominant validator
+  produces the majority of events while minor validators are throttled.
 
 Scenario:
   - startNode: validator-heavy

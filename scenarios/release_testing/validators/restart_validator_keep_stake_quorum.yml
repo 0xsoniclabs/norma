@@ -1,9 +1,8 @@
-# Summary: Verify stopping and restarting one validator without undelegating stake keeps the network alive due to remaining quorum.
-# Expectations:
-# - While one validator is offline, the remaining online stake keeps consensus running.
-# - After restart, the validator rejoins and the network remains healthy through 60 seconds of normal load.
-
 Name: Release Validator Restart Keep Stake Quorum
+
+Description: >-
+  Verifies stopping and restarting one validator without undelegating
+  stake keeps the network alive due to remaining quorum.
 
 Scenario:
   - startNode: validator-stable
@@ -27,8 +26,9 @@ Scenario:
 
   - waitFor: 30s
 
-  - checkBlocksProduced:
-    tolerance: 10
+  - checks:
+      - blocksProduced:
+          tolerance: 10
 
   - startNode: validator-transient
     type: validator

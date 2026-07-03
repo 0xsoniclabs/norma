@@ -1,12 +1,9 @@
-# This scenario tests the event throttler with mixed feature flags enabled and disabled.
-# Some nodes have the throttler enabled while others have it disabled, and we want
-# to ensure that the network behaves correctly in this mixed configuration.
-# Expected outcomes:
-# - Validators with the throttler enabled suppress events for non-dominant validators.
-# - Validators with the throttler disabled emit events at full rate regardless of stake.
-# - The network remains live and produces consistent blocks throughout.
-
 Name: Release Features Event Throttler Mixed Flags
+
+Description: >-
+  Tests event throttler behavior with mixed feature flags. Some nodes
+  have the throttler enabled while others do not, verifying the network
+  remains live and produces consistent blocks in mixed configuration.
 
 Scenario:
   - startNode: validator-dominant

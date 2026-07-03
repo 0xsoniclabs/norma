@@ -1,10 +1,9 @@
-# Summary: Verify supermajority liveness across a mixed v2.1.6/local validator set when Brio is enabled.
-# Expected outcomes:
-# - After Brio activation, the v2.1.6 validator can fork/fail as expected.
-# - The sonic:local supermajority keeps the network online.
-# - Brio-era load executes while block production continues.
-
 Name: Liveness Supermajority After Brio Fork v2.1.6 Local
+
+Description: >-
+  Verifies supermajority liveness across a mixed v2.1.6/local
+  validator set when Brio is enabled. The sonic:local supermajority
+  keeps the network online while Brio-era load executes.
 
 InitialNetworkRules:
   Upgrades:

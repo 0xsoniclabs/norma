@@ -1,14 +1,10 @@
-# This scenario verifies that a network in single proposer mode recovers
-# after a blackout (enough validators stopped to halt consensus).
-# Expected outcomes:
-# - Network starts in single proposer mode with multiple validators.
-# - Sufficient validators are stopped to halt the network.
-# - Blocks halt while the network is down.
-# - Validators are restarted and block production resumes.
-
 Name: Release Features Single Proposer Network Recovers From Blackout
 
-# End-of-scenario checks disabled because the network is intentionally halted.
+Description: >-
+  Verifies that a network in single proposer mode recovers after
+  a blackout caused by stopping enough validators to halt consensus.
+  Restarting validators restores block production.
+
 DisableEndChecks: true
 
 InitialNetworkRules:

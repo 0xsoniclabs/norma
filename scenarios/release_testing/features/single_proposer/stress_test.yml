@@ -1,12 +1,9 @@
-# This scenario stress-tests single proposer mode under heavy transaction load
-# with multiple validators. More validators increase consensus overhead, making
-# this a more demanding test for the single proposer to coordinate.
-# Expected outcomes:
-# - The network handles sustained high load in single proposer mode.
-# - Block production remains consistent across all validators.
-# - No hash divergence or excessive height drift under stress.
-
 Name: Release Features Single Proposer Stress Test
+
+Description: >-
+  Stress-tests single proposer mode under heavy transaction load
+  with multiple validators. Block production remains consistent and
+  no hash divergence occurs under stress.
 
 InitialNetworkRules:
   Upgrades:

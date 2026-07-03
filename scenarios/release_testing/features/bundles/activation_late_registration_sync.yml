@@ -1,10 +1,10 @@
-# Summary: Validate coherent bundle activation when a validator is registered after bundles are enabled and already executing.
-# Expected outcomes:
-# - Network rules switch to enable Brio and TransactionBundles at runtime.
-# - Subsidized bundle traffic is accepted and blocks keep rolling.
-# - A validator started after activation joins, connects, and stays in sync with existing validators.
-
 Name: Release Features Bundles Activation Late Registration Sync
+
+Description: >-
+  Validates coherent bundle activation when a validator is registered
+  after bundles are enabled and already executing. The network enables
+  Brio and TransactionBundles at runtime, subsidized bundle traffic is
+  accepted, and a late-joining validator stays in sync.
 
 InitialNetworkRules:
   Upgrades:

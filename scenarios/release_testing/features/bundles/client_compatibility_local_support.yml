@@ -1,10 +1,10 @@
-# Summary: Validate bundle-processing compatibility among all currently bundle-capable clients.
-# Expected outcomes:
-# - Validators using the currently supported bundle-capable image process subsidized bundles concurrently.
-# - Nodes remain synchronized while mixed traffic includes bundle transactions.
-# - Block production remains stable throughout execution.
-
 Name: Release Features Bundles Client Compatibility Local Support
+
+Description: >-
+  Validates bundle-processing compatibility among all currently
+  bundle-capable clients. Validators process subsidized bundles
+  concurrently while nodes remain synchronized and block production
+  stays stable.
 
 InitialNetworkRules:
   Upgrades:

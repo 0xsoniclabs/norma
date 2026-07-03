@@ -1,10 +1,9 @@
-# Summary: Verify liveness while progressively migrating four validators from v2.1.6 to local without undelegation.
-# Expected outcomes:
-# - Each validator restarts as sonic:local using its persisted data volume.
-# - No undelegation is performed during migration.
-# - Block production continues throughout every stop/restart window.
-
 Name: Liveness Progressive Validator State Migration Quorum
+
+Description: >-
+  Verifies liveness while progressively migrating four validators
+  from v2.1.6 to local without undelegation. Block production
+  continues throughout every stop/restart window.
 
 Scenario:
   - startNode: validator-1

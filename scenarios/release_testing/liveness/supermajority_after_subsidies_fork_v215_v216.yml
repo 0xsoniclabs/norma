@@ -1,10 +1,9 @@
-# Summary: Verify supermajority liveness across a mixed v2.1.5/v2.1.6 validator set after enabling GasSubsidies.
-# Expected outcomes:
-# - After GasSubsidies is enabled, the v2.1.5 validator can fork/fail as expected.
-# - The v2.1.6 supermajority keeps the network producing blocks.
-# - Subsidies load starts only after the feature is enabled.
-
 Name: Liveness Supermajority After Subsidies Fork v2.1.5 v2.1.6
+
+Description: >-
+  Verifies supermajority liveness across a mixed v2.1.5/v2.1.6
+  validator set after enabling GasSubsidies. The v2.1.6 supermajority
+  keeps the network producing blocks.
 
 InitialNetworkRules:
   Upgrades:

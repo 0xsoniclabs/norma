@@ -26,7 +26,7 @@ Create clear, valid, and test-focused scenario files for Norma.
 - Do not add `advanceEpoch` steps unless the prompt explicitly requires epoch transitions.
 - If explicit checks are requested, place them carefully at the right points in the flow (not only at the end).
 - When the prompt asks to verify specific expectations, add explicit checks that directly validate those expectations.
-- If the expectation is that quorum is maintained while a validator is offline, use the blocks rolling check (`checkBlocksProduced`) during the offline window.
+- If the expectation is that quorum is maintained while a validator is offline, use a `checks` step with `blocksProduced` during the offline window.
 - Do not add `stopApp` at the end by default; include `stopApp` only when the prompt explicitly requests app shutdown.
 
 ## Quality Checklist

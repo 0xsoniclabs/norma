@@ -1,9 +1,9 @@
-# Summary: Single-validator stress test with one transaction payload and sloping load.
-# Expected outcomes:
-# - A single validator sustains rising counter traffic.
-# - Block production remains active during the stress window.
-
 Name: Release Stress Single Node Single Payload Slope
+
+Description: >-
+  Single-validator stress test with one transaction payload and
+  sloping load. Block production remains active during the stress
+  window.
 
 Scenario:
   - startNode: validator-0

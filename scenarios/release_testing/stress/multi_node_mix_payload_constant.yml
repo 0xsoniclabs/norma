@@ -1,9 +1,9 @@
-# Summary: Multi-validator stress test with mixed transaction payloads at constant rates.
-# Expected outcomes:
-# - Mixed counter, erc20, and uniswap traffic runs concurrently.
-# - The network remains live and keeps producing blocks under mixed constant load.
-
 Name: Release Stress Multi Node Mix Payload Constant
+
+Description: >-
+  Multi-validator stress test with mixed transaction payloads
+  (counter, erc20, uniswap) at constant rates. The network remains
+  live under sustained mixed load.
 
 Scenario:
   - startNode: validator-old

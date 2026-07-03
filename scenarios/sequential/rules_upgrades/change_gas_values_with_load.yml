@@ -7,11 +7,14 @@
 Name: Rules Update Gas Values With Load
 
 InitialNetworkRules:
-  UPGRADES_SONIC: true
-  UPGRADES_ALLEGRO: true
-  UPGRADES_BRIO: true
-  MAX_BLOCK_GAS: 30000000
-  MAX_EPOCH_GAS: 1000000000
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: true
+  Blocks:
+    MaxBlockGas: 30000000
+  Epochs:
+    MaxEpochGas: 1000000000
 
 Scenario:
   - startNode: validator-main
@@ -40,8 +43,13 @@ Scenario:
   - waitFor: 20s
 
   - updateRules:
-      MAX_BLOCK_GAS: 25000000
-      MAX_EPOCH_GAS: 800000000
-      MIN_BASE_FEE: 1000000000
+      Blocks:
+        MaxBlockGas: 25000000
+      Epochs:
+        MaxEpochGas: 800000000
+      Economy:
+        MinBaseFee: 1000000000
+
+  - waitForEpoch
 
   - waitFor: 40s

@@ -1,10 +1,8 @@
-# Summary: Enable Brio and verify Brio-dependent large contract load.
-# Expected outcomes:
-# - Brio is enabled from a Brio-disabled baseline.
-# - Network remains live across activation.
-# - Large-contract traffic runs after Brio activation.
-
 Name: Release Rules Enable Brio
+
+Description: >-
+  Enables Brio from a Brio-disabled baseline and verifies network
+  liveness plus Brio-dependent large contract load after activation.
 
 InitialNetworkRules:
   Upgrades:

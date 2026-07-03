@@ -7,10 +7,12 @@
 Name: Rules Upgrade Sonic To Allegro Mixed Versions
 
 InitialNetworkRules:
-  UPGRADES_SONIC: true
-  UPGRADES_ALLEGRO: false
-  UPGRADES_BRIO: false
-  MAX_EPOCH_DURATION: 20s
+  Upgrades:
+    Sonic: true
+    Allegro: false
+    Brio: false
+  Epochs:
+    MaxEpochDuration: 20s
 
 Scenario:
   - startNode: validator-local
@@ -37,7 +39,10 @@ Scenario:
   - waitFor: 20s
 
   - updateRules:
-      UPGRADES_ALLEGRO: true
+      Upgrades:
+        Allegro: true
+
+  - waitForEpoch
 
   - runApp: allegro-bls12add
     type: bls12add

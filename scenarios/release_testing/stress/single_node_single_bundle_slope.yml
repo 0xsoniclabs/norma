@@ -1,9 +1,9 @@
-# Summary: Single-validator stress test with subsidized bundle traffic and sloping load.
-# Expected outcomes:
-# - A single validator sustains rising subsidized bundle traffic.
-# - Transaction bundles remain active with required upgrades enabled at genesis.
-
 Name: Release Stress Single Node Single Bundle Slope
+
+Description: >-
+  Single-validator stress test with subsidized bundle traffic and
+  sloping load. Transaction bundles remain active with required
+  upgrades enabled at genesis.
 
 InitialNetworkRules:
   Upgrades:

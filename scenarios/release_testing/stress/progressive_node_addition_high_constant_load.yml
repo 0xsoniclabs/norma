@@ -1,10 +1,9 @@
-# Summary: Progressive stress test under high constant load while validators are incorporated over time.
-# Expected outcomes:
-# - The network starts under high sustained mixed load.
-# - Additional validators join progressively with observation windows between joins.
-# - Block production remains active throughout the progressive scaling sequence.
-
 Name: Release Stress Progressive Node Addition High Constant Load
+
+Description: >-
+  Progressive stress test under high constant load while validators
+  are incorporated over time. Block production remains active
+  throughout the progressive scaling sequence.
 
 Scenario:
   - startNode: validator-0

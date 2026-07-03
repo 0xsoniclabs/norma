@@ -7,9 +7,11 @@
 Name: Rules Update Epoch Duration With Load
 
 InitialNetworkRules:
-  UPGRADES_SONIC: true
-  UPGRADES_ALLEGRO: true
-  MAX_EPOCH_DURATION: 30s
+  Upgrades:
+    Sonic: true
+    Allegro: true
+  Epochs:
+    MaxEpochDuration: 30s
 
 Scenario:
   - startNode: validator-main
@@ -32,6 +34,9 @@ Scenario:
   - waitFor: 20s
 
   - updateRules:
-      MAX_EPOCH_DURATION: 6s
+      Epochs:
+        MaxEpochDuration: 6s
+
+  - waitForEpoch
 
   - waitFor: 40s

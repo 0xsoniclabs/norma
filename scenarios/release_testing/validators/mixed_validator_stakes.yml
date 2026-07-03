@@ -1,9 +1,8 @@
-# Summary: Verify a validator set with mixed stake weights sustains normal load for 60 seconds.
-# Expectations:
-# - The network remains online and continues producing blocks for the full 60 seconds.
-# - Validators with different stake values participate without causing liveness issues.
-
 Name: Release Validators Mixed Stakes
+
+Description: >-
+  Verifies a validator set with mixed stake weights sustains normal
+  load for 60 seconds without causing liveness issues.
 
 Scenario:
   - startNode: validator-heavy

@@ -1,9 +1,9 @@
-# Summary: Multi-validator stress test with mixed payloads including subsidized bundles at constant rates.
-# Expected outcomes:
-# - Counter, erc20, and subsidized bundle traffic run concurrently.
-# - The network remains live under sustained mixed constant load.
-
 Name: Release Stress Multi Node Mix Payload Bundle Constant
+
+Description: >-
+  Multi-validator stress test with mixed payloads including
+  subsidized bundles at constant rates. The network remains live
+  under sustained mixed constant load.
 
 InitialNetworkRules:
   Upgrades:

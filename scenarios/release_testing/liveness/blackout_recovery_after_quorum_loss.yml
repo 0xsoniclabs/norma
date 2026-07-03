@@ -1,10 +1,9 @@
-# Summary: Verify network blackout and recovery when quorum is lost after one validator leaves and restored after it rejoins.
-# Expected outcomes:
-# - Stopping one high-stake validator causes block production to halt.
-# - While quorum is lost, the stalled state is explicitly observed.
-# - Restarting the validator restores block production.
-
 Name: Liveness Blackout Recovery After Quorum Loss
+
+Description: >-
+  Verifies network blackout and recovery when quorum is lost after a
+  high-stake validator leaves. Restarting the validator restores block
+  production.
 
 Scenario:
   - startNode: validator-majority

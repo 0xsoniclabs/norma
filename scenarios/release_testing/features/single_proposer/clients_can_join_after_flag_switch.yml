@@ -1,12 +1,9 @@
-# This scenario verifies that new validators can join the network after
-# single proposer mode is enabled at runtime.
-# Expected outcomes:
-# - Initial validators produce blocks normally.
-# - Single proposer mode is activated via updateRules.
-# - A new validator joins after the flag switch and syncs successfully.
-# - Block production continues with the new validator participating.
-
 Name: Release Features Single Proposer Clients Can Join After Flag Switch
+
+Description: >-
+  Verifies that new validators can join the network after single
+  proposer mode is enabled at runtime. A validator joining after the
+  flag switch syncs successfully and block production continues.
 
 InitialNetworkRules:
   Upgrades:

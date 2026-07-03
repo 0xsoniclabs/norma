@@ -1,12 +1,9 @@
-# This scenario verifies that single proposer mode works correctly with
-# validators running different Sonic versions.
-# Expected outcomes:
-# - Validators with different image versions form a network.
-# - Single proposer mode is activated via updateRules.
-# - Block production continues across all version combinations.
-# - Block hashes and heights remain consistent across nodes.
-
 Name: Release Features Single Proposer Mixed Versions
+
+Description: >-
+  Verifies single proposer mode works correctly with validators
+  running different Sonic versions. Block production continues and
+  hashes remain consistent across all version combinations.
 
 InitialNetworkRules:
   Upgrades:

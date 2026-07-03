@@ -1,11 +1,9 @@
-# Summary: Enable GasSubsidies at runtime via a rules update on a mixed-version validator set.
-# Expected outcomes:
-# - Network starts with GasSubsidies disabled and produces blocks normally.
-# - After the rules update enables GasSubsidies, both client versions support the feature.
-# - Subsidies traffic executes successfully after the feature is enabled.
-# - Block production and node synchronization remain stable.
-
 Name: Release Features Subsidies Enable By Rules Update
+
+Description: >-
+  Enables GasSubsidies at runtime via a rules update on a mixed-version
+  validator set. After activation, both client versions support the
+  feature and subsidies traffic executes successfully.
 
 InitialNetworkRules:
   Upgrades:

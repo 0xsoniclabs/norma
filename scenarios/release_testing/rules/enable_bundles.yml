@@ -1,10 +1,8 @@
-# Summary: Toggle TransactionBundles off and on while keeping the network live.
-# Expected outcomes:
-# - TransactionBundles can be disabled and enabled again at runtime.
-# - Load generators are stopped between disable and re-enable.
-# - Subsidized bundle traffic runs again after re-enabling bundles.
-
 Name: Release Rules Enable Bundles
+
+Description: >-
+  Toggles TransactionBundles off and on while keeping the network
+  live. Subsidized bundle traffic runs again after re-enabling.
 
 InitialNetworkRules:
   Upgrades:

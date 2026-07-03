@@ -1,10 +1,8 @@
-# Summary: Enable Allegro and verify network liveness plus Allegro-era traffic.
-# Expected outcomes:
-# - Allegro is enabled from a Sonic-only baseline.
-# - Network remains live before and after activation.
-# - BLS12-Add traffic runs successfully after Allegro is active.
-
 Name: Release Rules Enable Allegro
+
+Description: >-
+  Enables Allegro from a Sonic-only baseline and verifies network
+  liveness plus Allegro-era BLS12-Add traffic after activation.
 
 InitialNetworkRules:
   Upgrades:

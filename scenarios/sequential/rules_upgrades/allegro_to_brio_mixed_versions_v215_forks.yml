@@ -7,10 +7,12 @@
 Name: Rules Upgrade Allegro To Brio Mixed Versions v215 Forks
 
 InitialNetworkRules:
-  UPGRADES_SONIC: true
-  UPGRADES_ALLEGRO: true
-  UPGRADES_BRIO: false
-  MAX_EPOCH_DURATION: 20s
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: false
+  Epochs:
+    MaxEpochDuration: 20s
 
 Scenario:
   - startNode: validator-local
@@ -38,7 +40,10 @@ Scenario:
   - waitFor: 20s
 
   - updateRules:
-      UPGRADES_BRIO: true
+      Upgrades:
+        Brio: true
+
+  - waitForEpoch
 
   - runApp: brio-large-contract
     type: largecontract

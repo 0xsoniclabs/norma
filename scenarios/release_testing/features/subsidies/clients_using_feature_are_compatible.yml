@@ -1,10 +1,9 @@
-# Summary: Validate subsidies compatibility among validators running different client versions.
-# Expected outcomes:
-# - Validators using different supported images process subsidies traffic concurrently.
-# - Nodes remain synchronized while mixed traffic includes subsidized transactions.
-# - Block production remains stable throughout execution.
-
 Name: Release Features Subsidies Client Compatibility
+
+Description: >-
+  Validates subsidies compatibility among validators running different
+  client versions. Nodes remain synchronized while processing mixed
+  subsidized traffic and block production stays stable.
 
 InitialNetworkRules:
   Upgrades:
