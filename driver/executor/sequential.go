@@ -629,6 +629,7 @@ var checkFunctionToCheckerName = map[parser.StepFunction]string{
 	parser.FuncCheckBlockHeights:   "blockHeight",
 	parser.FuncCheckBlocksHalted:   "blocksHalted",
 	parser.FuncCheckBlocksProduced: "blocksRolling",
+	parser.FuncCheckEventThrottled: "eventThrottled",
 	parser.FuncCheckNetworkRules:   "networkRules",
 }
 

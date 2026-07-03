@@ -51,6 +51,7 @@ const (
 	FuncCheckBlockHeights   StepFunction = "blockHeights"
 	FuncCheckBlocksHalted   StepFunction = "blocksHalted"
 	FuncCheckBlocksProduced StepFunction = "blocksProduced"
+	FuncCheckEventThrottled StepFunction = "eventThrottled"
 	FuncCheckNetworkRules   StepFunction = "networkRules"
 )
 
@@ -75,6 +76,7 @@ var allCheckFunctions = [...]StepFunction{
 	FuncCheckBlockHeights,
 	FuncCheckBlocksHalted,
 	FuncCheckBlocksProduced,
+	FuncCheckEventThrottled,
 	FuncCheckNetworkRules,
 }
 
@@ -540,6 +542,7 @@ var checkFunctionDescriptions = map[StepFunction]string{
 	FuncCheckBlockHeights:   "Assert that all nodes are within tolerance of the same block height.",
 	FuncCheckBlocksHalted:   "Assert that block production has halted.",
 	FuncCheckBlocksProduced: "Assert that all nodes have produced blocks within tolerance.",
+	FuncCheckEventThrottled: "Assert that non-dominant validators emit fewer events than the ceiling percentage.",
 	FuncCheckNetworkRules:   "Assert that the active network rules on all nodes match the expected rules patch.",
 }
 
@@ -550,12 +553,13 @@ var checkFunctionParams = map[StepFunction][]string{
 	FuncCheckBlockHeights:   {"tolerance", "failing"},
 	FuncCheckBlocksHalted:   {"failing"},
 	FuncCheckBlocksProduced: {"tolerance", "failing"},
+	FuncCheckEventThrottled: {"ceiling", "failing"},
 	FuncCheckNetworkRules:   {"rules", "failing"},
 }
 
 // checkParamDescriptions provides a human-readable description for each sub-check parameter.
 var checkParamDescriptions = map[string]string{
-	"ceiling":   "Maximum allowed value (float64) for a gas rate check.",
+	"ceiling":   "Maximum allowed threshold (float64); interpretation depends on the check (e.g. gas rate cap, or emission percentage).",
 	"failing":   "When true, the check is expected to fail; a passing result is treated as an error.",
 	"rules":     "Expected network rules patch (NetworkRulesPatch field structure).",
 	"tolerance": "Allowed deviation (int, in blocks) between nodes for a height/production check.",
