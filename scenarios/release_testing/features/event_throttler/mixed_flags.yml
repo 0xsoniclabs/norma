@@ -1,0 +1,42 @@
+# This scenario tests the event throttler with mixed feature flags enabled and disabled.
+# Some nodes have the throttler enabled while others have it disabled, and we want
+# to ensure that the network behaves correctly in this mixed configuration.
+# Expected outcomes:
+# - Validators with the throttler enabled suppress events for non-dominant validators.
+# - Validators with the throttler disabled emit events at full rate regardless of stake.
+# - The network remains live and produces consistent blocks throughout.
+
+Name: Release Features Event Throttler Mixed Flags
+
+Scenario:
+  - startNode: validator-dominant
+    type: validator
+    imageName: "sonic:local"
+    stake: 8000000
+    extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
+
+  - startNode: validator-minor-throttled
+    type: validator
+    imageName: "sonic:local"
+    stake: 1000000
+    extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
+
+  - startNode: validator-minor-unthrottled
+    type: validator
+    imageName: "sonic:local"
+    stake: 1000000
+    extraArguments: "--event-throttler=false --http.api admin,eth,sonic,txpool,dag"
+
+  - runApp: load
+    type: counter
+    users: 20
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - eventThrottled:
+          ceiling: 10

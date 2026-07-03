@@ -1,0 +1,41 @@
+# This scenario checks that nodes with different stakes behave correctly with
+# the event throttler enabled. The dominant validator should suppress events
+# from minor validators, while minor validators should still be able to produce
+# events at a reduced rate.
+# Expected outcomes:
+# - The dominant validator produces the majority of events.
+# - Minor validators with less stake are throttled and emit fewer events.
+# - The network remains live under sustained load with asymmetric stakes.
+
+Name: Release Features Event Throttler Load With Different Stakes
+
+Scenario:
+  - startNode: validator-heavy
+    type: validator
+    imageName: "sonic:local"
+    stake: 7000000
+    extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag" # required for event throttler check
+
+  - startNode: validator-medium
+    type: validator
+    imageName: "sonic:local"
+    stake: 2000000
+    extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
+
+  - startNode: validator-light
+    type: validator
+    imageName: "sonic:local"
+    stake: 1000000
+    extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
+
+  - runApp: load
+    type: counter
+    users: 30
+    rate:
+      constant: 15
+
+  - waitFor: 45s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10

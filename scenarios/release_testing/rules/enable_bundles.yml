@@ -1,0 +1,91 @@
+# Summary: Toggle TransactionBundles off and on while keeping the network live.
+# Expected outcomes:
+# - TransactionBundles can be disabled and enabled again at runtime.
+# - Load generators are stopped between disable and re-enable.
+# - Subsidized bundle traffic runs again after re-enabling bundles.
+
+Name: Release Rules Enable Bundles
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    GasSubsidies: true
+    Brio: true
+    TransactionBundles: true
+
+Scenario:
+  - startNode: validators
+    type: validator
+    imageName: "sonic:local"
+    instances: 3
+
+  - runApp: baseline
+    type: counter
+    users: 20
+    rate:
+      constant: 10
+
+  - runApp: bundles-load
+    type: subsidizedbundle
+    users: 10
+    rate:
+      constant: 5
+
+  - waitFor: 15s
+
+  - updateRules:
+      Upgrades:
+        TransactionBundles: false
+
+  - waitForEpoch
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - networkRules:
+          rules:
+            Upgrades:
+              Sonic: true
+              Allegro: true
+              GasSubsidies: true
+              Brio: true
+              TransactionBundles: false
+
+  - stopApp: bundles-load
+
+  - stopApp: baseline
+
+  - waitFor: 10s
+
+  - updateRules:
+      Upgrades:
+        TransactionBundles: true
+
+  - waitForEpoch
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - networkRules:
+          rules:
+            Upgrades:
+              Sonic: true
+              Allegro: true
+              GasSubsidies: true
+              Brio: true
+              TransactionBundles: true
+
+  - runApp: baseline-reenabled
+    type: counter
+    users: 20
+    rate:
+      constant: 10
+
+  - runApp: bundles-load
+    type: subsidizedbundle
+    users: 10
+    rate:
+      constant: 5
+
+  - waitFor: 20s

@@ -1,0 +1,66 @@
+# This scenario verifies that new validators can join the network after
+# single proposer mode is enabled at runtime.
+# Expected outcomes:
+# - Initial validators produce blocks normally.
+# - Single proposer mode is activated via updateRules.
+# - A new validator joins after the flag switch and syncs successfully.
+# - Block production continues with the new validator participating.
+
+Name: Release Features Single Proposer Clients Can Join After Flag Switch
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    SingleProposerBlockFormation: false
+  Epochs:
+    MaxEpochDuration: 1000s
+
+Scenario:
+  - startNode: validator-initial
+    type: validator
+    imageName: "sonic:local"
+    instances: 3
+
+  - runApp: load
+    type: counter
+    users: 20
+    rate:
+      constant: 10
+
+  - waitFor: 15s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+
+  # Enable single proposer mode.
+  - updateRules:
+      Upgrades:
+        SingleProposerBlockFormation: true
+
+  - advanceEpoch
+
+  - waitFor: 15s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+
+  # Start a new validator after the flag switch.
+  - startNode: validator-late
+    type: validator
+    imageName: "sonic:local"
+
+  - advanceEpoch
+
+  - waitFor: 20s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - blockHashes
+      - blockHeights:
+          tolerance: 5
+
+  - stopApp: load

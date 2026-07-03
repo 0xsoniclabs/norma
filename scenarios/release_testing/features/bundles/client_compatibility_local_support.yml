@@ -1,0 +1,68 @@
+# Summary: Validate bundle-processing compatibility among all currently bundle-capable clients.
+# Expected outcomes:
+# - Validators using the currently supported bundle-capable image process subsidized bundles concurrently.
+# - Nodes remain synchronized while mixed traffic includes bundle transactions.
+# - Block production remains stable throughout execution.
+
+Name: Release Features Bundles Client Compatibility Local Support
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    GasSubsidies: true
+    Brio: true
+    TransactionBundles: true
+
+Scenario:
+  - startNode: validator-local-a
+    type: validator
+    imageName: "sonic:local"
+    stake: 4000000
+
+  - startNode: validator-local-b
+    type: validator
+    imageName: "sonic:local"
+    stake: 3000000
+
+  - startNode: validator-local-c
+    type: validator
+    imageName: "sonic:local"
+    stake: 3000000
+
+  - runApp: baseline
+    type: counter
+    users: 30
+    rate:
+      constant: 15
+
+  - runApp: bundles-load
+    type: subsidizedbundle
+    users: 15
+    rate:
+      constant: 8
+
+  - waitFor: 30s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - blockHashes
+
+  - stopNode: validator-local-c
+
+  - waitFor: 15s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+
+  - startNode: validator-local-c
+    type: validator
+    imageName: "sonic:local"
+
+  - waitFor: 20s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10

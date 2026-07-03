@@ -1,0 +1,59 @@
+# Summary: Enable GasSubsidies at runtime via a rules update on a mixed-version validator set.
+# Expected outcomes:
+# - Network starts with GasSubsidies disabled and produces blocks normally.
+# - After the rules update enables GasSubsidies, both client versions support the feature.
+# - Subsidies traffic executes successfully after the feature is enabled.
+# - Block production and node synchronization remain stable.
+
+Name: Release Features Subsidies Enable By Rules Update
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    GasSubsidies: false
+
+Scenario:
+  - startNode: validator-local
+    type: validator
+    imageName: "sonic:local"
+    stake: 5000000
+
+  - startNode: validator-v216
+    type: validator
+    imageName: "sonic:v2.1.6"
+    stake: 3000000
+
+  - waitFor: 15s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+
+  - updateRules:
+      Upgrades:
+        GasSubsidies: true
+
+  - waitForEpoch
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - networkRules:
+          rules:
+            Upgrades:
+              Sonic: true
+              Allegro: true
+              GasSubsidies: true
+
+  - runApp: subsidies-load
+    type: subsidies
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10

@@ -1,0 +1,47 @@
+# This scenario stress-tests single proposer mode under heavy transaction load
+# with multiple validators. More validators increase consensus overhead, making
+# this a more demanding test for the single proposer to coordinate.
+# Expected outcomes:
+# - The network handles sustained high load in single proposer mode.
+# - Block production remains consistent across all validators.
+# - No hash divergence or excessive height drift under stress.
+
+Name: Release Features Single Proposer Stress Test
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    SingleProposerBlockFormation: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+    imageName: "sonic:local"
+    instances: 5
+
+  - runApp: heavy-load
+    type: counter
+    users: 1000
+    rate:
+      constant: 500
+
+  - waitFor: 60s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - blockHashes
+      - blockHeights:
+          tolerance: 5
+
+  - waitFor: 60s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - blockHashes
+      - blockHeights:
+          tolerance: 5
+
+  - stopApp: heavy-load

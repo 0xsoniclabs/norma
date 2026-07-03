@@ -1,0 +1,81 @@
+# This scenario verifies that a network in single proposer mode recovers
+# after a blackout (enough validators stopped to halt consensus).
+# Expected outcomes:
+# - Network starts in single proposer mode with multiple validators.
+# - Sufficient validators are stopped to halt the network.
+# - Blocks halt while the network is down.
+# - Validators are restarted and block production resumes.
+
+Name: Release Features Single Proposer Network Recovers From Blackout
+
+# End-of-scenario checks disabled because the network is intentionally halted.
+DisableEndChecks: true
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    SingleProposerBlockFormation: true
+
+Scenario:
+  - startNode: validator-1
+    type: validator
+    dataVolume: validator-1-data
+
+  - startNode: validator-2
+    type: validator
+    dataVolume: validator-2-data
+
+  - startNode: validator-3
+    type: validator
+    dataVolume: validator-3-data
+
+  - startNode: validator-4
+    type: validator
+    dataVolume: validator-4-data
+
+  - startNode: validator-5
+    type: validator
+    dataVolume: validator-5-data
+
+  - runApp: load
+    type: counter
+    users: 20
+    rate:
+      constant: 10
+
+  - waitFor: 15s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+
+  # Stop validators to break quorum and halt the network.
+  - stopNode: validator-3
+  - stopNode: validator-4
+  - stopNode: validator-5
+
+  - waitFor: 60s
+
+  - checks:
+      - blocksHalted
+
+  # Restart stopped validators to restore the network.
+  - startNode: validator-4
+    type: validator
+    dataVolume: validator-4-data
+
+  - startNode: validator-5
+    type: validator
+    dataVolume: validator-5-data
+
+  - waitFor: 20s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - blockHashes
+      - blockHeights:
+          tolerance: 5
+
+  - stopApp: load

@@ -1,0 +1,46 @@
+# Summary: Verify stopping and restarting one validator with a migrated persistent data volume keeps the network alive due to remaining quorum.
+# Expectations:
+# - While the validator is offline, the remaining quorum sustains network liveness.
+# - The restarted validator rejoins using the same migrated persistent volume.
+# - The network remains stable for 60 seconds under normal load.
+
+Name: Release Validator Restart with Migrated Volume Quorum
+
+Scenario:
+  - startNode: validator-stable
+    type: validator
+    imageName: "sonic:local"
+    stake: 4500000
+    instances: 2
+
+  - startNode: validator-migrating
+    type: validator
+    imageName: "sonic:v2.1.6"
+    dataVolume: validator-migrating-data
+    stake: 1000000
+
+  - runApp: normal
+    type: counter
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 20s
+
+  - checkBlocksProduced:
+    tolerance: 10
+
+  - stopNode: validator-migrating
+
+  - waitFor: 20s
+
+  - checkBlocksProduced:   this is not working neither, it should have detected that the network halted
+    tolerance: 10
+
+  - startNode: validator-migrating
+    type: validator
+    imageName: "sonic:local"
+    dataVolume: validator-migrating-data
+
+  - waitFor: 20s
+
