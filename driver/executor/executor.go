@@ -351,7 +351,7 @@ func scheduleValidatorEvents(
 					}
 
 					if id := node.GetValidatorId(); id != nil {
-						if err := registry.unregisterValidator(*id); err != nil {
+						if err := registry.unregisterValidator(*id, 0); err != nil {
 							return fmt.Errorf("failed to unregister validator %s; %v", name, err)
 						}
 					}
@@ -374,8 +374,8 @@ func scheduleValidatorEvents(
 // validatorRegistry abstracts how an executor registers and unregisters
 // validator nodes with the network.
 type validatorRegistry interface {
-	registerNewValidator() (int, error)
-	unregisterValidator(validatorId int) error
+	registerNewValidator(stake uint64) (int, error)
+	unregisterValidator(validatorId int, stake uint64) error
 }
 
 // scheduleNodeEvents schedules a number of events covering the life-cycle of a class of
@@ -432,7 +432,7 @@ func scheduleNodeEvents(
 					// instances = 3, client.validatorId = 10 will get 10, 11, 12.
 					var validatorID *int
 					if nodeIsValidator {
-						id, err := registry.registerNewValidator()
+						id, err := registry.registerNewValidator(0)
 						if err != nil {
 							return fmt.Errorf("failed to register validator node; %v", err)
 						}
@@ -526,7 +526,7 @@ func scheduleNodeEvents(
 					// is being shut down, losing the ability to run transactions.
 					if endTime != end && nodeIsValidator {
 						if id := instance.GetValidatorId(); id != nil {
-							if err := registry.unregisterValidator(*id); err != nil {
+							if err := registry.unregisterValidator(*id, 0); err != nil {
 								return fmt.Errorf("failed to unregister validator %s; %v", name, err)
 							}
 						}
@@ -551,13 +551,13 @@ type netBasedValidatorRegistry struct {
 	net driver.Network
 }
 
-func (a netBasedValidatorRegistry) registerNewValidator() (int, error) {
+func (a netBasedValidatorRegistry) registerNewValidator(stake uint64) (int, error) {
 	rpcClient, err := a.net.DialRandomRpc()
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect to RPC; %v", err)
 	}
 	defer rpcClient.Close()
-	id, err := network.RegisterValidatorNode(rpcClient)
+	id, err := network.RegisterValidatorNode(rpcClient, stake)
 	if err != nil {
 		return 0, fmt.Errorf("failed to register validator node; %v", err)
 	}
@@ -565,13 +565,13 @@ func (a netBasedValidatorRegistry) registerNewValidator() (int, error) {
 	return id, nil
 }
 
-func (a netBasedValidatorRegistry) unregisterValidator(validatorId int) error {
+func (a netBasedValidatorRegistry) unregisterValidator(validatorId int, stake uint64) error {
 	rpcClient, err := a.net.DialRandomRpc()
 	if err != nil {
 		return fmt.Errorf("failed to connect to RPC; %v", err)
 	}
 	defer rpcClient.Close()
-	err = network.UnregisterValidatorNode(rpcClient, validatorId)
+	err = network.UnregisterValidatorNode(rpcClient, validatorId, stake)
 	if err != nil {
 		return fmt.Errorf("failed to unregister validator node; %v", err)
 	}

@@ -10,23 +10,38 @@ Description: >-
 Scenario:
   - startNode: heavy
     type: validator
-    stake: 10000000
+    stake: 10_000_000
 
   - startNode: medium
     type: validator
-    stake: 5000000
+    stake: 5_000_000
 
   - startNode: light
     type: validator
-    stake: 1000000
+    stake: 1_000_000
+    instances: 2
 
   - waitFor: 10s
 
   - advanceEpoch
 
+  # partial undelegation
+  - undelegate:
+    - node: heavy
+      stake: 1_000_000
+
+  # full undelegation
   - undelegate: medium
 
   - stopNode: medium
 
   - waitFor: 10s
+
+  # undelegate from multiple nodes
+  - undelegate:
+    - node: light-0
+    - node: light-1
+      stake: 500_000
+
+  - stopNode: light-0
   

@@ -37,7 +37,8 @@ Scenario:
 
   - advanceEpoch
 
-  - undelegate: validator-2
+  - undelegate:
+    - node: validator-2
 
   - stopNode: validator-2
   

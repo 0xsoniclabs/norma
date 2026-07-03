@@ -221,7 +221,7 @@ func executeStep(
 	case parser.FuncStopNode:
 		return execStopNode(ctx, step, net, state)
 	case parser.FuncUndelegate:
-		return execUndelegate(step, registry, state)
+		return execUndelegate(step, net, registry, state)
 	case parser.FuncRunApp:
 		return execRunApp(ctx, step, net, state)
 	case parser.FuncStopApp:
@@ -317,14 +317,21 @@ func execStartNode(
 		instanceNames[instance] = instanceName
 
 		if isValidator {
+			var stakeAmount uint64
+			if step.Stake != nil {
+				stakeAmount = *step.Stake
+			}
 			if id, ok := state.validatorIds[instanceName]; ok {
-				// Use pre-assigned ID (genesis validator or rejoin).
+				// Reuse existing ID (genesis validator or rejoin).
 				validatorIds[instance] = &id
-			} else if !isRejoin {
-				id, err := registry.registerNewValidator()
+			} else if isRejoin {
+				return fmt.Errorf("validator %s is rejoining but has no preserved validator ID",
+					instanceName,
+				)
+			} else {
+				id, err := registry.registerNewValidator(stakeAmount)
 				if err != nil {
-					return fmt.Errorf(
-						"failed to register validator %s: %w",
+					return fmt.Errorf("failed to register validator %s: %w",
 						instanceName, err,
 					)
 				}
@@ -494,31 +501,65 @@ func execStopNode(
 	return nil
 }
 
-// execUndelegate undelegates a validator's stake from the SFC.
+// execUndelegate undelegates stake from one or more validator nodes.
 func execUndelegate(
 	step *parser.Step,
+	net driver.Network,
 	registry validatorRegistry,
 	state *sequentialState,
 ) error {
-	name := step.Identifier
-
-	node, ok := state.nodes[name]
-	if !ok {
-		node, ok = state.nodes[name+"-0"]
+	for _, target := range step.UndelegateTargets {
+		node, ok := state.nodes[target.Node]
 		if !ok {
-			return fmt.Errorf("node %q not found in active nodes", name)
+			node, ok = state.nodes[target.Node+"-0"]
+			if !ok {
+				return fmt.Errorf("node %q not found in active nodes", target.Node)
+			} else {
+				// Ensure it is truly a single-instance node. If
+				// other numbered instances exist, require an
+				// explicit instance name.
+				if hasMultipleInstances(state, target.Node) {
+					return fmt.Errorf(
+						"node %q has multiple instances; use an explicit instance name (e.g. %q)",
+						target.Node, target.Node+"-0",
+					)
+				}
+			}
+		}
+		id := node.GetValidatorId()
+		if id == nil {
+			return fmt.Errorf("node %q is not a validator", target.Node)
+		}
+		var stakeAmount uint64
+		if target.Stake != nil {
+			stakeAmount = *target.Stake
+		}
+		// stakeAmount=0 → UnregisterValidatorNode queries self-stake on-chain
+		if err := registry.unregisterValidator(*id, stakeAmount); err != nil {
+			return fmt.Errorf("failed to unregister validator %s: %w", target.Node, err)
 		}
 	}
-
-	if id := node.GetValidatorId(); id != nil {
-		if err := registry.unregisterValidator(*id); err != nil {
-			return fmt.Errorf("failed to unregister validator %s: %w", name, err)
-		}
-	} else {
-		return fmt.Errorf("node %q is not a validator", name)
-	}
-
 	return nil
+}
+
+// hasMultipleInstances reports whether state contains more than one
+// numbered instance for the given base name (e.g. "name-0", "name-1").
+func hasMultipleInstances(
+	state *sequentialState,
+	baseName string,
+) bool {
+	prefix := baseName + "-"
+	count := 0
+	for key := range state.nodes {
+		if len(key) > len(prefix) &&
+			key[:len(prefix)] == prefix {
+			count++
+			if count > 1 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // execRunApp creates and starts an application.

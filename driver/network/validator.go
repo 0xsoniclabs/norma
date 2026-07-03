@@ -17,8 +17,12 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+// defaultStakePerValidator is the default stake used when no stake is specified.
+const defaultStakePerValidator = uint64(5_000_000)
+
 // RegisterValidatorNode registers a validator in the SFC contract.
-func RegisterValidatorNode(backend ContractBackend) (int, error) {
+// If stake is 0, the default stake of 5,000,000 S is used.
+func RegisterValidatorNode(backend ContractBackend, stake uint64) (int, error) {
 	// get a representation of the deployed contract
 	SFCContract, err := sfc100.NewContract(sfc.ContractAddress, backend)
 	if err != nil {
@@ -40,7 +44,10 @@ func RegisterValidatorNode(backend ContractBackend) (int, error) {
 	txOpts.GasTipCap = systemTxGasTipCap
 	txOpts.GasLimit = systemTxGasLimit
 
-	txOpts.Value = getStakePerValidator()
+	if stake == 0 {
+		stake = defaultStakePerValidator
+	}
+	txOpts.Value = stakeToWei(stake)
 
 	validatorPubKey := validatorpk.PubKey{
 		Raw:  crypto.FromECDSAPub(&privateKeyECDSA.PublicKey),
@@ -69,11 +76,14 @@ func RegisterValidatorNode(backend ContractBackend) (int, error) {
 	return newValId, nil
 }
 
-func UnregisterValidatorNode(client rpc.Client, validatorId int) error {
+// UnregisterValidatorNode undelegates a validator's self-stake from the SFC
+// contract. If stake is 0, the currently staked amount is queried on-chain via
+// GetSelfStake and used as the undelegate amount.
+func UnregisterValidatorNode(client rpc.Client, validatorId int, stake uint64) error {
 	slog.Info("start unregistering validator node", "validator_id", validatorId)
 
 	// get a representation of the deployed contract
-	sfc, err := sfc100.NewContract(sfc.ContractAddress, client)
+	sfcContract, err := sfc100.NewContract(sfc.ContractAddress, client)
 	if err != nil {
 		return fmt.Errorf("failed to get SFC contract representation; %v", err)
 	}
@@ -86,11 +96,20 @@ func UnregisterValidatorNode(client rpc.Client, validatorId int) error {
 	txOpts.GasTipCap = systemTxGasTipCap
 	txOpts.GasLimit = systemTxGasLimit
 
-	stake := getStakePerValidator()
+	var stakeWei *big.Int
+	if stake == 0 {
+		// No stake specified — query the current self-stake on-chain.
+		stakeWei, err = sfcContract.GetSelfStake(nil, big.NewInt(int64(validatorId)))
+		if err != nil {
+			return fmt.Errorf("failed to query self-stake for validator %d; %v", validatorId, err)
+		}
+	} else {
+		stakeWei = stakeToWei(stake)
+	}
 
 	// withdraw ID must be unique, so we use the current time in nanoseconds
 	withdrawId := big.NewInt(time.Now().UnixNano())
-	tx, err := sfc.Undelegate(txOpts, big.NewInt(int64(validatorId)), withdrawId, stake)
+	tx, err := sfcContract.Undelegate(txOpts, big.NewInt(int64(validatorId)), withdrawId, stakeWei)
 	if err != nil {
 		return fmt.Errorf("failed to undelegate validator stake; %v", err)
 	}
@@ -112,7 +131,7 @@ func UnregisterValidatorNode(client rpc.Client, validatorId int) error {
 	return nil
 }
 
-func getStakePerValidator() *big.Int {
-	// 5_000_000 S
-	return new(big.Int).Mul(big.NewInt(5_000_000), big.NewInt(1e18))
+// stakeToWei converts a stake value in S to wei.
+func stakeToWei(stake uint64) *big.Int {
+	return new(big.Int).Mul(new(big.Int).SetUint64(stake), big.NewInt(1e18))
 }
