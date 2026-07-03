@@ -18,11 +18,11 @@ package nodemon
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/monitoring/utils"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
@@ -105,6 +105,6 @@ func (s *BlockNodeMetricSource[T]) Shutdown() error {
 func (s *BlockNodeMetricSource[T]) OnBlock(node monitoring.Node, block monitoring.Block) {
 	series := s.GetOrAddSubject(node)
 	if err := series.Append(monitoring.BlockNumber(block.Height), s.getBlockProperty(block)); err != nil {
-		log.Error("error to add to the series: %s", err)
+		slog.Error("error to add to the series", "error", err)
 	}
 }
