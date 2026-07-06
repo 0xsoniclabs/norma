@@ -49,7 +49,7 @@ func render(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := report.SingleEvalReport.Render(input, currentDir, "", "")
+	result, err := report.SingleEvalReport.Render(input, currentDir, "", "", "")
 	if err != nil {
 		return err
 	}

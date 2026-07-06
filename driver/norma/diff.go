@@ -65,7 +65,7 @@ func diff(ctx *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	result, err := report.MultiEvalReport.Render(file.Name(), currentDir, "", "")
+	result, err := report.MultiEvalReport.Render(file.Name(), currentDir, "", "", "")
 	if err != nil {
 		return err
 	}

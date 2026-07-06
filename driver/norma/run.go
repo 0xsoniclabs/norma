@@ -123,6 +123,11 @@ func runScenario(ctx context.Context, path, outputDir, label string, skipChecks,
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	scenarioFilePath := path
+	if absPath, err := filepath.Abs(path); err == nil {
+		scenarioFilePath = absPath
+	}
+
 	// if not configured, default to /tmp/norma_data_<label>_<timestamp> else /configured/path/norma_data_<l>_<t>
 	outputDir, err := os.MkdirTemp(outputDir, fmt.Sprintf("norma_data_%s_", label))
 	if err != nil {
@@ -226,6 +231,7 @@ func runScenario(ctx context.Context, path, outputDir, label string, skipChecks,
 				outputDir,
 				scenario.Name,
 				scenario.Description,
+				scenarioFilePath,
 			); err != nil {
 				slog.Error("report generation failed", "error", err)
 			} else {
@@ -276,6 +282,11 @@ func runScenario(ctx context.Context, path, outputDir, label string, skipChecks,
 // runSequentialScenario handles execution of the new sequential scenario format.
 func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScenario, path, outputDir, label string, skipChecks, skipReportRendering, openReport bool) error {
 	slog.Info("running sequential scenario", "path", path, "name", scenario.Name)
+
+	scenarioFilePath := path
+	if absPath, err := filepath.Abs(path); err == nil {
+		scenarioFilePath = absPath
+	}
 
 	// create symlink as qol (_latest => _####) where #### is the randomly generated name
 	symlink := filepath.Join(filepath.Dir(outputDir), fmt.Sprintf("norma_data_%s_latest", label))
@@ -355,6 +366,7 @@ func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScena
 				outputDir,
 				scenario.Name,
 				scenario.Description,
+				scenarioFilePath,
 			); err != nil {
 				slog.Error("report generation failed", "error", err)
 			} else {

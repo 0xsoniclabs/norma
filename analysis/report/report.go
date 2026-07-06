@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 )
 
 // Report is a template for a report to be produced from monitoring data
@@ -60,7 +62,7 @@ var renderScript []byte
 
 // Render renders this report using the given input data file (in CSV format)
 // and places its results into the defined output directory.
-func (r *Report) Render(datafile, outputDir, scenario, description string) (outputFile string, err error) {
+func (r *Report) Render(datafile, outputDir, scenario, description, scenarioFilePath string) (outputFile string, err error) {
 	script, err := createTempFile(renderScript, ".R")
 	if err != nil {
 		return "", err
@@ -74,6 +76,15 @@ func (r *Report) Render(datafile, outputDir, scenario, description string) (outp
 	defer func() { err = errors.Join(err, os.Remove(template)) }()
 
 	outputFile = r.name + ".html"
+	if scenarioFilePath != "" {
+		base := strings.TrimSuffix(
+			filepath.Base(scenarioFilePath),
+			filepath.Ext(scenarioFilePath),
+		)
+		if base != "" {
+			outputFile = base + ".html"
+		}
+	}
 
 	cmd := exec.Command("docker", "run", "--rm",
 		"--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
@@ -86,6 +97,7 @@ func (r *Report) Render(datafile, outputDir, scenario, description string) (outp
 		"Rscript", "/render.R", "/template.Rmd", "/input.csv", "/output", outputFile,
 		scenario,
 		description,
+		scenarioFilePath,
 	)
 	var out bytes.Buffer
 	cmd.Stdout = &out
