@@ -19,6 +19,7 @@ package nodemon
 import (
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring"
@@ -42,19 +43,20 @@ func init() {
 // TransactionsThroughputSource is a metric source that captures transaction throughput.
 type TransactionsThroughputSource struct {
 	BlockNodeMetricSource[float32]
-	lastTimes map[monitoring.Node]time.Time // timestamps of the latest received blocks
+	lastTimes    map[monitoring.Node]time.Time // timestamps of the latest received blocks
+	syncingNodes map[monitoring.Node]bool
+	syncingMutex sync.Mutex
 }
 
 // NewTransactionsThroughputSource creates a metric capturing transaction throughput.
 func NewTransactionsThroughputSource(monitor *monitoring.Monitor) *TransactionsThroughputSource {
-	blockMetrics := BlockNodeMetricSource[float32]{
-		SyncedSeriesSource: utils.NewSyncedSeriesSource(TransactionsThroughput),
-		monitor:            monitor,
-	}
-
 	m := &TransactionsThroughputSource{
-		BlockNodeMetricSource: blockMetrics,
-		lastTimes:             make(map[monitoring.Node]time.Time, 50),
+		BlockNodeMetricSource: BlockNodeMetricSource[float32]{
+			SyncedSeriesSource: utils.NewSyncedSeriesSource(TransactionsThroughput),
+			monitor:            monitor,
+		},
+		lastTimes:    make(map[monitoring.Node]time.Time, 50),
+		syncingNodes: make(map[monitoring.Node]bool, 50),
 	}
 	monitor.NodeLogProvider().RegisterLogListener(m)
 
@@ -67,6 +69,7 @@ func newTransactionsThroughputSource(monitor *monitoring.Monitor) monitoring.Sou
 }
 
 func (s *TransactionsThroughputSource) OnBlock(node monitoring.Node, block monitoring.Block) {
+	s.markNodeAsSyncing(node)
 
 	prevTime, exists := s.lastTimes[node]
 	s.lastTimes[node] = block.Time
@@ -82,7 +85,43 @@ func (s *TransactionsThroughputSource) OnBlock(node monitoring.Node, block monit
 		txs := float64(block.Txs) * 1e9 / float64(timeDiff)
 		series := s.GetOrAddSubject(node)
 		if err := series.Append(monitoring.BlockNumber(block.Height), float32(txs)); err != nil {
+			if s.shouldSuppressAppendConflict(node, err) {
+				return
+			}
 			slog.Error("error to add to the series", "error", err)
+			return
 		}
+		s.markNodeAsSynced(node)
 	}
+}
+
+func (s *TransactionsThroughputSource) markNodeAsSyncing(node monitoring.Node) {
+	s.syncingMutex.Lock()
+	defer s.syncingMutex.Unlock()
+	if _, exists := s.syncingNodes[node]; !exists {
+		s.syncingNodes[node] = true
+	}
+}
+
+func (s *TransactionsThroughputSource) markNodeAsSynced(node monitoring.Node) {
+	s.syncingMutex.Lock()
+	defer s.syncingMutex.Unlock()
+	s.syncingNodes[node] = false
+}
+
+func (s *TransactionsThroughputSource) isNodeSyncing(node monitoring.Node) bool {
+	s.syncingMutex.Lock()
+	defer s.syncingMutex.Unlock()
+	syncing, exists := s.syncingNodes[node]
+	if !exists {
+		return true
+	}
+	return syncing
+}
+
+func (s *TransactionsThroughputSource) shouldSuppressAppendConflict(node monitoring.Node, err error) bool {
+	if !monitoring.IsOutOfOrderAppendError(err) {
+		return false
+	}
+	return s.isNodeSyncing(node)
 }

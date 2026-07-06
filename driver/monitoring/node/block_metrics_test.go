@@ -21,6 +21,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
@@ -104,6 +105,79 @@ func TestIntegrateRegistryWithShutdownNodeMetrics(t *testing.T) {
 	// series not created at all
 	if _, exists := source.GetData(monitoring.Node3TestId); exists {
 		t.Errorf("series shold not exist")
+	}
+}
+
+func TestBlockNodeMetricSource_SuppressesConflictWhileNodeIsSyncing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().RegisterListener(gomock.Any()).AnyTimes()
+	net.EXPECT().GetActiveNodes().AnyTimes().Return([]driver.Node{})
+
+	monitor, err := monitoring.NewMonitor(net, monitoring.MonitorConfig{OutputDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("failed to initiate monitor: %v", err)
+	}
+	source := NewBlockTimeSource(monitor)
+
+	node := monitoring.Node("A")
+	series := source.GetOrAddSubject(node)
+	seedTime := time.Unix(100, 0)
+	if err := series.Append(monitoring.BlockNumber(10), seedTime); err != nil {
+		t.Fatalf("failed to seed series: %v", err)
+	}
+
+	source.OnBlock(node, monitoring.Block{Height: 10, Time: seedTime})
+
+	if !source.isNodeSyncing(node) {
+		t.Fatalf("node syncing state should remain enabled after suppressed conflict")
+	}
+
+	if got, want := len(series.GetRange(monitoring.BlockNumber(0), monitoring.BlockNumber(100))), 1; got != want {
+		t.Fatalf("unexpected number of points: %d != %d", got, want)
+	}
+}
+
+func TestBlockNodeMetricSource_DisablesSyncingAfterFirstSuccessfulAppend(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().RegisterListener(gomock.Any()).AnyTimes()
+	net.EXPECT().GetActiveNodes().AnyTimes().Return([]driver.Node{})
+
+	monitor, err := monitoring.NewMonitor(net, monitoring.MonitorConfig{OutputDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("failed to initiate monitor: %v", err)
+	}
+	source := NewBlockTimeSource(monitor)
+
+	node := monitoring.Node("A")
+	source.OnBlock(node, monitoring.Block{Height: 10, Time: time.Unix(100, 0)})
+
+	if source.isNodeSyncing(node) {
+		t.Fatalf("node syncing state should be disabled after first successful append")
+	}
+}
+
+func TestBlockNodeMetricSource_DoesNotSuppressAfterSyncingDisabled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().RegisterListener(gomock.Any()).AnyTimes()
+	net.EXPECT().GetActiveNodes().AnyTimes().Return([]driver.Node{})
+
+	monitor, err := monitoring.NewMonitor(net, monitoring.MonitorConfig{OutputDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("failed to initiate monitor: %v", err)
+	}
+	source := NewBlockTimeSource(monitor)
+
+	node := monitoring.Node("A")
+	source.OnBlock(node, monitoring.Block{Height: 10, Time: time.Unix(100, 0)})
+
+	if source.shouldSuppressAppendConflict(node, monitoring.ErrOutOfOrderAppend) {
+		t.Fatalf("out-of-order conflict should not be suppressed after syncing is disabled")
 	}
 }
 
