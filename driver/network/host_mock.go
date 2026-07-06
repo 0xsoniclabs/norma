@@ -70,11 +70,12 @@ func (mr *MockHostMockRecorder) Cleanup(ctx any) *gomock.Call {
 }
 
 // GetAddressForService mocks base method.
-func (m *MockHost) GetAddressForService(arg0 *ServiceDescription) *AddressPort {
+func (m *MockHost) GetAddressForService(arg0 *ServiceDescription) (*AddressPort, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAddressForService", arg0)
 	ret0, _ := ret[0].(*AddressPort)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetAddressForService indicates an expected call of GetAddressForService.

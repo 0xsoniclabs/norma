@@ -64,9 +64,9 @@ func TestIntegrateRegistryWithShutdown(t *testing.T) {
 	urlA := driver.URL("A")
 	urlB := driver.URL("B")
 	urlC := driver.URL("C")
-	node1.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&urlA)
-	node2.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&urlB)
-	node3.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&urlC)
+	node1.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&urlA, nil)
+	node2.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&urlB, nil)
+	node3.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&urlC, nil)
 
 	node1.EXPECT().StreamLog(gomock.Any()).AnyTimes().DoAndReturn(func(context.Context) (io.ReadCloser, error) {
 		return io.NopCloser(strings.NewReader(monitoring.Node1TestLog)), nil
@@ -81,9 +81,9 @@ func TestIntegrateRegistryWithShutdown(t *testing.T) {
 	url1 := driver.URL("node1")
 	url2 := driver.URL("node2")
 	url3 := driver.URL("node3")
-	node1.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&url1)
-	node2.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&url2)
-	node3.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&url3)
+	node1.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&url1, nil)
+	node2.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&url2, nil)
+	node3.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&url3, nil)
 
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().RegisterListener(gomock.Any()).AnyTimes()
