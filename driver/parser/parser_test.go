@@ -40,6 +40,19 @@ func TestParseMinimalExample(t *testing.T) {
 	}
 }
 
+func TestParseScenarioDescription(t *testing.T) {
+	scenario, err := ParseBytes([]byte(`
+name: Example
+description: This scenario verifies parser support for description.
+`))
+	if err != nil {
+		t.Fatalf("parsing of scenario with description should have worked, got %v", err)
+	}
+	if scenario.Description != "This scenario verifies parser support for description." {
+		t.Fatalf("parsed description mismatch, got %q", scenario.Description)
+	}
+}
+
 var unknownKeyExample = minimalExample + `
 some_other_key: with a value
 `
