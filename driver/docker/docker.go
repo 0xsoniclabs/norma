@@ -51,6 +51,17 @@ type Client struct {
 	cli *client.Client
 }
 
+// DockerNetwork is the interface satisfied by docker networks. It
+// exposes the identity needed to attach containers and a Cleanup method
+// to remove the network when it is no longer needed.
+//
+//go:generate mockgen -destination network_mock.go -package docker . DockerNetwork
+type DockerNetwork interface {
+	ID() string
+	Name() string
+	Cleanup(ctx context.Context) error
+}
+
 // Network represents a Docker network. It is used to connect Containers
 // to each other.
 type Network struct {
@@ -59,6 +70,12 @@ type Network struct {
 	client  *Client
 	cleaned bool
 }
+
+// ID returns the Docker network ID.
+func (n *Network) ID() string { return n.id }
+
+// Name returns the Docker network name.
+func (n *Network) Name() string { return n.name }
 
 // Container represents a Docker Container, typically used for running a
 // Fantom network Node, thus an instance of the go-opera client.
@@ -78,11 +95,11 @@ type ContainerConfig struct {
 	ImageName       string
 	ShutdownTimeout *time.Duration
 	Environment     map[string]string
-	Entrypoint      []string // Entrypoint to run when starting the container. Optional.
-	Network         *Network // Docker network to join, nil to join bridge network
-	DataDirBinding  *string  // mount client datadir to this path on host
-	GenesisFileBind *string  // mount genesis file on host to /genesis.json:ro in container
-	KeystoreBinding *string  // mount keystore dir on host to /datadir/keystore:ro in container
+	Entrypoint      []string      // Entrypoint to run when starting the container. Optional.
+	Network         DockerNetwork // Docker network to join, nil to join bridge network
+	DataDirBinding  *string       // mount client datadir to this path on host
+	GenesisFileBind *string       // mount genesis file on host to /genesis.json:ro in container
+	KeystoreBinding *string       // mount keystore dir on host to /datadir/keystore:ro in container
 }
 
 // NewClient creates a new client facilitating the creation of Docker
@@ -182,7 +199,7 @@ func (c *Client) Start(ctx context.Context, config *ContainerConfig) (*Container
 	}
 
 	if config.Network != nil {
-		err := c.cli.NetworkConnect(ctx, config.Network.id, resp.ID, nil)
+		err := c.cli.NetworkConnect(ctx, config.Network.ID(), resp.ID, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -315,9 +332,9 @@ func (c *Container) resolveIP() error {
 		return fmt.Errorf("failed to inspect container: %w", err)
 	}
 	if c.config.Network != nil {
-		ep, ok := info.NetworkSettings.Networks[c.config.Network.name]
+		ep, ok := info.NetworkSettings.Networks[c.config.Network.Name()]
 		if !ok || ep.IPAddress == "" {
-			return fmt.Errorf("container has no IP on network %s", c.config.Network.name)
+			return fmt.Errorf("container has no IP on network %s", c.config.Network.Name())
 		}
 		c.ip = ep.IPAddress
 		return nil

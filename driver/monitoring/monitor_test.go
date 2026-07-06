@@ -173,7 +173,16 @@ func TestMonitorIntegrationPrometheusLogReceived(t *testing.T) {
 	t.Cleanup(func() {
 		_ = client.Close()
 	})
-	node, err := opera.StartOperaDockerNode(t.Context(), client, nil, &opera.OperaNodeConfig{
+	dn, err := client.CreateBridgeNetwork(t.Context())
+	if err != nil {
+		t.Fatalf("failed to create docker network: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := dn.Cleanup(context.Background()); err != nil {
+			t.Errorf("failed to cleanup docker network: %v", err)
+		}
+	})
+	node, err := opera.StartOperaDockerNode(t.Context(), client, dn, &opera.OperaNodeConfig{
 		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())},

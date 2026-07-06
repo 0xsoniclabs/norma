@@ -77,11 +77,10 @@ func init() {
 // OperaNode implements the driver's Node interface by running a go-opera
 // client on a generic host.
 type OperaNode struct {
-	host         network.Host
-	container    *docker.Container
-	config       *OperaNodeConfig
-	tempDirs     []string
-	ownedNetwork *docker.Network // cleaned up if created by StartOperaDockerNode
+	host      network.Host
+	container *docker.Container
+	config    *OperaNodeConfig
+	tempDirs  []string
 }
 
 type OperaNodeConfig struct {
@@ -155,7 +154,12 @@ func ensureImageAvailable(ctx context.Context, image string) error {
 }
 
 // StartOperaDockerNode creates a new OperaNode running in a Docker container.
-func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker.Network, config *OperaNodeConfig) (*OperaNode, error) {
+func StartOperaDockerNode(
+	ctx context.Context,
+	client *docker.Client,
+	dn docker.DockerNetwork,
+	config *OperaNodeConfig,
+) (*OperaNode, error) {
 	// avoid slashes and underscores in labels
 	config.Label = strings.ReplaceAll(config.Label, "/", "-")
 	config.Label = strings.ReplaceAll(config.Label, "_", "-")
@@ -163,23 +167,19 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		return nil, fmt.Errorf("invalid label for node: '%v'", config.Label)
 	}
 
+	if dn == nil {
+		return nil, fmt.Errorf(
+			"docker network is required to start an Opera node")
+	}
+
 	exists, err := client.ContainerExists(config.Label)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start docker node: %w", err)
 	}
 	if exists {
-		return nil, fmt.Errorf("failed to start docker node: container %q already running", config.Label)
-	}
-
-	// A custom bridge network is required so the host can reach the
-	// container by its IP. Create one if the caller did not provide it.
-	var ownedNetwork *docker.Network
-	if dn == nil {
-		dn, err = client.CreateBridgeNetwork(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create bridge network: %w", err)
-		}
-		ownedNetwork = dn
+		return nil, fmt.Errorf(
+			"failed to start docker node: container %q already running",
+			config.Label)
 	}
 
 	image := driver.ResolveClientImageName(config.Image)
@@ -304,11 +304,10 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		*nodeConfig.ValidatorId = *config.ValidatorId
 	}
 	node := &OperaNode{
-		host:         host,
-		container:    host,
-		config:       &nodeConfig,
-		tempDirs:     tempDirs,
-		ownedNetwork: ownedNetwork,
+		host:      host,
+		container: host,
+		config:    &nodeConfig,
+		tempDirs:  tempDirs,
 	}
 
 	// Wait until the OperaNode inside the Container is ready.
@@ -445,10 +444,6 @@ func (n *OperaNode) Cleanup(ctx context.Context) error {
 		}
 	}
 	n.tempDirs = nil
-	if n.ownedNetwork != nil {
-		err = errors.Join(err, n.ownedNetwork.Cleanup(ctx))
-		n.ownedNetwork = nil
-	}
 	return err
 }
 

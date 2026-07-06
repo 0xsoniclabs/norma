@@ -60,6 +60,15 @@ func TestImplements(t *testing.T) {
 
 }
 
+func TestStartOperaDockerNode_ReturnsError_WhenNetworkIsNil(t *testing.T) {
+	_, err := StartOperaDockerNode(t.Context(), nil, nil, &OperaNodeConfig{
+		Label: t.Name(),
+	})
+	if err == nil {
+		t.Fatal("expected error when network is nil")
+	}
+}
+
 func TestOperaNode_StartAndStop(t *testing.T) {
 	docker, err := docker.NewClient()
 	if err != nil {
@@ -68,7 +77,8 @@ func TestOperaNode_StartAndStop(t *testing.T) {
 	t.Cleanup(func() {
 		_ = docker.Close()
 	})
-	node, err := StartOperaDockerNode(t.Context(), docker, nil, &OperaNodeConfig{
+	dn := createTestNetwork(t, docker)
+	node, err := StartOperaDockerNode(t.Context(), docker, dn, &OperaNodeConfig{
 		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())},
@@ -119,7 +129,8 @@ func TestOperaNode_RpcServiceIsReadyAfterStartup(t *testing.T) {
 	t.Cleanup(func() {
 		_ = docker.Close()
 	})
-	node, err := StartOperaDockerNode(t.Context(), docker, nil, &OperaNodeConfig{
+	dn := createTestNetwork(t, docker)
+	node, err := StartOperaDockerNode(t.Context(), docker, dn, &OperaNodeConfig{
 		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())},
@@ -146,7 +157,8 @@ func TestOperaNode_StreamLog(t *testing.T) {
 		_ = docker.Close()
 	})
 
-	node, err := StartOperaDockerNode(t.Context(), docker, nil, &OperaNodeConfig{
+	dn := createTestNetwork(t, docker)
+	node, err := StartOperaDockerNode(t.Context(), docker, dn, &OperaNodeConfig{
 		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())},
@@ -202,7 +214,8 @@ func TestOperaNode_MetricsExposed(t *testing.T) {
 		_ = docker.Close()
 	})
 
-	node, err := StartOperaDockerNode(t.Context(), docker, nil, &OperaNodeConfig{
+	dn := createTestNetwork(t, docker)
+	node, err := StartOperaDockerNode(t.Context(), docker, dn, &OperaNodeConfig{
 		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())},
@@ -250,7 +263,8 @@ func TestClient_Stop_Graceful(t *testing.T) {
 		}
 	}()
 
-	node, err := StartOperaDockerNode(t.Context(), client, nil, &OperaNodeConfig{
+	dn := createTestNetwork(t, client)
+	node, err := StartOperaDockerNode(t.Context(), client, dn, &OperaNodeConfig{
 		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())},
@@ -295,4 +309,20 @@ func TestClient_Stop_Graceful(t *testing.T) {
 	case <-time.After(180 * time.Second):
 		t.Errorf("container did not stop gracefully")
 	}
+}
+
+func createTestNetwork(
+	t *testing.T, client *docker.Client,
+) docker.DockerNetwork {
+	t.Helper()
+	dn, err := client.CreateBridgeNetwork(t.Context())
+	if err != nil {
+		t.Fatalf("failed to create docker network: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := dn.Cleanup(context.Background()); err != nil {
+			t.Errorf("failed to cleanup docker network: %v", err)
+		}
+	})
+	return dn
 }
