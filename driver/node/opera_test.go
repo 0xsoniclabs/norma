@@ -40,8 +40,8 @@ func (cleanupHostStub) IsRunning() bool { return false }
 
 func (cleanupHostStub) CheckRunning(ctx context.Context) error { return nil }
 
-func (cleanupHostStub) GetAddressForService(*network.ServiceDescription) *network.AddressPort {
-	return nil
+func (cleanupHostStub) GetAddressForService(*network.ServiceDescription) (*network.AddressPort, error) {
+	return nil, nil
 }
 
 func (cleanupHostStub) Stop(ctx context.Context) error { return nil }
@@ -229,7 +229,10 @@ func TestOperaNode_MetricsExposed(t *testing.T) {
 		}
 	})
 
-	url := node.GetServiceUrl(&OperaDebugService)
+	url, err := node.GetServiceUrl(&OperaDebugService)
+	if err != nil {
+		t.Fatalf("failed to get service URL: %v", err)
+	}
 
 	var apiWorks bool
 	for i := 0; i < 100; i++ {

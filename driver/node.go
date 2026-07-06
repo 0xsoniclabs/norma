@@ -56,7 +56,7 @@ type Node interface {
 
 	// GetServiceUrl returns the URL of a service running on the
 	// represented node. May be nil if no such service is offered.
-	GetServiceUrl(*network.ServiceDescription) *URL
+	GetServiceUrl(*network.ServiceDescription) (*URL, error)
 
 	// DialRpc establish an RPC connection with the node and returns the RPC client.
 	DialRpc(context.Context) (rpc.Client, error)

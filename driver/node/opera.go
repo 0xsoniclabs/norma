@@ -333,18 +333,19 @@ func StartOperaDockerNode(
 
 // connectivityCheck attempts to connect to the Opera RPC service of the given host.
 func connectivityCheck(ctx context.Context, node *OperaNode) error {
-	if addr := node.host.GetAddressForService(&OperaRpcService); addr != nil {
-		conn, dialErr := net.DialTimeout("tcp", string(*addr), 5*time.Second)
-		if dialErr != nil {
-			return fmt.Errorf("failed to connect to RPC service at %s: %w",
-				string(*addr), dialErr)
-		}
-		if err := conn.Close(); err != nil {
-			return fmt.Errorf("failed to close connection to RPC service at %s: %w",
-				string(*addr), err)
-		}
-	} else {
-		return fmt.Errorf("no address for RPC service")
+	addr, err := node.host.GetAddressForService(&OperaRpcService)
+	if err != nil {
+		return fmt.Errorf("failed to get RPC service address: %w", err)
+	}
+
+	conn, dialErr := net.DialTimeout("tcp", string(*addr), 5*time.Second)
+	if dialErr != nil {
+		return fmt.Errorf("failed to connect to RPC service at %s: %w",
+			string(*addr), dialErr)
+	}
+	if err := conn.Close(); err != nil {
+		return fmt.Errorf("failed to close connection to RPC service at %s: %w",
+			string(*addr), err)
 	}
 	return nil
 }
@@ -393,17 +394,20 @@ func (n *OperaNode) CheckRunning(ctx context.Context) error {
 	return n.host.CheckRunning(ctx)
 }
 
-func (n *OperaNode) GetServiceUrl(service *network.ServiceDescription) *driver.URL {
-	addr := n.host.GetAddressForService(service)
-	if addr == nil {
-		return nil
+func (n *OperaNode) GetServiceUrl(service *network.ServiceDescription) (*driver.URL, error) {
+	addr, err := n.host.GetAddressForService(service)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get service address for %s: %w", service.Name, err)
 	}
 	url := driver.URL(fmt.Sprintf("%s://%s", service.Protocol, *addr))
-	return &url
+	return &url, nil
 }
 
 func (n *OperaNode) GetNodeID() (driver.NodeID, error) {
-	url := n.GetServiceUrl(&OperaRpcService)
+	url, err := n.GetServiceUrl(&OperaRpcService)
+	if err != nil {
+		return "", fmt.Errorf("failed to get RPC service URL: %w", err)
+	}
 	if url == nil {
 		return "", fmt.Errorf("node does not export an RPC server")
 	}
@@ -445,9 +449,9 @@ func (n *OperaNode) Cleanup(ctx context.Context) error {
 }
 
 func (n *OperaNode) DialRpc(ctx context.Context) (rpcdriver.Client, error) {
-	url := n.GetServiceUrl(&OperaRpcService)
-	if url == nil {
-		return nil, fmt.Errorf("node %s does not export an RPC server", n.GetLabel())
+	url, err := n.GetServiceUrl(&OperaRpcService)
+	if err != nil {
+		return nil, fmt.Errorf("node %s does not export an RPC server: %w", n.GetLabel(), err)
 	}
 
 	rpcClient, err := network.RetryReturn(ctx, network.DefaultRetryAttempts, 1*time.Second,

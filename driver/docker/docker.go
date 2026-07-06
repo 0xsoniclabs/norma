@@ -320,15 +320,14 @@ func (c *Container) Cleanup(ctx context.Context) error {
 // Container. Services are reached via the container's IP on the Docker
 // network using the service's internal port. If the IP was not resolved
 // at start time, it is looked up on demand via container inspection.
-func (c *Container) GetAddressForService(service *network.ServiceDescription) *network.AddressPort {
+func (c *Container) GetAddressForService(service *network.ServiceDescription) (*network.AddressPort, error) {
 	if c.ip == "" {
 		if err := c.resolveIP(); err != nil {
-			slog.Error("failed to resolve container IP", "error", err)
-			return nil
+			return nil, fmt.Errorf("failed to resolve container IP: %w", err)
 		}
 	}
 	res := network.AddressPort(fmt.Sprintf("%s:%d", c.ip, service.Port))
-	return &res
+	return &res, nil
 }
 
 // resolveIP inspects the container and populates c.ip. When the

@@ -56,10 +56,12 @@ func (p *RpcWorkerPool) AfterNodeCreation(newNode driver.Node) {
 		return
 	}
 
-	rpcUrl := newNode.GetServiceUrl(&node.OperaWsService)
-	if rpcUrl == nil {
+	rpcUrl, err := newNode.GetServiceUrl(&node.OperaWsService)
+	if err != nil {
+		slog.Error("failed to get RPC service URL", "error", err, "node", newNode.GetLabel())
 		return
 	}
+
 	wg := workerGroup{}
 	p.workers[newNode] = &wg
 	for i := 0; i < 150; i++ {

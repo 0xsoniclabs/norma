@@ -212,7 +212,11 @@ func (n *PrometheusLogDispatcher) AfterNodeCreation(driverNode driver.Node) {
 		// and distributed to listeners.
 		// It is done so to assure the logs are provided in the right order,
 		// not to swap more planned go routines.
-		url := driverNode.GetServiceUrl(&node.OperaDebugService)
+		url, err := driverNode.GetServiceUrl(&node.OperaDebugService)
+		if err != nil {
+			slog.Error("monitoring: failed to get service URL", "error", err)
+			return
+		}
 		ch := make(chan Time, 100)
 		n.nodes[nodeId] = ch
 		n.startNodeLogsDispatch(nodeId, url, ch)

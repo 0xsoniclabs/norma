@@ -43,7 +43,7 @@ type Host interface {
 
 	// GetAddressForService returns the address of a service running on this
 	// host, or nil if such a service is not offered.
-	GetAddressForService(*ServiceDescription) *AddressPort
+	GetAddressForService(*ServiceDescription) (*AddressPort, error)
 
 	// Stop shuts down the services running on the host gracefully, using
 	// their regular shutdown procedure (not killed). After stopping the
