@@ -1,0 +1,42 @@
+Name: Rules Update Epoch Duration With Load
+
+Description: >-
+  Changes MAX_EPOCH_DURATION while sustained application load is running.
+  The network remains online while epoch duration is reduced at runtime,
+  running load continues across the rule update without interruption, and
+  the updated epoch duration is applied with no validator restart.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+  Epochs:
+    MaxEpochDuration: 30s
+
+Scenario:
+  - startNode: validator-main
+    type: validator
+    imageName: "sonic:local"
+    stake: 10000000
+
+  - runApp: counter-load
+    type: counter
+    users: 20
+    rate:
+      constant: 15
+
+  - runApp: erc20-load
+    type: erc20
+    users: 20
+    rate:
+      constant: 10
+
+  - waitFor: 20s
+
+  - updateRules:
+      Epochs:
+        MaxEpochDuration: 6s
+
+  - waitForEpoch
+
+  - waitFor: 40s

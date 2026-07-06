@@ -1,0 +1,51 @@
+Name: Release Rules Enable Allegro
+
+Description: >-
+  Enables Allegro from a Sonic-only baseline and verifies network
+  liveness plus Allegro-era BLS12-Add traffic after activation.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: false
+
+Scenario:
+  - startNode: validators
+    type: validator
+    imageName: "sonic:local"
+    instances: 2
+
+  - startNode: validator-old
+    type: validator
+    imageName: "sonic:v2.1.6"
+
+  - runApp: baseline
+    type: counter
+    users: 20
+    rate:
+      constant: 10
+
+  - waitFor: 15s
+
+  - updateRules:
+      Upgrades:
+        Allegro: true
+
+  - waitForEpoch
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - networkRules:
+          rules:
+            Upgrades:
+              Sonic: true
+              Allegro: true
+
+  - runApp: allegro-load
+    type: bls12add
+    users: 10
+    rate:
+      constant: 8
+
+  - waitFor: 20s

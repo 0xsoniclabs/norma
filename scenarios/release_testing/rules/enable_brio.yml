@@ -1,0 +1,51 @@
+Name: Release Rules Enable Brio
+
+Description: >-
+  Enables Brio from a Brio-disabled baseline and verifies network
+  liveness plus Brio-dependent large contract load after activation.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    GasSubsidies: true
+    Brio: false
+
+Scenario:
+  - startNode: validators
+    type: validator
+    imageName: "sonic:local"
+    instances: 3
+
+  - runApp: baseline
+    type: counter
+    users: 20
+    rate:
+      constant: 10
+
+  - waitFor: 15s
+
+  - updateRules:
+      Upgrades:
+        Brio: true
+
+  - waitForEpoch
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - networkRules:
+          rules:
+            Upgrades:
+              Sonic: true
+              Allegro: true
+              GasSubsidies: true
+              Brio: true
+
+  - runApp: brio-large-contract
+    type: largecontract
+    users: 10
+    rate:
+      constant: 6
+
+  - waitFor: 20s

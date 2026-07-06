@@ -1,0 +1,87 @@
+Name: Release Rules Enable Subsidies
+
+Description: >-
+  Toggles GasSubsidies off and on while keeping the network live.
+  Subsidies traffic runs again after re-enabling the feature.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    GasSubsidies: true
+
+Scenario:
+  - startNode: validators
+    type: validator
+    imageName: "sonic:local"
+    instances: 2
+
+  - startNode: validator-old
+    type: validator
+    imageName: "sonic:v2.1.6"
+
+  - runApp: baseline
+    type: counter
+    users: 20
+    rate:
+      constant: 10
+
+  - runApp: subsidies-load
+    type: subsidies
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 15s
+
+  - updateRules:
+      Upgrades:
+        GasSubsidies: false
+
+  - waitForEpoch
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - networkRules:
+          rules:
+            Upgrades:
+              Sonic: true
+              Allegro: true
+              GasSubsidies: false
+
+  - stopApp: subsidies-load
+
+  - stopApp: baseline
+
+  - waitFor: 10s
+
+  - updateRules:
+      Upgrades:
+        GasSubsidies: true
+
+  - waitForEpoch
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - networkRules:
+          rules:
+            Upgrades:
+              Sonic: true
+              Allegro: true
+              GasSubsidies: true
+
+  - runApp: baseline-reenabled
+    type: counter
+    users: 20
+    rate:
+      constant: 10
+
+  - runApp: subsidies-load
+    type: subsidies
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 20s

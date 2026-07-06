@@ -1,0 +1,44 @@
+Name: Release Stress Multi Node Mix Payload Bundle Constant
+
+Description: >-
+  Multi-validator stress test with mixed payloads including
+  subsidized bundles at constant rates. The network remains live
+  under sustained mixed constant load.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    GasSubsidies: true
+    Brio: true
+    TransactionBundles: true
+
+Scenario:
+  - startNode: validator-old
+    type: validator
+    imageName: "sonic:v2.1.6"
+
+  - startNode: validators
+    type: validator
+    imageName: "sonic:local"
+    instances: 3
+
+  - runApp: counter-constant
+    type: counter
+    users: 80
+    rate:
+      constant: 20
+
+  - runApp: erc20-constant
+    type: erc20
+    users: 80
+    rate:
+      constant: 20
+
+  - runApp: bundles-constant
+    type: subsidizedbundle
+    users: 40
+    rate:
+      constant: 10
+
+  - waitFor: 90s

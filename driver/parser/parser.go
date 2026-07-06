@@ -31,6 +31,7 @@ import (
 // scenario properties and lists a set of nodes and transaction source.
 type Scenario struct {
 	Name          string
+	Description   string
 	Duration      float32
 	Validators    []Validator
 	RoundTripTime *time.Duration `yaml:"round_trip_time,omitempty"` // nil == 0

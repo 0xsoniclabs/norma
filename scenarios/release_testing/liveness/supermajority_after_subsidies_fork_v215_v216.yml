@@ -1,0 +1,50 @@
+Name: Liveness Supermajority After Subsidies Fork v2.1.5 v2.1.6
+
+Description: >-
+  Verifies supermajority liveness across a mixed v2.1.5/v2.1.6
+  validator set after enabling GasSubsidies. The v2.1.6 supermajority
+  keeps the network producing blocks.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    GasSubsidies: false
+
+Scenario:
+  - startNode: validator-v216
+    type: validator
+    imageName: "sonic:v2.1.6"
+    stake: 8000000
+
+  - startNode: validator-v215
+    type: validator
+    imageName: "sonic:v2.1.5"
+    stake: 2000000
+    failing: true
+
+  - runApp: baseline
+    type: counter
+    users: 20
+    rate:
+      constant: 20
+
+  - waitFor: 20s
+
+  - updateRules:
+      Upgrades:
+        GasSubsidies: true
+
+  - waitForEpoch
+
+  - runApp: subsidies
+    type: subsidies
+    users: 20
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10

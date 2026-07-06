@@ -1,0 +1,63 @@
+Name: Release Features Single Proposer Clients Can Join After Flag Switch
+
+Description: >-
+  Verifies that new validators can join the network after single
+  proposer mode is enabled at runtime. A validator joining after the
+  flag switch syncs successfully and block production continues.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    SingleProposerBlockFormation: false
+  Epochs:
+    MaxEpochDuration: 1000s
+
+Scenario:
+  - startNode: validator-initial
+    type: validator
+    imageName: "sonic:local"
+    instances: 3
+
+  - runApp: load
+    type: counter
+    users: 20
+    rate:
+      constant: 10
+
+  - waitFor: 15s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+
+  # Enable single proposer mode.
+  - updateRules:
+      Upgrades:
+        SingleProposerBlockFormation: true
+
+  - advanceEpoch
+
+  - waitFor: 15s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+
+  # Start a new validator after the flag switch.
+  - startNode: validator-late
+    type: validator
+    imageName: "sonic:local"
+
+  - advanceEpoch
+
+  - waitFor: 20s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - blockHashes
+      - blockHeights:
+          tolerance: 5
+
+  - stopApp: load

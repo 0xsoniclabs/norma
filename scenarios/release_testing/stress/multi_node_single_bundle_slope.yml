@@ -1,0 +1,34 @@
+Name: Release Stress Multi Node Single Bundle Slope
+
+Description: >-
+  Multi-validator stress test with subsidized bundle traffic and
+  sloping load. The network remains live while throughput pressure
+  increases.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    GasSubsidies: true
+    Brio: true
+    TransactionBundles: true
+
+Scenario:
+  - startNode: validator-old
+    type: validator
+    imageName: "sonic:v2.1.6"
+
+  - startNode: validators
+    type: validator
+    imageName: "sonic:local"
+    instances: 3
+
+  - runApp: bundles-slope
+    type: subsidizedbundle
+    users: 100
+    rate:
+      slope:
+        start: 20
+        increment: 5
+
+  - waitFor: 90s

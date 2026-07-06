@@ -1,0 +1,56 @@
+Name: Rules Update Gas Values With Load
+
+Description: >-
+  Changes gas-related network rule values while diverse load is active.
+  The network continues processing transactions after MAX_BLOCK_GAS and
+  MAX_EPOCH_GAS updates, Brio-enabled large contract load keeps running
+  under the updated gas limits, and mixed load (counter, uniswap,
+  largecontract) remains active through the rule change.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: true
+  Blocks:
+    MaxBlockGas: 20500000000
+  Epochs:
+    MaxEpochGas: 1500000000000
+
+Scenario:
+  - startNode: validator-main
+    type: validator
+    imageName: "sonic:local"
+    stake: 10000000
+
+  - runApp: counter-load
+    type: counter
+    users: 20
+    rate:
+      constant: 15
+
+  - runApp: uniswap-load
+    type: uniswap
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: large-contract-load
+    type: largecontract
+    users: 8
+    rate:
+      constant: 4
+
+  - waitFor: 20s
+
+  - updateRules:
+      Blocks:
+        MaxBlockGas: 10000000000
+      Epochs:
+        MaxEpochGas: 800000000000
+      Economy:
+        MinBaseFee: 1000000000
+
+  - waitForEpoch
+
+  - waitFor: 40s

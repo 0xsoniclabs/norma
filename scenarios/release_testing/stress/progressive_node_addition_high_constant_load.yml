@@ -1,0 +1,43 @@
+Name: Release Stress Progressive Node Addition High Constant Load
+
+Description: >-
+  Progressive stress test under high constant load while validators
+  are incorporated over time. Block production remains active
+  throughout the progressive scaling sequence.
+
+Scenario:
+  - startNode: validator-0
+    type: validator
+    imageName: "sonic:local"
+
+  - runApp: counter-high
+    type: counter
+    users: 120
+    rate:
+      constant: 30
+
+  - runApp: erc20-high
+    type: erc20
+    users: 120
+    rate:
+      constant: 30
+
+  - waitFor: 30s
+
+  - startNode: validator-1
+    type: validator
+    imageName: "sonic:local"
+
+  - waitFor: 30s
+
+  - startNode: validator-2
+    type: validator
+    imageName: "sonic:local"
+
+  - waitFor: 30s
+
+  - startNode: validator-3
+    type: validator
+    imageName: "sonic:local"
+
+  - waitFor: 30s

@@ -1,0 +1,37 @@
+Name: Release Features Event Throttler Mixed Flags
+
+Description: >-
+  Tests event throttler behavior with mixed feature flags. Some nodes
+  have the throttler enabled while others do not, verifying the network
+  remains live and produces consistent blocks in mixed configuration.
+
+Scenario:
+  - startNode: validator-dominant
+    type: validator
+    imageName: "sonic:local"
+    stake: 8000000
+    extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
+
+  - startNode: validator-minor-throttled
+    type: validator
+    imageName: "sonic:local"
+    stake: 1000000
+    extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
+
+  - startNode: validator-minor-unthrottled
+    type: validator
+    imageName: "sonic:local"
+    stake: 1000000
+    extraArguments: "--event-throttler=false --http.api admin,eth,sonic,txpool,dag"
+
+  - runApp: load
+    type: counter
+    users: 20
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10

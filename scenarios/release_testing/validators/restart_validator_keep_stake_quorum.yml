@@ -1,0 +1,36 @@
+Name: Release Validator Restart Keep Stake Quorum
+
+Description: >-
+  Verifies stopping and restarting one validator without undelegating
+  stake keeps the network alive due to remaining quorum.
+
+Scenario:
+  - startNode: validator-stable
+    type: validator
+    stake: 4500000
+    instances: 2
+
+  - startNode: validator-transient
+    type: validator
+    stake: 1000000
+
+  - runApp: normal
+    type: counter
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 20s
+
+  - stopNode: validator-transient
+
+  - waitFor: 30s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+
+  - startNode: validator-transient
+    type: validator
+
+  - waitFor: 20s

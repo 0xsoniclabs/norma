@@ -5,6 +5,7 @@ date: "`r Sys.Date()`"
 params:
     datafile: "measurements.csv"
     scenario: ""
+    description: ""
 ---
 
 ```{r setup, echo=FALSE, include=FALSE}
@@ -232,6 +233,14 @@ compute_incremental_rate <- function(data, group_cols) {
 ```
 
 This report summarizes the monitoring results of an execution of a Norma scenario.
+
+```{r scenario_description, echo=FALSE, results='asis'}
+if (nzchar(trimws(params$description))) {
+    cat("## Scenario Description\n\n")
+    cat(params$description)
+    cat("\n")
+}
+```
 
 ## Scenario Execution Timeline
 

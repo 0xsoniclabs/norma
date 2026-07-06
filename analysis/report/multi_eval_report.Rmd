@@ -5,6 +5,7 @@ date: "`r Sys.Date()`"
 params:
     datafile: "measurements.csv"
     scenario: ""
+    description: ""
 ---
 
 ```{r setup, echo=FALSE, include=FALSE}
@@ -88,7 +89,7 @@ ggplot() +
     theme(plot.title = element_text(hjust = 0.5))      # center title
 ```
 
-The following chart compares the througput of the runs over time.
+The following chart compares the throughput of the runs over time.
 
 ```{r throughput_over_time, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 received_rate <- all_data_with_start_time %>%
