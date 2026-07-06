@@ -19,7 +19,6 @@ package nodemon
 import (
 	"fmt"
 	"log/slog"
-	"sync"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring"
@@ -53,8 +52,7 @@ type BlockNodeMetricSource[T any] struct {
 	*utils.SyncedSeriesSource[monitoring.Node, monitoring.BlockNumber, T]
 	getBlockProperty func(b monitoring.Block) T
 	monitor          *monitoring.Monitor
-	syncingNodes     map[monitoring.Node]bool
-	syncingMutex     sync.Mutex
+	syncingTracker
 }
 
 // NewBlockTimeSource creates a metric capturing time of the block finalisation for each Node.
@@ -93,7 +91,7 @@ func newBlockNodeMetricsSource[T any](
 		SyncedSeriesSource: utils.NewSyncedSeriesSource(metric),
 		getBlockProperty:   getBlockProperty,
 		monitor:            monitor,
-		syncingNodes:       make(map[monitoring.Node]bool, 50),
+		syncingTracker:     newSyncingTracker(),
 	}
 
 	monitor.NodeLogProvider().RegisterLogListener(m)
@@ -119,33 +117,4 @@ func (s *BlockNodeMetricSource[T]) OnBlock(node monitoring.Node, block monitorin
 	s.markNodeAsSynced(node)
 }
 
-func (s *BlockNodeMetricSource[T]) markNodeAsSyncing(node monitoring.Node) {
-	s.syncingMutex.Lock()
-	defer s.syncingMutex.Unlock()
-	if _, exists := s.syncingNodes[node]; !exists {
-		s.syncingNodes[node] = true
-	}
-}
 
-func (s *BlockNodeMetricSource[T]) markNodeAsSynced(node monitoring.Node) {
-	s.syncingMutex.Lock()
-	defer s.syncingMutex.Unlock()
-	s.syncingNodes[node] = false
-}
-
-func (s *BlockNodeMetricSource[T]) isNodeSyncing(node monitoring.Node) bool {
-	s.syncingMutex.Lock()
-	defer s.syncingMutex.Unlock()
-	syncing, exists := s.syncingNodes[node]
-	if !exists {
-		return true
-	}
-	return syncing
-}
-
-func (s *BlockNodeMetricSource[T]) shouldSuppressAppendConflict(node monitoring.Node, err error) bool {
-	if !monitoring.IsOutOfOrderAppendError(err) {
-		return false
-	}
-	return s.isNodeSyncing(node)
-}

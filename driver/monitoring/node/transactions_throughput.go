@@ -19,7 +19,6 @@ package nodemon
 import (
 	"fmt"
 	"log/slog"
-	"sync"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring"
@@ -43,9 +42,7 @@ func init() {
 // TransactionsThroughputSource is a metric source that captures transaction throughput.
 type TransactionsThroughputSource struct {
 	BlockNodeMetricSource[float32]
-	lastTimes    map[monitoring.Node]time.Time // timestamps of the latest received blocks
-	syncingNodes map[monitoring.Node]bool
-	syncingMutex sync.Mutex
+	lastTimes map[monitoring.Node]time.Time // timestamps of the latest received blocks
 }
 
 // NewTransactionsThroughputSource creates a metric capturing transaction throughput.
@@ -54,9 +51,9 @@ func NewTransactionsThroughputSource(monitor *monitoring.Monitor) *TransactionsT
 		BlockNodeMetricSource: BlockNodeMetricSource[float32]{
 			SyncedSeriesSource: utils.NewSyncedSeriesSource(TransactionsThroughput),
 			monitor:            monitor,
+			syncingTracker:     newSyncingTracker(),
 		},
-		lastTimes:    make(map[monitoring.Node]time.Time, 50),
-		syncingNodes: make(map[monitoring.Node]bool, 50),
+		lastTimes: make(map[monitoring.Node]time.Time, 50),
 	}
 	monitor.NodeLogProvider().RegisterLogListener(m)
 
@@ -93,35 +90,4 @@ func (s *TransactionsThroughputSource) OnBlock(node monitoring.Node, block monit
 		}
 		s.markNodeAsSynced(node)
 	}
-}
-
-func (s *TransactionsThroughputSource) markNodeAsSyncing(node monitoring.Node) {
-	s.syncingMutex.Lock()
-	defer s.syncingMutex.Unlock()
-	if _, exists := s.syncingNodes[node]; !exists {
-		s.syncingNodes[node] = true
-	}
-}
-
-func (s *TransactionsThroughputSource) markNodeAsSynced(node monitoring.Node) {
-	s.syncingMutex.Lock()
-	defer s.syncingMutex.Unlock()
-	s.syncingNodes[node] = false
-}
-
-func (s *TransactionsThroughputSource) isNodeSyncing(node monitoring.Node) bool {
-	s.syncingMutex.Lock()
-	defer s.syncingMutex.Unlock()
-	syncing, exists := s.syncingNodes[node]
-	if !exists {
-		return true
-	}
-	return syncing
-}
-
-func (s *TransactionsThroughputSource) shouldSuppressAppendConflict(node monitoring.Node, err error) bool {
-	if !monitoring.IsOutOfOrderAppendError(err) {
-		return false
-	}
-	return s.isNodeSyncing(node)
 }
