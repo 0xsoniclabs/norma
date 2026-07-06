@@ -1,10 +1,11 @@
-# Summary: Upgrade network rules from Sonic to Allegro with mixed validator versions.
-# Expected outcomes:
-# - Validators on sonic:v2.1.5, sonic:v2.1.6, and sonic:local stay online across the Allegro activation.
-# - Baseline load continues before and after the rule upgrade.
-# - Allegro-specific BLS12-Add load runs successfully after the upgrade.
-
 Name: Rules Upgrade Sonic To Allegro Mixed Versions
+
+Description: >-
+  Upgrades network rules from Sonic to Allegro with mixed validator
+  versions. Validators on sonic:v2.1.5, sonic:v2.1.6, and sonic:local stay
+  online across the Allegro activation, baseline load continues before and
+  after the rule upgrade, and Allegro-specific BLS12-Add load runs
+  successfully after the upgrade.
 
 InitialNetworkRules:
   Upgrades:

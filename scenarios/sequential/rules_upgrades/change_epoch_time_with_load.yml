@@ -1,10 +1,10 @@
-# Summary: Change MAX_EPOCH_DURATION while sustained application load is running.
-# Expected outcomes:
-# - Network remains online while epoch duration is reduced at runtime.
-# - Running load continues across the rule update without interruption.
-# - The updated epoch duration is applied with no validator restart.
-
 Name: Rules Update Epoch Duration With Load
+
+Description: >-
+  Changes MAX_EPOCH_DURATION while sustained application load is running.
+  The network remains online while epoch duration is reduced at runtime,
+  running load continues across the rule update without interruption, and
+  the updated epoch duration is applied with no validator restart.
 
 InitialNetworkRules:
   Upgrades:

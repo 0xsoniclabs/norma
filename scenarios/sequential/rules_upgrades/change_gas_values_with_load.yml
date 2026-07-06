@@ -1,10 +1,11 @@
-# Summary: Change gas-related network rule values while diverse load is active.
-# Expected outcomes:
-# - Network continues processing transactions after MAX_BLOCK_GAS and MAX_EPOCH_GAS updates.
-# - Brio-enabled large contract load keeps running under the updated gas limits.
-# - Mixed load (counter, uniswap, largecontract) remains active through the rule change.
-
 Name: Rules Update Gas Values With Load
+
+Description: >-
+  Changes gas-related network rule values while diverse load is active.
+  The network continues processing transactions after MAX_BLOCK_GAS and
+  MAX_EPOCH_GAS updates, Brio-enabled large contract load keeps running
+  under the updated gas limits, and mixed load (counter, uniswap,
+  largecontract) remains active through the rule change.
 
 InitialNetworkRules:
   Upgrades:
@@ -12,9 +13,9 @@ InitialNetworkRules:
     Allegro: true
     Brio: true
   Blocks:
-    MaxBlockGas: 30000000
+    MaxBlockGas: 20500000000
   Epochs:
-    MaxEpochGas: 1000000000
+    MaxEpochGas: 1500000000000
 
 Scenario:
   - startNode: validator-main
@@ -44,9 +45,9 @@ Scenario:
 
   - updateRules:
       Blocks:
-        MaxBlockGas: 25000000
+        MaxBlockGas: 10000000000
       Epochs:
-        MaxEpochGas: 800000000
+        MaxEpochGas: 800000000000
       Economy:
         MinBaseFee: 1000000000
 

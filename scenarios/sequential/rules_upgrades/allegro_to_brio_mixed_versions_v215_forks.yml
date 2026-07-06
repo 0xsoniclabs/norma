@@ -1,10 +1,11 @@
-# Summary: Upgrade network rules from Allegro to Brio with mixed validator versions.
-# Expected outcomes:
-# - A sonic:v2.1.5 validator forks after Brio activation and is treated as expected failing behavior.
-# - sonic:v2.1.6 and sonic:local validators keep the network online via stake majority.
-# - Brio-specific large contract load executes after enabling Brio.
-
 Name: Rules Upgrade Allegro To Brio Mixed Versions v215 Forks
+
+Description: >-
+  Upgrades network rules from Allegro to Brio with mixed validator versions.
+  A sonic:v2.1.5 validator forks after Brio activation and is treated as
+  expected failing behavior, while sonic:v2.1.6 and sonic:local validators
+  keep the network online via stake majority. Brio-specific large contract
+  load executes after enabling Brio.
 
 InitialNetworkRules:
   Upgrades:

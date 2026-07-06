@@ -35,6 +35,8 @@ Scenario:
       Upgrades:
         Brio: true
 
+  - waitForEpoch
+
   - runApp: brio-large-contract
     type: largecontract
     users: 10
