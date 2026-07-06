@@ -101,7 +101,7 @@ func TestBlocksRolling_Blocks_WithStarts(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	configured := checker.Configure(CheckerConfig{"start": 5})
+	configured := checker.Configure(CheckerConfig{"start": int64(5)})
 	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
 	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
 	if err := configured.Check(t.Context()); err != nil {
@@ -138,6 +138,72 @@ func TestBlocksRolling_Configure(t *testing.T) {
 	emptySuccess := success.Configure(CheckerConfig{})
 	if err := emptySuccess.Check(t.Context()); err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// TestBlocksRolling_Start_UsesFirstVsLastComparison verifies that when a
+// non-zero start is set, the checker only compares the first in-range sample
+// to the latest sample instead of applying a sliding sub-window. This makes
+// the check robust against transient stalls inside the window.
+func TestBlocksRolling_Start_UsesFirstVsLastComparison(t *testing.T) {
+	// Long-lived stall in the middle, but overall progress at the ends.
+	// Sliding window (tolerance=5) would fail on the 6-sample flat span,
+	// but the windowed-mode (start > 0) check should pass because the
+	// first in-range sample (2) has a lower block height than the last (6).
+	blocks := []uint64{1, 2, 2, 2, 2, 2, 2, 3, 4, 5, 6}
+	series := createBlockSeries(t, blocks)
+
+	ctrl := gomock.NewController(t)
+	monitor := NewMockMonitoringData(ctrl)
+
+	// Sliding-window mode (start = 0) fails as expected.
+	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
+	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
+	strict := blocksRollingChecker{monitor: monitor, toleranceSamples: 5}
+	if err := strict.Check(t.Context()); err == nil {
+		t.Fatalf("expected sliding-window failure")
+	}
+
+	// Windowed mode (start = 1) passes because 2 < 6 at the endpoints.
+	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
+	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
+	windowed := strict.Configure(CheckerConfig{"start": int64(1)})
+	if err := windowed.Check(t.Context()); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// TestBlocksRolling_Start_FailsWhenWindowStalls verifies that the windowed
+// mode still fails if the block height did not advance across the window.
+func TestBlocksRolling_Start_FailsWhenWindowStalls(t *testing.T) {
+	// Progress in the first half, then a total stall for the last 5 samples.
+	blocks := []uint64{1, 2, 3, 4, 5, 5, 5, 5, 5, 5}
+	series := createBlockSeries(t, blocks)
+
+	ctrl := gomock.NewController(t)
+	monitor := NewMockMonitoringData(ctrl)
+	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
+	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
+
+	checker := (&blocksRollingChecker{monitor: monitor, toleranceSamples: 5}).
+		Configure(CheckerConfig{"start": int64(5)})
+	if err := checker.Check(t.Context()); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// TestBlocksRolling_ZeroTolerance_ReturnsErrorInsteadOfPanic verifies that
+// configuring tolerance=0 does not cause a divide-by-zero panic in the
+// sliding-window path; the checker must fail cleanly with a descriptive
+// error instead.
+func TestBlocksRolling_ZeroTolerance_ReturnsErrorInsteadOfPanic(t *testing.T) {
+	checker := &blocksRollingChecker{toleranceSamples: 0}
+	err := checker.Check(t.Context())
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if got := err.Error(); got != "tolerance must be > 0, got 0" {
+		t.Fatalf("unexpected error: %s", got)
 	}
 }
 

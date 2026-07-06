@@ -657,6 +657,17 @@ func execCheck(ctx context.Context, checkerName string, spec *parser.CheckSpec, 
 			config["tolerance"] = *spec.Tolerance
 		}
 	}
+	if spec.Start != nil {
+		// Translate the scenario-level "look back this far" duration into an
+		// absolute UnixNano timestamp suitable for the checker's `start`
+		// configuration key. Clamp to 0 when the computed start would
+		// underflow (e.g. an unreasonably large lookback duration).
+		lookBackNs := time.Now().UnixNano() - int64(*spec.Start)
+		if lookBackNs < 0 {
+			lookBackNs = 0
+		}
+		config["start"] = lookBackNs
+	}
 	if spec.Ceiling != nil {
 		config["ceiling"] = int(*spec.Ceiling)
 	}

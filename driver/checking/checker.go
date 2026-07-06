@@ -109,6 +109,7 @@ func (config *CheckerConfig) Check() error {
 
 	isBool := func(v any) bool { _, ok := v.(bool); return ok }
 	isPositiveInt := func(v any) bool { i, ok := v.(int); return ok && i >= 0 }
+	isNonNegativeInt64 := func(v any) bool { i, ok := v.(int64); return ok && i >= 0 }
 	isRulesPatch := func(v any) bool {
 		if _, ok := v.(map[string]any); ok {
 			return true
@@ -120,7 +121,7 @@ func (config *CheckerConfig) Check() error {
 	checks := map[string]func(any) bool{
 		"failing":   isBool,
 		"tolerance": isPositiveInt,
-		"start":     isPositiveInt,
+		"start":     isNonNegativeInt64,
 		"ceiling":   isPositiveInt,
 		"slack":     isPositiveInt,
 		"rules":     isRulesPatch,

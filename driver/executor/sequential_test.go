@@ -479,6 +479,85 @@ func TestSequential_Check(t *testing.T) {
 	}
 }
 
+func TestExecCheck_ForwardsStartAsMonitoringTime_WhenBlocksProducedHasStart(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	inner := checking.NewMockChecker(ctrl)
+	configured := checking.NewMockChecker(ctrl)
+
+	lookBack := 30 * time.Second
+
+	// Capture the config passed to Configure and validate the "start" key.
+	before := time.Now()
+	inner.EXPECT().Configure(gomock.Any()).DoAndReturn(
+		func(cfg checking.CheckerConfig) checking.Checker {
+			after := time.Now()
+			v, ok := cfg["start"]
+			if !ok {
+				t.Fatalf("expected 'start' in config, got %v", cfg)
+			}
+			startNanos, ok := v.(int64)
+			if !ok {
+				t.Fatalf("expected 'start' to be int64, got %T", v)
+			}
+			minNanos := before.Add(-lookBack).UnixNano()
+			maxNanos := after.Add(-lookBack).UnixNano()
+			if startNanos < minNanos || startNanos > maxNanos {
+				t.Fatalf("start=%d not within [%d,%d]", startNanos, minNanos, maxNanos)
+			}
+			return configured
+		},
+	)
+	configured.EXPECT().Check(gomock.Any()).Return(nil)
+
+	checks := checking.Checks{"blocksRolling": inner}
+	spec := &parser.CheckSpec{
+		Function: parser.FuncCheckBlocksProduced,
+		Start:    &lookBack,
+	}
+
+	if err := execCheck(t.Context(), "blocksRolling", spec, checks); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestExecCheck_ClampsStartToZero_WhenLookbackExceedsEpoch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	inner := checking.NewMockChecker(ctrl)
+	configured := checking.NewMockChecker(ctrl)
+
+	// A duration comfortably larger than the current time since the Unix
+	// epoch. This would otherwise underflow to a negative value.
+	lookBack := 200 * 365 * 24 * time.Hour
+
+	inner.EXPECT().Configure(gomock.Any()).DoAndReturn(
+		func(cfg checking.CheckerConfig) checking.Checker {
+			v, ok := cfg["start"]
+			if !ok {
+				t.Fatalf("expected 'start' in config, got %v", cfg)
+			}
+			start, ok := v.(int64)
+			if !ok {
+				t.Fatalf("expected 'start' to be int64, got %T", v)
+			}
+			if start != 0 {
+				t.Fatalf("expected start clamped to 0, got %d", start)
+			}
+			return configured
+		},
+	)
+	configured.EXPECT().Check(gomock.Any()).Return(nil)
+
+	checks := checking.Checks{"blocksRolling": inner}
+	spec := &parser.CheckSpec{
+		Function: parser.FuncCheckBlocksProduced,
+		Start:    &lookBack,
+	}
+
+	if err := execCheck(t.Context(), "blocksRolling", spec, checks); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestSequential_ContextCancellation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)

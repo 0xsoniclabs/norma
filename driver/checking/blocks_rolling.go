@@ -39,7 +39,7 @@ func (c *blocksRollingChecker) Configure(config CheckerConfig) Checker {
 
 	start := c.start
 	if s, exist := config["start"]; exist {
-		start = monitoring.Time(s.(int))
+		start = monitoring.Time(s.(int64))
 	}
 
 	return &blocksRollingChecker{
@@ -50,6 +50,9 @@ func (c *blocksRollingChecker) Configure(config CheckerConfig) Checker {
 }
 
 func (c *blocksRollingChecker) Check(ctx context.Context) error {
+	if c.toleranceSamples <= 0 {
+		return fmt.Errorf("tolerance must be > 0, got %d", c.toleranceSamples)
+	}
 	nodes := c.monitor.GetNodes()
 	// This function iterates through all nodes in the network and verifies whether their block height increases.
 	// A node with a stagnant block height indicates it is not actively participating in block production.
@@ -58,9 +61,17 @@ func (c *blocksRollingChecker) Check(ctx context.Context) error {
 	// The test ensures that at least one node is generating blocks, confirming that the network is operational
 	// to some extent. It does not verify the functionality of every node, as that is handled by other checks.
 	//
-	// To account for flexibility in block processing, the verification is performed within a sliding window
-	// defined by 'toleranceSamples'. Only the block height at the beginning and end of this window are assessed,
-	// allowing for scenarios where blocks may not be produced every second.
+	// Two evaluation modes are supported:
+	//   * start == 0 (default): a sliding window of size 'toleranceSamples' is
+	//     walked across the entire series; the node is functional if every
+	//     window shows a strict block-height increase from its oldest to its
+	//     newest sample.
+	//   * start > 0: the user has already narrowed the window of interest to
+	//     samples with Position >= start. The node is considered functional if
+	//     the block height at the first in-range sample is strictly less than
+	//     the block height of the latest sample. This models the intuitive
+	//     question "did the network make progress during the last N seconds?"
+	//     and is robust against transient stalls inside that window.
 	var networkFunctional bool
 	for _, node := range nodes {
 		nodeFunctional := true
@@ -79,7 +90,7 @@ func (c *blocksRollingChecker) Check(ctx context.Context) error {
 			// >= to account for various tick configuration
 			// example: if ticked at 0, 5, 10, ... and c.start = 8,
 			// the first tick that is bigger, 10, is selected instead.
-			if dp.Position >= monitoring.Time(c.start) {
+			if dp.Position >= c.start {
 				first = dp.Position
 				found = true
 				break
@@ -89,19 +100,28 @@ func (c *blocksRollingChecker) Check(ctx context.Context) error {
 			return fmt.Errorf("start %d not found", c.start)
 		}
 
-		items := series.GetRange(first, last.Position) // skip last item
-		window := make([]monitoring.BlockStatus, c.toleranceSamples)
-		for i, point := range append(items, *last) {
-			window[i%c.toleranceSamples] = point.Value
-			if i < c.toleranceSamples-1 {
-				continue
-			}
-			prev := (i - c.toleranceSamples + 1) % c.toleranceSamples
-			if window[prev].BlockHeight >= point.Value.BlockHeight {
+		items := append(series.GetRange(first, last.Position), *last)
+		if c.start > 0 {
+			// Windowed mode: compare the first in-range sample to the latest.
+			if items[0].Value.BlockHeight >= last.Value.BlockHeight {
 				nodeFunctional = false
-				break
+			}
+		} else {
+			// Sliding-window mode over the entire history.
+			window := make([]monitoring.BlockStatus, c.toleranceSamples)
+			for i, point := range items {
+				window[i%c.toleranceSamples] = point.Value
+				if i < c.toleranceSamples-1 {
+					continue
+				}
+				prev := (i - c.toleranceSamples + 1) % c.toleranceSamples
+				if window[prev].BlockHeight >= point.Value.BlockHeight {
+					nodeFunctional = false
+					break
+				}
 			}
 		}
+
 		networkFunctional = networkFunctional || nodeFunctional
 	}
 

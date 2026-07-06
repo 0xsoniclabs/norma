@@ -11,7 +11,7 @@ func TestCheckerConfig_Success(t *testing.T) {
 	configs := []CheckerConfig{
 		{"failing": true},
 		{"tolerance": 1},
-		{"start": 1},
+		{"start": int64(1)},
 		{"ceiling": 1},
 		{"slack": 1},
 		{"rules": map[string]any{"Blocks": map[string]any{"MaxBlockGas": 1}}},
@@ -33,6 +33,8 @@ func TestCheckerConfig_Failure(t *testing.T) {
 		{"failing": "false"},
 		{"tolerance": 1.0},
 		{"start": -1},
+		{"start": 1},
+		{"start": int64(-1)},
 		{"ceiling": nil},
 		{"rules": []any{"invalid"}},
 	}
