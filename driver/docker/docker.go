@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"os"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/network"
@@ -49,17 +50,6 @@ var SigInt Signal = "SIGINT"
 // services like the go-opera client.
 type Client struct {
 	cli *client.Client
-}
-
-// DockerNetwork is the interface satisfied by docker networks. It
-// exposes the identity needed to attach containers and a Cleanup method
-// to remove the network when it is no longer needed.
-//
-//go:generate mockgen -destination network_mock.go -package docker . DockerNetwork
-type DockerNetwork interface {
-	ID() string
-	Name() string
-	Cleanup(ctx context.Context) error
 }
 
 // Network represents a Docker network. It is used to connect Containers
@@ -95,11 +85,11 @@ type ContainerConfig struct {
 	ImageName       string
 	ShutdownTimeout *time.Duration
 	Environment     map[string]string
-	Entrypoint      []string      // Entrypoint to run when starting the container. Optional.
-	Network         DockerNetwork // Docker network to join, nil to join bridge network
-	DataDirBinding  *string       // mount client datadir to this path on host
-	GenesisFileBind *string       // mount genesis file on host to /genesis.json:ro in container
-	KeystoreBinding *string       // mount keystore dir on host to /datadir/keystore:ro in container
+	Entrypoint      []string // Entrypoint to run when starting the container. Optional.
+	Network         *Network // Docker network to join, nil to join bridge network
+	DataDirBinding  *string  // mount client datadir to this path on host
+	GenesisFileBind *string  // mount genesis file on host to /genesis.json:ro in container
+	KeystoreBinding *string  // mount keystore dir on host to /datadir/keystore:ro in container
 }
 
 // NewClient creates a new client facilitating the creation of Docker
@@ -199,7 +189,7 @@ func (c *Client) Start(ctx context.Context, config *ContainerConfig) (*Container
 	}
 
 	if config.Network != nil {
-		err := c.cli.NetworkConnect(ctx, config.Network.ID(), resp.ID, nil)
+		err := c.cli.NetworkConnect(ctx, config.Network.id, resp.ID, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -249,6 +239,24 @@ func (c *Client) CreateBridgeNetwork(ctx context.Context) (*Network, error) {
 		name:   name,
 		client: c,
 	}, nil
+}
+
+// CreateTestBridgeNetwork creates a Docker bridge network for use in
+// tests. When t is non-nil a cleanup function is registered that removes
+// the network after the test completes. When t is nil an error is
+// returned.
+func (c *Client) CreateTestBridgeNetwork(t *testing.T) *Network {
+	t.Helper()
+	dn, err := c.CreateBridgeNetwork(t.Context())
+	if err != nil {
+		t.Fatalf("failed to create docker network: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := dn.Cleanup(context.Background()); err != nil {
+			t.Errorf("failed to cleanup docker network: %v", err)
+		}
+	})
+	return dn
 }
 
 // Hostname returns the hostname of the Container. In this case it is the ID of the
@@ -332,9 +340,9 @@ func (c *Container) resolveIP() error {
 		return fmt.Errorf("failed to inspect container: %w", err)
 	}
 	if c.config.Network != nil {
-		ep, ok := info.NetworkSettings.Networks[c.config.Network.Name()]
+		ep, ok := info.NetworkSettings.Networks[c.config.Network.name]
 		if !ok || ep.IPAddress == "" {
-			return fmt.Errorf("container has no IP on network %s", c.config.Network.Name())
+			return fmt.Errorf("container has no IP on network %s", c.config.Network.name)
 		}
 		c.ip = ep.IPAddress
 		return nil

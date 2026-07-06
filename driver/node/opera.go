@@ -157,7 +157,7 @@ func ensureImageAvailable(ctx context.Context, image string) error {
 func StartOperaDockerNode(
 	ctx context.Context,
 	client *docker.Client,
-	dn docker.DockerNetwork,
+	dn *docker.Network,
 	config *OperaNodeConfig,
 ) (*OperaNode, error) {
 	// avoid slashes and underscores in labels
@@ -168,8 +168,7 @@ func StartOperaDockerNode(
 	}
 
 	if dn == nil {
-		return nil, fmt.Errorf(
-			"docker network is required to start an Opera node")
+		return nil, fmt.Errorf("docker network is required to start an Opera node")
 	}
 
 	exists, err := client.ContainerExists(config.Label)
@@ -177,9 +176,7 @@ func StartOperaDockerNode(
 		return nil, fmt.Errorf("failed to start docker node: %w", err)
 	}
 	if exists {
-		return nil, fmt.Errorf(
-			"failed to start docker node: container %q already running",
-			config.Label)
+		return nil, fmt.Errorf("failed to start docker node: container %q already running", config.Label)
 	}
 
 	image := driver.ResolveClientImageName(config.Image)

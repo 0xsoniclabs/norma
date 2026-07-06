@@ -77,7 +77,7 @@ func TestOperaNode_StartAndStop(t *testing.T) {
 	t.Cleanup(func() {
 		_ = docker.Close()
 	})
-	dn := createTestNetwork(t, docker)
+	dn := docker.CreateTestBridgeNetwork(t)
 	node, err := StartOperaDockerNode(t.Context(), docker, dn, &OperaNodeConfig{
 		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
@@ -129,7 +129,7 @@ func TestOperaNode_RpcServiceIsReadyAfterStartup(t *testing.T) {
 	t.Cleanup(func() {
 		_ = docker.Close()
 	})
-	dn := createTestNetwork(t, docker)
+	dn := docker.CreateTestBridgeNetwork(t)
 	node, err := StartOperaDockerNode(t.Context(), docker, dn, &OperaNodeConfig{
 		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
@@ -157,7 +157,7 @@ func TestOperaNode_StreamLog(t *testing.T) {
 		_ = docker.Close()
 	})
 
-	dn := createTestNetwork(t, docker)
+	dn := docker.CreateTestBridgeNetwork(t)
 	node, err := StartOperaDockerNode(t.Context(), docker, dn, &OperaNodeConfig{
 		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
@@ -214,7 +214,7 @@ func TestOperaNode_MetricsExposed(t *testing.T) {
 		_ = docker.Close()
 	})
 
-	dn := createTestNetwork(t, docker)
+	dn := docker.CreateTestBridgeNetwork(t)
 	node, err := StartOperaDockerNode(t.Context(), docker, dn, &OperaNodeConfig{
 		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
@@ -263,7 +263,7 @@ func TestClient_Stop_Graceful(t *testing.T) {
 		}
 	}()
 
-	dn := createTestNetwork(t, client)
+	dn := client.CreateTestBridgeNetwork(t)
 	node, err := StartOperaDockerNode(t.Context(), client, dn, &OperaNodeConfig{
 		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
@@ -309,20 +309,4 @@ func TestClient_Stop_Graceful(t *testing.T) {
 	case <-time.After(180 * time.Second):
 		t.Errorf("container did not stop gracefully")
 	}
-}
-
-func createTestNetwork(
-	t *testing.T, client *docker.Client,
-) docker.DockerNetwork {
-	t.Helper()
-	dn, err := client.CreateBridgeNetwork(t.Context())
-	if err != nil {
-		t.Fatalf("failed to create docker network: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := dn.Cleanup(context.Background()); err != nil {
-			t.Errorf("failed to cleanup docker network: %v", err)
-		}
-	})
-	return dn
 }

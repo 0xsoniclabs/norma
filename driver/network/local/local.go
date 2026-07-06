@@ -47,7 +47,7 @@ import (
 type LocalNetwork struct {
 	ctx            context.Context
 	docker         *docker.Client
-	network        docker.DockerNetwork
+	network        *docker.Network
 	config         driver.NetworkConfig
 	primaryAccount *app.Account
 
@@ -588,6 +588,6 @@ func (n *LocalNetwork) Shutdown() error {
 }
 
 // GetDockerNetwork returns the underlying docker network.
-func (n *LocalNetwork) GetDockerNetwork() docker.DockerNetwork {
+func (n *LocalNetwork) GetDockerNetwork() *docker.Network {
 	return n.network
 }
