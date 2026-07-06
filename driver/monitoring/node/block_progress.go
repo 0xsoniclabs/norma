@@ -54,9 +54,9 @@ func newNodeBlockStatusSource(monitor *mon.Monitor, period time.Duration) mon.So
 type blockProgressSensorFactory struct{}
 
 func (f *blockProgressSensorFactory) CreateSensor(node driver.Node) (utils.Sensor[mon.BlockStatus], error) {
-	url := node.GetServiceUrl(&opera.OperaRpcService)
-	if url == nil {
-		return nil, fmt.Errorf("node does not export an RPC server")
+	url, err := node.GetServiceUrl(&opera.OperaRpcService)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get RPC service URL: %w", err)
 	}
 	// current version of eth in sonic doesn't allow access to inner client
 	rpcClient, err := rpc.DialContext(context.Background(), string(*url))

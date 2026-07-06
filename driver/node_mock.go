@@ -102,11 +102,12 @@ func (mr *MockNodeMockRecorder) GetNodeID() *gomock.Call {
 }
 
 // GetServiceUrl mocks base method.
-func (m *MockNode) GetServiceUrl(arg0 *network.ServiceDescription) *URL {
+func (m *MockNode) GetServiceUrl(arg0 *network.ServiceDescription) (*URL, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetServiceUrl", arg0)
 	ret0, _ := ret[0].(*URL)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetServiceUrl indicates an expected call of GetServiceUrl.

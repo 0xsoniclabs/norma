@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -153,12 +154,21 @@ func ensureImageAvailable(ctx context.Context, image string) error {
 }
 
 // StartOperaDockerNode creates a new OperaNode running in a Docker container.
-func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker.Network, config *OperaNodeConfig) (*OperaNode, error) {
+func StartOperaDockerNode(
+	ctx context.Context,
+	client *docker.Client,
+	dn *docker.Network,
+	config *OperaNodeConfig,
+) (*OperaNode, error) {
 	// avoid slashes and underscores in labels
 	config.Label = strings.ReplaceAll(config.Label, "/", "-")
 	config.Label = strings.ReplaceAll(config.Label, "_", "-")
 	if !parser.NamePattern.MatchString(config.Label) {
 		return nil, fmt.Errorf("invalid label for node: '%v'", config.Label)
+	}
+
+	if dn == nil {
+		return nil, fmt.Errorf("docker network is required to start an Opera node")
 	}
 
 	exists, err := client.ContainerExists(config.Label)
@@ -209,83 +219,69 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		genesisJSONPath = *config.GenesisJsonPath
 	}
 
-	host, err := network.RetryReturn(ctx, network.DefaultRetryAttempts, 1*time.Second,
-		func(ctx context.Context) (*docker.Container, error) {
-			ports, err := network.GetFreePorts(len(operaServices.Services()))
+	envs := map[string]string{
+		"VALIDATOR_ID":     validatorId,
+		"VALIDATORS_COUNT": fmt.Sprintf("%d", config.NetworkConfig.Validators.GetNumValidators()),
+		"NETWORK_LATENCY":  fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
+		"EXTRA_ARGUMENTS":  config.ExtraArguments,
+	}
+
+	const dataDir = "/datadir"
+	envs["STATE_DB_DATADIR"] = dataDir
+
+	// when configured, mount the datadir to the host
+	var dataDirBinding *string
+	if config.MountDataDir != nil {
+		if err := os.MkdirAll(*config.MountDataDir, 0777); err != nil {
+			return nil, err
+		}
+
+		dataDirBinding = new(string)
+		*dataDirBinding = fmt.Sprintf("%s:%s", *config.MountDataDir, dataDir)
+	}
+
+	genesisBind := fmt.Sprintf("%s:/genesis.json:ro", genesisJSONPath)
+
+	var keystoreBinding *string
+	if isValidator {
+		privKey, pubKey, address, err := genesis.DeriveValidatorKey(*config.ValidatorId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to derive validator key: %w", err)
+		}
+		envs["VALIDATOR_PUBKEY"] = pubKey
+		envs["VALIDATOR_ADDRESS"] = address
+
+		if config.MountDataDir != nil {
+			if err := genesis.WriteValidatorKeystore(privKey, *config.MountDataDir); err != nil {
+				return nil, fmt.Errorf("failed to write validator keystore in mounted datadir: %w", err)
+			}
+		} else {
+			validatorDir, err := os.MkdirTemp("", fmt.Sprintf("norma-validator-%d-*", *config.ValidatorId))
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to create validator temp dir: %w", err)
+			}
+			tempDirs = append(tempDirs, validatorDir)
+
+			if err := genesis.WriteValidatorKeystore(privKey, validatorDir); err != nil {
+				return nil, fmt.Errorf("failed to write validator keystore: %w", err)
 			}
 
-			portForwarding := make(map[network.Port]network.Port, len(ports))
-			for i, service := range operaServices.Services() {
-				portForwarding[service.Port] = ports[i]
-			}
+			keystorePath := filepath.Join(validatorDir, "keystore")
+			keystoreBinding = new(string)
+			*keystoreBinding = fmt.Sprintf("%s:%s/keystore:ro", keystorePath, dataDir)
+		}
+	}
 
-			envs := map[string]string{
-				"VALIDATOR_ID":     validatorId,
-				"VALIDATORS_COUNT": fmt.Sprintf("%d", config.NetworkConfig.Validators.GetNumValidators()),
-				"NETWORK_LATENCY":  fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
-				"EXTRA_ARGUMENTS":  config.ExtraArguments,
-			}
-
-			const dataDir = "/datadir"
-			envs["STATE_DB_DATADIR"] = dataDir
-
-			// when configured, mount the datadir to the host
-			var dataDirBinding *string
-			if config.MountDataDir != nil {
-				if err := os.MkdirAll(*config.MountDataDir, 0777); err != nil {
-					return nil, err
-				}
-
-				dataDirBinding = new(string)
-				*dataDirBinding = fmt.Sprintf("%s:%s", *config.MountDataDir, dataDir)
-			}
-
-			genesisBind := fmt.Sprintf("%s:/genesis.json:ro", genesisJSONPath)
-
-			var keystoreBinding *string
-			if isValidator {
-				privKey, pubKey, address, err := genesis.DeriveValidatorKey(*config.ValidatorId)
-				if err != nil {
-					return nil, fmt.Errorf("failed to derive validator key: %w", err)
-				}
-				envs["VALIDATOR_PUBKEY"] = pubKey
-				envs["VALIDATOR_ADDRESS"] = address
-
-				if config.MountDataDir != nil {
-					if err := genesis.WriteValidatorKeystore(privKey, *config.MountDataDir); err != nil {
-						return nil, fmt.Errorf("failed to write validator keystore in mounted datadir: %w", err)
-					}
-				} else {
-					validatorDir, err := os.MkdirTemp("", fmt.Sprintf("norma-validator-%d-*", *config.ValidatorId))
-					if err != nil {
-						return nil, fmt.Errorf("failed to create validator temp dir: %w", err)
-					}
-					tempDirs = append(tempDirs, validatorDir)
-
-					if err := genesis.WriteValidatorKeystore(privKey, validatorDir); err != nil {
-						return nil, fmt.Errorf("failed to write validator keystore: %w", err)
-					}
-
-					keystorePath := filepath.Join(validatorDir, "keystore")
-					keystoreBinding = new(string)
-					*keystoreBinding = fmt.Sprintf("%s:%s/keystore:ro", keystorePath, dataDir)
-				}
-			}
-
-			return client.Start(ctx,
-				&docker.ContainerConfig{
-					Hostname:        config.Label,
-					ImageName:       image,
-					ShutdownTimeout: &shutdownTimeout,
-					PortForwarding:  portForwarding,
-					Environment:     envs,
-					Network:         dn,
-					DataDirBinding:  dataDirBinding,
-					GenesisFileBind: &genesisBind,
-					KeystoreBinding: keystoreBinding,
-				})
+	host, err := client.Start(ctx,
+		&docker.ContainerConfig{
+			Hostname:        config.Label,
+			ImageName:       image,
+			ShutdownTimeout: &shutdownTimeout,
+			Environment:     envs,
+			Network:         dn,
+			DataDirBinding:  dataDirBinding,
+			GenesisFileBind: &genesisBind,
+			KeystoreBinding: keystoreBinding,
 		})
 
 	if err != nil {
@@ -317,6 +313,9 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 			if err := node.host.CheckRunning(ctx); err != nil {
 				return fmt.Errorf("%w: %w", err, network.ErrPermanent)
 			}
+			if err := connectivityCheck(ctx, node); err != nil {
+				return err
+			}
 			_, err = node.GetNodeID()
 			return err
 		})
@@ -330,6 +329,25 @@ func StartOperaDockerNode(ctx context.Context, client *docker.Client, dn *docker
 		fmt.Errorf("failed to get node online, %w", err),
 		node.Cleanup(ctx),
 	)
+}
+
+// connectivityCheck attempts to connect to the Opera RPC service of the given host.
+func connectivityCheck(ctx context.Context, node *OperaNode) error {
+	addr, err := node.host.GetAddressForService(&OperaRpcService)
+	if err != nil {
+		return fmt.Errorf("failed to get RPC service address: %w", err)
+	}
+
+	conn, dialErr := net.DialTimeout("tcp", string(*addr), 5*time.Second)
+	if dialErr != nil {
+		return fmt.Errorf("failed to connect to RPC service at %s: %w",
+			string(*addr), dialErr)
+	}
+	if err := conn.Close(); err != nil {
+		return fmt.Errorf("failed to close connection to RPC service at %s: %w",
+			string(*addr), err)
+	}
+	return nil
 }
 
 // printLog streams and prints the logs of the given OperaNode, to debug cause of
@@ -376,17 +394,20 @@ func (n *OperaNode) CheckRunning(ctx context.Context) error {
 	return n.host.CheckRunning(ctx)
 }
 
-func (n *OperaNode) GetServiceUrl(service *network.ServiceDescription) *driver.URL {
-	addr := n.host.GetAddressForService(service)
-	if addr == nil {
-		return nil
+func (n *OperaNode) GetServiceUrl(service *network.ServiceDescription) (*driver.URL, error) {
+	addr, err := n.host.GetAddressForService(service)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get service address for %s: %w", service.Name, err)
 	}
 	url := driver.URL(fmt.Sprintf("%s://%s", service.Protocol, *addr))
-	return &url
+	return &url, nil
 }
 
 func (n *OperaNode) GetNodeID() (driver.NodeID, error) {
-	url := n.GetServiceUrl(&OperaRpcService)
+	url, err := n.GetServiceUrl(&OperaRpcService)
+	if err != nil {
+		return "", fmt.Errorf("failed to get RPC service URL: %w", err)
+	}
 	if url == nil {
 		return "", fmt.Errorf("node does not export an RPC server")
 	}
@@ -428,9 +449,9 @@ func (n *OperaNode) Cleanup(ctx context.Context) error {
 }
 
 func (n *OperaNode) DialRpc(ctx context.Context) (rpcdriver.Client, error) {
-	url := n.GetServiceUrl(&OperaRpcService)
-	if url == nil {
-		return nil, fmt.Errorf("node %s does not export an RPC server", n.GetLabel())
+	url, err := n.GetServiceUrl(&OperaRpcService)
+	if err != nil {
+		return nil, fmt.Errorf("node %s does not export an RPC server: %w", n.GetLabel(), err)
 	}
 
 	rpcClient, err := network.RetryReturn(ctx, network.DefaultRetryAttempts, 1*time.Second,

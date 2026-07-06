@@ -42,7 +42,7 @@ func TestNumNodeRetrievesNodeCount(t *testing.T) {
 			node.EXPECT().GetLabel().Return(fmt.Sprintf("%d", i)).AnyTimes()
 			node.EXPECT().StreamLog(gomock.Any()).AnyTimes().Return(io.NopCloser(strings.NewReader(monitoring.Node1TestLog)), nil)
 			url1 := driver.URL("node")
-			node.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&url1)
+			node.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&url1, nil)
 			nodes = append(nodes, node)
 		}
 		return nodes

@@ -173,7 +173,8 @@ func TestMonitorIntegrationPrometheusLogReceived(t *testing.T) {
 	t.Cleanup(func() {
 		_ = client.Close()
 	})
-	node, err := opera.StartOperaDockerNode(t.Context(), client, nil, &opera.OperaNodeConfig{
+	dn := client.CreateTestBridgeNetwork(t)
+	node, err := opera.StartOperaDockerNode(t.Context(), client, dn, &opera.OperaNodeConfig{
 		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())},

@@ -64,6 +64,9 @@ func Retry(
 ) error {
 	_, err := RetryReturn(ctx, numAttempts, delay, func(ctx context.Context) (*int, error) {
 		err := do(ctx)
+		if err != nil {
+			slog.Debug("retry failed", "error", err)
+		}
 		return nil, err
 	})
 	return err

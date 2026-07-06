@@ -33,9 +33,9 @@ import (
 type PprofData []byte
 
 func GetPprofData(node driver.Node, duration time.Duration) (data PprofData, err error) {
-	url := node.GetServiceUrl(&opera.OperaDebugService)
-	if url == nil {
-		return nil, fmt.Errorf("node does not offer the pprof service")
+	url, err := node.GetServiceUrl(&opera.OperaDebugService)
+	if err != nil {
+		return nil, fmt.Errorf("node does not offer the pprof service: %w", err)
 	}
 	resp, err := http.Get(fmt.Sprintf("%s/debug/pprof/profile?seconds=%d", *url, int(duration.Seconds())))
 	if err != nil {

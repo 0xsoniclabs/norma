@@ -45,9 +45,9 @@ func TestLogsDispatched(t *testing.T) {
 	bUrl := driver.URL("B")
 	cUrl := driver.URL("C")
 
-	node1.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&aUrl)
-	node2.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&bUrl)
-	node3.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&cUrl)
+	node1.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&aUrl, nil)
+	node2.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&bUrl, nil)
+	node3.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&cUrl, nil)
 
 	node1.EXPECT().GetLabel().AnyTimes().Return("A")
 	node2.EXPECT().GetLabel().AnyTimes().Return("B")
@@ -98,7 +98,7 @@ func TestLogsDispatchedLogsOrdered(t *testing.T) {
 
 	node1 := driver.NewMockNode(ctrl)
 	aUrl := driver.URL("A")
-	node1.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&aUrl)
+	node1.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&aUrl, nil)
 	node1.EXPECT().GetLabel().AnyTimes().Return("A")
 
 	// simulate existing nodes
@@ -143,7 +143,7 @@ func TestLogsDispatchedShutdown(t *testing.T) {
 
 	node1 := driver.NewMockNode(ctrl)
 	aUrl := driver.URL("A")
-	node1.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&aUrl)
+	node1.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&aUrl, nil)
 	node1.EXPECT().GetLabel().AnyTimes().Return("A")
 
 	// simulate existing nodes
@@ -192,7 +192,7 @@ func TestLogsDispatchedUnregisterListener(t *testing.T) {
 
 	node1 := driver.NewMockNode(ctrl)
 	aUrl := driver.URL("A")
-	node1.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&aUrl)
+	node1.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&aUrl, nil)
 	node1.EXPECT().GetLabel().AnyTimes().Return("A")
 
 	// simulate existing nodes
@@ -267,7 +267,7 @@ func TestLogsDispatchedShutdownTwice(t *testing.T) {
 
 	aUrl := driver.URL("A")
 
-	node1.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&aUrl)
+	node1.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&aUrl, nil)
 
 	node1.EXPECT().GetLabel().AnyTimes().Return("A")
 
@@ -295,7 +295,7 @@ func TestLogsCannotAddListenerAfterShutdown(t *testing.T) {
 
 	aUrl := driver.URL("A")
 
-	node1.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&aUrl)
+	node1.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&aUrl, nil)
 
 	node1.EXPECT().GetLabel().AnyTimes().Return("A")
 

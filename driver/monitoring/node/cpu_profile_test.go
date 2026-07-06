@@ -34,7 +34,8 @@ func TestCanCollectCpuProfileDateFromOperaNode(t *testing.T) {
 	t.Cleanup(func() {
 		_ = docker.Close()
 	})
-	node, err := opera.StartOperaDockerNode(t.Context(), docker, nil, &opera.OperaNodeConfig{
+	dn := docker.CreateTestBridgeNetwork(t)
+	node, err := opera.StartOperaDockerNode(t.Context(), docker, dn, &opera.OperaNodeConfig{
 		Label:         t.Name(),
 		Image:         driver.DefaultClientDockerImageName,
 		NetworkConfig: &driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())},
