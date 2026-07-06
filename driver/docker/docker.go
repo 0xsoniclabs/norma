@@ -86,7 +86,7 @@ type ContainerConfig struct {
 	ShutdownTimeout *time.Duration
 	Environment     map[string]string
 	Entrypoint      []string // Entrypoint to run when starting the container. Optional.
-	Network         *Network // Docker network to join, nil to join bridge network
+	Network         *Network // Docker network to join
 	DataDirBinding  *string  // mount client datadir to this path on host
 	GenesisFileBind *string  // mount genesis file on host to /genesis.json:ro in container
 	KeystoreBinding *string  // mount keystore dir on host to /datadir/keystore:ro in container
