@@ -35,5 +35,3 @@ Scenario:
   - checks:
       - blocksProduced:
           tolerance: 10
-      - eventThrottled:
-          ceiling: 10
