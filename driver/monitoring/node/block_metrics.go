@@ -116,5 +116,3 @@ func (s *BlockNodeMetricSource[T]) OnBlock(node monitoring.Node, block monitorin
 	}
 	s.markNodeAsSynced(node)
 }
-
-
