@@ -8,7 +8,6 @@ Description: >-
 Scenario:
   - startNode: validator-0
     type: validator
-    imageName: "sonic:local"
 
   - runApp: counter-high
     type: counter
@@ -26,18 +25,15 @@ Scenario:
 
   - startNode: validator-1
     type: validator
-    imageName: "sonic:local"
 
   - waitFor: 30s
 
   - startNode: validator-2
     type: validator
-    imageName: "sonic:local"
 
   - waitFor: 30s
 
   - startNode: validator-3
     type: validator
-    imageName: "sonic:local"
 
   - waitFor: 30s

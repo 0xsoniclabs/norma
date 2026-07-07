@@ -8,7 +8,6 @@ Description: >-
 Scenario:
   - startNode: validator-0
     type: validator
-    imageName: "sonic:local"
 
   - runApp: counter-slope
     type: counter
