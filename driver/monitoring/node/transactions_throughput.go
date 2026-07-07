@@ -47,14 +47,13 @@ type TransactionsThroughputSource struct {
 
 // NewTransactionsThroughputSource creates a metric capturing transaction throughput.
 func NewTransactionsThroughputSource(monitor *monitoring.Monitor) *TransactionsThroughputSource {
-	blockMetrics := BlockNodeMetricSource[float32]{
-		SyncedSeriesSource: utils.NewSyncedSeriesSource(TransactionsThroughput),
-		monitor:            monitor,
-	}
-
 	m := &TransactionsThroughputSource{
-		BlockNodeMetricSource: blockMetrics,
-		lastTimes:             make(map[monitoring.Node]time.Time, 50),
+		BlockNodeMetricSource: BlockNodeMetricSource[float32]{
+			SyncedSeriesSource: utils.NewSyncedSeriesSource(TransactionsThroughput),
+			monitor:            monitor,
+			syncingTracker:     newSyncingTracker(),
+		},
+		lastTimes: make(map[monitoring.Node]time.Time, 50),
 	}
 	monitor.NodeLogProvider().RegisterLogListener(m)
 
@@ -67,6 +66,7 @@ func newTransactionsThroughputSource(monitor *monitoring.Monitor) monitoring.Sou
 }
 
 func (s *TransactionsThroughputSource) OnBlock(node monitoring.Node, block monitoring.Block) {
+	s.markNodeAsSyncing(node)
 
 	prevTime, exists := s.lastTimes[node]
 	s.lastTimes[node] = block.Time
@@ -82,7 +82,12 @@ func (s *TransactionsThroughputSource) OnBlock(node monitoring.Node, block monit
 		txs := float64(block.Txs) * 1e9 / float64(timeDiff)
 		series := s.GetOrAddSubject(node)
 		if err := series.Append(monitoring.BlockNumber(block.Height), float32(txs)); err != nil {
+			if s.shouldSuppressAppendConflict(node, err) {
+				return
+			}
 			slog.Error("error to add to the series", "error", err)
+			return
 		}
+		s.markNodeAsSynced(node)
 	}
 }

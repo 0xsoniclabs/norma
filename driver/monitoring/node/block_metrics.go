@@ -52,6 +52,7 @@ type BlockNodeMetricSource[T any] struct {
 	*utils.SyncedSeriesSource[monitoring.Node, monitoring.BlockNumber, T]
 	getBlockProperty func(b monitoring.Block) T
 	monitor          *monitoring.Monitor
+	syncingTracker
 }
 
 // NewBlockTimeSource creates a metric capturing time of the block finalisation for each Node.
@@ -90,6 +91,7 @@ func newBlockNodeMetricsSource[T any](
 		SyncedSeriesSource: utils.NewSyncedSeriesSource(metric),
 		getBlockProperty:   getBlockProperty,
 		monitor:            monitor,
+		syncingTracker:     newSyncingTracker(),
 	}
 
 	monitor.NodeLogProvider().RegisterLogListener(m)
@@ -103,8 +105,14 @@ func (s *BlockNodeMetricSource[T]) Shutdown() error {
 }
 
 func (s *BlockNodeMetricSource[T]) OnBlock(node monitoring.Node, block monitoring.Block) {
+	s.markNodeAsSyncing(node)
 	series := s.GetOrAddSubject(node)
 	if err := series.Append(monitoring.BlockNumber(block.Height), s.getBlockProperty(block)); err != nil {
+		if s.shouldSuppressAppendConflict(node, err) {
+			return
+		}
 		slog.Error("error to add to the series", "error", err)
+		return
 	}
+	s.markNodeAsSynced(node)
 }

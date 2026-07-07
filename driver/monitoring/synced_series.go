@@ -17,12 +17,18 @@
 package monitoring
 
 import (
-	"fmt"
+	"errors"
 	"sort"
 	"sync"
 
 	"golang.org/x/exp/constraints"
 )
+
+var ErrOutOfOrderAppend = errors.New("cannot append data out-of-order")
+
+func IsOutOfOrderAppendError(err error) bool {
+	return errors.Is(err, ErrOutOfOrderAppend)
+}
 
 // SyncedSeries implements a generic series retaining all data in memory and
 // offering synchronized access to its content.
@@ -69,7 +75,7 @@ func (s *SyncedSeries[K, T]) Append(point K, value T) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	if len(s.data) > 0 && s.data[len(s.data)-1].Position >= point {
-		return fmt.Errorf("cannot append data out-of-order")
+		return ErrOutOfOrderAppend
 	}
 	s.data = append(s.data, DataPoint[K, T]{point, value})
 	return nil
