@@ -6,6 +6,7 @@ params:
     datafile: "measurements.csv"
     scenario: ""
     description: ""
+    scenario_file: ""
 ---
 
 ```{r setup, echo=FALSE, include=FALSE}
