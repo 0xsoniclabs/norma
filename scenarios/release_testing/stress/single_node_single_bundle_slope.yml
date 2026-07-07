@@ -16,7 +16,6 @@ InitialNetworkRules:
 Scenario:
   - startNode: validator-0
     type: validator
-    imageName: "sonic:local"
 
   - runApp: bundles-slope
     type: subsidizedbundle
