@@ -1,4 +1,4 @@
-Name: Release Features Event Throttler Load With Different Stakes
+Name: Event Throttler With Different Stakes
 
 Description: >-
   Verifies that the event throttler correctly limits event emission
@@ -9,13 +9,12 @@ Scenario:
   - startNode: validator-dominant
     type: validator
     stake: 9_000_000
-    extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag" # required for event throttler check
+    extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
 
   - startNode: validator-non-dominant
     type: validator
     stake: 1_000_000
     extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
-    instances: 2
 
   - runApp: load
     type: counter
@@ -29,4 +28,12 @@ Scenario:
       - blocksProduced:
           tolerance: 10
       - eventThrottled:
-          ceiling: 10
+          ceiling: 35
+          throttledNodes:
+            - validator-non-dominant
+      - eventThrottled:
+          ceiling: 35
+          throttledNodes:
+            - validator-dominant
+          failing: true
+

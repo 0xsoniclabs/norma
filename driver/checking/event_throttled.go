@@ -21,39 +21,61 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"math/big"
+	"sort"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/rpc"
+	"github.com/0xsoniclabs/sonic/gossip/contract/sfc100"
+	"github.com/0xsoniclabs/sonic/opera/contracts/sfc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-// defaultThrottleCeiling is the default maximum ratio (in percent)
-// between the least-emitting and most-emitting non-dominant validators.
+// defaultThrottleCeiling is the default maximum ratio (in percent) between
+// the least-emitting non-dominant validator and the max-emitting dominant
+// validator. Values above the ceiling indicate the throttler is not
+// effective enough.
 const defaultThrottleCeiling = 50
+
+// defaultDominantStakeThreshold matches sonic's emitter throttler default
+// (see emitter/config.DefaultThrottlerConfig). The dominant set is the
+// smallest set of highest-staked validators whose cumulative stake meets
+// or exceeds threshold * total stake.
+const defaultDominantStakeThreshold = 0.75
 
 func init() {
 	RegisterNetworkCheck("eventThrottled",
 		func(net driver.Network, _ *monitoring.Monitor) Checker {
-			return &eventThrottledChecker{
-				net:     net,
-				ceiling: defaultThrottleCeiling,
-			}
+			return newEventThrottledChecker(net)
 		})
 }
 
-// eventThrottledChecker verifies that the event throttler is effective
-// by comparing event emission among non-dominant validators. When some
-// validators have the throttler enabled and others do not, the throttled
-// ones should emit significantly fewer events.
-//
-// The check passes when the minimum-emitting non-dominant validator
-// produces at most ceiling% of the events that the maximum-emitting
-// non-dominant validator produces.
+func newEventThrottledChecker(net driver.Network) *eventThrottledChecker {
+	return &eventThrottledChecker{
+		net:            net,
+		ceiling:        defaultThrottleCeiling,
+		stakeThreshold: defaultDominantStakeThreshold,
+		fetchStakes:    fetchValidatorStakes,
+	}
+}
+
+// eventThrottledChecker verifies that the event throttler is effective by
+// comparing event emission of throttled validators against the
+// unthrottled reference set. The throttled set is either specified
+// explicitly via the `throttledNodes` config (a list of node labels) or,
+// when unspecified, derived from stake: the dominant set (as computed by
+// sonic's emitter throttler) forms the unthrottled reference, and all
+// non-dominant validators are expected to be throttled.
 type eventThrottledChecker struct {
-	net     driver.Network
-	ceiling int // max percentage (0–100)
+	net            driver.Network
+	ceiling        int      // max percentage (0–100)
+	stakeThreshold float64  // cumulative stake fraction that defines dominance
+	throttledNodes []string // explicit node labels expected to be throttled
+	// fetchStakes returns the current-epoch received stake per validator
+	// ID. Overridable for tests.
+	fetchStakes func(client rpc.Client) (map[uint64]*big.Int, error)
 }
 
 func (c *eventThrottledChecker) Configure(config CheckerConfig) Checker {
@@ -63,12 +85,35 @@ func (c *eventThrottledChecker) Configure(config CheckerConfig) Checker {
 			ceiling = i
 		}
 	}
-	return &eventThrottledChecker{net: c.net, ceiling: ceiling}
+	threshold := defaultDominantStakeThreshold
+	if v, ok := config["stakeThreshold"]; ok {
+		if f, ok := v.(float64); ok {
+			threshold = f
+		}
+	}
+	var throttled []string
+	if v, ok := config["throttledNodes"]; ok {
+		switch list := v.(type) {
+		case []string:
+			throttled = list
+		case []any:
+			for _, item := range list {
+				if s, ok := item.(string); ok {
+					throttled = append(throttled, s)
+				}
+			}
+		}
+	}
+	return &eventThrottledChecker{
+		net:            c.net,
+		ceiling:        ceiling,
+		stakeThreshold: threshold,
+		throttledNodes: throttled,
+		fetchStakes:    c.fetchStakes,
+	}
 }
 
 func (c *eventThrottledChecker) Check(ctx context.Context) error {
-	ceiling := c.ceiling
-
 	nodes := c.net.GetActiveNodes()
 	if len(nodes) == 0 {
 		return fmt.Errorf("no active nodes")
@@ -88,7 +133,75 @@ func (c *eventThrottledChecker) Check(ctx context.Context) error {
 	labels := nodeLabels(nodes)
 	logEmissionStats(counts, labels)
 
-	return verifyThrottling(counts, labels, ceiling)
+	throttledSet, err := c.resolveThrottledSet(client, nodes, labels)
+	if err != nil {
+		return err
+	}
+
+	return verifyThrottling(counts, throttledSet, labels, c.ceiling)
+}
+
+// resolveThrottledSet returns the set of validator IDs that are expected
+// to be throttled. When explicit node labels are configured, they take
+// precedence over stake-based inference.
+func (c *eventThrottledChecker) resolveThrottledSet(
+	client rpc.Client,
+	nodes []driver.Node,
+	labels map[int]string,
+) (map[uint64]struct{}, error) {
+	if len(c.throttledNodes) > 0 {
+		set, err := throttledSetFromLabels(c.throttledNodes, nodes)
+		if err != nil {
+			return nil, err
+		}
+		logThrottledSet(set, labels, "explicit")
+		return set, nil
+	}
+
+	stakes, err := c.fetchStakes(client)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to fetch validator stakes: %w", err,
+		)
+	}
+	dominantSet := computeDominantSet(stakes, c.stakeThreshold)
+	logDominantSet(dominantSet, stakes, labels)
+
+	// Non-dominant validators (by stake) are the implicit throttled set.
+	set := make(map[uint64]struct{})
+	for id := range stakes {
+		if _, isDominant := dominantSet[id]; !isDominant {
+			set[id] = struct{}{}
+		}
+	}
+	return set, nil
+}
+
+// throttledSetFromLabels resolves node labels to validator IDs, returning
+// an error when any configured label does not match an active validator.
+func throttledSetFromLabels(
+	labelsWanted []string, nodes []driver.Node,
+) (map[uint64]struct{}, error) {
+	byLabel := make(map[string]uint64, len(nodes))
+	for _, n := range nodes {
+		id := n.GetValidatorId()
+		if id == nil {
+			continue
+		}
+		byLabel[n.GetLabel()] = uint64(*id)
+	}
+	set := make(map[uint64]struct{}, len(labelsWanted))
+	for _, label := range labelsWanted {
+		id, ok := byLabel[label]
+		if !ok {
+			return nil, fmt.Errorf(
+				"throttledNodes: no active validator with label %q",
+				label,
+			)
+		}
+		set[id] = struct{}{}
+	}
+	return set, nil
 }
 
 // dialFirstReachable returns an RPC client for the first non-failing
@@ -261,62 +374,63 @@ func logEmissionStats(counts map[uint64]int, labels map[int]string) {
 	}
 }
 
-// verifyThrottling checks that the least-emitting non-dominant
-// validator produced at most ceiling% of the most-emitting
-// non-dominant validator's events.
-func verifyThrottling(counts map[uint64]int, labels map[int]string, ceiling int) error {
-	// Identify the dominant validator (most events). On ties the
-	// choice is arbitrary, but the check remains valid because
-	// it only compares non-dominant validators against each other.
-	maxCount := 0
-	var dominantCreator uint64
+// verifyThrottling checks that the least-emitting throttled validator
+// produced at most ceiling% of the events of the max-emitting
+// unthrottled validator. The `throttledSet` names the validators
+// expected to be throttled; all other observed validators serve as the
+// unthrottled reference.
+func verifyThrottling(
+	counts map[uint64]int,
+	throttledSet map[uint64]struct{},
+	labels map[int]string,
+	ceiling int,
+) error {
+	// Find the max-emitting unthrottled validator as the reference.
+	// Only validators actually observed in the DAG are considered.
+	maxUnthrottled := 0
+	var unthrottledCreator uint64
 	for creator, count := range counts {
-		if count > maxCount {
-			maxCount = count
-			dominantCreator = creator
-		}
-	}
-
-	// Among non-dominant validators, find min and max emitters.
-	minNonDom := math.MaxInt
-	maxNonDom := 0
-	var minCreator, maxCreator uint64
-	nonDomCount := 0
-	for creator, count := range counts {
-		if creator == dominantCreator {
+		if _, isThrottled := throttledSet[creator]; isThrottled {
 			continue
 		}
-		nonDomCount++
-		if count < minNonDom {
-			minNonDom = count
+		if count > maxUnthrottled {
+			maxUnthrottled = count
+			unthrottledCreator = creator
+		}
+	}
+
+	// Find the least-emitting throttled validator among those observed.
+	minThrottled := math.MaxInt
+	var minCreator uint64
+	observedThrottled := 0
+	for creator, count := range counts {
+		if _, isThrottled := throttledSet[creator]; !isThrottled {
+			continue
+		}
+		observedThrottled++
+		if count < minThrottled {
+			minThrottled = count
 			minCreator = creator
 		}
-		if count > maxNonDom {
-			maxNonDom = count
-			maxCreator = creator
-		}
 	}
 
-	if nonDomCount < 2 {
-		return fmt.Errorf(
-			"need at least 2 non-dominant validators, got %d",
-			nonDomCount,
+	if observedThrottled < 1 {
+		return fmt.Errorf("need at least 1 throttled validator, got %d",
+			observedThrottled,
 		)
 	}
-	if maxNonDom == 0 {
-		return fmt.Errorf(
-			"max non-dominant validator emitted 0 events",
-		)
+	if maxUnthrottled == 0 {
+		return fmt.Errorf("no unthrottled validator emitted events")
 	}
 
-	ratio := float64(minNonDom) / float64(maxNonDom) * 100
+	ratio := float64(minThrottled) / float64(maxUnthrottled) * 100
 	slog.Info("event throttle comparison",
 		"throttled_validator", minCreator,
 		"throttled_node", labels[int(minCreator)],
-		"throttled_events", minNonDom,
-		"unthrottled_validator", maxCreator,
-		"unthrottled_node", labels[int(maxCreator)],
-		"unthrottled_events", maxNonDom,
+		"throttled_events", minThrottled,
+		"unthrottled_validator", unthrottledCreator,
+		"unthrottled_node", labels[int(unthrottledCreator)],
+		"unthrottled_events", maxUnthrottled,
 		"ratio_percent", fmt.Sprintf("%.1f%%", ratio),
 		"ceiling_percent", ceiling,
 	)
@@ -326,12 +440,130 @@ func verifyThrottling(counts map[uint64]int, labels map[int]string, ceiling int)
 			"throttled validator %d (%s) emitted %d events "+
 				"(%.1f%% of unthrottled validator %d (%s) "+
 				"with %d events); expected at most %d%%",
-			minCreator, labels[int(minCreator)], minNonDom,
+			minCreator, labels[int(minCreator)], minThrottled,
 			ratio,
-			maxCreator, labels[int(maxCreator)], maxNonDom,
+			unthrottledCreator, labels[int(unthrottledCreator)],
+			maxUnthrottled,
 			ceiling,
 		)
 	}
 
 	return nil
+}
+
+// fetchValidatorStakes queries the SFC contract for the current-epoch
+// received stake of each registered validator.
+func fetchValidatorStakes(client rpc.Client) (map[uint64]*big.Int, error) {
+	sfcContract, err := sfc100.NewContract(sfc.ContractAddress, client)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to create SFC contract binding: %w", err,
+		)
+	}
+	lastValidatorID, err := sfcContract.LastValidatorID(nil)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to query last validator id: %w", err,
+		)
+	}
+	epoch, err := sfcContract.CurrentEpoch(nil)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to query current epoch: %w", err,
+		)
+	}
+
+	stakes := make(map[uint64]*big.Int)
+	last := lastValidatorID.Uint64()
+	for id := uint64(1); id <= last; id++ {
+		stake, err := sfcContract.GetEpochReceivedStake(
+			nil, epoch, new(big.Int).SetUint64(id),
+		)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"failed to query stake for validator %d: %w", id, err,
+			)
+		}
+		stakes[id] = stake
+	}
+	return stakes, nil
+}
+
+// computeDominantSet returns the smallest set of highest-staked
+// validators whose cumulative stake meets or exceeds threshold * total
+// stake. Validators with zero stake are excluded from the ordering.
+// Ties are broken by ascending validator ID for determinism. This
+// mirrors sonic's emitter/throttler.computeDominantSet semantics.
+func computeDominantSet(
+	stakes map[uint64]*big.Int, threshold float64,
+) map[uint64]struct{} {
+	res := make(map[uint64]struct{})
+	type pair struct {
+		id    uint64
+		stake *big.Int
+	}
+	pairs := make([]pair, 0, len(stakes))
+	total := new(big.Int)
+	for id, s := range stakes {
+		if s == nil || s.Sign() <= 0 {
+			continue
+		}
+		pairs = append(pairs, pair{id, s})
+		total = new(big.Int).Add(total, s)
+	}
+	if len(pairs) == 0 {
+		return res
+	}
+	sort.Slice(pairs, func(i, j int) bool {
+		if cmp := pairs[i].stake.Cmp(pairs[j].stake); cmp != 0 {
+			return cmp > 0
+		}
+		return pairs[i].id < pairs[j].id
+	})
+
+	// needed = ceil(total * threshold), computed via big.Float.
+	needed := new(big.Float).Mul(
+		new(big.Float).SetInt(total),
+		big.NewFloat(threshold),
+	)
+
+	accumulated := new(big.Int)
+	for _, p := range pairs {
+		if new(big.Float).SetInt(accumulated).Cmp(needed) >= 0 {
+			return res
+		}
+		accumulated = new(big.Int).Add(accumulated, p.stake)
+		res[p.id] = struct{}{}
+	}
+	return res
+}
+
+// logDominantSet logs which validators form the dominant set.
+func logDominantSet(
+	dominantSet map[uint64]struct{},
+	stakes map[uint64]*big.Int,
+	labels map[int]string,
+) {
+	for id := range dominantSet {
+		slog.Info("dominant validator (by stake)",
+			"validator", id,
+			"node", labels[int(id)],
+			"stake", stakes[id],
+		)
+	}
+}
+
+// logThrottledSet logs which validators are expected to be throttled.
+func logThrottledSet(
+	throttledSet map[uint64]struct{},
+	labels map[int]string,
+	source string,
+) {
+	for id := range throttledSet {
+		slog.Info("throttled validator",
+			"validator", id,
+			"node", labels[int(id)],
+			"source", source,
+		)
+	}
 }

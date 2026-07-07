@@ -35,3 +35,13 @@ Scenario:
   - checks:
       - blocksProduced:
           tolerance: 10
+      - eventThrottled:
+          ceiling: 50
+          throttledNodes:
+            - validator-minor-throttled
+      - eventThrottled:
+          ceiling: 50
+          throttledNodes:
+            - validator-minor-unthrottled
+            - validator-dominant
+          failing: true

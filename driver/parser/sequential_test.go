@@ -265,6 +265,145 @@ Scenario:
 	require.Equal(t, FuncCheckBlockHashes, check.Function)
 }
 
+func TestParseSequential_CheckParams_NestedForm(t *testing.T) {
+	input := `
+Name: Nested Check Params Test
+Scenario:
+  - checks:
+      - eventThrottled:
+          ceiling: 10
+          throttledNodes:
+            - validator-dominant
+            - validator-B
+      - blockGasRate:
+          ceiling: 1000
+          failing: true
+`
+	scenario, err := ParseSequentialBytes([]byte(input))
+	require.NoError(t, err)
+	step := scenario.Steps[0]
+	require.Equal(t, FuncChecks, step.Function)
+	require.Len(t, step.SubChecks, 2)
+
+	et := step.SubChecks[0]
+	require.Equal(t, FuncCheckEventThrottled, et.Function)
+	require.NotNil(t, et.Ceiling)
+	require.EqualValues(t, 10, *et.Ceiling)
+	require.Equal(
+		t, []string{"validator-dominant", "validator-B"},
+		et.ThrottledNodes,
+	)
+
+	gr := step.SubChecks[1]
+	require.Equal(t, FuncCheckBlockGasRate, gr.Function)
+	require.NotNil(t, gr.Ceiling)
+	require.EqualValues(t, 1000, *gr.Ceiling)
+	require.True(t, gr.Failing)
+}
+
+func TestParseSequential_CheckParams_RejectsUnknown(t *testing.T) {
+	input := `
+Name: Unknown Param Test
+Scenario:
+  - checks:
+      - eventThrottled:
+          bogus: 42
+`
+	_, err := ParseSequentialBytes([]byte(input))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `parameter "bogus" is not valid`)
+}
+
+func TestParseSequential_CheckParams_RejectsWrongParamForFunction(t *testing.T) {
+	cases := map[string]string{
+		"throttledNodes on blocksProduced": `
+Name: Wrong Param Test
+Scenario:
+  - checks:
+      - blocksProduced:
+          throttledNodes:
+            - validator-A
+`,
+		"ceiling on blocksHalted": `
+Name: Wrong Param Test
+Scenario:
+  - checks:
+      - blocksHalted:
+          ceiling: 5
+`,
+		"tolerance on eventThrottled": `
+Name: Wrong Param Test
+Scenario:
+  - checks:
+      - eventThrottled:
+          tolerance: 5
+`,
+		"rules on blockGasRate": `
+Name: Wrong Param Test
+Scenario:
+  - checks:
+      - blockGasRate:
+          rules:
+            Epochs:
+              MaxEpochDuration: 5s
+`,
+	}
+	for name, input := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := ParseSequentialBytes([]byte(input))
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "is not valid for check")
+		})
+	}
+}
+
+func TestAllCheckFunctionsAreDocumented(t *testing.T) {
+	for _, fn := range allCheckFunctions {
+		desc, ok := checkFunctionDescriptions[fn]
+		require.Truef(t, ok, "check function %q has no entry in checkFunctionDescriptions", fn)
+		require.NotEmptyf(t, strings.TrimSpace(desc), "check function %q has empty description", fn)
+
+		_, ok = checkFunctionParams[fn]
+		require.Truef(t, ok, "check function %q has no entry in checkFunctionParams", fn)
+	}
+}
+
+func TestAllCheckParamKeysAreDocumented(t *testing.T) {
+	seen := map[string]bool{}
+	for _, params := range checkFunctionParams {
+		for _, p := range params {
+			seen[p] = true
+		}
+	}
+	for p := range seen {
+		desc, ok := checkParamDescriptions[p]
+		require.Truef(t, ok, "check parameter %q has no entry in checkParamDescriptions", p)
+		require.NotEmptyf(t, strings.TrimSpace(desc), "check parameter %q has empty description", p)
+	}
+}
+
+func TestParseSequential_ThrottledNodes_FlatForm(t *testing.T) {
+	input := `
+Name: Flat Throttled Nodes Test
+Scenario:
+  - checks:
+      - eventThrottled:
+        ceiling: 10
+        throttledNodes:
+          - validator-A
+`
+	scenario, err := ParseSequentialBytes([]byte(input))
+	require.NoError(t, err)
+	step := scenario.Steps[0]
+	require.Equal(t, FuncChecks, step.Function)
+	require.Len(t, step.SubChecks, 1)
+	et := step.SubChecks[0]
+	require.Equal(t, FuncCheckEventThrottled, et.Function)
+	require.NotNil(t, et.Ceiling)
+	require.EqualValues(t, 10, *et.Ceiling)
+	require.Equal(t, []string{"validator-A"}, et.ThrottledNodes)
+}
+
 func TestParseSequential_SlopeRate(t *testing.T) {
 	input := `
 Name: Slope Rate Test

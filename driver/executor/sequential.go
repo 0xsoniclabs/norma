@@ -663,6 +663,9 @@ func execCheck(ctx context.Context, checkerName string, spec *parser.CheckSpec, 
 	if spec.Rules != (genesis.NetworkRulesPatch{}) {
 		config["rules"] = spec.Rules
 	}
+	if len(spec.ThrottledNodes) > 0 {
+		config["throttledNodes"] = spec.ThrottledNodes
+	}
 
 	if len(config) > 0 {
 		checker = checking.NewFailingChecker(checker).Configure(config)
