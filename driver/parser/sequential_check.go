@@ -146,7 +146,7 @@ func (s *Step) checkRunApp() error {
 
 	if s.Rate == nil {
 		errs = append(errs, fmt.Errorf("run app requires a rate"))
-	} else if err := s.Rate.Check(nil); err != nil {
+	} else if err := s.Rate.Check(); err != nil {
 		errs = append(errs, err)
 	}
 

@@ -58,21 +58,23 @@ func TestCollectBuildableImages(t *testing.T) {
 	tmp := t.TempDir()
 
 	scenarioA := `
-name: scenario-a
-duration: 5
-validators:
-  - name: validator-a
-    imagename: sonic:v2.1.2
-nodes:
-  - name: node-a
-    client:
-      imagename: sonic:local
+Name: scenario-a
+Description: two nodes.
+Scenario:
+  - startNode: validator-a
+    type: validator
+    imageName: sonic:v2.1.2
+
+  - startNode: node-a
+    type: rpc
+    imageName: sonic:local
 `
 	scenarioB := `
-name: scenario-b
-duration: 3
-nodes:
-  - name: node-b
+Name: scenario-b
+Description: single node.
+Scenario:
+  - startNode: node-b
+    type: validator
 `
 
 	pathA := filepath.Join(tmp, "a.yml")

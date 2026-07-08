@@ -28,7 +28,7 @@ if (nrow(all_data) > 0) {
 }
 
 scenario_step_data <- all_data %>%
-    dplyr::filter(metric %in% c("ScenarioStepExecutionDuration", "ScenarioEventExecutionDuration")) %>%
+    dplyr::filter(metric == "ScenarioStepExecutionDuration") %>%
     transmute(
         event_name = as.character(app),
         start_sec = elapsed_sec,

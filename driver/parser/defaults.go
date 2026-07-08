@@ -20,8 +20,3 @@ func ensureDefaultEpochDuration(patch *genesis.NetworkRulesPatch) {
 		patch.Epochs.MaxEpochDuration = genesis.NewDuration(DefaultMaxEpochDuration)
 	}
 }
-
-// setDefaults pass default values into the configuration of a scenario.
-func (s *Scenario) setDefaults() {
-	ensureDefaultEpochDuration(&s.NetworkRules.Genesis)
-}

@@ -383,7 +383,7 @@ func TestSequential_RunAndStopApp(t *testing.T) {
 				Function:   parser.FuncRunApp,
 				Identifier: "load",
 				AppType:    "counter",
-				Users:      New(50),
+				Users:      new(50),
 				Rate:       &parser.Rate{Constant: &rate},
 			},
 			{

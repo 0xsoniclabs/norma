@@ -176,29 +176,6 @@ type Validator struct {
 	ExtraArguments string // Extra command line arguments for sonicd
 }
 
-// NewValidator creates a new Validator from a parser.Validator.
-func NewValidator(v parser.Validator) Validator {
-	instances := 1
-	if v.Instances != nil {
-		instances = *v.Instances
-	}
-	imageName := ResolveClientImageName(v.ImageName)
-
-	stake := uint64(5_000_000)
-	if v.Stake != nil {
-		stake = *v.Stake
-	}
-
-	return Validator{
-		Name:           v.Name,
-		Failing:        v.Failing,
-		Instances:      instances,
-		ImageName:      imageName,
-		Stake:          uint64(stake),
-		ExtraArguments: v.ExtraArguments,
-	}
-}
-
 type Validators []Validator
 
 // NewDefaultValidators creates a new Validators with a single validator defining only the number of instances,
@@ -209,19 +186,6 @@ func NewDefaultValidators(instances int) Validators {
 
 func NewDefaultTestValidators(name string, instances int) Validators {
 	return []Validator{{Name: fmt.Sprintf("validator-%s", name), Instances: instances, ImageName: DefaultClientDockerImageName}}
-}
-
-// NewValidators creates a new Validators from a parser.Validators.
-func NewValidators(v []parser.Validator) Validators {
-	if len(v) == 0 {
-		return NewDefaultValidators(1)
-	}
-
-	validators := make([]Validator, len(v))
-	for i, val := range v {
-		validators[i] = NewValidator(val)
-	}
-	return validators
 }
 
 func (v Validators) GetNumValidators() int {
