@@ -156,34 +156,25 @@ func (c *CheckSpec) unmarshalCheckMapping(node *yaml.Node) error {
 	for i := 0; i < len(node.Content); i += 2 {
 		keyNode := node.Content[i]
 		valNode := node.Content[i+1]
-		key := keyNode.Value
 
-		if _, err := toCheckFunction(key); err == nil {
-			// Support nested-parameter form:
+		if _, err := toCheckFunction(keyNode.Value); err == nil {
+			// Nested-parameter form:
 			//   - eventThrottled:
-			//       ceiling: 10
-			// where the function's value is a mapping of params.
-			if valNode.Kind == yaml.MappingNode {
-				if err := c.parseParamMapping(valNode); err != nil {
+			//       throttledNodes: [a, b]
+			// The function's value is a mapping of params.
+			if valNode.Kind != yaml.MappingNode {
+				continue
+			}
+			for j := 0; j < len(valNode.Content); j += 2 {
+				if err := c.parseParam(
+					valNode.Content[j], valNode.Content[j+1],
+				); err != nil {
 					return err
 				}
 			}
 			continue
 		}
 
-		if err := c.parseParam(keyNode, valNode); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// parseParamMapping parses a mapping node whose entries are check
-// parameters. Used for the nested-parameter form.
-func (c *CheckSpec) parseParamMapping(node *yaml.Node) error {
-	for i := 0; i < len(node.Content); i += 2 {
-		keyNode := node.Content[i]
-		valNode := node.Content[i+1]
 		if err := c.parseParam(keyNode, valNode); err != nil {
 			return err
 		}
@@ -618,7 +609,7 @@ var checkFunctionDescriptions = map[StepFunction]string{
 	FuncCheckBlockHeights:   "Assert that all nodes are within tolerance of the same block height.",
 	FuncCheckBlocksHalted:   "Assert that block production has halted.",
 	FuncCheckBlocksProduced: "Assert that all nodes have produced blocks within tolerance.",
-	FuncCheckEventThrottled: "Assert that non-dominant validators emit fewer events than the ceiling percentage.",
+	FuncCheckEventThrottled: "Assert that validators listed in throttledNodes emit events at a significantly lower rate than the rest.",
 	FuncCheckNetworkRules:   "Assert that the active network rules on all nodes match the expected rules patch.",
 }
 
@@ -629,17 +620,17 @@ var checkFunctionParams = map[StepFunction][]string{
 	FuncCheckBlockHeights:   {"tolerance", "failing"},
 	FuncCheckBlocksHalted:   {"failing"},
 	FuncCheckBlocksProduced: {"tolerance", "failing"},
-	FuncCheckEventThrottled: {"ceiling", "throttledNodes", "failing"},
+	FuncCheckEventThrottled: {"throttledNodes", "failing"},
 	FuncCheckNetworkRules:   {"rules", "failing"},
 }
 
 // checkParamDescriptions provides a human-readable description for each sub-check parameter.
 var checkParamDescriptions = map[string]string{
-	"ceiling":        "Maximum allowed threshold (float64); interpretation depends on the check (e.g. gas rate cap, or emission percentage).",
+	"ceiling":        "Maximum allowed value (float64) for a gas rate check.",
 	"failing":        "When true, the check is expected to fail; a passing result is treated as an error.",
 	"rules":          "Expected network rules patch (NetworkRulesPatch field structure).",
 	"tolerance":      "Allowed deviation (int, in blocks) between nodes for a height/production check.",
-	"throttledNodes": "List of node labels expected to be throttled; when omitted, the throttled set is inferred from stake.",
+	"throttledNodes": "List of node labels expected to be throttled.",
 }
 
 // PrintSequentialHelp writes a formatted summary of all available sequential

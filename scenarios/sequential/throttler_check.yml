@@ -2,8 +2,11 @@ Name: Event Throttler With Different Stakes
 
 Description: >-
   Verifies that the event throttler correctly limits event emission
-  for minor validators under asymmetric stakes. The dominant validator
-  produces the majority of events while minor validator is throttled.
+  for a minor validator under asymmetric stakes. The dominant validator
+  (90% of stake) alone exceeds the 0.75 dominant-stake threshold, so
+  the non-dominant validator is throttled and skips empty events. Load
+  is kept minimal so that most non-dominant events remain empty and
+  eligible to be skipped.
 
 Scenario:
   - startNode: validator-dominant
@@ -18,9 +21,9 @@ Scenario:
 
   - runApp: load
     type: counter
-    users: 30
+    users: 1
     rate:
-      constant: 15
+      constant: 1
 
   - waitFor: 45s
 
@@ -28,11 +31,9 @@ Scenario:
       - blocksProduced:
           tolerance: 10
       - eventThrottled:
-          ceiling: 35
           throttledNodes:
             - validator-non-dominant
       - eventThrottled:
-          ceiling: 35
           throttledNodes:
             - validator-dominant
           failing: true

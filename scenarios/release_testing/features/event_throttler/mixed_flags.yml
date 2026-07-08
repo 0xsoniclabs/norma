@@ -4,43 +4,44 @@ Description: >-
   Tests event throttler behavior with mixed feature flags. Some nodes
   have the throttler enabled while others do not, verifying the network
   remains live and produces consistent blocks in mixed configuration.
+  Load is kept minimal so that non-dominant validators mostly emit
+  empty events; only the validator with the throttler enabled skips
+  those events.
 
 Scenario:
   - startNode: validator-dominant
     type: validator
     imageName: "sonic:local"
-    stake: 8000000
+    stake: 8000000 # 80% of stake => dominant set alone
     extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
 
   - startNode: validator-minor-throttled
     type: validator
     imageName: "sonic:local"
-    stake: 1000000
+    stake: 1000000 # 10% of stake => non-dominant, throttler enabled
     extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
 
   - startNode: validator-minor-unthrottled
     type: validator
     imageName: "sonic:local"
-    stake: 1000000
+    stake: 1000000 # 10% of stake => non-dominant, throttler disabled
     extraArguments: "--event-throttler=false --http.api admin,eth,sonic,txpool,dag"
 
   - runApp: load
     type: counter
-    users: 20
+    users: 1
     rate:
-      constant: 10
+      constant: 1 # minimal load; empty events dominate
 
-  - waitFor: 30s
+  - waitFor: 45s
 
   - checks:
       - blocksProduced:
           tolerance: 10
       - eventThrottled:
-          ceiling: 50
           throttledNodes:
             - validator-minor-throttled
       - eventThrottled:
-          ceiling: 50
           throttledNodes:
             - validator-minor-unthrottled
             - validator-dominant

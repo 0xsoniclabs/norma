@@ -20,30 +20,31 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"math"
-	"math/big"
-	"sort"
+	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/rpc"
-	"github.com/0xsoniclabs/sonic/gossip/contract/sfc100"
-	"github.com/0xsoniclabs/sonic/opera/contracts/sfc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-// defaultThrottleCeiling is the default maximum ratio (in percent) between
-// the least-emitting non-dominant validator and the max-emitting dominant
-// validator. Values above the ceiling indicate the throttler is not
-// effective enough.
-const defaultThrottleCeiling = 50
+// minGapRatio is the minimum ratio required between the slowest
+// unthrottled validator and the fastest expected-throttled validator.
+// Below this ratio the split is considered too narrow to conclude that
+// throttling is occurring.
+const minGapRatio = 2.0
 
-// defaultDominantStakeThreshold matches sonic's emitter throttler default
-// (see emitter/config.DefaultThrottlerConfig). The dominant set is the
-// smallest set of highest-staked validators whose cumulative stake meets
-// or exceeds threshold * total stake.
-const defaultDominantStakeThreshold = 0.75
+// defaultSampleWindow is the interval between the two DAG snapshots used
+// to compute per-validator emission rates. Longer windows produce more
+// stable rate estimates but are more likely to straddle an epoch
+// boundary and force a retry.
+const defaultSampleWindow = 5 * time.Second
+
+// maxSampleAttempts caps the number of sampling attempts before giving
+// up. An attempt is discarded whenever the epoch rolls over between the
+// two snapshots that make up the window.
+const maxSampleAttempts = 5
 
 func init() {
 	RegisterNetworkCheck("eventThrottled",
@@ -54,43 +55,28 @@ func init() {
 
 func newEventThrottledChecker(net driver.Network) *eventThrottledChecker {
 	return &eventThrottledChecker{
-		net:            net,
-		ceiling:        defaultThrottleCeiling,
-		stakeThreshold: defaultDominantStakeThreshold,
-		fetchStakes:    fetchValidatorStakes,
+		net:          net,
+		sampleWindow: defaultSampleWindow,
+		collectRates: collectEmissionRates,
 	}
 }
 
-// eventThrottledChecker verifies that the event throttler is effective by
-// comparing event emission of throttled validators against the
-// unthrottled reference set. The throttled set is either specified
-// explicitly via the `throttledNodes` config (a list of node labels) or,
-// when unspecified, derived from stake: the dominant set (as computed by
-// sonic's emitter throttler) forms the unthrottled reference, and all
-// non-dominant validators are expected to be throttled.
+// eventThrottledChecker verifies the event throttler by measuring
+// per-validator event emission rates over a fixed sampling window and
+// checking that every validator listed in `throttledNodes` emits at a
+// rate at most 1/`minGapRatio` of every other observed validator's rate.
 type eventThrottledChecker struct {
 	net            driver.Network
-	ceiling        int      // max percentage (0–100)
-	stakeThreshold float64  // cumulative stake fraction that defines dominance
-	throttledNodes []string // explicit node labels expected to be throttled
-	// fetchStakes returns the current-epoch received stake per validator
-	// ID. Overridable for tests.
-	fetchStakes func(client rpc.Client) (map[uint64]*big.Int, error)
+	throttledNodes []string // node labels expected to be throttled
+	sampleWindow   time.Duration
+	// collectRates measures per-validator emission rates over the given
+	// window. Overridable for tests.
+	collectRates func(
+		ctx context.Context, client rpc.Client, window time.Duration,
+	) (map[uint64]float64, error)
 }
 
 func (c *eventThrottledChecker) Configure(config CheckerConfig) Checker {
-	ceiling := defaultThrottleCeiling
-	if v, ok := config["ceiling"]; ok {
-		if i, ok := v.(int); ok {
-			ceiling = i
-		}
-	}
-	threshold := defaultDominantStakeThreshold
-	if v, ok := config["stakeThreshold"]; ok {
-		if f, ok := v.(float64); ok {
-			threshold = f
-		}
-	}
 	var throttled []string
 	if v, ok := config["throttledNodes"]; ok {
 		switch list := v.(type) {
@@ -106,17 +92,27 @@ func (c *eventThrottledChecker) Configure(config CheckerConfig) Checker {
 	}
 	return &eventThrottledChecker{
 		net:            c.net,
-		ceiling:        ceiling,
-		stakeThreshold: threshold,
 		throttledNodes: throttled,
-		fetchStakes:    c.fetchStakes,
+		sampleWindow:   c.sampleWindow,
+		collectRates:   c.collectRates,
 	}
 }
 
 func (c *eventThrottledChecker) Check(ctx context.Context) error {
+	if len(c.throttledNodes) == 0 {
+		return fmt.Errorf("throttledNodes must not be empty")
+	}
+
 	nodes := c.net.GetActiveNodes()
 	if len(nodes) == 0 {
 		return fmt.Errorf("no active nodes")
+	}
+
+	// Resolve labels first so a misspelled throttledNodes entry is
+	// reported immediately, before the multi-second DAG sampling.
+	labels, expected, err := resolveLabels(nodes, c.throttledNodes)
+	if err != nil {
+		return err
 	}
 
 	client, err := dialFirstReachable(ctx, nodes)
@@ -125,88 +121,55 @@ func (c *eventThrottledChecker) Check(ctx context.Context) error {
 	}
 	defer client.Close()
 
-	counts, err := collectEpochEventCounts(ctx, client)
+	rates, err := c.collectRates(ctx, client, c.sampleWindow)
 	if err != nil {
 		return err
 	}
 
-	labels := nodeLabels(nodes)
-	logEmissionStats(counts, labels)
+	logEmissionRates(rates, labels)
+	logThrottledSet(expected, labels)
 
-	throttledSet, err := c.resolveThrottledSet(client, nodes, labels)
-	if err != nil {
-		return err
-	}
-
-	return verifyThrottling(counts, throttledSet, labels, c.ceiling)
+	return verifyThrottled(expected, rates)
 }
 
-// resolveThrottledSet returns the set of validator IDs that are expected
-// to be throttled. When explicit node labels are configured, they take
-// precedence over stake-based inference.
-func (c *eventThrottledChecker) resolveThrottledSet(
-	client rpc.Client,
-	nodes []driver.Node,
-	labels map[int]string,
-) (map[uint64]struct{}, error) {
-	if len(c.throttledNodes) > 0 {
-		set, err := throttledSetFromLabels(c.throttledNodes, nodes)
-		if err != nil {
-			return nil, err
-		}
-		logThrottledSet(set, labels, "explicit")
-		return set, nil
-	}
-
-	stakes, err := c.fetchStakes(client)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to fetch validator stakes: %w", err,
-		)
-	}
-	dominantSet := computeDominantSet(stakes, c.stakeThreshold)
-	logDominantSet(dominantSet, stakes, labels)
-
-	// Non-dominant validators (by stake) are the implicit throttled set.
-	set := make(map[uint64]struct{})
-	for id := range stakes {
-		if _, isDominant := dominantSet[id]; !isDominant {
-			set[id] = struct{}{}
-		}
-	}
-	return set, nil
-}
-
-// throttledSetFromLabels resolves node labels to validator IDs, returning
-// an error when any configured label does not match an active validator.
-func throttledSetFromLabels(
-	labelsWanted []string, nodes []driver.Node,
-) (map[uint64]struct{}, error) {
+// resolveLabels walks the node list once, returning both a
+// validator-id -> label map (for logging) and the set of validator ids
+// that match the configured throttledNodes labels. Every label listed
+// in throttledNodes must resolve to an active validator.
+func resolveLabels(
+	nodes []driver.Node, throttledNodes []string,
+) (map[uint64]string, map[uint64]struct{}, error) {
+	labels := make(map[uint64]string, len(nodes))
 	byLabel := make(map[string]uint64, len(nodes))
 	for _, n := range nodes {
 		id := n.GetValidatorId()
 		if id == nil {
 			continue
 		}
-		byLabel[n.GetLabel()] = uint64(*id)
+		vid := uint64(*id)
+		label := n.GetLabel()
+		labels[vid] = label
+		byLabel[label] = vid
 	}
-	set := make(map[uint64]struct{}, len(labelsWanted))
-	for _, label := range labelsWanted {
+	throttled := make(map[uint64]struct{}, len(throttledNodes))
+	for _, label := range throttledNodes {
 		id, ok := byLabel[label]
 		if !ok {
-			return nil, fmt.Errorf(
+			return nil, nil, fmt.Errorf(
 				"throttledNodes: no active validator with label %q",
 				label,
 			)
 		}
-		set[id] = struct{}{}
+		throttled[id] = struct{}{}
 	}
-	return set, nil
+	return labels, throttled, nil
 }
 
 // dialFirstReachable returns an RPC client for the first non-failing
 // node that accepts a connection.
-func dialFirstReachable(ctx context.Context, nodes []driver.Node) (rpc.Client, error) {
+func dialFirstReachable(
+	ctx context.Context, nodes []driver.Node,
+) (rpc.Client, error) {
 	for _, n := range nodes {
 		if n.IsExpectedFailure() {
 			continue
@@ -219,52 +182,127 @@ func dialFirstReachable(ctx context.Context, nodes []driver.Node) (rpc.Client, e
 	return nil, fmt.Errorf("no reachable node for DAG query")
 }
 
-// dagEvent represents a single DAG event with its creator and parents.
-type dagEvent struct {
-	creator uint64
-	parents []common.Hash
+// rawEvent is the wire representation of a DAG event as returned by
+// dag_getEvent. Struct tags let the JSON-RPC client unmarshal directly
+// into it, avoiding a manual walk over map[string]any.
+type rawEvent struct {
+	Creator hexutil.Uint64 `json:"creator"`
+	Parents []common.Hash  `json:"parents"`
 }
 
-// collectEpochEventCounts fetches all events in the current epoch
-// via the DAG API and returns per-creator event counts.
-func collectEpochEventCounts(ctx context.Context, client rpc.Client) (map[uint64]int, error) {
+// collectEmissionRates repeatedly calls sampleEmissionRates until one
+// attempt produces a window that does not straddle an epoch boundary,
+// giving up after maxSampleAttempts. This is necessary because Sonic
+// epochs can be shorter than a useful sampling window.
+func collectEmissionRates(
+	ctx context.Context, client rpc.Client, window time.Duration,
+) (map[uint64]float64, error) {
+	var lastErr error
+	for attempt := range maxSampleAttempts {
+		rates, err := sampleEmissionRates(ctx, client, window)
+		if err == nil {
+			return rates, nil
+		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		lastErr = err
+		slog.Info(
+			"emission-rate sample discarded, retrying",
+			"attempt", attempt+1,
+			"max_attempts", maxSampleAttempts,
+			"error", err,
+		)
+	}
+	return nil, fmt.Errorf(
+		"could not obtain a stable emission-rate sample after %d "+
+			"attempts: %w",
+		maxSampleAttempts, lastErr,
+	)
+}
+
+// sampleEmissionRates takes two DAG snapshots separated by `window` and
+// returns each validator's emission rate in events per second. The
+// current epoch must not roll over during the window; on rollover an
+// error is returned so the caller can retry.
+func sampleEmissionRates(
+	ctx context.Context, client rpc.Client, window time.Duration,
+) (map[uint64]float64, error) {
+	epoch1, counts1, err := snapshotEpochCounts(ctx, client)
+	if err != nil {
+		return nil, fmt.Errorf("first snapshot failed: %w", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(window):
+	}
+
+	epoch2, counts2, err := snapshotEpochCounts(ctx, client)
+	if err != nil {
+		return nil, fmt.Errorf("second snapshot failed: %w", err)
+	}
+
+	if epoch1 != epoch2 {
+		return nil, fmt.Errorf(
+			"epoch changed during sampling window (%d -> %d)",
+			epoch1, epoch2,
+		)
+	}
+
+	seconds := window.Seconds()
+	rates := make(map[uint64]float64, len(counts2))
+	// Both snapshots walk the same epoch's DAG, so counts2[id] is always
+	// >= counts1[id] and every id in counts1 is also in counts2.
+	for id, c2 := range counts2 {
+		rates[id] = float64(c2-counts1[id]) / seconds
+	}
+	return rates, nil
+}
+
+// snapshotEpochCounts queries the current epoch and counts events per
+// validator by walking the DAG of that epoch.
+func snapshotEpochCounts(
+	ctx context.Context, client rpc.Client,
+) (uint64, map[uint64]int, error) {
 	var epoch hexutil.Uint64
 	if err := client.Call(
 		&epoch, "eth_currentEpoch",
 	); err != nil {
-		return nil, fmt.Errorf("failed to get current epoch: %w", err)
+		return 0, nil, fmt.Errorf("failed to get current epoch: %w", err)
 	}
-
 	var headHexes []string
 	if err := client.Call(
 		&headHexes, "dag_getHeads", epoch.String(),
 	); err != nil {
-		return nil, fmt.Errorf("failed to get DAG heads: %w", err)
+		return 0, nil, fmt.Errorf("failed to get DAG heads: %w", err)
 	}
 	if len(headHexes) == 0 {
-		return nil, fmt.Errorf("no events in current epoch")
+		// Transient: a freshly rolled-over epoch may have no heads yet.
+		// Returning an error triggers a retry in collectEmissionRates.
+		return 0, nil, fmt.Errorf(
+			"epoch %s has no DAG heads yet", epoch.String(),
+		)
 	}
-
-	visited, err := walkDAG(ctx, client, headHexes)
+	counts, err := countEventsFromHeads(ctx, client, headHexes)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
-	if len(visited) == 0 {
-		return nil, fmt.Errorf("collected no events from DAG")
+	if len(counts) == 0 {
+		return 0, nil, fmt.Errorf("collected no events from DAG")
 	}
-
-	counts := make(map[uint64]int, len(visited))
-	for _, ev := range visited {
-		counts[ev.creator]++
-	}
-	return counts, nil
+	return uint64(epoch), counts, nil
 }
 
-// walkDAG performs a DFS from the given head hashes, fetching each
-// event and its parents until no more unvisited ancestors remain.
-func walkDAG(ctx context.Context, client rpc.Client, headHexes []string,
-) (map[common.Hash]dagEvent, error) {
-	visited := make(map[common.Hash]dagEvent, len(headHexes))
+// countEventsFromHeads walks the DAG from the given head hashes via DFS
+// and returns per-creator event counts. Each event is fetched at most
+// once. Missing events (nil RPC result) are skipped.
+func countEventsFromHeads(
+	ctx context.Context, client rpc.Client, headHexes []string,
+) (map[uint64]int, error) {
+	counts := make(map[uint64]int)
+	visited := make(map[common.Hash]struct{}, len(headHexes))
 	queue := make([]common.Hash, 0, len(headHexes))
 	for _, h := range headHexes {
 		queue = append(queue, common.HexToHash(h))
@@ -281,6 +319,7 @@ func walkDAG(ctx context.Context, client rpc.Client, headHexes []string,
 		if _, seen := visited[id]; seen {
 			continue
 		}
+		visited[id] = struct{}{}
 
 		ev, err := fetchEvent(client, id)
 		if err != nil {
@@ -290,265 +329,112 @@ func walkDAG(ctx context.Context, client rpc.Client, headHexes []string,
 			continue
 		}
 
-		visited[id] = *ev
-		for _, p := range ev.parents {
+		counts[uint64(ev.Creator)]++
+		for _, p := range ev.Parents {
 			if _, seen := visited[p]; !seen {
 				queue = append(queue, p)
 			}
 		}
 	}
-	return visited, nil
+	return counts, nil
 }
 
 // fetchEvent retrieves a single DAG event by its hash.
 // Returns nil without error when the event does not exist.
-func fetchEvent(client rpc.Client, id common.Hash) (*dagEvent, error) {
-	var result map[string]any
+func fetchEvent(client rpc.Client, id common.Hash) (*rawEvent, error) {
+	var ev *rawEvent
 	if err := client.Call(
-		&result, "dag_getEvent", id.Hex(),
+		&ev, "dag_getEvent", id.Hex(),
 	); err != nil {
 		return nil, fmt.Errorf(
 			"failed to get event %s: %w", id.Hex(), err,
 		)
 	}
-	if result == nil {
-		return nil, nil
-	}
-
-	creatorStr, ok := result["creator"].(string)
-	if !ok {
-		return nil, fmt.Errorf(
-			"event %s: missing or invalid creator field", id.Hex(),
-		)
-	}
-	var creator hexutil.Uint64
-	if err := creator.UnmarshalText(
-		[]byte(creatorStr),
-	); err != nil {
-		return nil, fmt.Errorf("failed to parse creator: %w", err)
-	}
-
-	parents := make([]common.Hash, 0)
-	if ps, ok := result["parents"].([]any); ok {
-		for _, p := range ps {
-			s, ok := p.(string)
-			if !ok {
-				continue
-			}
-			parents = append(parents, common.HexToHash(s))
-		}
-	}
-
-	return &dagEvent{
-		creator: uint64(creator),
-		parents: parents,
-	}, nil
+	return ev, nil
 }
 
-// nodeLabels builds a map from validator ID to the node label.
-func nodeLabels(nodes []driver.Node) map[int]string {
-	labels := make(map[int]string, len(nodes))
-	for _, n := range nodes {
-		if id := n.GetValidatorId(); id != nil {
-			labels[*id] = n.GetLabel()
-		}
-	}
-	return labels
-}
-
-// logEmissionStats logs per-validator event counts.
-func logEmissionStats(counts map[uint64]int, labels map[int]string) {
-	total := 0
-	for _, c := range counts {
-		total += c
-	}
-	for creator, count := range counts {
-		pct := float64(count) / float64(total) * 100
-		slog.Info("event emission stats",
-			"validator", creator,
-			"node", labels[int(creator)],
-			"events", count,
-			"total", total,
-			"percent", fmt.Sprintf("%.1f%%", pct),
-		)
-	}
-}
-
-// verifyThrottling checks that the least-emitting throttled validator
-// produced at most ceiling% of the events of the max-emitting
-// unthrottled validator. The `throttledSet` names the validators
-// expected to be throttled; all other observed validators serve as the
-// unthrottled reference.
-func verifyThrottling(
-	counts map[uint64]int,
-	throttledSet map[uint64]struct{},
-	labels map[int]string,
-	ceiling int,
+// verifyThrottled fails when the slowest validator not in the expected
+// set does not emit at least `minGapRatio` times as many events per
+// second as the fastest validator in the expected set. This one
+// invariant catches all misclassification cases: rates that are uniform
+// (no throttling active), a listed validator emitting at full speed, or
+// an unlisted validator emitting suspiciously slowly.
+func verifyThrottled(
+	expected map[uint64]struct{},
+	rates map[uint64]float64,
 ) error {
-	// Find the max-emitting unthrottled validator as the reference.
-	// Only validators actually observed in the DAG are considered.
-	maxUnthrottled := 0
-	var unthrottledCreator uint64
-	for creator, count := range counts {
-		if _, isThrottled := throttledSet[creator]; isThrottled {
-			continue
-		}
-		if count > maxUnthrottled {
-			maxUnthrottled = count
-			unthrottledCreator = creator
-		}
-	}
-
-	// Find the least-emitting throttled validator among those observed.
-	minThrottled := math.MaxInt
-	var minCreator uint64
-	observedThrottled := 0
-	for creator, count := range counts {
-		if _, isThrottled := throttledSet[creator]; !isThrottled {
-			continue
-		}
-		observedThrottled++
-		if count < minThrottled {
-			minThrottled = count
-			minCreator = creator
-		}
-	}
-
-	if observedThrottled < 1 {
-		return fmt.Errorf("need at least 1 throttled validator, got %d",
-			observedThrottled,
-		)
-	}
-	if maxUnthrottled == 0 {
-		return fmt.Errorf("no unthrottled validator emitted events")
-	}
-
-	ratio := float64(minThrottled) / float64(maxUnthrottled) * 100
-	slog.Info("event throttle comparison",
-		"throttled_validator", minCreator,
-		"throttled_node", labels[int(minCreator)],
-		"throttled_events", minThrottled,
-		"unthrottled_validator", unthrottledCreator,
-		"unthrottled_node", labels[int(unthrottledCreator)],
-		"unthrottled_events", maxUnthrottled,
-		"ratio_percent", fmt.Sprintf("%.1f%%", ratio),
-		"ceiling_percent", ceiling,
+	var (
+		maxListed    float64
+		minUnlisted  float64
+		haveListed   bool
+		haveUnlisted bool
 	)
-
-	if ratio > float64(ceiling) {
+	for id, r := range rates {
+		if _, ok := expected[id]; ok {
+			if !haveListed || r > maxListed {
+				maxListed = r
+			}
+			haveListed = true
+		} else {
+			if !haveUnlisted || r < minUnlisted {
+				minUnlisted = r
+			}
+			haveUnlisted = true
+		}
+	}
+	if !haveListed {
+		return fmt.Errorf("no expected-throttled validator observed")
+	}
+	if !haveUnlisted {
 		return fmt.Errorf(
-			"throttled validator %d (%s) emitted %d events "+
-				"(%.1f%% of unthrottled validator %d (%s) "+
-				"with %d events); expected at most %d%%",
-			minCreator, labels[int(minCreator)], minThrottled,
-			ratio,
-			unthrottledCreator, labels[int(unthrottledCreator)],
-			maxUnthrottled,
-			ceiling,
+			"no unthrottled validator observed for comparison",
 		)
 	}
 
-	return nil
-}
-
-// fetchValidatorStakes queries the SFC contract for the current-epoch
-// received stake of each registered validator.
-func fetchValidatorStakes(client rpc.Client) (map[uint64]*big.Int, error) {
-	sfcContract, err := sfc100.NewContract(sfc.ContractAddress, client)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to create SFC contract binding: %w", err,
-		)
-	}
-	lastValidatorID, err := sfcContract.LastValidatorID(nil)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to query last validator id: %w", err,
-		)
-	}
-	epoch, err := sfcContract.CurrentEpoch(nil)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to query current epoch: %w", err,
-		)
-	}
-
-	stakes := make(map[uint64]*big.Int)
-	last := lastValidatorID.Uint64()
-	for id := uint64(1); id <= last; id++ {
-		stake, err := sfcContract.GetEpochReceivedStake(
-			nil, epoch, new(big.Int).SetUint64(id),
-		)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"failed to query stake for validator %d: %w", id, err,
+	// If listed validators emit nothing, any positive unlisted rate is
+	// clear evidence of throttling. Both zero means nothing is
+	// happening at all, which is not the same as throttling.
+	if maxListed == 0 {
+		if minUnlisted == 0 {
+			return fmt.Errorf(
+				"no throttling detected: no validator emitted " +
+					"events over the sampling window",
 			)
 		}
-		stakes[id] = stake
+		return nil
 	}
-	return stakes, nil
-}
 
-// computeDominantSet returns the smallest set of highest-staked
-// validators whose cumulative stake meets or exceeds threshold * total
-// stake. Validators with zero stake are excluded from the ordering.
-// Ties are broken by ascending validator ID for determinism. This
-// mirrors sonic's emitter/throttler.computeDominantSet semantics.
-func computeDominantSet(
-	stakes map[uint64]*big.Int, threshold float64,
-) map[uint64]struct{} {
-	res := make(map[uint64]struct{})
-	type pair struct {
-		id    uint64
-		stake *big.Int
+	ratio := minUnlisted / maxListed
+	if ratio >= minGapRatio {
+		return nil
 	}
-	pairs := make([]pair, 0, len(stakes))
-	total := new(big.Int)
-	for id, s := range stakes {
-		if s == nil || s.Sign() <= 0 {
-			continue
-		}
-		pairs = append(pairs, pair{id, s})
-		total = new(big.Int).Add(total, s)
-	}
-	if len(pairs) == 0 {
-		return res
-	}
-	sort.Slice(pairs, func(i, j int) bool {
-		if cmp := pairs[i].stake.Cmp(pairs[j].stake); cmp != 0 {
-			return cmp > 0
-		}
-		return pairs[i].id < pairs[j].id
-	})
-
-	// needed = ceil(total * threshold), computed via big.Float.
-	needed := new(big.Float).Mul(
-		new(big.Float).SetInt(total),
-		big.NewFloat(threshold),
+	return fmt.Errorf(
+		"no throttling detected: slowest unthrottled validator emits "+
+			"at %.2f/s but fastest expected-throttled validator emits "+
+			"at %.2f/s (ratio %.2f < required %.2f)",
+		minUnlisted, maxListed, ratio, minGapRatio,
 	)
-
-	accumulated := new(big.Int)
-	for _, p := range pairs {
-		if new(big.Float).SetInt(accumulated).Cmp(needed) >= 0 {
-			return res
-		}
-		accumulated = new(big.Int).Add(accumulated, p.stake)
-		res[p.id] = struct{}{}
-	}
-	return res
 }
 
-// logDominantSet logs which validators form the dominant set.
-func logDominantSet(
-	dominantSet map[uint64]struct{},
-	stakes map[uint64]*big.Int,
-	labels map[int]string,
+// logEmissionRates logs per-validator emission rates.
+func logEmissionRates(
+	rates map[uint64]float64, labels map[uint64]string,
 ) {
-	for id := range dominantSet {
-		slog.Info("dominant validator (by stake)",
+	total := 0.0
+	for _, r := range rates {
+		total += r
+	}
+	for id, r := range rates {
+		pct := 0.0
+		if total > 0 {
+			pct = r / total * 100
+		}
+		slog.Info("event emission rate",
 			"validator", id,
-			"node", labels[int(id)],
-			"stake", stakes[id],
+			"node", labels[id],
+			"rate_per_sec", fmt.Sprintf("%.2f", r),
+			"total_per_sec", fmt.Sprintf("%.2f", total),
+			"percent", fmt.Sprintf("%.1f%%", pct),
 		)
 	}
 }
@@ -556,14 +442,12 @@ func logDominantSet(
 // logThrottledSet logs which validators are expected to be throttled.
 func logThrottledSet(
 	throttledSet map[uint64]struct{},
-	labels map[int]string,
-	source string,
+	labels map[uint64]string,
 ) {
 	for id := range throttledSet {
-		slog.Info("throttled validator",
+		slog.Info("expected throttled validator",
 			"validator", id,
-			"node", labels[int(id)],
-			"source", source,
+			"node", labels[id],
 		)
 	}
 }

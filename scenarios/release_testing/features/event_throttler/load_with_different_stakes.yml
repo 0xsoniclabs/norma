@@ -2,33 +2,36 @@ Name: Release Features Event Throttler Load With Different Stakes
 
 Description: >-
   Verifies that the event throttler correctly limits event emission
-  for minor validators under asymmetric stakes. The dominant validator
-  produces the majority of events while minor validators are throttled.
+  for minor validators under asymmetric stakes. The heavy validator
+  alone exceeds the 0.75 dominant-stake threshold, so the minor
+  validators are the non-dominant set and their empty events are
+  skipped by the throttler. Only a trickle of load is applied so most
+  events carry no transactions and remain eligible to be skipped.
 
 Scenario:
   - startNode: validator-heavy
     type: validator
     imageName: "sonic:local"
-    stake: 7000000
+    stake: 8000000 # 80% of stake => dominant set alone
     extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag" # required for event throttler check
 
   - startNode: validator-medium
     type: validator
     imageName: "sonic:local"
-    stake: 2000000
+    stake: 1000000 # 10% of stake => non-dominant, throttler-eligible
     extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
 
   - startNode: validator-light
     type: validator
     imageName: "sonic:local"
-    stake: 1000000
+    stake: 1000000 # 10% of stake => non-dominant, throttler-eligible
     extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
 
   - runApp: load
     type: counter
-    users: 30
+    users: 1
     rate:
-      constant: 15
+      constant: 1 # keep tx load minimal so non-dominant events are mostly empty
 
   - waitFor: 45s
 
@@ -36,12 +39,10 @@ Scenario:
       - blocksProduced:
           tolerance: 10
       - eventThrottled:
-          ceiling: 50
           throttledNodes:
             - validator-medium
             - validator-light
       - eventThrottled:
-          ceiling: 50
           throttledNodes:
             - validator-heavy
           failing: true

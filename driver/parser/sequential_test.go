@@ -271,7 +271,7 @@ Name: Nested Check Params Test
 Scenario:
   - checks:
       - eventThrottled:
-          ceiling: 10
+          failing: true
           throttledNodes:
             - validator-dominant
             - validator-B
@@ -287,8 +287,7 @@ Scenario:
 
 	et := step.SubChecks[0]
 	require.Equal(t, FuncCheckEventThrottled, et.Function)
-	require.NotNil(t, et.Ceiling)
-	require.EqualValues(t, 10, *et.Ceiling)
+	require.True(t, et.Failing)
 	require.Equal(
 		t, []string{"validator-dominant", "validator-B"},
 		et.ThrottledNodes,
@@ -388,7 +387,7 @@ Name: Flat Throttled Nodes Test
 Scenario:
   - checks:
       - eventThrottled:
-        ceiling: 10
+        failing: true
         throttledNodes:
           - validator-A
 `
@@ -399,8 +398,7 @@ Scenario:
 	require.Len(t, step.SubChecks, 1)
 	et := step.SubChecks[0]
 	require.Equal(t, FuncCheckEventThrottled, et.Function)
-	require.NotNil(t, et.Ceiling)
-	require.EqualValues(t, 10, *et.Ceiling)
+	require.True(t, et.Failing)
 	require.Equal(t, []string{"validator-A"}, et.ThrottledNodes)
 }
 

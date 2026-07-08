@@ -17,8 +17,10 @@
 package checking
 
 import (
+	"context"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/rpc"
@@ -28,199 +30,92 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func TestVerifyThrottling_Passes_WhenRatioBelowCeiling(t *testing.T) {
+func TestVerifyThrottled_Passes_WhenGapAboveThreshold(t *testing.T) {
 	cases := map[string]struct {
-		counts       map[uint64]int
-		throttledSet map[uint64]struct{}
-		ceiling      int
+		expected map[uint64]struct{}
+		rates    map[uint64]float64
 	}{
-		"throttled well below ceiling": {
-			counts: map[uint64]int{
-				1: 100, // unthrottled reference
-				2: 80,  // throttled (80% of 100)
-				3: 10,  // throttled (10% of 100)
-			},
-			throttledSet: map[uint64]struct{}{2: {}, 3: {}},
-			ceiling:      100,
+		"single throttled validator, zero rate": {
+			expected: map[uint64]struct{}{2: {}},
+			rates:    map[uint64]float64{1: 10.0, 2: 0.0},
 		},
-		"throttled at ceiling boundary": {
-			counts: map[uint64]int{
-				1: 200, // unthrottled
-				2: 100, // throttled (50% of 200)
-				3: 50,  // throttled (25% of 200)
-			},
-			throttledSet: map[uint64]struct{}{2: {}, 3: {}},
-			ceiling:      50,
+		"single throttled validator, low rate": {
+			expected: map[uint64]struct{}{2: {}},
+			rates:    map[uint64]float64{1: 10.0, 2: 1.0},
 		},
-		"custom ceiling": {
-			counts: map[uint64]int{
-				1: 500, // unthrottled
-				2: 100, // throttled (20% of 500)
-				3: 20,  // throttled (4% of 500)
-			},
-			throttledSet: map[uint64]struct{}{2: {}, 3: {}},
-			ceiling:      25,
+		"multiple throttled, all below gap": {
+			expected: map[uint64]struct{}{2: {}, 3: {}},
+			rates:    map[uint64]float64{1: 10.0, 2: 1.0, 3: 2.0},
 		},
-		"multiple unthrottled validators": {
-			counts: map[uint64]int{
-				1: 100, // unthrottled
-				2: 90,  // unthrottled (max reference = 100)
-				3: 30,  // throttled (30% of 100)
-			},
-			throttledSet: map[uint64]struct{}{3: {}},
-			ceiling:      50,
-		},
-		"single throttled validator": {
-			counts: map[uint64]int{
-				1: 100, // unthrottled
-				2: 10,  // throttled (10% of 100)
-			},
-			throttledSet: map[uint64]struct{}{2: {}},
-			ceiling:      50,
+		"gap exactly at threshold": {
+			expected: map[uint64]struct{}{2: {}},
+			rates:    map[uint64]float64{1: 10.0, 2: 5.0},
 		},
 	}
-
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			labels := map[int]string{
-				1: "node-1",
-				2: "node-2",
-				3: "node-3",
-			}
-			err := verifyThrottling(
-				tc.counts, tc.throttledSet, labels, tc.ceiling,
-			)
-			require.NoError(t, err)
+			require.NoError(t, verifyThrottled(tc.expected, tc.rates))
 		})
 	}
 }
 
-func TestVerifyThrottling_Fails_WhenRatioExceedsCeiling(t *testing.T) {
+func TestVerifyThrottled_Fails_WhenGapTooNarrow(t *testing.T) {
 	cases := map[string]struct {
-		counts       map[uint64]int
-		throttledSet map[uint64]struct{}
-		ceiling      int
-		errMsg       string
+		expected map[uint64]struct{}
+		rates    map[uint64]float64
 	}{
-		"ratio exceeds ceiling": {
-			counts: map[uint64]int{
-				1: 100, // unthrottled
-				2: 80,  // throttled (80% of 100)
-				3: 60,  // throttled (60% of 100)
-			},
-			throttledSet: map[uint64]struct{}{2: {}, 3: {}},
-			ceiling:      50,
-			errMsg:       "expected at most 50%",
+		"listed validator emits at full speed": {
+			expected: map[uint64]struct{}{2: {}},
+			rates:    map[uint64]float64{1: 10.0, 2: 9.5},
 		},
-		"single throttled above ceiling": {
-			counts: map[uint64]int{
-				1: 100, // unthrottled
-				2: 60,  // throttled (60% of 100)
-			},
-			throttledSet: map[uint64]struct{}{2: {}},
-			ceiling:      50,
-			errMsg:       "expected at most 50%",
+		"unlisted validator emits suspiciously slowly": {
+			expected: map[uint64]struct{}{2: {}},
+			rates:    map[uint64]float64{1: 1.5, 2: 1.0},
 		},
-		"no throttled validator observed": {
-			counts: map[uint64]int{
-				1: 100,
-			},
-			throttledSet: map[uint64]struct{}{2: {}},
-			ceiling:      50,
-			errMsg:       "need at least 1 throttled validator",
-		},
-		"no unthrottled validator emitted": {
-			counts: map[uint64]int{
-				2: 50, // throttled only observed
-			},
-			throttledSet: map[uint64]struct{}{2: {}},
-			ceiling:      50,
-			errMsg:       "no unthrottled validator emitted events",
+		"all rates uniform": {
+			expected: map[uint64]struct{}{2: {}, 3: {}},
+			rates:    map[uint64]float64{1: 5.0, 2: 5.0, 3: 5.0},
 		},
 	}
-
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			labels := map[int]string{
-				1: "node-1",
-				2: "node-2",
-				3: "node-3",
-			}
-			err := verifyThrottling(
-				tc.counts, tc.throttledSet, labels, tc.ceiling,
-			)
+			err := verifyThrottled(tc.expected, tc.rates)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), tc.errMsg)
+			require.Contains(t, err.Error(), "no throttling detected")
 		})
 	}
 }
 
-func TestComputeDominantSet_ReturnsExpectedSet_ForVariousStakes(t *testing.T) {
-	cases := map[string]struct {
-		stakes    map[uint64]*big.Int
-		threshold float64
-		expected  map[uint64]struct{}
-	}{
-		"single dominant meets threshold": {
-			stakes: map[uint64]*big.Int{
-				1: big.NewInt(9_000_000),
-				2: big.NewInt(1_000_000),
-			},
-			threshold: 0.75,
-			expected:  map[uint64]struct{}{1: {}},
-		},
-		"multiple validators needed to reach threshold": {
-			stakes: map[uint64]*big.Int{
-				1: big.NewInt(40),
-				2: big.NewInt(30),
-				3: big.NewInt(20),
-				4: big.NewInt(10),
-			},
-			threshold: 0.75,
-			// total=100; needed=75; 40+30=70 < 75, add 20 → 90 >= 75
-			expected: map[uint64]struct{}{1: {}, 2: {}, 3: {}},
-		},
-		"threshold not reachable returns all": {
-			stakes: map[uint64]*big.Int{
-				1: big.NewInt(50),
-				2: big.NewInt(50),
-			},
-			threshold: 0.99,
-			expected:  map[uint64]struct{}{1: {}, 2: {}},
-		},
-		"zero stakes excluded": {
-			stakes: map[uint64]*big.Int{
-				1: big.NewInt(100),
-				2: big.NewInt(0),
-			},
-			threshold: 0.75,
-			expected:  map[uint64]struct{}{1: {}},
-		},
-		"tie broken by ascending id": {
-			stakes: map[uint64]*big.Int{
-				1: big.NewInt(50),
-				2: big.NewInt(50),
-			},
-			threshold: 0.5,
-			// total=100; needed=50; first (id=1, 50) → 50 >= 50
-			expected: map[uint64]struct{}{1: {}},
-		},
-		"empty stakes returns empty set": {
-			stakes:    map[uint64]*big.Int{},
-			threshold: 0.75,
-			expected:  map[uint64]struct{}{},
-		},
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			got := computeDominantSet(tc.stakes, tc.threshold)
-			require.Equal(t, tc.expected, got)
-		})
-	}
+func TestVerifyThrottled_Fails_WhenAllRatesZero(t *testing.T) {
+	err := verifyThrottled(
+		map[uint64]struct{}{2: {}},
+		map[uint64]float64{1: 0.0, 2: 0.0},
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no validator emitted events")
 }
 
-func TestThrottledSetFromLabels_ResolvesLabels_ToValidatorIds(t *testing.T) {
+func TestVerifyThrottled_Fails_WhenNoUnlistedValidator(t *testing.T) {
+	err := verifyThrottled(
+		map[uint64]struct{}{1: {}, 2: {}},
+		map[uint64]float64{1: 0.0, 2: 0.0},
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"no unthrottled validator observed for comparison")
+}
+
+func TestVerifyThrottled_Fails_WhenNoListedValidator(t *testing.T) {
+	err := verifyThrottled(
+		map[uint64]struct{}{99: {}},
+		map[uint64]float64{1: 10.0, 2: 10.0},
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"no expected-throttled validator observed")
+}
+
+func TestResolveLabels_ResolvesLabels_ToValidatorIds(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	nodeA := driver.NewMockNode(ctrl)
 	nodeB := driver.NewMockNode(ctrl)
@@ -234,22 +129,23 @@ func TestThrottledSetFromLabels_ResolvesLabels_ToValidatorIds(t *testing.T) {
 	// nodeC is a non-validator (no ID); must be skipped without error.
 	nodeC.EXPECT().GetValidatorId().Return(nil)
 
-	got, err := throttledSetFromLabels(
-		[]string{"beta"}, []driver.Node{nodeA, nodeB, nodeC},
+	labels, throttled, err := resolveLabels(
+		[]driver.Node{nodeA, nodeB, nodeC}, []string{"beta"},
 	)
 	require.NoError(t, err)
-	require.Equal(t, map[uint64]struct{}{2: {}}, got)
+	require.Equal(t, map[uint64]struct{}{2: {}}, throttled)
+	require.Equal(t, map[uint64]string{1: "alpha", 2: "beta"}, labels)
 }
 
-func TestThrottledSetFromLabels_ReturnsError_WhenLabelUnknown(t *testing.T) {
+func TestResolveLabels_ReturnsError_WhenLabelUnknown(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	nodeA := driver.NewMockNode(ctrl)
 	idA := 1
 	nodeA.EXPECT().GetValidatorId().Return(&idA)
 	nodeA.EXPECT().GetLabel().Return("alpha")
 
-	_, err := throttledSetFromLabels(
-		[]string{"missing"}, []driver.Node{nodeA},
+	_, _, err := resolveLabels(
+		[]driver.Node{nodeA}, []string{"missing"},
 	)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), `label "missing"`)
@@ -260,25 +156,56 @@ func TestEventThrottledChecker_AppliesConfiguration_WhenProvided(t *testing.T) {
 	net := driver.NewMockNetwork(ctrl)
 	original := newEventThrottledChecker(net)
 
-	t.Run("custom ceiling, threshold, and throttled nodes", func(t *testing.T) {
+	t.Run("throttled nodes from []any", func(t *testing.T) {
 		configured := original.Configure(CheckerConfig{
-			"ceiling":        75,
-			"stakeThreshold": 0.9,
 			"throttledNodes": []any{"node-a", "node-b"},
 		})
 		c := configured.(*eventThrottledChecker)
-		require.Equal(t, 75, c.ceiling)
-		require.Equal(t, 0.9, c.stakeThreshold)
 		require.Equal(t, []string{"node-a", "node-b"}, c.throttledNodes)
 	})
 
-	t.Run("empty config uses defaults", func(t *testing.T) {
+	t.Run("throttled nodes from []string", func(t *testing.T) {
+		configured := original.Configure(CheckerConfig{
+			"throttledNodes": []string{"node-a"},
+		})
+		c := configured.(*eventThrottledChecker)
+		require.Equal(t, []string{"node-a"}, c.throttledNodes)
+	})
+
+	t.Run("empty config leaves throttled nodes unset", func(t *testing.T) {
 		configured := original.Configure(CheckerConfig{})
 		c := configured.(*eventThrottledChecker)
-		require.Equal(t, defaultThrottleCeiling, c.ceiling)
-		require.Equal(t, defaultDominantStakeThreshold, c.stakeThreshold)
 		require.Empty(t, c.throttledNodes)
 	})
+
+	t.Run("unknown keys are silently ignored", func(t *testing.T) {
+		configured := original.Configure(CheckerConfig{
+			"ceiling":        50,
+			"stakeThreshold": 0.75,
+			"throttledNodes": []any{"node-a"},
+		})
+		c := configured.(*eventThrottledChecker)
+		require.Equal(t, []string{"node-a"}, c.throttledNodes)
+	})
+
+	t.Run("sample window is preserved through Configure", func(t *testing.T) {
+		original.sampleWindow = 5 * time.Second
+		configured := original.Configure(CheckerConfig{
+			"throttledNodes": []any{"node-a"},
+		})
+		c := configured.(*eventThrottledChecker)
+		require.Equal(t, 5*time.Second, c.sampleWindow)
+	})
+}
+
+func TestEventThrottledChecker_ReturnsError_WhenThrottledNodesEmpty(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+
+	checker := newEventThrottledChecker(net)
+	err := checker.Check(t.Context())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "throttledNodes must not be empty")
 }
 
 func TestEventThrottledChecker_ReturnsError_WhenNoActiveNodes(t *testing.T) {
@@ -287,6 +214,7 @@ func TestEventThrottledChecker_ReturnsError_WhenNoActiveNodes(t *testing.T) {
 	net.EXPECT().GetActiveNodes().Return(nil)
 
 	checker := newEventThrottledChecker(net)
+	checker.throttledNodes = []string{"any"}
 	err := checker.Check(t.Context())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no active nodes")
@@ -297,186 +225,21 @@ func TestEventThrottledChecker_ReturnsError_WhenNoReachableNode(t *testing.T) {
 	net := driver.NewMockNetwork(ctrl)
 	node := driver.NewMockNode(ctrl)
 
+	validatorId := 1
 	net.EXPECT().GetActiveNodes().Return([]driver.Node{node})
+	// resolveLabels reads id/label first; then dialFirstReachable
+	// sees the failure marker and skips the node.
+	node.EXPECT().GetValidatorId().Return(&validatorId)
+	node.EXPECT().GetLabel().Return("any")
 	node.EXPECT().IsExpectedFailure().Return(true)
 
 	checker := newEventThrottledChecker(net)
+	checker.throttledNodes = []string{"any"}
 	err := checker.Check(t.Context())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no reachable node")
 }
 
-func TestEventThrottledChecker_Fails_WhenNonDominantRatioExceedsCeiling(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	net := driver.NewMockNetwork(ctrl)
-	node1 := driver.NewMockNode(ctrl)
-	node2 := driver.NewMockNode(ctrl)
-	node3 := driver.NewMockNode(ctrl)
-	rpcClient := rpc.NewMockClient(ctrl)
-
-	validatorId1 := 1
-	validatorId2 := 2
-	validatorId3 := 3
-
-	net.EXPECT().GetActiveNodes().Return(
-		[]driver.Node{node1, node2, node3},
-	)
-	node1.EXPECT().IsExpectedFailure().Return(false)
-	node1.EXPECT().DialRpc(gomock.Any()).Return(rpcClient, nil)
-	node1.EXPECT().GetValidatorId().Return(&validatorId1)
-	node1.EXPECT().GetLabel().Return("dominant")
-	node2.EXPECT().GetValidatorId().Return(&validatorId2)
-	node2.EXPECT().GetLabel().Return("non-dominant-a")
-	node3.EXPECT().GetValidatorId().Return(&validatorId3)
-	node3.EXPECT().GetLabel().Return("non-dominant-b")
-
-	// Mock eth_currentEpoch → epoch 5
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "eth_currentEpoch").
-		SetArg(0, hexutil.Uint64(5))
-
-	// Mock dag_getHeads → two heads
-	head1 := common.HexToHash("0x1111")
-	head2 := common.HexToHash("0x2222")
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getHeads", "0x5").
-		SetArg(0, []string{head1.Hex(), head2.Hex()})
-
-	// Event 1 (head1): creator=1 (dominant), no parents
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getEvent", head1.Hex()).
-		SetArg(0, map[string]any{
-			"creator": "0x1",
-			"parents": []any{},
-		})
-
-	// Event 2 (head2): creator=2, parent=event3
-	event3Hash := common.HexToHash("0x3333")
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getEvent", head2.Hex()).
-		SetArg(0, map[string]any{
-			"creator": "0x2",
-			"parents": []any{event3Hash.Hex()},
-		})
-
-	// Event 3: creator=2, parent=event4
-	event4Hash := common.HexToHash("0x4444")
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getEvent", event3Hash.Hex()).
-		SetArg(0, map[string]any{
-			"creator": "0x2",
-			"parents": []any{event4Hash.Hex()},
-		})
-
-	// Event 4: creator=3, no parents
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getEvent", event4Hash.Hex()).
-		SetArg(0, map[string]any{
-			"creator": "0x3",
-			"parents": []any{},
-		})
-
-	rpcClient.EXPECT().Close()
-
-	// Stakes make validator 1 the sole dominant validator.
-	stakes := map[uint64]*big.Int{
-		1: big.NewInt(9_000_000),
-		2: big.NewInt(500_000),
-		3: big.NewInt(500_000),
-	}
-
-	// counts: creator1=1, creator2=2, creator3=1
-	// unthrottled reference (max unthrottled) = counts[1] = 1
-	// min throttled = 1 (creator3) → ratio = 100%
-	// With ceiling=50, this should fail.
-	checker := newEventThrottledChecker(net)
-	checker.ceiling = 50
-	checker.fetchStakes = func(rpc.Client) (map[uint64]*big.Int, error) {
-		return stakes, nil
-	}
-	err := checker.Check(t.Context())
-
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "expected at most 50%")
-}
-
-func TestEventThrottledChecker_Passes_WhenThrottledEmitsFewerEvents(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	net := driver.NewMockNetwork(ctrl)
-	node1 := driver.NewMockNode(ctrl)
-	node2 := driver.NewMockNode(ctrl)
-	rpcClient := rpc.NewMockClient(ctrl)
-
-	validatorId1 := 1
-	validatorId2 := 2
-
-	net.EXPECT().GetActiveNodes().Return(
-		[]driver.Node{node1, node2},
-	)
-	node1.EXPECT().IsExpectedFailure().Return(false)
-	node1.EXPECT().DialRpc(gomock.Any()).Return(rpcClient, nil)
-	node1.EXPECT().GetValidatorId().Return(&validatorId1)
-	node1.EXPECT().GetLabel().Return("dominant")
-	node2.EXPECT().GetValidatorId().Return(&validatorId2)
-	node2.EXPECT().GetLabel().Return("throttled")
-
-	// Mock eth_currentEpoch
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "eth_currentEpoch").
-		SetArg(0, hexutil.Uint64(1))
-
-	// Build a DAG where:
-	//   creator 1 (dominant): 10 events
-	//   creator 2 (throttled): 1 event  → ratio = 1/10 = 10% < 50%
-	events := make([]common.Hash, 11)
-	for i := range events {
-		events[i] = common.BigToHash(big.NewInt(int64(i + 1)))
-	}
-
-	heads := make([]string, len(events))
-	for i, e := range events {
-		heads[i] = e.Hex()
-	}
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getHeads", "0x1").
-		SetArg(0, heads)
-
-	for i, e := range events {
-		creator := "0x1"
-		if i == len(events)-1 {
-			creator = "0x2"
-		}
-		rpcClient.EXPECT().
-			Call(gomock.Any(), "dag_getEvent", e.Hex()).
-			SetArg(0, map[string]any{
-				"creator": creator,
-				"parents": []any{},
-			})
-	}
-
-	rpcClient.EXPECT().Close()
-
-	// Stakes match the throttler_check.yml scenario (90/10 split).
-	stakes := map[uint64]*big.Int{
-		1: big.NewInt(9_000_000),
-		2: big.NewInt(1_000_000),
-	}
-
-	checker := newEventThrottledChecker(net)
-	checker.ceiling = 50
-	checker.fetchStakes = func(rpc.Client) (map[uint64]*big.Int, error) {
-		return stakes, nil
-	}
-	err := checker.Check(t.Context())
-	require.NoError(t, err)
-}
-
-// TestEventThrottledChecker_Passes_WhenExplicitThrottledNodeMatches verifies
-// that specifying `throttledNodes` bypasses the stake-based inference and
-// designates the named node as the throttled validator. In this scenario
-// stakes are equal (so stake-based inference would fail to find a
-// throttled validator), but the explicit configuration lets the check
-// succeed.
 func TestEventThrottledChecker_Passes_WhenExplicitThrottledNodeMatches(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
@@ -492,60 +255,25 @@ func TestEventThrottledChecker_Passes_WhenExplicitThrottledNodeMatches(t *testin
 	)
 	node1.EXPECT().IsExpectedFailure().Return(false)
 	node1.EXPECT().DialRpc(gomock.Any()).Return(rpcClient, nil)
-	// throttledSetFromLabels reads GetValidatorId/GetLabel once per node;
-	// nodeLabels also reads them once, giving two calls each.
-	node1.EXPECT().GetValidatorId().Return(&validatorId1).Times(2)
-	node1.EXPECT().GetLabel().Return("unthrottled").Times(2)
-	node2.EXPECT().GetValidatorId().Return(&validatorId2).Times(2)
-	node2.EXPECT().GetLabel().Return("throttled").Times(2)
-
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "eth_currentEpoch").
-		SetArg(0, hexutil.Uint64(1))
-
-	events := make([]common.Hash, 11)
-	for i := range events {
-		events[i] = common.BigToHash(big.NewInt(int64(i + 1)))
-	}
-	heads := make([]string, len(events))
-	for i, e := range events {
-		heads[i] = e.Hex()
-	}
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getHeads", "0x1").
-		SetArg(0, heads)
-
-	for i, e := range events {
-		creator := "0x1"
-		if i == len(events)-1 {
-			creator = "0x2"
-		}
-		rpcClient.EXPECT().
-			Call(gomock.Any(), "dag_getEvent", e.Hex()).
-			SetArg(0, map[string]any{
-				"creator": creator,
-				"parents": []any{},
-			})
-	}
-
+	// resolveLabels walks the node list once.
+	node1.EXPECT().GetValidatorId().Return(&validatorId1)
+	node1.EXPECT().GetLabel().Return("unthrottled")
+	node2.EXPECT().GetValidatorId().Return(&validatorId2)
+	node2.EXPECT().GetLabel().Return("throttled")
 	rpcClient.EXPECT().Close()
 
 	checker := newEventThrottledChecker(net)
-	checker.ceiling = 50
 	checker.throttledNodes = []string{"throttled"}
-	// fetchStakes must not be called when throttledNodes is set.
-	checker.fetchStakes = func(rpc.Client) (map[uint64]*big.Int, error) {
-		t.Fatal("fetchStakes should not be called when throttledNodes is set")
-		return nil, nil
+	checker.collectRates = func(
+		context.Context, rpc.Client, time.Duration,
+	) (map[uint64]float64, error) {
+		return map[uint64]float64{1: 10.0, 2: 1.0}, nil
 	}
 	err := checker.Check(t.Context())
 	require.NoError(t, err)
 }
 
-// TestEventThrottledChecker_Fails_WhenExplicitThrottledNodeEmitsTooMany
-// verifies that if the explicitly named node emits too many events
-// relative to the unthrottled reference, the check fails.
-func TestEventThrottledChecker_Fails_WhenExplicitThrottledNodeEmitsTooMany(t *testing.T) {
+func TestEventThrottledChecker_Fails_WhenListedNodeIsUnthrottled(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	node1 := driver.NewMockNode(ctrl)
@@ -560,46 +288,197 @@ func TestEventThrottledChecker_Fails_WhenExplicitThrottledNodeEmitsTooMany(t *te
 	)
 	node1.EXPECT().IsExpectedFailure().Return(false)
 	node1.EXPECT().DialRpc(gomock.Any()).Return(rpcClient, nil)
-	node1.EXPECT().GetValidatorId().Return(&validatorId1).Times(2)
-	node1.EXPECT().GetLabel().Return("unthrottled").Times(2)
-	node2.EXPECT().GetValidatorId().Return(&validatorId2).Times(2)
-	node2.EXPECT().GetLabel().Return("throttled").Times(2)
+	node1.EXPECT().GetValidatorId().Return(&validatorId1)
+	node1.EXPECT().GetLabel().Return("dominant")
+	node2.EXPECT().GetValidatorId().Return(&validatorId2)
+	node2.EXPECT().GetLabel().Return("also-dominant")
+	rpcClient.EXPECT().Close()
+
+	checker := newEventThrottledChecker(net)
+	checker.throttledNodes = []string{"also-dominant"}
+	checker.collectRates = func(
+		context.Context, rpc.Client, time.Duration,
+	) (map[uint64]float64, error) {
+		return map[uint64]float64{1: 10.0, 2: 10.0}, nil
+	}
+	err := checker.Check(t.Context())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no throttling detected")
+}
+
+func TestCollectEmissionRates_ReturnsDeltaRates_WhenEpochStable(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	rpcClient := rpc.NewMockClient(ctrl)
+
+	// Two snapshots, both in epoch 1.
+	// Snapshot 1: 6 events (5 by v1, 1 by v2).
+	// Snapshot 2: 18 events (15 by v1, 3 by v2).
+	// Delta: creator 1 => 10 events, creator 2 => 2 events.
+	s1Heads, s1Events := buildIndependentHeads(
+		[]uint64{1, 1, 1, 1, 1, 2},
+	)
+	// Snapshot 2: 18 events (15 by v1, 3 by v2), continuing.
+	s2Creators := make([]uint64, 0, 18)
+	for range 15 {
+		s2Creators = append(s2Creators, 1)
+	}
+	for range 3 {
+		s2Creators = append(s2Creators, 2)
+	}
+	s2Heads, s2Events := buildIndependentHeads(s2Creators)
+
+	// Expect first snapshot RPC sequence.
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "eth_currentEpoch").
+		SetArg(0, hexutil.Uint64(1))
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "dag_getHeads", "0x1").
+		SetArg(0, s1Heads)
+	for h, ev := range s1Events {
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "dag_getEvent", h).
+			SetArg(0, ev)
+	}
+	// Expect second snapshot RPC sequence.
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "eth_currentEpoch").
+		SetArg(0, hexutil.Uint64(1))
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "dag_getHeads", "0x1").
+		SetArg(0, s2Heads)
+	for h, ev := range s2Events {
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "dag_getEvent", h).
+			SetArg(0, ev)
+	}
+
+	window := 100 * time.Millisecond
+	rates, err := collectEmissionRates(t.Context(), rpcClient, window)
+	require.NoError(t, err)
+	// Delta creator 1: 15 - 5 = 10 events over 0.1s => 100/s.
+	// Delta creator 2: 3 - 1 = 2 events over 0.1s => 20/s.
+	require.InDelta(t, 100.0, rates[1], 0.01)
+	require.InDelta(t, 20.0, rates[2], 0.01)
+}
+
+func TestSampleEmissionRates_ReturnsError_WhenEpochChanges(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	rpcClient := rpc.NewMockClient(ctrl)
+
+	s1Heads, s1Events := buildIndependentHeads([]uint64{1, 2})
+	s2Heads, s2Events := buildIndependentHeads([]uint64{1, 2})
 
 	rpcClient.EXPECT().
 		Call(gomock.Any(), "eth_currentEpoch").
 		SetArg(0, hexutil.Uint64(1))
-
-	// 3 events: unthrottled=2, throttled=1 → ratio 50%
-	events := []common.Hash{
-		common.BigToHash(big.NewInt(1)),
-		common.BigToHash(big.NewInt(2)),
-		common.BigToHash(big.NewInt(3)),
-	}
-	heads := []string{events[0].Hex(), events[1].Hex(), events[2].Hex()}
 	rpcClient.EXPECT().
 		Call(gomock.Any(), "dag_getHeads", "0x1").
-		SetArg(0, heads)
-
-	creators := []string{"0x1", "0x1", "0x2"}
-	for i, e := range events {
+		SetArg(0, s1Heads)
+	for h, ev := range s1Events {
 		rpcClient.EXPECT().
-			Call(gomock.Any(), "dag_getEvent", e.Hex()).
-			SetArg(0, map[string]any{
-				"creator": creators[i],
-				"parents": []any{},
-			})
+			Call(gomock.Any(), "dag_getEvent", h).
+			SetArg(0, ev)
+	}
+	// Second snapshot advertises a different epoch.
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "eth_currentEpoch").
+		SetArg(0, hexutil.Uint64(2))
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "dag_getHeads", "0x2").
+		SetArg(0, s2Heads)
+	for h, ev := range s2Events {
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "dag_getEvent", h).
+			SetArg(0, ev)
 	}
 
-	rpcClient.EXPECT().Close()
-
-	checker := newEventThrottledChecker(net)
-	checker.ceiling = 25 // 50% > 25%
-	checker.throttledNodes = []string{"throttled"}
-	checker.fetchStakes = func(rpc.Client) (map[uint64]*big.Int, error) {
-		t.Fatal("fetchStakes should not be called when throttledNodes is set")
-		return nil, nil
-	}
-	err := checker.Check(t.Context())
+	_, err := sampleEmissionRates(
+		t.Context(), rpcClient, 50*time.Millisecond,
+	)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "expected at most 25%")
+	require.Contains(t, err.Error(), "epoch changed during sampling window")
+}
+
+// TestCollectEmissionRates_Retries_OnEpochChange verifies that the
+// top-level rate collector transparently retries when the first sample
+// straddles an epoch boundary and eventually succeeds.
+func TestCollectEmissionRates_Retries_OnEpochChange(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	rpcClient := rpc.NewMockClient(ctrl)
+
+	// --- Attempt 1: epoch 1 -> epoch 2, discarded.
+	a1s1Heads, a1s1Events := buildIndependentHeads([]uint64{1})
+	a1s2Heads, a1s2Events := buildIndependentHeads([]uint64{1})
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "eth_currentEpoch").
+		SetArg(0, hexutil.Uint64(1))
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "dag_getHeads", "0x1").
+		SetArg(0, a1s1Heads)
+	for h, ev := range a1s1Events {
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "dag_getEvent", h).
+			SetArg(0, ev)
+	}
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "eth_currentEpoch").
+		SetArg(0, hexutil.Uint64(2))
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "dag_getHeads", "0x2").
+		SetArg(0, a1s2Heads)
+	for h, ev := range a1s2Events {
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "dag_getEvent", h).
+			SetArg(0, ev)
+	}
+
+	// --- Attempt 2: stable in epoch 2, succeeds.
+	a2s1Heads, a2s1Events := buildIndependentHeads([]uint64{1})
+	a2s2Heads, a2s2Events := buildIndependentHeads([]uint64{1, 1})
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "eth_currentEpoch").
+		SetArg(0, hexutil.Uint64(2))
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "dag_getHeads", "0x2").
+		SetArg(0, a2s1Heads)
+	for h, ev := range a2s1Events {
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "dag_getEvent", h).
+			SetArg(0, ev)
+	}
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "eth_currentEpoch").
+		SetArg(0, hexutil.Uint64(2))
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "dag_getHeads", "0x2").
+		SetArg(0, a2s2Heads)
+	for h, ev := range a2s2Events {
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "dag_getEvent", h).
+			SetArg(0, ev)
+	}
+
+	rates, err := collectEmissionRates(
+		t.Context(), rpcClient, 100*time.Millisecond,
+	)
+	require.NoError(t, err)
+	// Delta for creator 1: 2 - 1 = 1 event over 0.1s => 10/s.
+	require.InDelta(t, 10.0, rates[1], 0.01)
+}
+
+// buildIndependentHeads constructs a set of disconnected head events,
+// each with no parents, one per entry in `creators`. Returns the head
+// hex strings and a map from head hex to the *rawEvent value to hand
+// back via SetArg in RPC mocks.
+func buildIndependentHeads(
+	creators []uint64,
+) (heads []string, events map[string]*rawEvent) {
+	heads = make([]string, 0, len(creators))
+	events = make(map[string]*rawEvent, len(creators))
+	for i, c := range creators {
+		h := common.BigToHash(big.NewInt(int64(1_000_000 + i))).Hex()
+		heads = append(heads, h)
+		events[h] = &rawEvent{Creator: hexutil.Uint64(c)}
+	}
+	return heads, events
 }
