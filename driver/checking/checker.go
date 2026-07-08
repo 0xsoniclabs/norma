@@ -121,7 +121,7 @@ func (config *CheckerConfig) Check() error {
 	checks := map[string]func(any) bool{
 		"failing":   isBool,
 		"tolerance": isPositiveInt,
-		"start":     isNonNegativeInt64,
+		"duration":  isNonNegativeInt64,
 		"ceiling":   isPositiveInt,
 		"slack":     isPositiveInt,
 		"rules":     isRulesPatch,

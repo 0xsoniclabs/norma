@@ -46,8 +46,8 @@ Scenario:
   - checks:
       - blocksProduced:
         tolerance: 10
-        # Ignore samples from before the network recovered so the flat
-        # block-height stretch during the blackout does not fail the check.
-        start: 20s
+        # Actively observe the network for 20 seconds and require that
+        # block production advanced during that window.
+        duration: 20s
 
  # default checks are added automatically.

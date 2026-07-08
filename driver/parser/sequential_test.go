@@ -402,14 +402,14 @@ Scenario:
 	require.Equal(t, []string{"validator-A"}, et.ThrottledNodes)
 }
 
-func TestParseSequential_BlocksProduced_ParsesStartDuration(t *testing.T) {
+func TestParseSequential_BlocksProduced_ParsesDuration(t *testing.T) {
 	input := `
-Name: Start Test
+Name: Duration Test
 Scenario:
   - checks:
       - blocksProduced:
         tolerance: 10
-        start: 30s
+        duration: 30s
 `
 	scenario, err := ParseSequentialBytes([]byte(input))
 	require.NoError(t, err)
@@ -419,25 +419,25 @@ Scenario:
 	require.Equal(t, FuncCheckBlocksProduced, check.Function)
 	require.NotNil(t, check.Tolerance)
 	require.Equal(t, 10, *check.Tolerance)
-	require.NotNil(t, check.Start)
-	require.Equal(t, 30*time.Second, *check.Start)
+	require.NotNil(t, check.Duration)
+	require.Equal(t, 30*time.Second, *check.Duration)
 }
 
-func TestParseSequential_BlocksProduced_RejectsInvalidStart(t *testing.T) {
+func TestParseSequential_BlocksProduced_RejectsInvalidDuration(t *testing.T) {
 	cases := map[string]string{
 		"non-duration string": `
 Name: Bad
 Scenario:
   - checks:
       - blocksProduced:
-        start: not-a-duration
+        duration: not-a-duration
 `,
 		"negative duration": `
 Name: Bad
 Scenario:
   - checks:
       - blocksProduced:
-        start: -5s
+        duration: -5s
 `,
 	}
 	for name, input := range cases {
