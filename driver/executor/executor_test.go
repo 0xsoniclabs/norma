@@ -431,6 +431,10 @@ func TestExecutor_RunScenarioWithDefaultChecks(t *testing.T) {
 	checking.RegisterNetworkCheck("blocksHalted", func(driver.Network, *monitoring.Monitor) checking.Checker {
 		return checkBlocksHalted
 	})
+	checkEventThrottled := checking.NewMockChecker(ctrl)
+	checking.RegisterNetworkCheck("eventThrottled", func(driver.Network, *monitoring.Monitor) checking.Checker {
+		return checkEventThrottled
+	})
 
 	net.EXPECT().AdvanceEpoch(2)
 
@@ -439,6 +443,7 @@ func TestExecutor_RunScenarioWithDefaultChecks(t *testing.T) {
 	checkBlocksRolling.EXPECT().Check(gomock.Any())
 	checkBlockGasRate.EXPECT().Check(gomock.Any())
 	checkBlocksHalted.EXPECT().Check(gomock.Any()).Return(nil)
+	checkEventThrottled.EXPECT().Check(gomock.Any())
 
 	checks := checking.InitNetworkChecks(net, nil)
 	if err := Run(t.Context(), clock, net, &scenario, checks); err != nil {

@@ -629,6 +629,7 @@ var checkFunctionToCheckerName = map[parser.StepFunction]string{
 	parser.FuncCheckBlockHeights:   "blockHeight",
 	parser.FuncCheckBlocksHalted:   "blocksHalted",
 	parser.FuncCheckBlocksProduced: "blocksRolling",
+	parser.FuncCheckEventThrottled: "eventThrottled",
 	parser.FuncCheckNetworkRules:   "networkRules",
 }
 
@@ -661,6 +662,9 @@ func execCheck(ctx context.Context, checkerName string, spec *parser.CheckSpec, 
 	}
 	if spec.Rules != (genesis.NetworkRulesPatch{}) {
 		config["rules"] = spec.Rules
+	}
+	if len(spec.ThrottledNodes) > 0 {
+		config["throttledNodes"] = spec.ThrottledNodes
 	}
 
 	if len(config) > 0 {

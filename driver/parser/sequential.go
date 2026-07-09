@@ -51,6 +51,7 @@ const (
 	FuncCheckBlockHeights   StepFunction = "blockHeights"
 	FuncCheckBlocksHalted   StepFunction = "blocksHalted"
 	FuncCheckBlocksProduced StepFunction = "blocksProduced"
+	FuncCheckEventThrottled StepFunction = "eventThrottled"
 	FuncCheckNetworkRules   StepFunction = "networkRules"
 )
 
@@ -75,6 +76,7 @@ var allCheckFunctions = [...]StepFunction{
 	FuncCheckBlockHeights,
 	FuncCheckBlocksHalted,
 	FuncCheckBlocksProduced,
+	FuncCheckEventThrottled,
 	FuncCheckNetworkRules,
 }
 
@@ -100,16 +102,19 @@ func toCheckFunction(s string) (StepFunction, error) {
 
 // CheckSpec represents a single check inside a checks: step.
 type CheckSpec struct {
-	Function  StepFunction
-	Ceiling   *float64
-	Tolerance *int
-	Failing   bool
-	Rules     genesis.NetworkRulesPatch
+	Function       StepFunction
+	Ceiling        *float64
+	Tolerance      *int
+	Failing        bool
+	Rules          genesis.NetworkRulesPatch
+	ThrottledNodes []string
 }
 
 // UnmarshalYAML implements custom YAML unmarshalling for CheckSpec.
 // A check can be either a plain function name string or a mapping with
-// the function name as key and optional parameters as siblings.
+// the function name as key and optional parameters. Parameters may be
+// siblings of the function key (flat form) or nested under it (nested
+// form); both are accepted.
 func (c *CheckSpec) UnmarshalYAML(value *yaml.Node) error {
 	switch value.Kind {
 	case yaml.ScalarNode:
@@ -122,52 +127,116 @@ func (c *CheckSpec) UnmarshalYAML(value *yaml.Node) error {
 	case yaml.MappingNode:
 		return c.unmarshalCheckMapping(value)
 	default:
-		return fmt.Errorf("line %d: check must be a string or mapping", value.Line)
+		return fmt.Errorf(
+			"line %d: check must be a string or mapping", value.Line,
+		)
 	}
 }
 
 func (c *CheckSpec) unmarshalCheckMapping(node *yaml.Node) error {
+	// First pass: find the function key so that parameter validation
+	// (which depends on the check function) works regardless of key
+	// order in the mapping.
 	for i := 0; i < len(node.Content); i += 2 {
-		keyNode := node.Content[i]
-		valNode := node.Content[i+1]
-		key := keyNode.Value
-
+		key := node.Content[i].Value
 		if fn, err := toCheckFunction(key); err == nil {
 			c.Function = fn
-			continue
-		}
-
-		switch key {
-		case "tolerance":
-			var v int
-			if err := valNode.Decode(&v); err != nil {
-				return fmt.Errorf("line %d: invalid tolerance: %w", keyNode.Line, err)
-			}
-			c.Tolerance = &v
-		case "ceiling":
-			var v float64
-			if err := valNode.Decode(&v); err != nil {
-				return fmt.Errorf("line %d: invalid ceiling: %w", keyNode.Line, err)
-			}
-			c.Ceiling = &v
-		case "failing":
-			var v bool
-			if err := valNode.Decode(&v); err != nil {
-				return fmt.Errorf("line %d: invalid failing: %w", keyNode.Line, err)
-			}
-			c.Failing = v
-		case "rules":
-			var patch genesis.NetworkRulesPatch
-			if err := valNode.Decode(&patch); err != nil {
-				return fmt.Errorf("line %d: invalid rules: %w", keyNode.Line, err)
-			}
-			c.Rules = patch
-		default:
-			return fmt.Errorf("line %d: unknown check parameter %q", keyNode.Line, key)
+			break
 		}
 	}
 	if c.Function == "" {
-		return fmt.Errorf("line %d: no known check function found in mapping", node.Line)
+		return fmt.Errorf(
+			"line %d: no known check function found in mapping",
+			node.Line,
+		)
+	}
+
+	// Second pass: parse the function value (nested-parameter form) and
+	// any sibling parameters (flat form).
+	for i := 0; i < len(node.Content); i += 2 {
+		keyNode := node.Content[i]
+		valNode := node.Content[i+1]
+
+		if _, err := toCheckFunction(keyNode.Value); err == nil {
+			// Nested-parameter form:
+			//   - eventThrottled:
+			//       throttledNodes: [a, b]
+			// The function's value is a mapping of params.
+			if valNode.Kind != yaml.MappingNode {
+				continue
+			}
+			for j := 0; j < len(valNode.Content); j += 2 {
+				if err := c.parseParam(
+					valNode.Content[j], valNode.Content[j+1],
+				); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+
+		if err := c.parseParam(keyNode, valNode); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *CheckSpec) parseParam(keyNode, valNode *yaml.Node) error {
+	allowed, known := checkFunctionParams[c.Function]
+	if !known || !slices.Contains(allowed, keyNode.Value) {
+		return fmt.Errorf(
+			"line %d: parameter %q is not valid for check %s",
+			keyNode.Line, keyNode.Value, c.Function,
+		)
+	}
+	switch keyNode.Value {
+	case "tolerance":
+		var v int
+		if err := valNode.Decode(&v); err != nil {
+			return fmt.Errorf(
+				"line %d: invalid tolerance: %w", keyNode.Line, err,
+			)
+		}
+		c.Tolerance = &v
+	case "ceiling":
+		var v float64
+		if err := valNode.Decode(&v); err != nil {
+			return fmt.Errorf(
+				"line %d: invalid ceiling: %w", keyNode.Line, err,
+			)
+		}
+		c.Ceiling = &v
+	case "failing":
+		var v bool
+		if err := valNode.Decode(&v); err != nil {
+			return fmt.Errorf(
+				"line %d: invalid failing: %w", keyNode.Line, err,
+			)
+		}
+		c.Failing = v
+	case "rules":
+		var patch genesis.NetworkRulesPatch
+		if err := valNode.Decode(&patch); err != nil {
+			return fmt.Errorf(
+				"line %d: invalid rules: %w", keyNode.Line, err,
+			)
+		}
+		c.Rules = patch
+	case "throttledNodes":
+		var v []string
+		if err := valNode.Decode(&v); err != nil {
+			return fmt.Errorf(
+				"line %d: invalid throttledNodes: %w",
+				keyNode.Line, err,
+			)
+		}
+		c.ThrottledNodes = v
+	default:
+		return fmt.Errorf(
+			"line %d: unknown check parameter %q",
+			keyNode.Line, keyNode.Value,
+		)
 	}
 	return nil
 }
@@ -540,6 +609,7 @@ var checkFunctionDescriptions = map[StepFunction]string{
 	FuncCheckBlockHeights:   "Assert that all nodes are within tolerance of the same block height.",
 	FuncCheckBlocksHalted:   "Assert that block production has halted.",
 	FuncCheckBlocksProduced: "Assert that all nodes have produced blocks within tolerance.",
+	FuncCheckEventThrottled: "Assert that validators listed in throttledNodes emit events at a significantly lower rate than the rest.",
 	FuncCheckNetworkRules:   "Assert that the active network rules on all nodes match the expected rules patch.",
 }
 
@@ -550,15 +620,17 @@ var checkFunctionParams = map[StepFunction][]string{
 	FuncCheckBlockHeights:   {"tolerance", "failing"},
 	FuncCheckBlocksHalted:   {"failing"},
 	FuncCheckBlocksProduced: {"tolerance", "failing"},
+	FuncCheckEventThrottled: {"throttledNodes", "failing"},
 	FuncCheckNetworkRules:   {"rules", "failing"},
 }
 
 // checkParamDescriptions provides a human-readable description for each sub-check parameter.
 var checkParamDescriptions = map[string]string{
-	"ceiling":   "Maximum allowed value (float64) for a gas rate check.",
-	"failing":   "When true, the check is expected to fail; a passing result is treated as an error.",
-	"rules":     "Expected network rules patch (NetworkRulesPatch field structure).",
-	"tolerance": "Allowed deviation (int, in blocks) between nodes for a height/production check.",
+	"ceiling":        "Maximum allowed value (float64) for a gas rate check.",
+	"failing":        "When true, the check is expected to fail; a passing result is treated as an error.",
+	"rules":          "Expected network rules patch (NetworkRulesPatch field structure).",
+	"tolerance":      "Allowed deviation (int, in blocks) between nodes for a height/production check.",
+	"throttledNodes": "List of node labels expected to be throttled.",
 }
 
 // PrintSequentialHelp writes a formatted summary of all available sequential

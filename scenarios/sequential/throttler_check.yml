@@ -1,0 +1,40 @@
+Name: Event Throttler With Different Stakes
+
+Description: >-
+  Verifies that the event throttler correctly limits event emission
+  for a minor validator under asymmetric stakes. The dominant validator
+  (90% of stake) alone exceeds the 0.75 dominant-stake threshold, so
+  the non-dominant validator is throttled and skips empty events. Load
+  is kept minimal so that most non-dominant events remain empty and
+  eligible to be skipped.
+
+Scenario:
+  - startNode: validator-dominant
+    type: validator
+    stake: 9_000_000
+    extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
+
+  - startNode: validator-non-dominant
+    type: validator
+    stake: 1_000_000
+    extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
+
+  - runApp: load
+    type: counter
+    users: 1
+    rate:
+      constant: 1
+
+  - waitFor: 45s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+      - eventThrottled:
+          throttledNodes:
+            - validator-non-dominant
+      - eventThrottled:
+          throttledNodes:
+            - validator-dominant
+          failing: true
+
