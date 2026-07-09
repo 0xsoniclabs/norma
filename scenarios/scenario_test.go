@@ -35,7 +35,7 @@ func TestCheckScenarios(t *testing.T) {
 	require.NotEmpty(t, files, "failed to locate any scenario files")
 	for _, file := range files {
 		t.Run(file, func(t *testing.T) {
-			scenario, err := parser.ParseSequentialFile(file)
+			scenario, err := parser.ParseFile(file)
 			require.NoError(t, err, "failed to parse file", file)
 			require.NoError(t, scenario.Check(), "scenario check failed for file", file)
 		})

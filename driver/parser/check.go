@@ -26,8 +26,8 @@ import (
 	"github.com/0xsoniclabs/norma/load/app"
 )
 
-// Check validates semantic constraints on a sequential scenario.
-func (s *SequentialScenario) Check() error {
+// Check validates semantic constraints on a scenario.
+func (s *Scenario) Check() error {
 	errs := []error{}
 
 	if strings.TrimSpace(s.Name) == "" {

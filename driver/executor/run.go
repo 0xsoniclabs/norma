@@ -32,16 +32,16 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// RunSequential executes a sequential scenario on the given network.
+// Run executes a scenario on the given network.
 // Steps are executed one by one in order. The context can be used to abort
 // execution, and a default timeout is enforced as a deadline.
-func RunSequential(
+func Run(
 	ctx context.Context,
 	network driver.Network,
-	scenario *parser.SequentialScenario,
+	scenario *parser.Scenario,
 	checks checking.Checks,
 ) error {
-	return runSequentialWithObserver(
+	return runWithObserver(
 		ctx,
 		network,
 		scenario,
@@ -52,20 +52,20 @@ func RunSequential(
 	)
 }
 
-// RunSequentialAndCaptureEventExecution executes a sequential scenario and
+// RunAndCaptureEventExecution executes a scenario and
 // returns wall-clock start/end intervals for every executed step.
 // genesisValidatorIds maps node labels to their pre-assigned validator IDs
 // (from genesis configuration); these nodes are started without on-chain
 // registration.
-func RunSequentialAndCaptureEventExecution(
+func RunAndCaptureEventExecution(
 	ctx context.Context,
 	network driver.Network,
-	scenario *parser.SequentialScenario,
+	scenario *parser.Scenario,
 	checks checking.Checks,
 	genesisValidatorIds map[string]int,
 ) ([]EventExecution, error) {
 	executions := make([]EventExecution, 0, len(scenario.Steps))
-	err := runSequentialWithObserver(
+	err := runWithObserver(
 		ctx,
 		network,
 		scenario,
@@ -79,20 +79,20 @@ func RunSequentialAndCaptureEventExecution(
 	return executions, err
 }
 
-// defaultScenarioTimeout is the maximum time a sequential scenario is
+// defaultScenarioTimeout is the maximum time a scenario is
 // allowed to run before being aborted.
 const defaultScenarioTimeout = 10 * time.Minute
 
-// runSequential is the internal implementation, allowing injection of
+// run is the internal implementation, allowing injection of
 // a validatorRegistry for testing.
-func runSequential(
+func run(
 	ctx context.Context,
 	network driver.Network,
-	scenario *parser.SequentialScenario,
+	scenario *parser.Scenario,
 	checks checking.Checks,
 	registry validatorRegistry,
 ) error {
-	return runSequentialWithObserver(
+	return runWithObserver(
 		ctx,
 		network,
 		scenario,
@@ -103,10 +103,10 @@ func runSequential(
 	)
 }
 
-func runSequentialWithObserver(
+func runWithObserver(
 	ctx context.Context,
 	network driver.Network,
-	scenario *parser.SequentialScenario,
+	scenario *parser.Scenario,
 	checks checking.Checks,
 	registry validatorRegistry,
 	onStepExecuted func(EventExecution),
@@ -119,7 +119,7 @@ func runSequentialWithObserver(
 	ctx, cancel := context.WithTimeout(ctx, defaultScenarioTimeout)
 	defer cancel()
 
-	state := &sequentialState{
+	state := &runState{
 		nodes:        make(map[string]driver.Node),
 		apps:         make(map[string]driver.Application),
 		nodeHistory:  make(map[string]bool),
@@ -148,7 +148,7 @@ func runSequentialWithObserver(
 		end := time.Now()
 		if onStepExecuted != nil {
 			onStepExecuted(EventExecution{
-				Name:  formatSequentialStepExecutionName(i+1, &step),
+				Name:  formatStepExecutionName(i+1, &step),
 				Start: start,
 				End:   end,
 			})
@@ -182,19 +182,19 @@ func runSequentialWithObserver(
 		}
 	}
 
-	slog.Info("sequential scenario completed successfully")
+	slog.Info("scenario completed successfully")
 	return nil
 }
 
-func formatSequentialStepExecutionName(stepNum int, step *parser.Step) string {
+func formatStepExecutionName(stepNum int, step *parser.Step) string {
 	if step.Identifier == "" {
 		return fmt.Sprintf("step %d: %s", stepNum, step.Function)
 	}
 	return fmt.Sprintf("step %d: %s %s", stepNum, step.Function, step.Identifier)
 }
 
-// sequentialState tracks runtime state during sequential execution.
-type sequentialState struct {
+// runState tracks runtime state during execution.
+type runState struct {
 	// nodes maps node identifiers to active node instances.
 	nodes map[string]driver.Node
 	// apps maps app identifiers to active application instances.
@@ -213,7 +213,7 @@ func executeStep(
 	net driver.Network,
 	checks checking.Checks,
 	registry validatorRegistry,
-	state *sequentialState,
+	state *runState,
 ) error {
 	switch step.Function {
 	case parser.FuncStartNode:
@@ -270,7 +270,7 @@ func execStartNode(
 	step *parser.Step,
 	net driver.Network,
 	registry validatorRegistry,
-	state *sequentialState,
+	state *runState,
 ) error {
 	name := step.Identifier
 	isRejoin := state.nodeHistory[name]
@@ -444,7 +444,7 @@ func execStopNode(
 	ctx context.Context,
 	step *parser.Step,
 	net driver.Network,
-	state *sequentialState,
+	state *runState,
 ) error {
 	base := step.Identifier
 	prefix := base + "-"
@@ -507,7 +507,7 @@ func execUndelegate(
 	step *parser.Step,
 	net driver.Network,
 	registry validatorRegistry,
-	state *sequentialState,
+	state *runState,
 ) error {
 	for _, target := range step.UndelegateTargets {
 		node, ok := state.nodes[target.Node]
@@ -546,7 +546,7 @@ func execUndelegate(
 // hasMultipleInstances reports whether state contains more than one
 // numbered instance for the given base name (e.g. "name-0", "name-1").
 func hasMultipleInstances(
-	state *sequentialState,
+	state *runState,
 	baseName string,
 ) bool {
 	prefix := baseName + "-"
@@ -568,7 +568,7 @@ func execRunApp(
 	ctx context.Context,
 	step *parser.Step,
 	net driver.Network,
-	state *sequentialState,
+	state *runState,
 ) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -598,7 +598,7 @@ func execRunApp(
 }
 
 // execStopApp stops a running application.
-func execStopApp(step *parser.Step, state *sequentialState) error {
+func execStopApp(step *parser.Step, state *runState) error {
 	app, ok := state.apps[step.Identifier]
 	if !ok {
 		return fmt.Errorf("application %q not found in active apps", step.Identifier)

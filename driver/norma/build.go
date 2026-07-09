@@ -174,7 +174,7 @@ func collectScenarioFiles(path string) ([]string, error) {
 func collectBuildableImages(paths []string) ([]string, error) {
 	images := map[string]struct{}{}
 	for _, path := range paths {
-		scenario, err := parser.ParseSequentialFile(path)
+		scenario, err := parser.ParseFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse scenario %q: %w", path, err)
 		}

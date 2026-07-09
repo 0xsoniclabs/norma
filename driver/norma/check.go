@@ -42,7 +42,7 @@ func check(ctx *cli.Context) (err error) {
 	path := args.First()
 	slog.Info("trying to parse", "path", path)
 
-	scenario, err := parser.ParseSequentialFile(path)
+	scenario, err := parser.ParseFile(path)
 	if err != nil {
 		return fmt.Errorf("failed to parse scenario file: %w", err)
 	}

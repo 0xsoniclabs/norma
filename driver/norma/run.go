@@ -125,21 +125,17 @@ func runScenario(ctx context.Context, path, outputDir, label string, skipChecks,
 	}
 
 	slog.Info("reading scenario file", "path", path)
-	scenario, err := parser.ParseSequentialFile(path)
+	parsed, err := parser.ParseFile(path)
 	if err != nil {
 		return fmt.Errorf("failed to parse scenario file: %w", err)
 	}
-	if err := scenario.Check(); err != nil {
+	if err := parsed.Check(); err != nil {
 		return err
 	}
+	scenario := &parsed
 
 	slog.Info("starting evaluation", "label", label)
-	return runSequentialScenario(ctx, &scenario, path, outputDir, label, skipChecks, skipReportRendering, openReport)
-}
-
-// runSequentialScenario handles execution of the new sequential scenario format.
-func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScenario, path, outputDir, label string, skipChecks, skipReportRendering, openReport bool) error {
-	slog.Info("running sequential scenario", "path", path, "name", scenario.Name)
+	slog.Info("running scenario", "path", path, "name", scenario.Name)
 
 	scenarioFilePath := path
 	if absPath, err := filepath.Abs(path); err == nil {
@@ -173,7 +169,7 @@ func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScena
 
 	// Startup network. Genesis is configured from the first startNode step,
 	// which must be a validator. The step is NOT removed — nodes are started
-	// explicitly by the sequential runner so they appear in the report timeline.
+	// explicitly by the runner so they appear in the report timeline.
 	validators, genesisIds, err := extractBootstrapValidators(scenario)
 	if err != nil {
 		return err
@@ -251,11 +247,11 @@ func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScena
 		checks = checking.InitNetworkChecks(net, monitor)
 	}
 
-	// Run the sequential scenario.
+	// Run the scenario.
 	slog.Info("running scenario", "path", path)
 	logger := startProgressLogger(monitor, net)
 	defer logger.shutdown()
-	stepExecutions, err = executor.RunSequentialAndCaptureEventExecution(
+	stepExecutions, err = executor.RunAndCaptureEventExecution(
 		ctx,
 		net,
 		scenario,
@@ -273,9 +269,9 @@ func runSequentialScenario(ctx context.Context, scenario *parser.SequentialScena
 
 // extractBootstrapValidators reads only the first scenario step to configure
 // the network genesis validator set. The first step must be startNode.
-func extractBootstrapValidators(scenario *parser.SequentialScenario) (driver.Validators, map[string]int, error) {
+func extractBootstrapValidators(scenario *parser.Scenario) (driver.Validators, map[string]int, error) {
 	if len(scenario.Steps) == 0 {
-		return nil, nil, fmt.Errorf("sequential scenario has no steps")
+		return nil, nil, fmt.Errorf("scenario has no steps")
 	}
 
 	step := scenario.Steps[0]

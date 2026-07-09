@@ -1,18 +1,18 @@
-# Sequential Scenario Specification
+# Scenario Specification
 
-This document specifies the YAML format used to describe **sequential
-scenarios** for Norma. It is written for both humans and coding agents that
-need to author, review, or generate scenario files.
+This document specifies the YAML format used to describe **scenarios** for
+Norma. It is written for both humans and coding agents that need to author,
+review, or generate scenario files.
 
-A sequential scenario is an ordered list of blocking **steps**. Each step
-executes to completion before the next one starts. Between steps, the runner
+A scenario is an ordered list of blocking **steps**. Each step executes to
+completion before the next one starts. Between steps, the runner
 transparently waits for the network to remain healthy (block production
 continues) unless the step is one that is expected to leave the network
 temporarily inactive.
 
-Scenario files live under `scenarios/sequential/` and are consumed by the
-parser in [driver/parser/sequential.go](driver/parser/sequential.go) and
-executed by [driver/executor/sequential.go](driver/executor/sequential.go).
+Scenario files live under `scenarios/` and are consumed by the parser in
+[driver/parser/scenario.go](driver/parser/scenario.go) and executed by
+[driver/executor/run.go](driver/executor/run.go).
 
 ---
 
@@ -427,7 +427,7 @@ function name or a mapping.
 
 ### 6.1 Timeout
 
-Every sequential scenario has a hard wall-clock deadline (currently
+Every scenario has a hard wall-clock deadline (currently
 **10 minutes**). Long scenarios must respect this limit; abort at deadline
 causes an error naming the step that was in flight.
 
@@ -513,7 +513,7 @@ Scenario:
 ```
 
 More runnable examples can be found in the
-[scenarios/sequential/](scenarios/sequential) directory.
+[scenarios/](scenarios) directory.
 
 ---
 

@@ -52,7 +52,7 @@ func TestAllParamKeysAreDocumented(t *testing.T) {
 	}
 }
 
-func TestParseSequential_MinimalScenario(t *testing.T) {
+func TestParseBytes_MinimalScenario(t *testing.T) {
 	input := `
 Name: Minimal Test
 Scenario:
@@ -67,7 +67,7 @@ Scenario:
   - stopApp: load
   - stopNode: validator-A
 `
-	scenario, err := ParseSequentialBytes([]byte(input))
+	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 	require.Equal(t, "Minimal Test", scenario.Name)
 	require.Len(t, scenario.Steps, 8)
@@ -104,7 +104,7 @@ Scenario:
 	require.Equal(t, "validator-A", step.Identifier)
 }
 
-func TestParseSequential_InitialRules(t *testing.T) {
+func TestParseBytes_InitialRules(t *testing.T) {
 	input := `
 Name: Rules Test
 InitialNetworkRules:
@@ -117,7 +117,7 @@ Scenario:
   - startNode: validator
     type: validator
 `
-	scenario, err := ParseSequentialBytes([]byte(input))
+	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 	require.NotNil(t, scenario.InitialRules.Upgrades)
 	require.NotNil(t, scenario.InitialRules.Upgrades.Sonic)
@@ -133,7 +133,7 @@ Scenario:
 	)
 }
 
-func TestParseSequential_UpdateRules(t *testing.T) {
+func TestParseBytes_UpdateRules(t *testing.T) {
 	input := `
 Name: Update Rules Test
 Scenario:
@@ -145,7 +145,7 @@ Scenario:
       Blocks:
         MaxBlockGas: 100000
 `
-	scenario, err := ParseSequentialBytes([]byte(input))
+	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, scenario.Steps, 5)
 
@@ -161,7 +161,7 @@ Scenario:
 	require.EqualValues(t, 100000, *step.Rules.Blocks.MaxBlockGas)
 }
 
-func TestParseSequential_StartNodeWithOptions(t *testing.T) {
+func TestParseBytes_StartNodeWithOptions(t *testing.T) {
 	input := `
 Name: Node Options Test
 Scenario:
@@ -172,7 +172,7 @@ Scenario:
     dataVolume: "vol-A"
     failing: true
 `
-	scenario, err := ParseSequentialBytes([]byte(input))
+	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
 	step := scenario.Steps[0]
@@ -185,7 +185,7 @@ Scenario:
 	require.True(t, step.Failing)
 }
 
-func TestParseSequential_Undelegate(t *testing.T) {
+func TestParseBytes_Undelegate(t *testing.T) {
 	input := `
 Name: Stop Node Test
 Scenario:
@@ -199,7 +199,7 @@ Scenario:
     - node: validator-A
       stake: 2_000_000
 `
-	scenario, err := ParseSequentialBytes([]byte(input))
+	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
 	step := scenario.Steps[0]
@@ -220,7 +220,7 @@ Scenario:
 	require.EqualValues(t, 2_000_000, *step.UndelegateTargets[0].Stake)
 }
 
-func TestParseSequential_Checks(t *testing.T) {
+func TestParseBytes_Checks(t *testing.T) {
 	input := `
 Name: Checks Test
 Scenario:
@@ -234,7 +234,7 @@ Scenario:
         failing: true
       - blockHashes
 `
-	scenario, err := ParseSequentialBytes([]byte(input))
+	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, scenario.Steps, 4)
 
@@ -265,7 +265,7 @@ Scenario:
 	require.Equal(t, FuncCheckBlockHashes, check.Function)
 }
 
-func TestParseSequential_CheckParams_NestedForm(t *testing.T) {
+func TestParseBytes_CheckParams_NestedForm(t *testing.T) {
 	input := `
 Name: Nested Check Params Test
 Scenario:
@@ -279,7 +279,7 @@ Scenario:
           ceiling: 1000
           failing: true
 `
-	scenario, err := ParseSequentialBytes([]byte(input))
+	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 	step := scenario.Steps[0]
 	require.Equal(t, FuncChecks, step.Function)
@@ -300,7 +300,7 @@ Scenario:
 	require.True(t, gr.Failing)
 }
 
-func TestParseSequential_CheckParams_RejectsUnknown(t *testing.T) {
+func TestParseBytes_CheckParams_RejectsUnknown(t *testing.T) {
 	input := `
 Name: Unknown Param Test
 Scenario:
@@ -308,12 +308,12 @@ Scenario:
       - eventThrottled:
           bogus: 42
 `
-	_, err := ParseSequentialBytes([]byte(input))
+	_, err := ParseBytes([]byte(input))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), `parameter "bogus" is not valid`)
 }
 
-func TestParseSequential_CheckParams_RejectsWrongParamForFunction(t *testing.T) {
+func TestParseBytes_CheckParams_RejectsWrongParamForFunction(t *testing.T) {
 	cases := map[string]string{
 		"throttledNodes on blocksProduced": `
 Name: Wrong Param Test
@@ -349,7 +349,7 @@ Scenario:
 	}
 	for name, input := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := ParseSequentialBytes([]byte(input))
+			_, err := ParseBytes([]byte(input))
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "is not valid for check")
 		})
@@ -381,7 +381,7 @@ func TestAllCheckParamKeysAreDocumented(t *testing.T) {
 	}
 }
 
-func TestParseSequential_ThrottledNodes_FlatForm(t *testing.T) {
+func TestParseBytes_ThrottledNodes_FlatForm(t *testing.T) {
 	input := `
 Name: Flat Throttled Nodes Test
 Scenario:
@@ -391,7 +391,7 @@ Scenario:
         throttledNodes:
           - validator-A
 `
-	scenario, err := ParseSequentialBytes([]byte(input))
+	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 	step := scenario.Steps[0]
 	require.Equal(t, FuncChecks, step.Function)
@@ -402,7 +402,7 @@ Scenario:
 	require.Equal(t, []string{"validator-A"}, et.ThrottledNodes)
 }
 
-func TestParseSequential_BlocksProduced_ParsesDuration(t *testing.T) {
+func TestParseBytes_BlocksProduced_ParsesDuration(t *testing.T) {
 	input := `
 Name: Duration Test
 Scenario:
@@ -411,7 +411,7 @@ Scenario:
         tolerance: 10
         duration: 30s
 `
-	scenario, err := ParseSequentialBytes([]byte(input))
+	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, scenario.Steps[0].SubChecks, 1)
 
@@ -423,7 +423,7 @@ Scenario:
 	require.Equal(t, 30*time.Second, *check.Duration)
 }
 
-func TestParseSequential_BlocksProduced_RejectsInvalidDuration(t *testing.T) {
+func TestParseBytes_BlocksProduced_RejectsInvalidDuration(t *testing.T) {
 	cases := map[string]string{
 		"non-duration string": `
 Name: Bad
@@ -442,13 +442,13 @@ Scenario:
 	}
 	for name, input := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := ParseSequentialBytes([]byte(input))
+			_, err := ParseBytes([]byte(input))
 			require.Error(t, err)
 		})
 	}
 }
 
-func TestParseSequential_SlopeRate(t *testing.T) {
+func TestParseBytes_SlopeRate(t *testing.T) {
 	input := `
 Name: Slope Rate Test
 Scenario:
@@ -460,7 +460,7 @@ Scenario:
         start: 20
         increment: 5
 `
-	scenario, err := ParseSequentialBytes([]byte(input))
+	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
 	step := scenario.Steps[0]
@@ -470,13 +470,13 @@ Scenario:
 	require.EqualValues(t, 5, step.Rate.Slope.Increment)
 }
 
-func TestParseSequential_DefaultsApplied(t *testing.T) {
+func TestParseBytes_DefaultsApplied(t *testing.T) {
 	input := `
 Name: Defaults Test
 Scenario:
   - advanceEpoch
 `
-	scenario, err := ParseSequentialBytes([]byte(input))
+	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 	require.NotNil(t, scenario.InitialRules.Epochs)
 	require.NotNil(t, scenario.InitialRules.Epochs.MaxEpochDuration)
@@ -492,30 +492,30 @@ Scenario:
 	require.Equal(t, FuncChecks, scenario.Steps[3].Function)
 }
 
-func TestParseSequential_DisableEndChecks(t *testing.T) {
+func TestParseBytes_DisableEndChecks(t *testing.T) {
 	input := `
 Name: Disable End Checks Test
 DisableEndChecks: true
 Scenario:
   - advanceEpoch
 `
-	scenario, err := ParseSequentialBytes([]byte(input))
+	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, scenario.Steps, 1)
 }
 
-func TestParseSequential_UnknownFunction(t *testing.T) {
+func TestParseBytes_UnknownFunction(t *testing.T) {
 	input := `
 Name: Bad Function
 Scenario:
   - Do something weird: foo
 `
-	_, err := ParseSequentialBytes([]byte(input))
+	_, err := ParseBytes([]byte(input))
 	require.Error(t, err)
 }
 
-func TestSequentialCheck_EmptyName(t *testing.T) {
-	scenario := SequentialScenario{
+func TestCheck_EmptyName(t *testing.T) {
+	scenario := Scenario{
 		Name:        "",
 		Description: "A test scenario.",
 		Steps:       []Step{{Function: FuncAdvanceEpoch}},
@@ -524,8 +524,8 @@ func TestSequentialCheck_EmptyName(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestSequentialCheck_EmptyDescription(t *testing.T) {
-	scenario := SequentialScenario{
+func TestCheck_EmptyDescription(t *testing.T) {
+	scenario := Scenario{
 		Name:        "Test",
 		Description: "",
 		Steps:       []Step{{Function: FuncAdvanceEpoch}},
@@ -534,8 +534,8 @@ func TestSequentialCheck_EmptyDescription(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestSequentialCheck_InvalidNodeName(t *testing.T) {
-	scenario := SequentialScenario{
+func TestCheck_InvalidNodeName(t *testing.T) {
+	scenario := Scenario{
 		Name:        "Test",
 		Description: "A test scenario.",
 		Steps: []Step{{
@@ -548,8 +548,8 @@ func TestSequentialCheck_InvalidNodeName(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestSequentialCheck_RunAppMissingRate(t *testing.T) {
-	scenario := SequentialScenario{
+func TestCheck_RunAppMissingRate(t *testing.T) {
+	scenario := Scenario{
 		Name:        "Test",
 		Description: "A test scenario.",
 		Steps: []Step{{
@@ -562,8 +562,8 @@ func TestSequentialCheck_RunAppMissingRate(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestSequentialCheck_UpdateRulesEmpty(t *testing.T) {
-	scenario := SequentialScenario{
+func TestCheck_UpdateRulesEmpty(t *testing.T) {
+	scenario := Scenario{
 		Name:        "Test",
 		Description: "A test scenario.",
 		Steps: []Step{{
@@ -575,7 +575,7 @@ func TestSequentialCheck_UpdateRulesEmpty(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestParseSequential_FullBlackoutScenario(t *testing.T) {
+func TestParseBytes_FullBlackoutScenario(t *testing.T) {
 	input := `
 Name: Single Proposer Blackout
 InitialNetworkRules:
@@ -617,7 +617,7 @@ Scenario:
       - blockHashes
   - stopApp: load
 `
-	scenario, err := ParseSequentialBytes([]byte(input))
+	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 	require.Equal(t, "Single Proposer Blackout", scenario.Name)
 	require.Len(t, scenario.Steps, 18)
@@ -632,20 +632,20 @@ Scenario:
 	require.Equal(t, 2, starts)
 }
 
-func TestParseSequentialFile_NonExistentFile(t *testing.T) {
-	_, err := ParseSequentialFile("/non/existent/path.yml")
+func TestParseFile_NonExistentFile(t *testing.T) {
+	_, err := ParseFile("/non/existent/path.yml")
 	require.Error(t, err)
 }
 
-func TestParseSequentialFile_InvalidContent(t *testing.T) {
+func TestParseFile_InvalidContent(t *testing.T) {
 	// Write invalid YAML to a temp file.
 	path := t.TempDir() + "/bad.yml"
 	require.NoError(t, os.WriteFile(path, []byte(":::not valid yaml"), 0644))
-	_, err := ParseSequentialFile(path)
+	_, err := ParseFile(path)
 	require.Error(t, err)
 }
 
-func TestParseSequential_InvalidParamForFunction(t *testing.T) {
+func TestParseBytes_InvalidParamForFunction(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
@@ -727,14 +727,14 @@ Scenario:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ParseSequentialBytes([]byte(tt.input))
+			_, err := ParseBytes([]byte(tt.input))
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "is not valid for")
 		})
 	}
 }
 
-func TestParseSequential_NonScalarStringParam(t *testing.T) {
+func TestParseBytes_NonScalarStringParam(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
@@ -774,13 +774,13 @@ Scenario:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ParseSequentialBytes([]byte(tt.input))
+			_, err := ParseBytes([]byte(tt.input))
 			require.Error(t, err)
 		})
 	}
 }
 
-func TestParseSequential_TypeOrderIndependent(t *testing.T) {
+func TestParseBytes_TypeOrderIndependent(t *testing.T) {
 	// type listed before the function key — should still be parsed correctly.
 	input := `
 Name: Order Test
@@ -791,7 +791,7 @@ Scenario:
     rate:
       constant: 10
 `
-	scenario, err := ParseSequentialBytes([]byte(input))
+	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
 	step := scenario.Steps[0]
@@ -800,7 +800,7 @@ Scenario:
 	require.Empty(t, step.NodeType)
 }
 
-func TestParseSequential_RulesPatchAllCategories(t *testing.T) {
+func TestParseBytes_RulesPatchAllCategories(t *testing.T) {
 	input := `
 Name: Full Patch Test
 InitialNetworkRules:
@@ -828,7 +828,7 @@ Scenario:
       Upgrades:
         Brio: true
 `
-	scenario, err := ParseSequentialBytes([]byte(input))
+	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
 	r := scenario.InitialRules
@@ -884,8 +884,8 @@ Scenario:
 	require.Nil(t, step.Rules.Epochs)
 }
 
-func TestSequentialCheck_EmptySubChecks(t *testing.T) {
-	scenario := SequentialScenario{
+func TestCheck_EmptySubChecks(t *testing.T) {
+	scenario := Scenario{
 		Name:        "Test",
 		Description: "A test scenario.",
 		Steps: []Step{{
@@ -898,14 +898,14 @@ func TestSequentialCheck_EmptySubChecks(t *testing.T) {
 	require.Contains(t, err.Error(), "at least one sub-check")
 }
 
-func TestParseSequential_UnknownCheckFunction(t *testing.T) {
+func TestParseBytes_UnknownCheckFunction(t *testing.T) {
 	input := `
 Name: Bad Check
 Scenario:
   - checks:
       - unknownCheck
 `
-	_, err := ParseSequentialBytes([]byte(input))
+	_, err := ParseBytes([]byte(input))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unknown check function")
 }

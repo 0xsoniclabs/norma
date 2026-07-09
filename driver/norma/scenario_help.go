@@ -28,9 +28,9 @@ import (
 var scenarioHelpCommand = cli.Command{
 	Action: scenarioHelp,
 	Name:   "scenario-help",
-	Usage:  "prints available step functions and parameters for sequential scenarios",
+	Usage:  "prints available step functions and parameters for scenarios",
 }
 
 func scenarioHelp(_ *cli.Context) error {
-	return parser.PrintSequentialHelp(os.Stdout)
+	return parser.PrintHelp(os.Stdout)
 }
