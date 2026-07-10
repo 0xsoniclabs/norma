@@ -2,6 +2,7 @@ package checking
 
 import (
 	"testing"
+	"time"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"go.uber.org/mock/gomock"
@@ -87,24 +88,68 @@ func TestBlocksRolling_Blocks_Failure(t *testing.T) {
 	}
 }
 
-func TestBlocksRolling_Blocks_WithStarts(t *testing.T) {
-	series := createBlockSeries(t, []uint64{1, 1, 1, 1, 1, 2, 3, 4, 5, 6})
+func TestBlocksRolling_Duration_PassesWhenBlocksAdvanceDuringObservation(t *testing.T) {
+	// All samples are placed in the future so they are guaranteed to fall
+	// inside the observation window regardless of when Check starts.
+	base := monitoring.Time(time.Now().UnixNano() + int64(time.Hour))
+	blocks := []uint64{1, 2, 2, 2, 2, 2, 2, 3, 4, 5, 6}
+	series := createBlockSeriesAt(t, base, blocks)
 
 	ctrl := gomock.NewController(t)
 	monitor := NewMockMonitoringData(ctrl)
 
-	// this fails because of 1, 1, 1, 1, 1
-	checker := blocksRollingChecker{monitor: monitor, toleranceSamples: 5}
+	// Sliding-window mode (duration == 0) fails on the long flat span.
 	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
 	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
+	strict := blocksRollingChecker{monitor: monitor, toleranceSamples: 5}
+	if err := strict.Check(t.Context()); err == nil {
+		t.Fatalf("expected sliding-window failure")
+	}
+
+	// Live-observation mode: after the (short) wait, the first in-range
+	// sample has block height 1 and the latest 6, so the network is
+	// considered healthy despite the internal stall.
+	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
+	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
+	windowed := strict.Configure(CheckerConfig{"duration": int64(time.Millisecond)})
+	if err := windowed.Check(t.Context()); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestBlocksRolling_Duration_FailsWhenBlocksStallDuringObservation(t *testing.T) {
+	// All samples are constant during the observation window: first-in-range
+	// block height equals the latest, so the check must fail.
+	base := monitoring.Time(time.Now().UnixNano() + int64(time.Hour))
+	blocks := []uint64{5, 5, 5, 5, 5}
+	series := createBlockSeriesAt(t, base, blocks)
+
+	ctrl := gomock.NewController(t)
+	monitor := NewMockMonitoringData(ctrl)
+	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
+	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
+
+	checker := (&blocksRollingChecker{monitor: monitor, toleranceSamples: 5}).
+		Configure(CheckerConfig{"duration": int64(time.Millisecond)})
 	if err := checker.Check(t.Context()); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
 		t.Errorf("unexpected error: %v", err)
 	}
+}
 
-	configured := checker.Configure(CheckerConfig{"start": 5})
+func TestBlocksRolling_Duration_FailsWhenNoSamplesAppearDuringObservation(t *testing.T) {
+	// All samples sit strictly in the past relative to the observation
+	// window; no in-range sample exists, so progress cannot be confirmed.
+	blocks := []uint64{1, 2, 3, 4, 5}
+	series := createBlockSeries(t, blocks)
+
+	ctrl := gomock.NewController(t)
+	monitor := NewMockMonitoringData(ctrl)
 	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
 	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
-	if err := configured.Check(t.Context()); err != nil {
+
+	checker := (&blocksRollingChecker{monitor: monitor, toleranceSamples: 5}).
+		Configure(CheckerConfig{"duration": int64(time.Millisecond)})
+	if err := checker.Check(t.Context()); err == nil || err.Error() != "network is down, nodes stopped producing blocks" {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -141,12 +186,33 @@ func TestBlocksRolling_Configure(t *testing.T) {
 	}
 }
 
+// TestBlocksRolling_ZeroTolerance_ReturnsErrorInsteadOfPanic verifies that
+// configuring tolerance=0 does not cause a divide-by-zero panic in the
+// sliding-window path; the checker must fail cleanly with a descriptive
+// error instead.
+func TestBlocksRolling_ZeroTolerance_ReturnsErrorInsteadOfPanic(t *testing.T) {
+	checker := &blocksRollingChecker{toleranceSamples: 0}
+	err := checker.Check(t.Context())
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if got := err.Error(); got != "tolerance must be > 0, got 0" {
+		t.Fatalf("unexpected error: %s", got)
+	}
+}
+
 func createBlockSeries(t *testing.T, blocks []uint64) monitoring.Series[monitoring.Time, monitoring.BlockStatus] {
+	t.Helper()
+	return createBlockSeriesAt(t, 0, blocks)
+}
+
+func createBlockSeriesAt(t *testing.T, base monitoring.Time, blocks []uint64) monitoring.Series[monitoring.Time, monitoring.BlockStatus] {
 	t.Helper()
 
 	series := monitoring.SyncedSeries[monitoring.Time, monitoring.BlockStatus]{}
 	for i, block := range blocks {
-		if err := series.Append(monitoring.Time(i), monitoring.BlockStatus{BlockHeight: block}); err != nil {
+		pos := base + monitoring.Time(i)
+		if err := series.Append(pos, monitoring.BlockStatus{BlockHeight: block}); err != nil {
 			t.Fatalf("failed to append block %d: %v", block, err)
 		}
 	}

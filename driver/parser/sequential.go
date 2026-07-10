@@ -105,6 +105,7 @@ type CheckSpec struct {
 	Function       StepFunction
 	Ceiling        *float64
 	Tolerance      *int
+	Duration       *time.Duration
 	Failing        bool
 	Rules          genesis.NetworkRulesPatch
 	ThrottledNodes []string
@@ -199,6 +200,19 @@ func (c *CheckSpec) parseParam(keyNode, valNode *yaml.Node) error {
 			)
 		}
 		c.Tolerance = &v
+	case "duration":
+		var s string
+		if err := valNode.Decode(&s); err != nil {
+			return fmt.Errorf("line %d: invalid duration: %w", keyNode.Line, err)
+		}
+		d, err := time.ParseDuration(s)
+		if err != nil {
+			return fmt.Errorf("line %d: invalid duration %q: %w", keyNode.Line, s, err)
+		}
+		if d < 0 {
+			return fmt.Errorf("line %d: duration must be non-negative, got %s", keyNode.Line, d)
+		}
+		c.Duration = &d
 	case "ceiling":
 		var v float64
 		if err := valNode.Decode(&v); err != nil {
@@ -619,7 +633,7 @@ var checkFunctionParams = map[StepFunction][]string{
 	FuncCheckBlockHashes:    {"failing"},
 	FuncCheckBlockHeights:   {"tolerance", "failing"},
 	FuncCheckBlocksHalted:   {"failing"},
-	FuncCheckBlocksProduced: {"tolerance", "failing"},
+	FuncCheckBlocksProduced: {"tolerance", "duration", "failing"},
 	FuncCheckEventThrottled: {"throttledNodes", "failing"},
 	FuncCheckNetworkRules:   {"rules", "failing"},
 }
@@ -629,8 +643,10 @@ var checkParamDescriptions = map[string]string{
 	"ceiling":        "Maximum allowed value (float64) for a gas rate check.",
 	"failing":        "When true, the check is expected to fail; a passing result is treated as an error.",
 	"rules":          "Expected network rules patch (NetworkRulesPatch field structure).",
+	"start":          "Duration (e.g. \"30s\") to look back from now; older samples are ignored by the check.",
 	"tolerance":      "Allowed deviation (int, in blocks) between nodes for a height/production check.",
 	"throttledNodes": "List of node labels expected to be throttled.",
+	"duration":       "Duration (e.g. \"30s\") to actively observe the network; the check waits this long and then verifies block progress during the observation window.",
 }
 
 // PrintSequentialHelp writes a formatted summary of all available sequential

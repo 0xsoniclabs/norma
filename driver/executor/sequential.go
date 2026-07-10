@@ -657,6 +657,12 @@ func execCheck(ctx context.Context, checkerName string, spec *parser.CheckSpec, 
 			config["tolerance"] = *spec.Tolerance
 		}
 	}
+	if spec.Duration != nil {
+		// Forward the observation duration (in nanoseconds) to the checker,
+		// which will actively wait for that long and then verify that block
+		// production progressed during the observation window.
+		config["duration"] = int64(*spec.Duration)
+	}
 	if spec.Ceiling != nil {
 		config["ceiling"] = int(*spec.Ceiling)
 	}

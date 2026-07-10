@@ -479,6 +479,42 @@ func TestSequential_Check(t *testing.T) {
 	}
 }
 
+func TestExecCheck_ForwardsDurationAsInt64Nanos_WhenBlocksProducedHasDuration(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	inner := checking.NewMockChecker(ctrl)
+	configured := checking.NewMockChecker(ctrl)
+
+	duration := 30 * time.Second
+
+	inner.EXPECT().Configure(gomock.Any()).DoAndReturn(
+		func(cfg checking.CheckerConfig) checking.Checker {
+			v, ok := cfg["duration"]
+			if !ok {
+				t.Fatalf("expected 'duration' in config, got %v", cfg)
+			}
+			got, ok := v.(int64)
+			if !ok {
+				t.Fatalf("expected 'duration' to be int64, got %T", v)
+			}
+			if got != int64(duration) {
+				t.Fatalf("expected duration=%d, got %d", int64(duration), got)
+			}
+			return configured
+		},
+	)
+	configured.EXPECT().Check(gomock.Any()).Return(nil)
+
+	checks := checking.Checks{"blocksRolling": inner}
+	spec := &parser.CheckSpec{
+		Function: parser.FuncCheckBlocksProduced,
+		Duration: &duration,
+	}
+
+	if err := execCheck(t.Context(), "blocksRolling", spec, checks); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestSequential_ContextCancellation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
