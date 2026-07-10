@@ -36,6 +36,37 @@ import (
 // non-local Sonic images on demand.
 const sonicRepositoryURL = "https://github.com/0xsoniclabs/sonic.git"
 
+// DefaultSonicLocalPath is the default path used as the build context when
+// building the "sonic:local" image. It is interpreted relative to the Norma
+// build root (see ResolveBuildRoot) unless overridden with SetSonicLocalPath
+// to point at an arbitrary location on disk.
+const DefaultSonicLocalPath = "sonic"
+
+// sonicLocalPath is the currently configured path used as the docker build
+// context for the "sonic:local" image. It defaults to DefaultSonicLocalPath
+// and can be overridden with SetSonicLocalPath (for example from a CLI flag).
+var sonicLocalPath = DefaultSonicLocalPath
+
+// SetSonicLocalPath configures the path used as the docker build context for
+// the "sonic:local" image. An empty path resets the configuration to the
+// built-in default (DefaultSonicLocalPath).
+//
+// The path may be absolute or relative; when relative it is resolved against
+// the Norma build root at build time.
+func SetSonicLocalPath(path string) {
+	if path == "" {
+		sonicLocalPath = DefaultSonicLocalPath
+		return
+	}
+	sonicLocalPath = path
+}
+
+// SonicLocalPath returns the currently configured path used as the docker
+// build context for the "sonic:local" image.
+func SonicLocalPath() string {
+	return sonicLocalPath
+}
+
 // imageBuildKind describes how an image should be materialized when it is not
 // already available locally.
 type imageBuildKind int
@@ -76,7 +107,8 @@ type imageBuildPlan struct {
 //
 // For Sonic image refs, it lazily builds from the project's Dockerfile:
 //   - sonic: from sonicRepositoryURL
-//   - sonic:local: from local ./sonic
+//   - sonic:local: from the currently configured sonic local path (see
+//     SetSonicLocalPath / SonicLocalPath, default DefaultSonicLocalPath)
 //   - sonic:<tag>: from sonicRepositoryURL#<tag>
 //   - sonic:<commit hash>: from sonicRepositoryURL#<commit hash>
 //
@@ -200,7 +232,9 @@ func buildImage(ctx context.Context, buildRoot, imageRef, clientSrc string) erro
 //
 // Current mapping rules:
 //   - "sonic"       => remote build from sonicRepositoryURL
-//   - "sonic:local" => local build from "sonic"
+//   - "sonic:local" => local build from the currently configured sonic local
+//     path (see SetSonicLocalPath / SonicLocalPath, default
+//     DefaultSonicLocalPath)
 //   - "sonic:<tag>" => remote build from sonicRepositoryURL#<tag>
 //   - "sonic:<commit hash>" => remote build from sonicRepositoryURL#<commit hash>
 //   - everything else => no build strategy (pull)
@@ -211,7 +245,7 @@ func planImage(imageRef string) imageBuildPlan {
 		return imageBuildPlan{kind: imageBuildSonicRemote, clientSrc: sonicRepositoryURL}
 	}
 	if imageRef == "sonic:local" {
-		return imageBuildPlan{kind: imageBuildSonicLocal, clientSrc: "sonic"}
+		return imageBuildPlan{kind: imageBuildSonicLocal, clientSrc: sonicLocalPath}
 	}
 	if imageRef == "sonic:latest" {
 		// "latest" is a Docker tag convention, not a git ref; build from repo HEAD.

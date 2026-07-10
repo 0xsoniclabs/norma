@@ -8,14 +8,21 @@ import "github.com/urfave/cli/v2"
 // AllGlobalFlags aggregates all global flags for the application that are
 // common across different commands.
 var AllGlobalFlags = append(
-	[]cli.Flag{},
+	append(
+		[]cli.Flag{},
 
-	// Add flags related to slog configuration
-	AllLoggerFlags...,
+		// Add flags related to slog configuration
+		AllLoggerFlags...,
+	),
+	// Add flags related to sonic build configuration
+	AllSonicFlags...,
 )
 
 // ProcessGlobalFlags processes global flags for the application.
 // It processes the setup of any global flag included in the AllGlobalFlags list.
 func ProcessGlobalFlags(c *cli.Context) error {
-	return SetupLogger(c)
+	if err := SetupLogger(c); err != nil {
+		return err
+	}
+	return SetupSonicPath(c)
 }
