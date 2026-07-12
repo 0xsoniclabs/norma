@@ -79,6 +79,35 @@ func TestPlanImage(t *testing.T) {
 	}
 }
 
+func TestSetSonicLocalPath_OverridesLocalBuildContext(t *testing.T) {
+	original := SonicLocalPath()
+	t.Cleanup(func() { SetSonicLocalPath(original) })
+
+	if got := SonicLocalPath(); got != DefaultSonicLocalPath {
+		t.Fatalf("unexpected default sonic local path: got %q, want %q",
+			got, DefaultSonicLocalPath)
+	}
+
+	custom := "/tmp/custom-sonic"
+	SetSonicLocalPath(custom)
+	if got := SonicLocalPath(); got != custom {
+		t.Fatalf("SonicLocalPath after set: got %q, want %q", got, custom)
+	}
+
+	plan := planImage("sonic:local")
+	want := imageBuildPlan{kind: imageBuildSonicLocal, clientSrc: custom}
+	if plan != want {
+		t.Fatalf("planImage(sonic:local) after override: got %+v, want %+v",
+			plan, want)
+	}
+
+	SetSonicLocalPath("")
+	if got := SonicLocalPath(); got != DefaultSonicLocalPath {
+		t.Fatalf("SonicLocalPath after reset: got %q, want %q",
+			got, DefaultSonicLocalPath)
+	}
+}
+
 func TestDeduplicateAndSort(t *testing.T) {
 	input := []string{"sonic:v2.1", "", "sonic", "sonic:v2.1", "   ", "alpine"}
 	want := []string{"alpine", "sonic", "sonic:v2.1"}
