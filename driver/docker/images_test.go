@@ -124,12 +124,8 @@ func TestResolveBuildRoot(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(root, "Dockerfile"), []byte("FROM scratch\n"), 0o644); err != nil {
 			t.Fatalf("failed to write Dockerfile: %v", err)
 		}
-		scriptsDir := filepath.Join(root, "scripts")
-		if err := os.MkdirAll(scriptsDir, 0o755); err != nil {
-			t.Fatalf("failed to create scripts dir: %v", err)
-		}
-		if err := os.WriteFile(filepath.Join(scriptsDir, "run_sonic.sh"), []byte("#!/bin/sh\n"), 0o755); err != nil {
-			t.Fatalf("failed to write run_sonic.sh: %v", err)
+		if err := os.WriteFile(filepath.Join(root, "Makefile"), []byte("all:\n"), 0o644); err != nil {
+			t.Fatalf("failed to write Makefile: %v", err)
 		}
 
 		deep := filepath.Join(root, "a", "b", "c")

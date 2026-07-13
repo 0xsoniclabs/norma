@@ -287,7 +287,6 @@ func deduplicateAndSort(in []string) []string {
 // Starting from startDir, it walks up parent directories until it finds a
 // directory containing both:
 //   - Dockerfile
-//   - scripts/run_sonic.sh
 //
 // This guards against running docker build in unrelated directories while
 // keeping call sites simple.
@@ -300,7 +299,6 @@ func resolveBuildRoot(startDir string) (string, error) {
 // Starting from startDir, it walks up parent directories until it finds a
 // directory containing both:
 //   - Dockerfile
-//   - scripts/run_sonic.sh
 //
 // This guards against running docker build in unrelated directories while
 // keeping call sites simple.
@@ -311,9 +309,7 @@ func ResolveBuildRoot(startDir string) (string, error) {
 	}
 
 	for {
-		dockerfile := filepath.Join(dir, "Dockerfile")
-		script := filepath.Join(dir, "scripts", "run_sonic.sh")
-		if fileExists(dockerfile) && fileExists(script) {
+		if fileExists(filepath.Join(dir, "Dockerfile")) {
 			return dir, nil
 		}
 
@@ -324,7 +320,7 @@ func ResolveBuildRoot(startDir string) (string, error) {
 		dir = parent
 	}
 
-	return "", errors.New("unable to locate norma build root with Dockerfile and scripts/run_sonic.sh")
+	return "", errors.New("unable to locate norma build root with Dockerfile")
 }
 
 // fileExists reports whether path exists and is a regular file-like entry

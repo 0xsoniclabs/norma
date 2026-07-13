@@ -66,4 +66,8 @@ type Host interface {
 	// Cleanup releases all underlying resources. After the cleanup no more
 	// operations on this host are expected to succeed.
 	Cleanup(ctx context.Context) error
+
+	// ExecWithEnv executes a command on the host with the given environment variables.
+	// It returns the combined output of stdout and stderr, and an error if the command failed.
+	ExecWithEnv(ctx context.Context, cmd []string, env []string, logName string) (string, error)
 }

@@ -23,7 +23,9 @@ import (
 	"log/slog"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -79,6 +81,24 @@ type Container struct {
 	cleaned bool
 }
 
+// ExecHandle represents a background exec process running inside a
+// container. It provides access to the exec ID and a channel that is
+// closed when the output streaming goroutine finishes.
+type ExecHandle struct {
+	ExecID string
+	Done   <-chan struct{}
+	mu     sync.Mutex
+	err    error
+}
+
+// Err returns the error encountered by the background streaming
+// goroutine, if any. It is safe to call after <-Done.
+func (h *ExecHandle) Err() error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.err
+}
+
 // ContainerConfig defines parameters for running Docker Containers.
 type ContainerConfig struct {
 	Hostname        string
@@ -90,6 +110,7 @@ type ContainerConfig struct {
 	DataDirBinding  *string  // mount client datadir to this path on host
 	GenesisFileBind *string  // mount genesis file on host to /genesis.json:ro in container
 	KeystoreBinding *string  // mount keystore dir on host to /datadir/keystore:ro in container
+	LogsDir         *string  // host directory for exec output logs
 }
 
 // NewClient creates a new client facilitating the creation of Docker
@@ -162,6 +183,11 @@ func (c *Client) Start(ctx context.Context, config *ContainerConfig) (*Container
 		binds = append(binds, *config.DataDirBinding)
 	}
 	if config.GenesisFileBind != nil {
+		// ensure the genesis file exists on the host before starting the container
+		genesisPath := strings.Split(*config.GenesisFileBind, ":")[0]
+		if _, err := os.Stat(genesisPath); err != nil {
+			return nil, fmt.Errorf("genesis file %s does not exist: %w", genesisPath, err)
+		}
 		binds = append(binds, *config.GenesisFileBind)
 	}
 	if config.KeystoreBinding != nil {
@@ -330,6 +356,11 @@ func (c *Container) GetAddressForService(service *network.ServiceDescription) (*
 	return &res, nil
 }
 
+// IP returns the container's IP address on the Docker network.
+func (c *Container) IP() string {
+	return c.ip
+}
+
 // resolveIP inspects the container and populates c.ip. When the
 // container was started with a specific network, only that network is
 // considered; otherwise the first available IP is used.
@@ -407,10 +438,23 @@ func (c *Container) SendSignal(ctx context.Context, signal Signal) error {
 // The output of the command is returned as a string (stdout + stderr).
 // The command is required to be tokenized and interpreted in shell's exec form.
 func (c *Container) Exec(ctx context.Context, cmd []string) (string, error) {
-	// Create a container exec instance
+	return c.ExecWithEnv(ctx, cmd, nil, "")
+}
+
+// ExecWithEnv executes a command in the container with the given
+// environment variables. If logName is non-empty and a LogsDir was
+// configured, the output is also written to a timestamped log file
+// named <logName>_<timestamp>.log inside that directory.
+func (c *Container) ExecWithEnv(
+	ctx context.Context,
+	cmd []string,
+	env []string,
+	logName string,
+) (string, error) {
 	execConfig := container.ExecOptions{
 		Tty:          true,
 		Cmd:          cmd,
+		Env:          env,
 		AttachStdout: true,
 		AttachStderr: true,
 	}
@@ -437,19 +481,108 @@ func (c *Container) Exec(ctx context.Context, cmd []string) (string, error) {
 		return "", fmt.Errorf("failed to read exec output: %s", err)
 	}
 
-	// Wait for the exec command to finish
+	// Persist output to a log file when configured.
+	if logName != "" && c.config.LogsDir != nil {
+		if writeErr := c.writeExecLog(logName, output); writeErr != nil {
+			slog.Warn("failed to write exec log",
+				"name", logName,
+				"error", writeErr)
+		}
+	}
+
 	execInspect, err := c.client.cli.ContainerExecInspect(ctx, execResp.ID)
 	if err != nil {
-		return (string)(output), fmt.Errorf("failed to inspect exec instance: %s", err)
+		return string(output), fmt.Errorf("failed to inspect exec instance: %s", err)
 	}
-
-	// Check the exit code of the executed command
 	if execInspect.ExitCode != 0 {
-		return (string)(output), fmt.Errorf(
-			"command '%s' execution failed with exit code %d", strings.Join(cmd, " "), execInspect.ExitCode)
+		return string(output),
+			fmt.Errorf("command '%s' execution failed with exit code %d",
+				strings.Join(cmd, " "), execInspect.ExitCode)
 	}
 
-	return (string)(output), nil
+	return string(output), nil
+}
+
+// ExecBackground starts a long-running command in the container and
+// streams its output to the given file on the host. The method returns
+// immediately with an ExecHandle. The streaming goroutine runs until
+// the command exits or the context is cancelled.
+func (c *Container) ExecBackground(
+	ctx context.Context,
+	cmd []string,
+	env []string,
+	logName string,
+) (*ExecHandle, error) {
+	execConfig := container.ExecOptions{
+		Tty:          true,
+		Cmd:          cmd,
+		Env:          env,
+		AttachStdout: true,
+		AttachStderr: true,
+	}
+	execResp, err := c.client.cli.ContainerExecCreate(ctx, c.id, execConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create background exec: %s", err)
+	}
+	if execResp.ID == "" {
+		return nil, fmt.Errorf("failed to create background exec: Empty exec ID")
+	}
+
+	resp, err := c.client.cli.ContainerExecAttach(ctx,
+		execResp.ID,
+		container.ExecStartOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to attach to background exec: %s", err)
+	}
+
+	done := make(chan struct{})
+	handle := &ExecHandle{ExecID: execResp.ID, Done: done}
+
+	go func() {
+		defer close(done)
+		defer resp.Close()
+
+		w := io.Discard
+		if logName != "" && c.config.LogsDir != nil {
+			f, ferr := c.createExecLogFile(logName)
+			if ferr != nil {
+				slog.Warn("failed to create background exec log",
+					"name", logName,
+					"error", ferr)
+			}
+			defer f.Close()
+			w = f
+		}
+
+		_, copyErr := io.Copy(w, resp.Reader)
+		if copyErr != nil && ctx.Err() == nil {
+			handle.mu.Lock()
+			handle.err = copyErr
+			handle.mu.Unlock()
+		}
+	}()
+
+	return handle, nil
+}
+
+// writeExecLog writes output data to a timestamped log file.
+func (c *Container) writeExecLog(name string, data []byte) error {
+	f, err := c.createExecLogFile(name)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(data)
+	return err
+}
+
+// createExecLogFile creates a new timestamped log file in the
+// configured LogsDir.
+func (c *Container) createExecLogFile(name string) (*os.File, error) {
+	ts := time.Now().UTC().Format("20060102T150405Z")
+	filename := fmt.Sprintf("%s_%s_%s.log", c.config.Hostname, name, ts)
+	path := filepath.Join(*c.config.LogsDir, filename)
+	return os.Create(path) //#nosec G304 -- path is constructed internally
 }
 
 // Cleanup removes the network from the Docker host.
