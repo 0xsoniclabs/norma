@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -81,6 +82,8 @@ type OperaNode struct {
 	container *docker.Container
 	config    *OperaNodeConfig
 	tempDirs  []string
+	sonicd    *docker.ExecHandle
+	logsDir   string
 }
 
 type OperaNodeConfig struct {
@@ -205,25 +208,41 @@ func StartOperaDockerNode(
 		tempDirs = append(tempDirs, tmpDir)
 
 		rules := opera.FakeNetRules(opera.GetSonicUpgrades())
-		if err := genesis.ApplyNetworkRulesPatch(&rules, config.NetworkConfig.NetworkRules); err != nil {
+		err = genesis.ApplyNetworkRulesPatch(&rules, config.NetworkConfig.NetworkRules)
+		if err != nil {
 			return nil, fmt.Errorf("failed to configure rules for temporary genesis: %w", err)
 		}
 
 		genesisPath := filepath.Join(tmpDir, "genesis.json")
-		if err := genesis.GenerateJsonGenesis(genesisPath, driver.GetValidatorStakes(config.NetworkConfig.Validators), &rules); err != nil {
+		err = genesis.GenerateJsonGenesis(
+			genesisPath,
+			driver.GetValidatorStakes(config.NetworkConfig.Validators),
+			&rules)
+		if err != nil {
 			return nil, fmt.Errorf("failed to generate temporary genesis: %w", err)
 		}
 
 		genesisJSONPath = genesisPath
+		// verify a file is created in genesisJSONPath
+		if info, err := os.Stat(genesisJSONPath); err != nil {
+			return nil, fmt.Errorf("failed to verify temporary genesis file: %w", err)
+		} else {
+			if info.IsDir() {
+				return nil, fmt.Errorf("temporary genesis path is a directory, expected a file: %s", genesisJSONPath)
+			} else if info.Size() == 0 {
+				return nil, fmt.Errorf("temporary genesis file is empty: %s", genesisJSONPath)
+			}
+		}
 	} else {
 		genesisJSONPath = *config.GenesisJsonPath
 	}
 
+	// Container-level env vars (shared state only).
 	envs := map[string]string{
-		"VALIDATOR_ID":     validatorId,
-		"VALIDATORS_COUNT": fmt.Sprintf("%d", config.NetworkConfig.Validators.GetNumValidators()),
-		"NETWORK_LATENCY":  fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
-		"EXTRA_ARGUMENTS":  config.ExtraArguments,
+		"STATE_DB_IMPL":   "geth",
+		"VM_IMPL":         "geth",
+		"LD_LIBRARY_PATH": "./",
+		"GOMEMLIMIT":      "1GiB",
 	}
 
 	const dataDir = "/datadir"
@@ -243,8 +262,10 @@ func StartOperaDockerNode(
 	genesisBind := fmt.Sprintf("%s:/genesis.json:ro", genesisJSONPath)
 
 	var keystoreBinding *string
+	var pubKey, address string
 	if isValidator {
-		privKey, pubKey, address, err := genesis.DeriveValidatorKey(*config.ValidatorId)
+		var privKey string
+		privKey, pubKey, address, err = genesis.DeriveValidatorKey(*config.ValidatorId)
 		if err != nil {
 			return nil, fmt.Errorf("failed to derive validator key: %w", err)
 		}
@@ -272,21 +293,117 @@ func StartOperaDockerNode(
 		}
 	}
 
+	// Create a host-side logs directory for exec output.
+	logsDir, err := os.MkdirTemp("", "norma-node-logs-*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create logs dir: %w", err)
+	}
+	tempDirs = append(tempDirs, logsDir)
+
 	host, err := client.Start(ctx,
 		&docker.ContainerConfig{
 			Hostname:        config.Label,
 			ImageName:       image,
 			ShutdownTimeout: &shutdownTimeout,
 			Environment:     envs,
+			Entrypoint:      []string{"sleep", "infinity"},
 			Network:         dn,
 			DataDirBinding:  dataDirBinding,
 			GenesisFileBind: &genesisBind,
 			KeystoreBinding: keystoreBinding,
+			LogsDir:         &logsDir,
 		})
-
 	if err != nil {
 		return nil, err
 	}
+
+	// Ensure the container and temp dirs are cleaned up if any
+	// subsequent exec step fails before we return the OperaNode.
+	started := false
+	defer func() {
+		if !started {
+			_ = host.Cleanup(context.Background())
+			for _, dir := range tempDirs {
+				_ = os.RemoveAll(dir)
+			}
+		}
+	}()
+
+	// --- Exec-based startup sequence ---
+
+	// 1. Initialize datadir with sonictool.
+	// Skip initialization only when re-using a populated mount directory.
+	needsInit := config.MountDataDir == nil || isDirEmpty(*config.MountDataDir)
+	if needsInit {
+		mkdirCmd := []string{"mkdir", "-m", "755", "-p", dataDir}
+		if output, err := host.ExecWithEnv(ctx, mkdirCmd, nil, ""); err != nil {
+			return nil, fmt.Errorf("failed to create datadir: %w - output: %s", err, output)
+		}
+
+		sonicToolCmd := []string{
+			"./sonictool",
+			"--datadir", dataDir,
+			"--statedb.livecache", "1",
+			"genesis", "json", "--experimental", "/genesis.json",
+		}
+		output, err := host.ExecWithEnv(ctx, sonicToolCmd, nil, "sonictool")
+		if err != nil {
+			return nil, fmt.Errorf("sonictool genesis init failed: %w - output: %s", err, output)
+		}
+	}
+
+	// 2. Write password file for validator keystore decryption.
+	passwordCmd := []string{"sh", "-c", "echo password > password.txt"}
+	if _, err := host.ExecWithEnv(ctx, passwordCmd, nil, ""); err != nil {
+		return nil, fmt.Errorf("failed to write password file: %w", err)
+	}
+
+	// 3. Write config.toml (emitter intervals).
+	numValidators := config.NetworkConfig.Validators.GetNumValidators()
+	dsProtection := "5000000000"
+	if numValidators == 1 && validatorId == "1" {
+		dsProtection = "0"
+	}
+	configToml := fmt.Sprintf("[Emitter.EmitIntervals]\nDoublesignProtection = %s\n", dsProtection)
+	configCmd := []string{"sh", "-c",
+		fmt.Sprintf("printf '%%s' '%s' > config.toml", configToml)}
+	if _, err := host.ExecWithEnv(ctx, configCmd, nil, ""); err != nil {
+		return nil, fmt.Errorf("failed to write config.toml: %w", err)
+	}
+
+	// 4. Network latency simulation via tc netem.
+	latency := config.NetworkConfig.RoundTripTime / 2
+	if latency > 0 {
+		tcCmd := fmt.Sprintf(
+			"tc qdisc add dev eth0 root netem delay %v"+
+				" && (ip link show eth1 2>/dev/null"+
+				" && tc qdisc add dev eth1 root netem delay %v || true)",
+			latency, latency)
+		cmd := []string{"sh", "-c", tcCmd}
+		if _, err := host.ExecWithEnv(ctx, cmd, nil, "tc_setup"); err != nil {
+			return nil, fmt.Errorf("failed to configure network latency: %w", err)
+		}
+	}
+
+	// 5. Build sonicd command line.
+	sonicdCmd := buildSonicdCmd(
+		dataDir, validatorId, pubKey, address,
+		host.IP(), config.ExtraArguments)
+
+	// 6. Start sonicd in the background.
+	slog.Info("Starting sonicd", "node", config.Label)
+	sonicdHandle, err := host.ExecBackground(
+		ctx,
+		sonicdCmd,
+		[]string{"GOMEMLIMIT=1GiB"},
+		"sonicd",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start sonicd: %w", err)
+	}
+	slog.Info("Sonicd started")
+
+	// --- End exec startup ---
 
 	// Use a private copy of the config to avoid modifying the original.
 	nodeConfig := *config
@@ -305,6 +422,8 @@ func StartOperaDockerNode(
 		container: host,
 		config:    &nodeConfig,
 		tempDirs:  tempDirs,
+		sonicd:    sonicdHandle,
+		logsDir:   logsDir,
 	}
 
 	// Wait until the OperaNode inside the Container is ready.
@@ -320,10 +439,12 @@ func StartOperaDockerNode(
 			return err
 		})
 	if err == nil {
+		started = true
 		return node, nil
 	}
 
 	// The node did not show up in time, so we consider the start to have failed.
+	started = true // node.Cleanup handles teardown; avoid double cleanup
 	return nil, errors.Join(
 		printLog(ctx, node),
 		fmt.Errorf("failed to get node online, %w", err),
@@ -430,10 +551,142 @@ func (n *OperaNode) GetValidatorId() *int {
 }
 
 func (n *OperaNode) StreamLog(ctx context.Context) (io.ReadCloser, error) {
-	return n.host.StreamLog(ctx)
+	return n.tailExecLog(ctx)
+}
+
+// tailExecLog returns a reader that continuously tails the sonicd exec
+// log file, similar to `tail -f`. The reader blocks on Read when it
+// reaches the end of the file and polls for new data until the context
+// is cancelled or the sonicd process exits.
+func (n *OperaNode) tailExecLog(ctx context.Context) (io.ReadCloser, error) {
+	path, err := n.execLogPath()
+	if err != nil {
+		return nil, err
+	}
+	//nolint:gosec // path is constructed internally from logsDir
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open exec log: %w", err)
+	}
+	return &fileTailer{
+		file:    f,
+		done:    n.sonicd.Done,
+		ctx:     ctx,
+		pollInt: 200 * time.Millisecond,
+	}, nil
+}
+
+// StreamExecLog opens the sonicd exec log file for a one-shot read.
+// Use this only after the sonicd process has exited and the log file
+// is fully flushed. For continuous tailing, use StreamLog instead.
+func (n *OperaNode) StreamExecLog() (io.ReadCloser, error) {
+	path, err := n.execLogPath()
+	if err != nil {
+		return nil, err
+	}
+	//nolint:gosec // path is constructed internally from logsDir
+	return os.Open(path)
+}
+
+// execLogPath returns the path to the latest sonicd exec log file.
+func (n *OperaNode) execLogPath() (string, error) {
+	matches, err := filepath.Glob(
+		filepath.Join(n.logsDir, "*_sonicd_*.log"),
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to glob sonicd logs: %w", err)
+	}
+	if len(matches) == 0 {
+		return "", fmt.Errorf(
+			"no sonicd log file found in %s", n.logsDir,
+		)
+	}
+	slices.Sort(matches)
+	return matches[len(matches)-1], nil
+}
+
+// fileTailer implements io.ReadCloser and tails a file that is being
+// written to by another process. When Read reaches EOF it polls for
+// new data until the context is cancelled or the done channel closes.
+type fileTailer struct {
+	file    *os.File
+	done    <-chan struct{} // closed when the writing process exits
+	ctx     context.Context
+	pollInt time.Duration
+}
+
+func (t *fileTailer) Read(p []byte) (int, error) {
+	for {
+		n, err := t.file.Read(p)
+		if n > 0 || err != io.EOF {
+			return n, err
+		}
+		// Reached EOF — check if the writer is done.
+		select {
+		case <-t.done:
+			// Writer exited; do one final read then return EOF.
+			return t.file.Read(p)
+		case <-t.ctx.Done():
+			return 0, t.ctx.Err()
+		default:
+		}
+		// Poll for new data.
+		select {
+		case <-time.After(t.pollInt):
+		case <-t.done:
+		case <-t.ctx.Done():
+			return 0, t.ctx.Err()
+		}
+	}
+}
+
+func (t *fileTailer) Close() error {
+	return t.file.Close()
+}
+
+// Exec runs a command inside the node's container and returns its output.
+func (n *OperaNode) Exec(ctx context.Context, cmd []string) (string, error) {
+	return n.container.Exec(ctx, cmd)
+}
+
+// ExecDone returns a channel that is closed when the sonicd background
+// exec finishes. This can be used to wait for the log file to be fully
+// flushed before reading it.
+func (n *OperaNode) ExecDone() <-chan struct{} {
+	if n.sonicd == nil {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	}
+	return n.sonicd.Done
 }
 
 func (n *OperaNode) Stop(ctx context.Context) error {
+	// Send SIGINT to sonicd so it can shut down gracefully (close DBs, etc.).
+	// The container's PID 1 is "sleep infinity" which doesn't forward signals,
+	// so we must explicitly find and signal the sonicd process.
+	if n.container != nil && n.sonicd != nil {
+		_, _ = n.container.Exec(ctx, []string{
+			"sh", "-c",
+			`for d in /proc/[0-9]*; do` +
+				` grep -ql sonicd "$d/cmdline" 2>/dev/null &&` +
+				` kill -INT "${d##*/}" 2>/dev/null; done`,
+		})
+		// Wait for sonicd to exit gracefully before stopping the container.
+		select {
+		case <-n.sonicd.Done:
+		case <-ctx.Done():
+		}
+	}
+
+	// Fix permissions on the bind-mounted datadir while the container is
+	// still running, so non-root host users can clean up afterwards.
+	if n.container != nil && n.config.MountDataDir != nil {
+		_, _ = n.container.ExecWithEnv(
+			ctx, []string{"chmod", "-R", "777", "/datadir"}, nil, "",
+		)
+	}
+
 	return n.host.Stop(ctx)
 }
 
@@ -517,4 +770,59 @@ func (n *OperaNode) GetRoundTripTime(host string) (time.Duration, error) {
 	}
 	slices.Sort(durations)
 	return durations[len(durations)/2], nil
+}
+
+// buildSonicdCmd constructs the sonicd command-line from the given
+// parameters. It mirrors the flags previously assembled in
+// scripts/run_sonic.sh.
+func buildSonicdCmd(
+	dataDir, validatorId, pubKey, address, externalIP string,
+	extraArguments string,
+) []string {
+	cmd := []string{
+		"./sonicd",
+		"--datadir=" + dataDir,
+		"--http", "--http.addr", "0.0.0.0",
+		"--http.port", "18545",
+		"--http.api", "admin,eth,sonic,txpool",
+		"--ws", "--ws.addr", "0.0.0.0",
+		"--ws.port", "18546",
+		"--ws.api", "admin,eth,sonic,txpool",
+		"--pprof", "--pprof.addr", "0.0.0.0",
+		"--nat", "extip:" + externalIP,
+		"--metrics", "--metrics.expensive",
+		"--config", "config.toml",
+		"--datadir.minfreedisk", "0",
+		"--statedb.livecache", "1",
+	}
+
+	if validatorId != "0" {
+		cmd = append(cmd,
+			"--validator.id", validatorId,
+			"--validator.pubkey", pubKey,
+			"--validator.password", "password.txt",
+			"--mode", "rpc",
+		)
+	}
+
+	if extraArguments != "" {
+		cmd = append(cmd, strings.Fields(extraArguments)...)
+	}
+
+	return cmd
+}
+
+// isDirEmpty reports whether the directory at path contains no
+// entries (ignoring the "keystore" directory written before init).
+func isDirEmpty(path string) bool {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return true
+	}
+	for _, e := range entries {
+		if e.Name() != "keystore" {
+			return false
+		}
+	}
+	return true
 }

@@ -17,10 +17,9 @@
 package local
 
 import (
-	"bufio"
 	"context"
-	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -238,34 +237,7 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 		_ = net.Shutdown()
 	})
 
-	done := make(chan bool, 1)
-
-	ctrl := gomock.NewController(t)
-	listener := driver.NewMockNetworkListener(ctrl)
-	listener.EXPECT().AfterNodeCreation(gomock.Any()).DoAndReturn(func(node driver.Node) {
-		reader, err := node.StreamLog(t.Context())
-		if err != nil {
-			t.Errorf("error: %v", err)
-		}
-		t.Cleanup(func() {
-			if err := reader.Close(); err != nil {
-				t.Errorf("cannot close: %v", err)
-			}
-		})
-
-		go func() {
-			scanner := bufio.NewScanner(reader)
-			for scanner.Scan() {
-				line := scanner.Text()
-				if strings.Contains(line, "State DB closed") {
-					done <- true
-				}
-			}
-		}()
-	}).Times(1)
-	net.RegisterListener(listener)
-
-	_, err = net.CreateNode(&driver.NodeConfig{
+	createdNode, err := net.CreateNode(&driver.NodeConfig{
 		Name:  fmt.Sprintf("N-%d-%s", 1, t.Name()),
 		Image: driver.DefaultClientDockerImageName,
 	})
@@ -273,15 +245,40 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 		t.Fatalf("failed to create node: %v", err)
 	}
 
-	if err := net.Shutdown(); err != nil {
-		t.Errorf("failed to shut down network: %v", err)
+	operaNode, ok := createdNode.(*node.OperaNode)
+	if !ok {
+		t.Fatalf("node is not an OperaNode")
 	}
 
+	// Stop sonicd gracefully (not the full network shutdown, which also
+	// cleans up temp dirs before we can read the log).
+	if err := operaNode.Stop(t.Context()); err != nil {
+		t.Errorf("failed to stop node: %v", err)
+	}
+
+	// Wait for sonicd exec to finish so the log file is fully flushed.
 	select {
-	case <-done:
-		// one container done successfully
-	case <-time.After(180 * time.Second):
-		t.Errorf("container did not stop gracefully")
+	case <-operaNode.ExecDone():
+	case <-time.After(60 * time.Second):
+		t.Fatalf("sonicd exec did not finish in time")
+	}
+
+	// Read the complete exec log and check for graceful shutdown message.
+	reader, err := operaNode.StreamExecLog()
+	if err != nil {
+		t.Fatalf("cannot read exec log: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	logBytes, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("failed to read exec log: %v", err)
+	}
+
+	if !strings.Contains(string(logBytes), "State DB closed") {
+		t.Errorf("container did not stop gracefully: "+
+			"\"State DB closed\" not found in exec log (%d bytes)",
+			len(logBytes))
 	}
 }
 
@@ -567,9 +564,9 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T
 }
 
 // getChecksum creates a node of the provided image type on the provided network
-// and extract the checksum.
-func getChecksum(net *LocalNetwork, image string) (checksum string, err error) {
-	node, err := net.CreateNode(&driver.NodeConfig{
+// and extracts the sha256 checksum of the sonicd binary via docker exec.
+func getChecksum(net *LocalNetwork, image string) (string, error) {
+	n, err := net.CreateNode(&driver.NodeConfig{
 		Name:  fmt.Sprintf("T-%s", strings.ReplaceAll(image, ":", "-")),
 		Image: image,
 	})
@@ -577,24 +574,21 @@ func getChecksum(net *LocalNetwork, image string) (checksum string, err error) {
 		return "", fmt.Errorf("failed to create node: %v", err)
 	}
 
-	reader, err := node.StreamLog(context.Background())
+	operaNode, ok := n.(*node.OperaNode)
+	if !ok {
+		return "", fmt.Errorf("node is not an OperaNode")
+	}
+
+	output, err := operaNode.Exec(context.Background(), []string{"sha256sum", "./sonicd"})
 	if err != nil {
-		return "", fmt.Errorf("cannot read node logs: %e", err)
-	}
-	defer func() { err = errors.Join(err, reader.Close()) }()
-
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.Contains(line, "Sonic binary checksum:") {
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) == 2 {
-				return strings.TrimSpace(parts[1]), nil
-			}
-		}
+		return "", fmt.Errorf("failed to exec sha256sum: %w", err)
 	}
 
-	return "", fmt.Errorf("unable to find Sonic binary checksums")
+	fields := strings.Fields(strings.TrimSpace(output))
+	if len(fields) == 0 {
+		return "", fmt.Errorf("empty sha256sum output")
+	}
+	return fields[0], nil
 }
 
 func TestLocalNetworkApplyNetworkRules_Success(t *testing.T) {
@@ -751,6 +745,7 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 		}
 	})
 
+	t.Log("about to start first node")
 	dataVolume := "abcd"
 	node, err := net.CreateNode(&driver.NodeConfig{
 		Name:       t.Name() + "-2",
@@ -784,6 +779,8 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	if prevModTime == nil {
 		t.Fatalf("directory does not contain database files: %v", prevVisitedDirs)
 	}
+	t.Logf("database lock modification time: %v", *prevModTime)
+
 	if !slices.ContainsFunc(
 		prevVisitedDirs,
 		func(s string) bool { return strings.Contains(s, temp) }) {
@@ -796,13 +793,16 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	if err := net.RemoveNode(node); err != nil {
 		t.Fatalf("failed to remove node: %v", err)
 	}
+	t.Log("about to stop node")
 	if err := node.Stop(t.Context()); err != nil {
 		t.Fatalf("failed to stop node: %v", err)
 	}
+	t.Log("about to cleanup node")
 	if err := node.Cleanup(context.Background()); err != nil {
 		t.Fatalf("failed to cleanup node: %v", err)
 	}
 
+	t.Log("about to re-run node on the same data volume")
 	// re-run another node on the same data volume
 	if _, err := net.CreateNode(&driver.NodeConfig{
 		Name:       t.Name() + "-3",
@@ -820,6 +820,7 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	if got, want := *currModTime, *prevModTime; got.Equal(want) {
 		t.Errorf("got modification time %v, wanted modification time %v", got, want)
 	}
+	t.Logf("database lock modification time: %v", *currModTime)
 	if !slices.ContainsFunc(
 		currVisitedDirs,
 		func(s string) bool { return strings.Contains(s, temp) }) {

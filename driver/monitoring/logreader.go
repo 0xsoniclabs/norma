@@ -35,6 +35,7 @@ var (
 	baseFeeReg        = regexp.MustCompile(`base_fee=\d+`)
 	txsReg            = regexp.MustCompile(`txs=\d+`)
 	processingTimeReg = regexp.MustCompile(`t=\S*`)
+	ansiEscapeReg     = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 )
 
 // NewLogReader creates a channel and reads logs from the input reader, sending it to the channel.
@@ -57,7 +58,7 @@ func NewLogReader(reader io.Reader) <-chan Block {
 func readBlocks(reader io.Reader, ch chan<- Block) error {
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
-		line := scanner.Text()
+		line := ansiEscapeReg.ReplaceAllString(scanner.Text(), "")
 		if strings.Contains(line, "New block") {
 			block, err := parseBlock(line)
 			if err != nil {

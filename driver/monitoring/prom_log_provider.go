@@ -287,7 +287,7 @@ func (n *PrometheusLogDispatcher) startNodeLogsDispatch(nodeId Node, url *driver
 				n.nodesLock.Lock()
 				// report only errors occurred before shutdown
 				if _, exists := n.nodes[node]; exists {
-					slog.Error("monitoring: failed to parse log", "error", err)
+					slog.Debug("monitoring: failed to parse log", "error", err)
 				}
 				n.nodesLock.Unlock()
 			}

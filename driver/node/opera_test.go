@@ -281,9 +281,21 @@ func TestClient_Stop_Graceful(t *testing.T) {
 		}
 	}()
 
-	reader, err := node.StreamLog(t.Context())
+	if err := node.Stop(t.Context()); err != nil {
+		t.Errorf("cannot stop client node: %v", err)
+	}
+
+	// Wait for the sonicd exec to finish so the log file is fully flushed.
+	select {
+	case <-node.sonicd.Done:
+	case <-time.After(30 * time.Second):
+		t.Fatalf("sonicd exec did not finish in time")
+	}
+
+	// Read the complete exec log and verify graceful shutdown message.
+	reader, err := node.StreamExecLog()
 	if err != nil {
-		t.Errorf("error: %v", err)
+		t.Fatalf("cannot read exec log: %v", err)
 	}
 	defer func() {
 		if err := reader.Close(); err != nil {
@@ -291,25 +303,14 @@ func TestClient_Stop_Graceful(t *testing.T) {
 		}
 	}()
 
-	done := make(chan bool, 1)
-	go func() {
-		scanner := bufio.NewScanner(reader)
-		for scanner.Scan() {
-			line := scanner.Text()
-			if strings.Contains(line, "State DB closed") {
-				done <- true
-			}
-		}
-	}()
-
-	if err := node.Stop(t.Context()); err != nil {
-		t.Errorf("cannot stop client node: %v", err)
+	logBytes, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("failed to read exec log: %v", err)
 	}
 
-	select {
-	case <-done:
-		// container stopped gracefully
-	case <-time.After(180 * time.Second):
-		t.Errorf("container did not stop gracefully")
+	if !strings.Contains(string(logBytes), "State DB closed") {
+		t.Errorf("container did not stop gracefully: "+
+			"\"State DB closed\" not found in exec log (%d bytes)",
+			len(logBytes))
 	}
 }
