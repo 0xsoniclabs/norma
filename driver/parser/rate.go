@@ -123,7 +123,7 @@ func (w *Wave) Check() error {
 	}
 
 	if w.Period <= 0 {
-		errs = append(errs, fmt.Errorf("wave priode must be > 0, got %f", w.Period))
+		errs = append(errs, fmt.Errorf("wave period must be > 0, got %f", w.Period))
 	}
 
 	return errors.Join(errs...)
