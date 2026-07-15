@@ -98,9 +98,23 @@ func run(ctx *cli.Context) (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to collect scenario files: %w", err)
 	}
+
+	// When the argument is a directory, scenarios are collected recursively
+	// from its subfolders. Print the folder name whenever execution moves
+	// into a new subfolder so the output is easy to follow.
+	info, statErr := os.Stat(path)
+	printFolders := statErr == nil && info.IsDir()
+	lastFolder := ""
+
 	for _, file := range files {
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		if printFolders {
+			if folder := filepath.Dir(file); folder != lastFolder {
+				lastFolder = folder
+				fmt.Printf("=== scenarios in %s ===\n", folder)
+			}
 		}
 		label := ctx.String(evalLabel.Name)
 		if label == "" {
