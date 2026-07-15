@@ -69,6 +69,21 @@ func (mr *MockHostMockRecorder) Cleanup(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cleanup", reflect.TypeOf((*MockHost)(nil).Cleanup), ctx)
 }
 
+// ExecWithEnv mocks base method.
+func (m *MockHost) ExecWithEnv(ctx context.Context, cmd []string, env map[string]string, workDir string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ExecWithEnv", ctx, cmd, env, workDir)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ExecWithEnv indicates an expected call of ExecWithEnv.
+func (mr *MockHostMockRecorder) ExecWithEnv(ctx, cmd, env, workDir any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecWithEnv", reflect.TypeOf((*MockHost)(nil).ExecWithEnv), ctx, cmd, env, workDir)
+}
+
 // GetAddressForService mocks base method.
 func (m *MockHost) GetAddressForService(arg0 *ServiceDescription) (*AddressPort, error) {
 	m.ctrl.T.Helper()

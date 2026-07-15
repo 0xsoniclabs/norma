@@ -745,7 +745,6 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 		}
 	})
 
-	t.Log("about to start first node")
 	dataVolume := "abcd"
 	node, err := net.CreateNode(&driver.NodeConfig{
 		Name:       t.Name() + "-2",
@@ -779,7 +778,6 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	if prevModTime == nil {
 		t.Fatalf("directory does not contain database files: %v", prevVisitedDirs)
 	}
-	t.Logf("database lock modification time: %v", *prevModTime)
 
 	if !slices.ContainsFunc(
 		prevVisitedDirs,
@@ -793,16 +791,13 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	if err := net.RemoveNode(node); err != nil {
 		t.Fatalf("failed to remove node: %v", err)
 	}
-	t.Log("about to stop node")
 	if err := node.Stop(t.Context()); err != nil {
 		t.Fatalf("failed to stop node: %v", err)
 	}
-	t.Log("about to cleanup node")
 	if err := node.Cleanup(context.Background()); err != nil {
 		t.Fatalf("failed to cleanup node: %v", err)
 	}
 
-	t.Log("about to re-run node on the same data volume")
 	// re-run another node on the same data volume
 	if _, err := net.CreateNode(&driver.NodeConfig{
 		Name:       t.Name() + "-3",
@@ -820,7 +815,6 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	if got, want := *currModTime, *prevModTime; got.Equal(want) {
 		t.Errorf("got modification time %v, wanted modification time %v", got, want)
 	}
-	t.Logf("database lock modification time: %v", *currModTime)
 	if !slices.ContainsFunc(
 		currVisitedDirs,
 		func(s string) bool { return strings.Contains(s, temp) }) {
