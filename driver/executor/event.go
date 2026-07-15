@@ -14,23 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Norma. If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package executor
 
-import (
-	"os"
+import "time"
 
-	"github.com/0xsoniclabs/norma/driver/parser"
-	"github.com/urfave/cli/v2"
-)
-
-// Run with `go run ./driver/norma scenario-help`
-
-var scenarioHelpCommand = cli.Command{
-	Action: scenarioHelp,
-	Name:   "scenario-help",
-	Usage:  "prints available step functions and parameters for scenarios",
-}
-
-func scenarioHelp(_ *cli.Context) error {
-	return parser.PrintHelp(os.Stdout)
+// EventExecution captures the observed execution interval of one scenario
+// event on the driver process wall clock.
+type EventExecution struct {
+	Name       string
+	Start, End time.Time
 }

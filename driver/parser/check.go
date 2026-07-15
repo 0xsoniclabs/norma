@@ -17,346 +17,188 @@
 package parser
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/0xsoniclabs/norma/genesis"
-
 	"github.com/0xsoniclabs/norma/load/app"
 )
 
-const namePatternStr = `^[A-Za-z0-9-.]+$`
-
-var NamePattern = regexp.MustCompile(namePatternStr)
-
-// Check tests semantic constraints on the configuration of a scenario.
+// Check validates semantic constraints on a scenario.
 func (s *Scenario) Check() error {
 	errs := []error{}
+
 	if strings.TrimSpace(s.Name) == "" {
 		errs = append(errs, fmt.Errorf("scenario name must not be empty"))
 	}
-	if s.Duration <= 0 {
-		errs = append(errs, fmt.Errorf("scenario duration must be > 0"))
+	if strings.TrimSpace(s.Description) == "" {
+		errs = append(errs, fmt.Errorf("scenario description must not be empty"))
 	}
-	if s.RoundTripTime != nil && *s.RoundTripTime < 0 {
-		errs = append(errs, fmt.Errorf("round trip time must be >= 0, is %v", *s.RoundTripTime))
-	}
-
-	names := map[string]bool{}
-	for _, validator := range s.Validators {
-		if err := validator.Check(s); err != nil {
-			errs = append(errs, err)
-		}
-		if _, exists := names[validator.Name]; exists {
-			errs = append(errs, fmt.Errorf("validator names must be unique, %s encountered multiple times", validator.Name))
-		} else {
-			names[validator.Name] = true
-		}
-	}
-	for _, node := range s.Nodes {
-		if err := node.Check(s); err != nil {
-			errs = append(errs, err)
-		}
-		if _, exists := names[node.Name]; exists {
-			errs = append(errs, fmt.Errorf("node names must be unique, %s encountered multiple times", node.Name))
-		} else {
-			names[node.Name] = true
-		}
-	}
-	names = map[string]bool{}
-	for _, application := range s.Applications {
-		if err := application.Check(s); err != nil {
-			errs = append(errs, err)
-		}
-		if _, exists := names[application.Name]; exists {
-			errs = append(errs, fmt.Errorf("application names must be unique, %s encountered multiple times", application.Name))
-		} else {
-			names[application.Name] = true
-		}
-	}
-	names = map[string]bool{}
-	for _, cheat := range s.Cheats {
-		if err := cheat.Check(s); err != nil {
-			errs = append(errs, err)
-		}
-		if _, exists := names[cheat.Name]; exists {
-			errs = append(errs, fmt.Errorf("cheat names must be unique, %s encountered multiple times", cheat.Name))
-		} else {
-			names[cheat.Name] = true
-		}
+	// Validate initial network rules.
+	if err := genesis.ValidateNetworkRulesPatch(s.InitialRules); err != nil {
+		errs = append(errs, fmt.Errorf("invalid initial network rules: %w", err))
 	}
 
-	if err := genesis.ValidateNetworkRulesPatch(s.NetworkRules.Genesis); err != nil {
-		errs = append(errs, fmt.Errorf("invalid genesis network rules patch: %w", err))
-	}
-
-	for _, rule := range s.NetworkRules.Updates {
-		if rule.Time < 0 {
-			errs = append(errs, fmt.Errorf("network rule update time must be >= 0, is %f", rule.Time))
-		}
-		if err := genesis.ValidateNetworkRulesPatch(rule.Rules); err != nil {
-			errs = append(errs, fmt.Errorf("invalid timed network rules patch at time %f: %w", rule.Time, err))
-		}
-	}
-
-	for _, adv := range s.AdvanceEpoch {
-		if adv.Time < 0 || adv.Time > s.Duration {
-			errs = append(errs, fmt.Errorf("invalid timing for advance epoch: %f", adv.Time))
-		}
-
-		if adv.Epochs != nil && *adv.Epochs < 1 {
-			errs = append(errs, fmt.Errorf("minimum epoch to advance must be 1, got: %d", *adv.Epochs))
-		}
-	}
-
-	for _, chk := range s.Checks {
-		if chk.Time < 0 || chk.Time > s.Duration {
-			errs = append(errs, fmt.Errorf("invalid timing for checks: %f", chk.Time))
+	// Validate each step.
+	for i, step := range s.Steps {
+		if err := step.Check(); err != nil {
+			errs = append(errs, fmt.Errorf("step %d (%s): %w", i+1, step.Function, err))
 		}
 	}
 
 	return errors.Join(errs...)
 }
 
-// Check tests semantic constraints on the validator configuration of a scenario.
-func (v *Validator) Check(scenario *Scenario) error {
-	errs := []error{}
-
-	if len(v.Name) != 0 && !NamePattern.Match([]byte(v.Name)) {
-		errs = append(errs, fmt.Errorf("validator name must match %v, got %v", namePatternStr, v.Name))
-	}
-
-	if v.Instances != nil && *v.Instances < 0 {
-		errs = append(errs, fmt.Errorf("number of instances must be >= 0, is %d", *v.Instances))
-	}
-
-	if err := checkTimeInterval(nil, v.End, scenario.Duration); err != nil {
-		errs = append(errs, err)
-	}
-
-	return errors.Join(errs...)
-}
-
-// Check tests semantic constraints on the node configuration of a scenario.
-func (n *Node) Check(scenario *Scenario) error {
-	errs := []error{}
-	if !NamePattern.Match([]byte(n.Name)) {
-		errs = append(errs, fmt.Errorf("node name must match %v, got %v", namePatternStr, n.Name))
-	}
-	if n.Instances != nil && *n.Instances < 0 {
-		errs = append(errs, fmt.Errorf("number of instances must be >= 0, is %d", *n.Instances))
-	}
-	if n.Client.Type == "" {
-		n.Client.Type = "observer"
-	}
-
-	if n.Start != nil && n.Rejoin != nil {
-		errs = append(errs, fmt.Errorf("node cannot have both start and rejoin; start=%f, rejoin=%f", *n.Start, *n.Rejoin))
-	}
-
-	if n.End != nil && n.Leave != nil {
-		errs = append(errs, fmt.Errorf("node cannot have both end and leave; end=%f, leave=%f", *n.End, *n.Leave))
-	}
-
-	if err := checkTimeInterval(n.Start, n.End, scenario.Duration); err != nil {
-		errs = append(errs, err)
-	}
-	if err := checkTimeInterval(n.Start, n.Leave, scenario.Duration); err != nil {
-		errs = append(errs, err)
-	}
-	if err := checkTimeInterval(n.Rejoin, n.End, scenario.Duration); err != nil {
-		errs = append(errs, err)
-	}
-	if err := checkTimeInterval(n.Rejoin, n.Leave, scenario.Duration); err != nil {
-		errs = append(errs, err)
-	}
-
-	if err := n.isTypeValid(); err != nil {
-		errs = append(errs, err)
-	}
-
-	return errors.Join(errs...)
-}
-
-// isTypeValid returns true if the node has valid type, false otherwise
-func (n *Node) isTypeValid() error {
-	return isTypeValid(n.Client.Type)
-}
-
-func isTypeValid(t string) error {
-	switch t {
-	case
-		"validator",
-		"rpc",
-		"observer":
+// Check validates semantic constraints on a single step.
+func (s *Step) Check() error {
+	switch s.Function {
+	case FuncStartNode:
+		return s.checkStartNode()
+	case FuncStopNode:
+		return s.checkStopNode()
+	case FuncRunApp:
+		return s.checkRunApp()
+	case FuncStopApp:
+		return s.checkStopApp()
+	case FuncUpdateRules:
+		return s.checkUpdateRules()
+	case FuncUndelegate:
+		if len(s.UndelegateTargets) == 0 {
+			return fmt.Errorf("undelegate requires at least one target")
+		}
+		for i, t := range s.UndelegateTargets {
+			if t.Node == "" {
+				return fmt.Errorf("undelegate target %d: missing required 'node' field", i+1)
+			}
+			if !NamePattern.Match([]byte(t.Node)) {
+				return fmt.Errorf("undelegate target %d: node name must match %v, got %v", i+1, namePatternStr, t.Node)
+			}
+		}
 		return nil
+	case FuncWaitFor:
+		if s.Duration <= 0 {
+			return fmt.Errorf("waitFor requires a positive duration, got %v", s.Duration)
+		}
+		return nil
+	case FuncAdvanceEpoch, FuncWaitForEpoch:
+		return nil
+	case FuncChecks:
+		return s.checkSubChecks()
+	default:
+		return fmt.Errorf("unknown function: %q", s.Function)
 	}
-	return fmt.Errorf("type of node must be observer, rpc or validator, was set to %s", t)
 }
 
-// Check tests semantic constraints on the application configuration of a scenario.
-func (a *Application) Check(scenario *Scenario) error {
+func (s *Step) checkStartNode() error {
 	errs := []error{}
 
-	if !NamePattern.Match([]byte(a.Name)) {
-		errs = append(errs, fmt.Errorf("application name must match %v, got %v", namePatternStr, a.Name))
+	if s.Identifier == "" {
+		errs = append(errs, fmt.Errorf("start node requires an identifier (name)"))
+	} else if !NamePattern.Match([]byte(s.Identifier)) {
+		errs = append(errs, fmt.Errorf("node name must match %v, got %v", namePatternStr, s.Identifier))
 	}
 
-	if a.Type == "" {
-		errs = append(errs, fmt.Errorf("application type must be specified"))
-	} else if !app.IsSupportedApplicationType(a.Type) {
-		errs = append(errs, fmt.Errorf("unknown application type: %v", a.Type))
+	// Validate node type if specified.
+	nodeType := s.NodeType
+	if nodeType == "" {
+		nodeType = "observer"
 	}
-
-	if a.Instances != nil && *a.Instances < 0 {
-		errs = append(errs, fmt.Errorf("number of instances must be >= 0, is %d", *a.Instances))
-	}
-
-	if a.Users != nil && *a.Users < 1 {
-		errs = append(errs, fmt.Errorf("number of users must be >= 1, is %d", *a.Users))
-	}
-
-	if err := checkTimeInterval(a.Start, a.End, scenario.Duration); err != nil {
+	if err := isTypeValid(nodeType); err != nil {
 		errs = append(errs, err)
 	}
 
-	if err := a.Rate.Check(scenario); err != nil {
+	if s.Instances != nil && *s.Instances < 1 {
+		errs = append(errs, fmt.Errorf("number of instances must be >= 1, got %d", *s.Instances))
+	}
+
+	return errors.Join(errs...)
+}
+
+func (s *Step) checkStopNode() error {
+	errs := []error{}
+
+	if s.Identifier == "" {
+		errs = append(errs, fmt.Errorf("stop node requires an identifier (name)"))
+	} else if !NamePattern.Match([]byte(s.Identifier)) {
+		errs = append(errs, fmt.Errorf("node name must match %v, got %v", namePatternStr, s.Identifier))
+	}
+
+	return errors.Join(errs...)
+}
+
+func (s *Step) checkRunApp() error {
+	errs := []error{}
+
+	if s.Identifier == "" {
+		errs = append(errs, fmt.Errorf("run app requires an identifier (name)"))
+	} else if !NamePattern.Match([]byte(s.Identifier)) {
+		errs = append(errs, fmt.Errorf("app name must match %v, got %v", namePatternStr, s.Identifier))
+	}
+
+	appType := s.AppType
+	if appType == "" {
+		errs = append(errs, fmt.Errorf("run app requires a type"))
+	} else if !app.IsSupportedApplicationType(appType) {
+		errs = append(errs, fmt.Errorf("unknown application type: %v", appType))
+	}
+
+	if s.Rate == nil {
+		errs = append(errs, fmt.Errorf("run app requires a rate"))
+	} else if err := s.Rate.Check(); err != nil {
 		errs = append(errs, err)
 	}
 
-	return errors.Join(errs...)
-}
-
-// Check tests semantic constraints on the cheat configuration of a scenario.
-func (c *Cheat) Check(scenario *Scenario) error {
-	errs := []error{}
-
-	if !NamePattern.Match([]byte(c.Name)) {
-		errs = append(errs, fmt.Errorf("cheat name must match %v, got %v", namePatternStr, c.Name))
-	}
-
-	if err := checkTimeInterval(c.Start, nil, scenario.Duration); err != nil {
-		errs = append(errs, err)
+	if s.Users != nil && *s.Users < 1 {
+		errs = append(errs, fmt.Errorf("number of users must be >= 1, got %d", *s.Users))
 	}
 
 	return errors.Join(errs...)
 }
 
-// Check tests semantic constraints on the traffic shape configuration of a source.
-func (r *Rate) Check(scenario *Scenario) error {
-	count := 0
-	if r.Constant != nil {
-		count++
-	}
-	if r.Slope != nil {
-		count++
-	}
-	if r.Wave != nil {
-		count++
-	}
-	if r.Auto != nil {
-		count++
-	}
-	if count != 1 {
-		return fmt.Errorf("application must specify exactly one load shape, got %d", count)
-	}
-
-	if r.Constant != nil && *r.Constant < 0 {
-		return fmt.Errorf("constant transaction rate must be >= 0, got %f", *r.Constant)
-	}
-	if r.Slope != nil {
-		return r.Slope.Check()
-	}
-	if r.Wave != nil {
-		return r.Wave.Check()
-	}
-	if r.Auto != nil {
-		return r.Auto.Check()
-	}
-	return nil
-}
-
-// Check tests semantic constraints on the configuration of a slope traffic pattern.
-func (s *Slope) Check() error {
+func (s *Step) checkStopApp() error {
 	errs := []error{}
 
-	if s.Start < 0 {
-		errs = append(errs, fmt.Errorf("initial transaction rate must be >= 0, got %f", s.Start))
+	if s.Identifier == "" {
+		errs = append(errs, fmt.Errorf("stop app requires an identifier (name)"))
+	} else if !NamePattern.Match([]byte(s.Identifier)) {
+		errs = append(errs, fmt.Errorf("app name must match %v, got %v", namePatternStr, s.Identifier))
 	}
 
 	return errors.Join(errs...)
 }
 
-// Check tests semantic constraints on the configuration of a wave-shaped traffic pattern.
-func (w *Wave) Check() error {
+func (s *Step) checkUpdateRules() error {
 	errs := []error{}
 
-	min := float32(0.0)
-	if w.Min != nil {
-		min = *w.Min
-	}
-	max := w.Max
-
-	if min < 0 {
-		errs = append(errs, fmt.Errorf("minimum transaction rate must be >= 0, got %f", min))
-	}
-	if max < 0 {
-		errs = append(errs, fmt.Errorf("maximum transaction rate must be >= 0, got %f", max))
-	}
-	if min > max {
-		errs = append(errs, fmt.Errorf("minimum transaction rate must be <= maximum rate, got %f > %f", min, max))
-	}
-
-	if w.Period <= 0 {
-		errs = append(errs, fmt.Errorf("wave priode must be > 0, got %f", w.Period))
+	b, err := json.Marshal(s.Rules)
+	if err != nil || string(b) == "{}" {
+		errs = append(errs, fmt.Errorf("update rules requires at least one rule"))
 	}
 
 	return errors.Join(errs...)
 }
 
-// Check tests semantic constraints on the configuration of a auto-shaped traffic pattern.
-func (a *Auto) Check() error {
-	errs := []error{}
+func (s *Step) checkSubChecks() error {
+	if len(s.SubChecks) == 0 {
+		return fmt.Errorf("checks step requires at least one sub-check")
+	}
 
-	if a.Increase != nil {
-		if *a.Increase <= 0 {
-			errs = append(errs, fmt.Errorf("traffic rate increase per second must be positive, got %f", *a.Increase))
+	errs := []error{}
+	for i, check := range s.SubChecks {
+		if check.Function == "" {
+			errs = append(errs, fmt.Errorf("sub-check %d: missing check function", i+1))
+			continue
 		}
-	}
-	if a.Decrease != nil {
-		if *a.Decrease < 0 || *a.Decrease > 1 {
-			errs = append(errs, fmt.Errorf("traffic decrease rate must be between 0 and 1, got %f", *a.Decrease))
+
+		// Validate that rules patches are valid when provided.
+		if check.Function == FuncCheckNetworkRules && check.Rules != (genesis.NetworkRulesPatch{}) {
+			if err := genesis.ValidateNetworkRulesPatch(check.Rules); err != nil {
+				errs = append(errs, fmt.Errorf("sub-check %d (%s): invalid rules: %w", i+1, check.Function, err))
+			}
 		}
 	}
 
-	return errors.Join(errs...)
-}
-
-// checkTimeInterval is a utility function checking the validity of a start/end time pair.
-func checkTimeInterval(start, end *float32, duration float32) error {
-	realStart := float32(0.0)
-	if start != nil {
-		realStart = *start
-	}
-	realEnd := duration
-	if end != nil {
-		realEnd = *end
-	}
-	errs := []error{}
-	if realStart < 0 {
-		errs = append(errs, fmt.Errorf("start time must be >= 0, is %f", realStart))
-	}
-	if realStart > duration {
-		errs = append(errs, fmt.Errorf("start time must be <= scenario duration (=%fs), is %f", duration, realStart))
-	}
-	if realEnd < realStart {
-		errs = append(errs, fmt.Errorf("end time must be >= start time,  end=%fs, start=%fs", realEnd, realStart))
-	} else {
-		if realEnd > duration {
-			errs = append(errs, fmt.Errorf("end time must be <= scenario duration, end=%fs, duration=%fs", realEnd, duration))
-		}
-	}
 	return errors.Join(errs...)
 }

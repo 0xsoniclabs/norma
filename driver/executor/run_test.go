@@ -31,22 +31,22 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func TestSequential_EmptyScenario(t *testing.T) {
+func TestRun_EmptyScenario(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 
-	scenario := parser.SequentialScenario{
+	scenario := parser.Scenario{
 		Name:        "Empty",
 		Description: "Test scenario.",
 		Steps:       []parser.Step{},
 	}
 
-	if err := runSequential(t.Context(), net, &scenario, nil, nil); err != nil {
+	if err := run(t.Context(), net, &scenario, nil, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestSequential_StartAndStopNode(t *testing.T) {
+func TestRun_StartAndStopNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	registry := NewMockvalidatorRegistry(ctrl)
@@ -68,7 +68,7 @@ func TestSequential_StartAndStopNode(t *testing.T) {
 		node.EXPECT().Cleanup(gomock.Any()).Return(nil),
 	)
 
-	scenario := parser.SequentialScenario{
+	scenario := parser.Scenario{
 		Name:        "Start Stop",
 		Description: "Test scenario.",
 		Steps: []parser.Step{
@@ -88,12 +88,12 @@ func TestSequential_StartAndStopNode(t *testing.T) {
 		},
 	}
 
-	if err := runSequential(t.Context(), net, &scenario, nil, registry); err != nil {
+	if err := run(t.Context(), net, &scenario, nil, registry); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestSequential_StartNode_ForwardsCustomStake(t *testing.T) {
+func TestRun_StartNode_ForwardsCustomStake(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	registry := NewMockvalidatorRegistry(ctrl)
@@ -116,7 +116,7 @@ func TestSequential_StartNode_ForwardsCustomStake(t *testing.T) {
 	)
 
 	stake := customStake
-	scenario := parser.SequentialScenario{
+	scenario := parser.Scenario{
 		Name:             "Custom Stake",
 		Description:      "Test scenario.",
 		DisableEndChecks: true,
@@ -130,14 +130,14 @@ func TestSequential_StartNode_ForwardsCustomStake(t *testing.T) {
 		},
 	}
 
-	if err := runSequential(
+	if err := run(
 		t.Context(), net, &scenario, nil, registry,
 	); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestSequential_UndelegateSingleInstanceWithSuffix(t *testing.T) {
+func TestRun_UndelegateSingleInstanceWithSuffix(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	registry := NewMockvalidatorRegistry(ctrl)
@@ -160,7 +160,7 @@ func TestSequential_UndelegateSingleInstanceWithSuffix(t *testing.T) {
 	)
 
 	instances := 1
-	scenario := parser.SequentialScenario{
+	scenario := parser.Scenario{
 		Name:             "Undelegate Single Instance With Suffix",
 		Description:      "Test scenario.",
 		DisableEndChecks: true,
@@ -178,14 +178,14 @@ func TestSequential_UndelegateSingleInstanceWithSuffix(t *testing.T) {
 		},
 	}
 
-	if err := runSequential(
+	if err := run(
 		t.Context(), net, &scenario, nil, registry,
 	); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestSequential_UndelegateMultiInstance(t *testing.T) {
+func TestRun_UndelegateMultiInstance(t *testing.T) {
 	cases := map[string]struct {
 		target    string
 		expectErr bool
@@ -230,7 +230,7 @@ func TestSequential_UndelegateMultiInstance(t *testing.T) {
 				registry.EXPECT().unregisterValidator(validatorId0, uint64(0)).Return(nil)
 			}
 
-			scenario := parser.SequentialScenario{
+			scenario := parser.Scenario{
 				Name:             "Undelegate Multi Instance",
 				Description:      "Test scenario.",
 				DisableEndChecks: true,
@@ -248,7 +248,7 @@ func TestSequential_UndelegateMultiInstance(t *testing.T) {
 				},
 			}
 
-			err := runSequential(t.Context(), net, &scenario, nil, registry)
+			err := run(t.Context(), net, &scenario, nil, registry)
 			if tc.expectErr && err == nil {
 				t.Fatal("expected error, got nil")
 			}
@@ -259,7 +259,7 @@ func TestSequential_UndelegateMultiInstance(t *testing.T) {
 	}
 }
 
-func TestSequential_StopNodeWithoutUndelegate(t *testing.T) {
+func TestRun_StopNodeWithoutUndelegate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	registry := NewMockvalidatorRegistry(ctrl)
@@ -279,7 +279,7 @@ func TestSequential_StopNodeWithoutUndelegate(t *testing.T) {
 		node.EXPECT().Cleanup(gomock.Any()).Return(nil),
 	)
 
-	scenario := parser.SequentialScenario{
+	scenario := parser.Scenario{
 		Name:        "Leave",
 		Description: "Test scenario.",
 		Steps: []parser.Step{
@@ -296,12 +296,12 @@ func TestSequential_StopNodeWithoutUndelegate(t *testing.T) {
 		},
 	}
 
-	if err := runSequential(t.Context(), net, &scenario, nil, registry); err != nil {
+	if err := run(t.Context(), net, &scenario, nil, registry); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestSequential_RejoinNode(t *testing.T) {
+func TestRun_RejoinNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	registry := NewMockvalidatorRegistry(ctrl)
@@ -335,7 +335,7 @@ func TestSequential_RejoinNode(t *testing.T) {
 		}).Return(node2, nil),
 	)
 
-	scenario := parser.SequentialScenario{
+	scenario := parser.Scenario{
 		Name:        "Rejoin",
 		Description: "Test scenario.",
 		Steps: []parser.Step{
@@ -356,12 +356,12 @@ func TestSequential_RejoinNode(t *testing.T) {
 		},
 	}
 
-	if err := runSequential(t.Context(), net, &scenario, nil, registry); err != nil {
+	if err := run(t.Context(), net, &scenario, nil, registry); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestSequential_RunAndStopApp(t *testing.T) {
+func TestRun_RunAndStopApp(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
@@ -375,7 +375,7 @@ func TestSequential_RunAndStopApp(t *testing.T) {
 		app.EXPECT().Stop().Return(nil),
 	)
 
-	scenario := parser.SequentialScenario{
+	scenario := parser.Scenario{
 		Name:        "App",
 		Description: "Test scenario.",
 		Steps: []parser.Step{
@@ -383,7 +383,7 @@ func TestSequential_RunAndStopApp(t *testing.T) {
 				Function:   parser.FuncRunApp,
 				Identifier: "load",
 				AppType:    "counter",
-				Users:      New(50),
+				Users:      new(50),
 				Rate:       &parser.Rate{Constant: &rate},
 			},
 			{
@@ -393,12 +393,12 @@ func TestSequential_RunAndStopApp(t *testing.T) {
 		},
 	}
 
-	if err := runSequential(t.Context(), net, &scenario, nil, nil); err != nil {
+	if err := run(t.Context(), net, &scenario, nil, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestSequential_UpdateRules(t *testing.T) {
+func TestRun_UpdateRules(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
@@ -410,7 +410,7 @@ func TestSequential_UpdateRules(t *testing.T) {
 		},
 	}).Return(nil)
 
-	scenario := parser.SequentialScenario{
+	scenario := parser.Scenario{
 		Name:        "Rules",
 		Description: "Test scenario.",
 		Steps: []parser.Step{
@@ -425,12 +425,12 @@ func TestSequential_UpdateRules(t *testing.T) {
 		},
 	}
 
-	if err := runSequential(t.Context(), net, &scenario, nil, nil); err != nil {
+	if err := run(t.Context(), net, &scenario, nil, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestSequential_AdvanceEpoch(t *testing.T) {
+func TestRun_AdvanceEpoch(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 
@@ -438,7 +438,7 @@ func TestSequential_AdvanceEpoch(t *testing.T) {
 	// DialRandomRpc returns error so waitForBlockProduction is skipped.
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 
-	scenario := parser.SequentialScenario{
+	scenario := parser.Scenario{
 		Name:        "Epoch",
 		Description: "Test scenario.",
 		Steps: []parser.Step{
@@ -446,12 +446,12 @@ func TestSequential_AdvanceEpoch(t *testing.T) {
 		},
 	}
 
-	if err := runSequential(t.Context(), net, &scenario, nil, nil); err != nil {
+	if err := run(t.Context(), net, &scenario, nil, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestSequential_Check(t *testing.T) {
+func TestRun_Check(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
@@ -461,7 +461,7 @@ func TestSequential_Check(t *testing.T) {
 
 	checks := checking.Checks{"blocksRolling": checker}
 
-	scenario := parser.SequentialScenario{
+	scenario := parser.Scenario{
 		Name:        "Check",
 		Description: "Test scenario.",
 		Steps: []parser.Step{
@@ -474,55 +474,19 @@ func TestSequential_Check(t *testing.T) {
 		},
 	}
 
-	if err := runSequential(t.Context(), net, &scenario, checks, nil); err != nil {
+	if err := run(t.Context(), net, &scenario, checks, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestExecCheck_ForwardsDurationAsInt64Nanos_WhenBlocksProducedHasDuration(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	inner := checking.NewMockChecker(ctrl)
-	configured := checking.NewMockChecker(ctrl)
-
-	duration := 30 * time.Second
-
-	inner.EXPECT().Configure(gomock.Any()).DoAndReturn(
-		func(cfg checking.CheckerConfig) checking.Checker {
-			v, ok := cfg["duration"]
-			if !ok {
-				t.Fatalf("expected 'duration' in config, got %v", cfg)
-			}
-			got, ok := v.(int64)
-			if !ok {
-				t.Fatalf("expected 'duration' to be int64, got %T", v)
-			}
-			if got != int64(duration) {
-				t.Fatalf("expected duration=%d, got %d", int64(duration), got)
-			}
-			return configured
-		},
-	)
-	configured.EXPECT().Check(gomock.Any()).Return(nil)
-
-	checks := checking.Checks{"blocksRolling": inner}
-	spec := &parser.CheckSpec{
-		Function: parser.FuncCheckBlocksProduced,
-		Duration: &duration,
-	}
-
-	if err := execCheck(t.Context(), "blocksRolling", spec, checks); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestSequential_ContextCancellation(t *testing.T) {
+func TestRun_ContextCancellation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // Cancel immediately.
 
-	scenario := parser.SequentialScenario{
+	scenario := parser.Scenario{
 		Name:        "Cancelled",
 		Description: "Test scenario.",
 		Steps: []parser.Step{
@@ -530,13 +494,13 @@ func TestSequential_ContextCancellation(t *testing.T) {
 		},
 	}
 
-	err := runSequential(ctx, net, &scenario, nil, nil)
+	err := run(ctx, net, &scenario, nil, nil)
 	if err == nil {
 		t.Fatal("expected error from cancelled context")
 	}
 }
 
-func TestSequential_MultiInstanceNode(t *testing.T) {
+func TestRun_MultiInstanceNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	registry := NewMockvalidatorRegistry(ctrl)
@@ -569,7 +533,7 @@ func TestSequential_MultiInstanceNode(t *testing.T) {
 	}).Times(2)
 
 	instances := 2
-	scenario := parser.SequentialScenario{
+	scenario := parser.Scenario{
 		Name:        "Multi",
 		Description: "Test scenario.",
 		Steps: []parser.Step{
@@ -582,7 +546,7 @@ func TestSequential_MultiInstanceNode(t *testing.T) {
 		},
 	}
 
-	if err := runSequential(t.Context(), net, &scenario, nil, registry); err != nil {
+	if err := run(t.Context(), net, &scenario, nil, registry); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -592,7 +556,7 @@ func TestExecStopNode_SingleInstanceSuffix(t *testing.T) {
 	net := driver.NewMockNetwork(ctrl)
 	node := driver.NewMockNode(ctrl)
 
-	state := &sequentialState{
+	state := &runState{
 		nodes: map[string]driver.Node{
 			"validator-A-0": node,
 		},
@@ -623,7 +587,7 @@ func TestExecStopNode_MultipleInstances(t *testing.T) {
 	node1 := driver.NewMockNode(ctrl)
 	other := driver.NewMockNode(ctrl)
 
-	state := &sequentialState{
+	state := &runState{
 		nodes: map[string]driver.Node{
 			"validators-0": node0,
 			"validators-1": node1,
@@ -665,7 +629,7 @@ func TestExecStopNode_IgnoresNonNumericSuffix(t *testing.T) {
 	node := driver.NewMockNode(ctrl)
 	unrelated := driver.NewMockNode(ctrl)
 
-	state := &sequentialState{
+	state := &runState{
 		nodes: map[string]driver.Node{
 			"validator-0":     node,
 			"validator-extra": unrelated,
@@ -693,11 +657,11 @@ func TestExecStopNode_IgnoresNonNumericSuffix(t *testing.T) {
 	}
 }
 
-func TestSequential_RunAndCaptureEventExecution_CapturesAllSteps(t *testing.T) {
+func TestRun_RunAndCaptureEventExecution_CapturesAllSteps(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 
-	scenario := parser.SequentialScenario{
+	scenario := parser.Scenario{
 		Name:        "Capture",
 		Description: "Test scenario.",
 		Steps: []parser.Step{
@@ -706,7 +670,7 @@ func TestSequential_RunAndCaptureEventExecution_CapturesAllSteps(t *testing.T) {
 		},
 	}
 
-	executions, err := RunSequentialAndCaptureEventExecution(
+	executions, err := RunAndCaptureEventExecution(
 		t.Context(),
 		net,
 		&scenario,

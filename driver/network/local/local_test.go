@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/network"
-	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/genesis"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -318,11 +317,11 @@ func TestLocalNetwork_CanRunWithMultipleValidators(t *testing.T) {
 }
 
 func TestLocalNetwork_CanRunWithVariousValidators(t *testing.T) {
-	validators := driver.NewValidators([]parser.Validator{
-		{},
-		{Name: "validator2", ImageName: "sonic:v2.1.6"},
-		{Name: "validator3", ImageName: "sonic:local"},
-	})
+	validators := driver.Validators{
+		{Name: "validator", Instances: 1, ImageName: driver.DefaultClientDockerImageName, Stake: 5_000_000},
+		{Name: "validator2", Instances: 1, ImageName: "sonic:v2.1.6", Stake: 5_000_000},
+		{Name: "validator3", Instances: 1, ImageName: "sonic:local", Stake: 5_000_000},
+	}
 
 	config := driver.NetworkConfig{Validators: validators}
 	net, err := NewLocalLegacyNetwork(t.Context(), &config)

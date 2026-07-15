@@ -35,15 +35,8 @@ func TestCheckScenarios(t *testing.T) {
 	require.NotEmpty(t, files, "failed to locate any scenario files")
 	for _, file := range files {
 		t.Run(file, func(t *testing.T) {
-			// Try sequential format first, fall back to legacy format.
-			seqScenario, seqErr := parser.ParseSequentialFile(file)
-			if seqErr == nil {
-				require.NoError(t, seqScenario.Check(), "sequential scenario check failed for file", file)
-				return
-			}
-
 			scenario, err := parser.ParseFile(file)
-			require.NoError(t, err, "failed to parse file", file, "sequential error:", seqErr)
+			require.NoError(t, err, "failed to parse file", file)
 			require.NoError(t, scenario.Check(), "scenario check failed for file", file)
 		})
 	}

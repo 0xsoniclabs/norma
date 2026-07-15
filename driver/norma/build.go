@@ -169,7 +169,8 @@ func collectScenarioFiles(path string) ([]string, error) {
 // that are expected to be built by docker.EnsureImages.
 //
 // The helper applies scenario defaults (e.g. default client image for empty
-// node image entries) so build behavior matches runtime node startup behavior.
+// startNode image entries) so build behavior matches runtime node startup
+// behavior.
 func collectBuildableImages(paths []string) ([]string, error) {
 	images := map[string]struct{}{}
 	for _, path := range paths {
@@ -182,14 +183,11 @@ func collectBuildableImages(paths []string) ([]string, error) {
 			return nil, err
 		}
 
-		for _, validator := range driver.NewValidators(scenario.Validators) {
-			if docker.WillBuildImage(validator.ImageName) {
-				images[validator.ImageName] = struct{}{}
+		for _, step := range scenario.Steps {
+			if step.Function != parser.FuncStartNode {
+				continue
 			}
-		}
-
-		for _, node := range scenario.Nodes {
-			image := driver.ResolveClientImageName(node.Client.ImageName)
+			image := driver.ResolveClientImageName(step.ImageName)
 			if docker.WillBuildImage(image) {
 				images[image] = struct{}{}
 			}

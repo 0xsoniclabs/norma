@@ -14,41 +14,25 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Norma. If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package parser
 
 import (
 	"fmt"
-	"log/slog"
-
-	"github.com/0xsoniclabs/norma/driver/parser"
-	"github.com/urfave/cli/v2"
+	"regexp"
 )
 
-// Run with `go run ./driver/norma check <scenario.yml>`
+const namePatternStr = `^[A-Za-z0-9-.]+$`
 
-var checkCommand = cli.Command{
-	Action: check,
-	Name:   "check",
-	Usage:  "checks a scenario configuration file for issues",
-}
+// NamePattern is the regular expression that all node, validator, and
+// application identifiers must match.
+var NamePattern = regexp.MustCompile(namePatternStr)
 
-func check(ctx *cli.Context) (err error) {
-
-	args := ctx.Args()
-	if args.Len() < 1 {
-		return fmt.Errorf("requires target file name as argument")
+// isTypeValid reports whether the given node type is one of the supported
+// values (observer, rpc, validator).
+func isTypeValid(t string) error {
+	switch t {
+	case "validator", "rpc", "observer":
+		return nil
 	}
-
-	path := args.First()
-	slog.Info("trying to parse", "path", path)
-
-	scenario, err := parser.ParseFile(path)
-	if err != nil {
-		return fmt.Errorf("failed to parse scenario file: %w", err)
-	}
-	if err := scenario.Check(); err != nil {
-		return err
-	}
-	slog.Info("all checks passed!", "path", path)
-	return nil
+	return fmt.Errorf("type of node must be observer, rpc or validator, was set to %s", t)
 }

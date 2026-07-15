@@ -255,9 +255,9 @@ func (c *CheckSpec) parseParam(keyNode, valNode *yaml.Node) error {
 	return nil
 }
 
-// SequentialScenario is the root element of a sequential scenario description.
+// Scenario is the root element of a scenario description.
 // Unlike the time-based Scenario, it defines an ordered list of blocking steps.
-type SequentialScenario struct {
+type Scenario struct {
 	Name             string                    `yaml:"Name"`
 	Description      string                    `yaml:"Description"`
 	InitialRules     genesis.NetworkRulesPatch `yaml:"InitialNetworkRules"`
@@ -265,7 +265,7 @@ type SequentialScenario struct {
 	Steps            []Step                    `yaml:"Scenario"`
 }
 
-// Step is a single blocking operation in a sequential scenario.
+// Step is a single blocking operation in a scenario.
 type Step struct {
 	// Function identifies which operation this step performs.
 	Function StepFunction
@@ -567,36 +567,36 @@ func (s *Step) parseParam(key string, val *yaml.Node) error {
 	return nil
 }
 
-// ParseSequential parses a sequential scenario from the given reader.
-func ParseSequential(reader io.Reader) (SequentialScenario, error) {
-	var res SequentialScenario
+// Parse parses a scenario from the given reader.
+func Parse(reader io.Reader) (Scenario, error) {
+	var res Scenario
 	decoder := yaml.NewDecoder(reader)
 	decoder.KnownFields(true)
 	err := decoder.Decode(&res)
 	if err != nil {
-		return SequentialScenario{}, err
+		return Scenario{}, err
 	}
 	res.setDefaults()
 	return res, nil
 }
 
-// ParseSequentialBytes parses a sequential scenario from a byte slice.
-func ParseSequentialBytes(data []byte) (SequentialScenario, error) {
-	return ParseSequential(bytes.NewReader(data))
+// ParseBytes parses a scenario from a byte slice.
+func ParseBytes(data []byte) (Scenario, error) {
+	return Parse(bytes.NewReader(data))
 }
 
-// ParseSequentialFile parses a sequential scenario from a file.
-func ParseSequentialFile(path string) (scenario SequentialScenario, err error) {
+// ParseFile parses a scenario from a file.
+func ParseFile(path string) (scenario Scenario, err error) {
 	reader, err := os.Open(path)
 	if err != nil {
-		return SequentialScenario{}, err
+		return Scenario{}, err
 	}
 	defer func() { err = errors.Join(err, reader.Close()) }()
-	return ParseSequential(reader)
+	return Parse(reader)
 }
 
-// setDefaults sets default values on the sequential scenario.
-func (s *SequentialScenario) setDefaults() {
+// setDefaults sets default values on the scenario.
+func (s *Scenario) setDefaults() {
 	ensureDefaultEpochDuration(&s.InitialRules)
 
 	// if the scenario does not disable end checks, append the default end
@@ -649,10 +649,10 @@ var checkParamDescriptions = map[string]string{
 	"duration":       "Duration (e.g. \"30s\") to actively observe the network; the check waits this long and then verifies block progress during the observation window.",
 }
 
-// PrintSequentialHelp writes a formatted summary of all available sequential
-// scenario step functions, their descriptions, and accepted parameters to w.
-// It returns the first write error encountered, if any.
-func PrintSequentialHelp(w io.Writer) error {
+// PrintHelp writes a formatted summary of all available scenario step
+// functions, their descriptions, and accepted parameters to w. It returns
+// the first write error encountered, if any.
+func PrintHelp(w io.Writer) error {
 	stepFns := slices.SortedFunc(slices.Values(allStepFunctions[:]), func(a, b StepFunction) int {
 		return strings.Compare(string(a), string(b))
 	})
@@ -661,7 +661,7 @@ func PrintSequentialHelp(w io.Writer) error {
 	})
 
 	ew := &errWriter{w: w}
-	ew.printf("Sequential scenario step functions:\n\n")
+	ew.printf("Scenario step functions:\n\n")
 	for _, fn := range stepFns {
 		desc := stepFunctionDescriptions[fn]
 		params := allowedParams[fn]
