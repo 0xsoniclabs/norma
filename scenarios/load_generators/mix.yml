@@ -1,0 +1,26 @@
+Name: Mixed Load Test
+Description: >-
+  Runs the mix load generator against a single validator, dispatching transactions across every available application type with weighted random selection.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: true
+    GasSubsidies: true
+    TransactionBundles: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+    instances: 3
+
+  - runApp: mix
+    type: mix
+    users: 10
+    rate:
+      constant: 1
+
+  - waitFor: 30s
+
+  - stopApp: mix
