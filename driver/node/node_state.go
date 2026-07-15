@@ -4,12 +4,12 @@ package node
 type NodeState int
 
 const (
-	// NodeStateUnknown represents an unknown state for a node.
+	// NodeStateOffline represents an offline state for a node.
 	NodeStateOffline NodeState = iota
-	// NodeStateOnline represents an online state for a node.
+	// NodeStateUninitialized represents an uninitialized state for a node.
 	NodeStateUninitialized
-	// NodeStateInitialized represents an initialized state for a node.
-	NodeStateInitialized
+	// NodeStateReady represents a ready state for a node.
+	NodeStateReady
 	// NodeStateSyncing represents a syncing state for a node.
 	NodeStateSyncing
 	// NodeStateRunning represents a running state for a node.

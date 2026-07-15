@@ -103,7 +103,6 @@ func TestOperaNode_Cleanup_RemovesTempDirs(t *testing.T) {
 	}
 
 	node := &OperaNode{
-		host:     cleanupHostStub{},
 		config:   &OperaNodeConfig{Label: t.Name()},
 		tempDirs: []string{tempDir},
 	}
