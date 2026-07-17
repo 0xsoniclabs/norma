@@ -1,0 +1,17 @@
+Name: Self-Destruct New Contract Load Test
+Description: >-
+  Runs the selfdestructnewcontract load generator against a single validator to verify same-transaction contract creation and self-destruct is processed correctly.
+
+Scenario:
+  - startNode: validator
+    type: validator
+
+  - runApp: selfdestructnewcontract
+    type: selfdestructnewcontract
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - stopApp: selfdestructnewcontract

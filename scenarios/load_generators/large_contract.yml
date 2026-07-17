@@ -1,0 +1,23 @@
+Name: Large Contract Load Test
+Description: >-
+  Runs the largecontract load generator against a single validator to verify large contract deployment transactions are processed correctly.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+
+  - runApp: largecontract
+    type: largecontract
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - stopApp: largecontract

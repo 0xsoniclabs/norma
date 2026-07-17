@@ -1,0 +1,25 @@
+Name: All-Of Bundle Load Test
+Description: >-
+  Runs the allofbundle load generator against a single validator to verify all-or-nothing transaction bundles are processed correctly.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: true
+    GasSubsidies: true
+    TransactionBundles: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+
+  - runApp: allofbundle
+    type: allofbundle
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - stopApp: allofbundle

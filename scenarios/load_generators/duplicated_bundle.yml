@@ -1,0 +1,25 @@
+Name: Duplicated Bundle Load Test
+Description: >-
+  Runs the duplicatedbundle load generator against a single validator to verify duplicated transaction bundles are handled correctly.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: true
+    GasSubsidies: true
+    TransactionBundles: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+
+  - runApp: duplicatedbundle
+    type: duplicatedbundle
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - stopApp: duplicatedbundle

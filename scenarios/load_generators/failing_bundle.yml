@@ -1,0 +1,25 @@
+Name: Failing Bundle Load Test
+Description: >-
+  Runs the failingbundle load generator against a single validator to verify bundles containing failing transactions are handled correctly.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: true
+    GasSubsidies: true
+    TransactionBundles: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+
+  - runApp: failingbundle
+    type: failingbundle
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - stopApp: failingbundle

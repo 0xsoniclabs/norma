@@ -1,0 +1,17 @@
+Name: Uniswap Load Test
+Description: >-
+  Runs the uniswap load generator against a single validator to verify Uniswap swap transactions are processed correctly.
+
+Scenario:
+  - startNode: validator
+    type: validator
+
+  - runApp: uniswap
+    type: uniswap
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - stopApp: uniswap

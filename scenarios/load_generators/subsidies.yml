@@ -1,0 +1,22 @@
+Name: Gas Subsidies Load Test
+Description: >-
+  Runs the subsidies load generator against a single validator to verify gas-subsidized transactions are processed correctly.
+
+InitialNetworkRules:
+  Upgrades:
+    Allegro: true
+    GasSubsidies: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+
+  - runApp: subsidies
+    type: subsidies
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - stopApp: subsidies
