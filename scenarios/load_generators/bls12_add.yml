@@ -1,0 +1,21 @@
+Name: BLS12-Add Precompile Load Test
+Description: >-
+  Runs the bls12add load generator against a single validator to verify the BLS12-381 addition precompile (added in Allegro) is exercised correctly.
+
+InitialNetworkRules:
+  Upgrades:
+    Allegro: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+
+  - runApp: bls12add
+    type: bls12add
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - stopApp: bls12add

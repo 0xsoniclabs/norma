@@ -1,0 +1,17 @@
+Name: Counter Load Test
+Description: >-
+  Runs the counter load generator against a single validator to verify it produces and processes valid transactions.
+
+Scenario:
+  - startNode: validator
+    type: validator
+
+  - runApp: counter
+    type: counter
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - stopApp: counter

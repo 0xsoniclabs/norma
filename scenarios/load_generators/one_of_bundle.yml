@@ -1,0 +1,25 @@
+Name: One-Of Bundle Load Test
+Description: >-
+  Runs the oneofbundle load generator against a single validator to verify one-of transaction bundles are processed correctly.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: true
+    GasSubsidies: true
+    TransactionBundles: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+
+  - runApp: oneofbundle
+    type: oneofbundle
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - stopApp: oneofbundle

@@ -1,0 +1,21 @@
+Name: Smart Account Load Test
+Description: >-
+  Runs the smartaccount load generator against a single validator to verify EIP-7702 SetCode transactions are processed correctly.
+
+InitialNetworkRules:
+  Upgrades:
+    Allegro: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+
+  - runApp: smartaccount
+    type: smartaccount
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - stopApp: smartaccount
