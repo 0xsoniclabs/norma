@@ -54,10 +54,6 @@ func (c *networkRulesChecker) Configure(config CheckerConfig) Checker {
 		timeout:      c.timeout,
 	}
 
-	if d, exist := config["duration"]; exist {
-		configured.timeout = time.Duration(d.(int64))
-	}
-
 	rules, exists := config["rules"]
 	if !exists {
 		return configured
@@ -88,6 +84,9 @@ func (c *networkRulesChecker) Check(ctx context.Context) error {
 
 	deadline := time.Now().Add(c.timeout)
 	logged := false
+	ticker := time.NewTicker(networkRulesPollInterval)
+	defer ticker.Stop()
+
 	for {
 		err := c.checkOnce(ctx)
 		if err == nil {
@@ -102,8 +101,8 @@ func (c *networkRulesChecker) Check(ctx context.Context) error {
 		}
 		select {
 		case <-ctx.Done():
-			return err
-		case <-time.After(networkRulesPollInterval):
+			return ctx.Err()
+		case <-ticker.C:
 		}
 	}
 }
