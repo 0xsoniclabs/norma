@@ -82,6 +82,11 @@ func (s *Step) Check() error {
 			return fmt.Errorf("waitFor requires a positive duration, got %v", s.Duration)
 		}
 		return nil
+	case FuncKillSonic, FuncHealDb:
+		if s.Identifier == "" {
+			return fmt.Errorf("%s requires a node identifier", s.Function)
+		}
+		return nil
 	case FuncAdvanceEpoch, FuncWaitForEpoch:
 		return nil
 	case FuncChecks:

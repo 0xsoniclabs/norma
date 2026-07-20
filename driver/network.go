@@ -103,6 +103,21 @@ type Network interface {
 
 	// WaitForEpochChange waits until the epoch changes.
 	WaitForEpochChange() error
+
+	// ReconnectNode re-establishes peer connections between the given
+	// node and the rest of the network. Use after an in-place sonicd
+	// restart where the node's peer table was lost.
+	ReconnectNode(ctx context.Context, node Node) error
+
+	// SuspendNode notifies listeners that the given node is temporarily
+	// unavailable (e.g. sonicd was killed). Monitoring sensors will stop
+	// polling this node until ResumeNode is called.
+	SuspendNode(node Node)
+
+	// ResumeNode notifies listeners that the given node is available
+	// again (e.g. sonicd was restarted after heal). Monitoring sensors
+	// will resume polling this node.
+	ResumeNode(node Node)
 }
 
 // NetworkConfig is a collection of network parameters to be used by factories

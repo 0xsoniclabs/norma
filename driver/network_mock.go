@@ -143,6 +143,20 @@ func (mr *MockNetworkMockRecorder) GetActiveNodes() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveNodes", reflect.TypeOf((*MockNetwork)(nil).GetActiveNodes))
 }
 
+// ReconnectNode mocks base method.
+func (m *MockNetwork) ReconnectNode(ctx context.Context, node Node) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReconnectNode", ctx, node)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ReconnectNode indicates an expected call of ReconnectNode.
+func (mr *MockNetworkMockRecorder) ReconnectNode(ctx, node any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReconnectNode", reflect.TypeOf((*MockNetwork)(nil).ReconnectNode), ctx, node)
+}
+
 // RegisterListener mocks base method.
 func (m *MockNetwork) RegisterListener(arg0 NetworkListener) {
 	m.ctrl.T.Helper()
@@ -169,6 +183,18 @@ func (mr *MockNetworkMockRecorder) RemoveNode(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveNode", reflect.TypeOf((*MockNetwork)(nil).RemoveNode), arg0)
 }
 
+// ResumeNode mocks base method.
+func (m *MockNetwork) ResumeNode(node Node) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ResumeNode", node)
+}
+
+// ResumeNode indicates an expected call of ResumeNode.
+func (mr *MockNetworkMockRecorder) ResumeNode(node any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResumeNode", reflect.TypeOf((*MockNetwork)(nil).ResumeNode), node)
+}
+
 // SendTransaction mocks base method.
 func (m *MockNetwork) SendTransaction(tx *types.Transaction, source string) {
 	m.ctrl.T.Helper()
@@ -193,6 +219,18 @@ func (m *MockNetwork) Shutdown() error {
 func (mr *MockNetworkMockRecorder) Shutdown() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Shutdown", reflect.TypeOf((*MockNetwork)(nil).Shutdown))
+}
+
+// SuspendNode mocks base method.
+func (m *MockNetwork) SuspendNode(node Node) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SuspendNode", node)
+}
+
+// SuspendNode indicates an expected call of SuspendNode.
+func (mr *MockNetworkMockRecorder) SuspendNode(node any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SuspendNode", reflect.TypeOf((*MockNetwork)(nil).SuspendNode), node)
 }
 
 // UnregisterListener mocks base method.

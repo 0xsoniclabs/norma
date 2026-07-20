@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -222,17 +223,17 @@ func StartOperaDockerNode(
 	// --- Exec-based startup sequence ---
 
 	// Initialize datadir with sonictool.
-	if err = Initialize(ctx, node); err != nil {
+	if err = node.Initialize(ctx); err != nil {
 		return nil, fmt.Errorf("failed to initialize datadir: %w", err)
 	}
 
 	// Start sonicd in the background.
-	if err = StartSonicd(ctx, node); err != nil {
+	if err = node.StartSonicd(ctx); err != nil {
 		return nil, fmt.Errorf("failed to start sonicd: %w", err)
 	}
 
 	// Wait for the node to sync and become ready.
-	if err = WaitForSync(ctx, node); err != nil {
+	if err = node.WaitForSync(ctx); err != nil {
 		return nil, errors.Join(
 			printLog(ctx, node),
 			fmt.Errorf("failed to get node online: %w", err),
@@ -262,8 +263,10 @@ func connectivityCheck(ctx context.Context, node *OperaNode) error {
 	return nil
 }
 
-// printLog streams and prints the logs of the given OperaNode, to debug cause of
-// startup failure.
+// printLog streams and prints the logs of the given OperaNode, to help
+// diagnose the cause of a startup failure. Emits structured slog
+// entries tagged with the node label so the output is greppable and
+// consistent with the rest of the driver's logging.
 func printLog(ctx context.Context, node *OperaNode) error {
 	reader, err := node.StreamLog(ctx)
 	if err != nil {
@@ -271,7 +274,9 @@ func printLog(ctx context.Context, node *OperaNode) error {
 	}
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
-		fmt.Printf("[Opera Node %s] %s\n", node.GetLabel(), scanner.Text())
+		slog.Info("opera node log",
+			"node", node.GetLabel(),
+			"line", scanner.Text())
 	}
 	return reader.Close()
 }
@@ -541,7 +546,7 @@ func (n *OperaNode) ExecDone() <-chan struct{} {
 // Stop stops the node's container and waits for it to exit.
 func (n *OperaNode) Stop(ctx context.Context) error {
 
-	if err := StopSonicd(ctx, n); err != nil {
+	if err := n.StopSonicd(ctx); err != nil {
 		return err
 	}
 
@@ -557,7 +562,10 @@ func (n *OperaNode) Stop(ctx context.Context) error {
 }
 
 func (n *OperaNode) Cleanup(ctx context.Context) error {
-	err := n.host.Cleanup(ctx)
+	var err error
+	if n.host != nil {
+		err = n.host.Cleanup(ctx)
+	}
 	for _, dir := range n.tempDirs {
 		if cleanupErr := os.RemoveAll(dir); cleanupErr != nil {
 			err = errors.Join(err, cleanupErr)
@@ -645,20 +653,29 @@ func (n *OperaNode) GetState() NodeState {
 	return n.state
 }
 
-// requireState checks that the node is in the expected state, returning an error if not.
-func (n *OperaNode) requireState(expected NodeState) error {
+// transition atomically moves the node from the expected `from` state to
+// the target `to` state. It returns an error if the current state does
+// not match `from`, which prevents concurrent actions from interleaving.
+// This is the only supported way to mutate the node's state.
+func (n *OperaNode) transition(from, to NodeState) error {
 	n.stateMutex.Lock()
 	defer n.stateMutex.Unlock()
-	if n.state != expected {
-		return fmt.Errorf("node %v is in state %v, expected %v", n.GetLabel(), n.state, expected)
+	if n.state != from {
+		return fmt.Errorf(
+			"node %q: cannot transition %s\u2192%s (currently %s)",
+			n.GetLabel(), from, to, n.state)
 	}
+	n.state = to
 	return nil
 }
 
-func (n *OperaNode) setState(newState NodeState) {
+// forceSetState unconditionally sets the node's state. It is intended
+// only for construction (setting the initial state) and must not be
+// used from action methods; use transition instead.
+func (n *OperaNode) forceSetState(s NodeState) {
 	n.stateMutex.Lock()
 	defer n.stateMutex.Unlock()
-	n.state = newState
+	n.state = s
 }
 
 // buildSonicdCmd constructs the sonicd command-line from the given
@@ -705,19 +722,4 @@ func buildSonicdCmd(
 	// captures sonicd output (exec stdout also goes to the log file).
 	shellCmd := strings.Join(args, " ") + " 2>&1 | tee /proc/1/fd/1"
 	return []string{"sh", "-c", shellCmd}
-}
-
-// isDirEmpty reports whether the directory at path contains no
-// entries (ignoring the "keystore" directory written before init).
-func isDirEmpty(path string) bool {
-	entries, err := os.ReadDir(path)
-	if err != nil {
-		return true
-	}
-	for _, e := range entries {
-		if e.Name() != "keystore" {
-			return false
-		}
-	}
-	return true
 }

@@ -255,7 +255,7 @@ func TestTransactionsThroughputSource_DisablesSyncingAfterFirstSuccessfulAppend(
 	}
 }
 
-func TestTransactionsThroughputSource_DoesNotSuppressAfterSyncingDisabled(t *testing.T) {
+func TestTransactionsThroughputSource_SuppressesAfterResync(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	net := driver.NewMockNetwork(ctrl)
@@ -273,7 +273,12 @@ func TestTransactionsThroughputSource_DoesNotSuppressAfterSyncingDisabled(t *tes
 	source.OnBlock(node, monitoring.Block{Height: 10, Time: baseTime, Txs: 1})
 	source.OnBlock(node, monitoring.Block{Height: 11, Time: baseTime.Add(time.Second), Txs: 1})
 
-	if source.shouldSuppressAppendConflict(node, monitoring.ErrOutOfOrderAppend) {
-		t.Fatalf("out-of-order conflict should not be suppressed after syncing is disabled")
+	// After successful appends the node is synced. An out-of-order
+	// error at this point means the node restarted, so suppress it.
+	if !source.shouldSuppressAppendConflict(node, monitoring.ErrOutOfOrderAppend) {
+		t.Fatalf("out-of-order conflict should be suppressed (node restarted)")
+	}
+	if !source.isNodeSyncing(node) {
+		t.Fatalf("node should be re-marked as syncing after out-of-order conflict")
 	}
 }

@@ -84,6 +84,12 @@ type Container struct {
 // ExecHandle represents a background exec process running inside a
 // container. It provides access to the exec ID and a channel that is
 // closed when the output streaming goroutine finishes.
+//
+// Note: Docker's ContainerExecInspect.Pid returns the host-namespace
+// PID, which is not usable for `kill` executed inside the container
+// (different PID namespace). Callers that need to signal the process
+// must discover its container-namespace PID from inside the container
+// (see OperaNode.signalSonicd).
 type ExecHandle struct {
 	ExecID string
 	Done   <-chan struct{}

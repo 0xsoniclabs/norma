@@ -160,7 +160,7 @@ func TestBlockNodeMetricSource_DisablesSyncingAfterFirstSuccessfulAppend(t *test
 	}
 }
 
-func TestBlockNodeMetricSource_DoesNotSuppressAfterSyncingDisabled(t *testing.T) {
+func TestBlockNodeMetricSource_SuppressesAfterResync(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	net := driver.NewMockNetwork(ctrl)
@@ -176,8 +176,15 @@ func TestBlockNodeMetricSource_DoesNotSuppressAfterSyncingDisabled(t *testing.T)
 	node := monitoring.Node("A")
 	source.OnBlock(node, monitoring.Block{Height: 10, Time: time.Unix(100, 0)})
 
-	if source.shouldSuppressAppendConflict(node, monitoring.ErrOutOfOrderAppend) {
-		t.Fatalf("out-of-order conflict should not be suppressed after syncing is disabled")
+	// After a successful append the node is synced. An out-of-order
+	// error at this point means the node restarted and is re-syncing,
+	// so the conflict should be suppressed and the node re-marked as
+	// syncing.
+	if !source.shouldSuppressAppendConflict(node, monitoring.ErrOutOfOrderAppend) {
+		t.Fatalf("out-of-order conflict should be suppressed (node restarted)")
+	}
+	if !source.isNodeSyncing(node) {
+		t.Fatalf("node should be re-marked as syncing after out-of-order conflict")
 	}
 }
 
