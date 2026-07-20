@@ -1,6 +1,7 @@
 package network
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	big "math/big"
@@ -19,8 +20,8 @@ import (
 )
 
 // AdvanceEpoch triggers the sealing of an epoch advancing it by the given number.
-// The function blocks until the final epoch has been reached
-func AdvanceEpoch(client rpc.Client, epochIncrement int) error {
+// The function blocks until the final epoch has been reached.
+func AdvanceEpoch(ctx context.Context, client rpc.Client, epochIncrement int) error {
 	contract, err := driverauth100.NewContract(driverauth.ContractAddress, client)
 	if err != nil {
 		return fmt.Errorf("failed to get driver auth contract representation; %v", err)
@@ -40,6 +41,7 @@ func AdvanceEpoch(client rpc.Client, epochIncrement int) error {
 	if err != nil {
 		return fmt.Errorf("failed to create txOpts; %v", err)
 	}
+	txOpts.Context = ctx
 	txOpts.GasTipCap = systemTxGasTipCap
 	txOpts.GasLimit = systemTxGasLimit
 
@@ -48,7 +50,7 @@ func AdvanceEpoch(client rpc.Client, epochIncrement int) error {
 		return fmt.Errorf("failed to advance epoch; %v", err)
 	}
 
-	rec, err := client.WaitTransactionReceipt(tx.Hash())
+	rec, err := client.WaitTransactionReceipt(ctx, tx.Hash())
 	if err != nil {
 		return fmt.Errorf("failed to get receipt; %v", err)
 	}
@@ -60,6 +62,9 @@ func AdvanceEpoch(client rpc.Client, epochIncrement int) error {
 	// wait until the new epoch has actually started
 	start := time.Now()
 	for time.Since(start) < 60*time.Second {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("aborted while waiting for epoch to advance: %w", err)
+		}
 		newEpoch, err := GetCurrentEpoch(client)
 		if err != nil {
 			return fmt.Errorf("failed to get current epoch after advancing: %w", err)
@@ -68,7 +73,11 @@ func AdvanceEpoch(client rpc.Client, epochIncrement int) error {
 			logEpochSummary(client)
 			return nil
 		}
-		time.Sleep(100 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("aborted while waiting for epoch to advance: %w", ctx.Err())
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
 
 	return fmt.Errorf("failed to advance epoch: waited too long for the epoch to be advanced")
@@ -76,7 +85,7 @@ func AdvanceEpoch(client rpc.Client, epochIncrement int) error {
 
 // WaitForEpochChange waits until the current epoch changes. It polls the
 // network until a new epoch is observed or a timeout of 60 seconds is reached.
-func WaitForEpochChange(client rpc.Client) error {
+func WaitForEpochChange(ctx context.Context, client rpc.Client) error {
 	currentEpoch, err := GetCurrentEpoch(client)
 	if err != nil {
 		return fmt.Errorf("failed to get current epoch: %w", err)
@@ -84,6 +93,9 @@ func WaitForEpochChange(client rpc.Client) error {
 
 	start := time.Now()
 	for time.Since(start) < 60*time.Second {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("aborted while waiting for epoch to change: %w", err)
+		}
 		newEpoch, err := GetCurrentEpoch(client)
 		if err != nil {
 			return fmt.Errorf("failed to get epoch while waiting: %w", err)
@@ -93,7 +105,11 @@ func WaitForEpochChange(client rpc.Client) error {
 			logEpochSummary(client)
 			return nil
 		}
-		time.Sleep(100 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("aborted while waiting for epoch to change: %w", ctx.Err())
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
 
 	return fmt.Errorf("timed out waiting for epoch to change from %d", uint64(currentEpoch))

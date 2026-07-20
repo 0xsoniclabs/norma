@@ -43,31 +43,31 @@ func (m *MockNetwork) EXPECT() *MockNetworkMockRecorder {
 }
 
 // AdvanceEpoch mocks base method.
-func (m *MockNetwork) AdvanceEpoch(epochIncrement int) error {
+func (m *MockNetwork) AdvanceEpoch(ctx context.Context, epochIncrement int) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AdvanceEpoch", epochIncrement)
+	ret := m.ctrl.Call(m, "AdvanceEpoch", ctx, epochIncrement)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AdvanceEpoch indicates an expected call of AdvanceEpoch.
-func (mr *MockNetworkMockRecorder) AdvanceEpoch(epochIncrement any) *gomock.Call {
+func (mr *MockNetworkMockRecorder) AdvanceEpoch(ctx, epochIncrement any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdvanceEpoch", reflect.TypeOf((*MockNetwork)(nil).AdvanceEpoch), epochIncrement)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdvanceEpoch", reflect.TypeOf((*MockNetwork)(nil).AdvanceEpoch), ctx, epochIncrement)
 }
 
 // ApplyNetworkRules mocks base method.
-func (m *MockNetwork) ApplyNetworkRules(rules NetworkRules) error {
+func (m *MockNetwork) ApplyNetworkRules(ctx context.Context, rules NetworkRules) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ApplyNetworkRules", rules)
+	ret := m.ctrl.Call(m, "ApplyNetworkRules", ctx, rules)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ApplyNetworkRules indicates an expected call of ApplyNetworkRules.
-func (mr *MockNetworkMockRecorder) ApplyNetworkRules(rules any) *gomock.Call {
+func (mr *MockNetworkMockRecorder) ApplyNetworkRules(ctx, rules any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyNetworkRules", reflect.TypeOf((*MockNetwork)(nil).ApplyNetworkRules), rules)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyNetworkRules", reflect.TypeOf((*MockNetwork)(nil).ApplyNetworkRules), ctx, rules)
 }
 
 // CreateApplication mocks base method.
@@ -208,17 +208,17 @@ func (mr *MockNetworkMockRecorder) UnregisterListener(arg0 any) *gomock.Call {
 }
 
 // WaitForEpochChange mocks base method.
-func (m *MockNetwork) WaitForEpochChange() error {
+func (m *MockNetwork) WaitForEpochChange(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WaitForEpochChange")
+	ret := m.ctrl.Call(m, "WaitForEpochChange", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // WaitForEpochChange indicates an expected call of WaitForEpochChange.
-func (mr *MockNetworkMockRecorder) WaitForEpochChange() *gomock.Call {
+func (mr *MockNetworkMockRecorder) WaitForEpochChange(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForEpochChange", reflect.TypeOf((*MockNetwork)(nil).WaitForEpochChange))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForEpochChange", reflect.TypeOf((*MockNetwork)(nil).WaitForEpochChange), ctx)
 }
 
 // MockNetworkListener is a mock of NetworkListener interface.

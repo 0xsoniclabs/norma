@@ -96,13 +96,13 @@ type Network interface {
 	DialRandomRpc() (rpc.Client, error)
 
 	// ApplyNetworkRules applies the given network rules to the network.
-	ApplyNetworkRules(rules NetworkRules) error
+	ApplyNetworkRules(ctx context.Context, rules NetworkRules) error
 
 	// AdvanceEpoch advances an epoch by the given number.
-	AdvanceEpoch(epochIncrement int) error
+	AdvanceEpoch(ctx context.Context, epochIncrement int) error
 
 	// WaitForEpochChange waits until the epoch changes.
-	WaitForEpochChange() error
+	WaitForEpochChange(ctx context.Context) error
 }
 
 // NetworkConfig is a collection of network parameters to be used by factories

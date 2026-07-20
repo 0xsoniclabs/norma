@@ -55,8 +55,8 @@ type Client interface {
 	// WaitTransactionReceipt waits for the transaction receipt of the given transaction hash.
 	// It returns an error if the receipt could not be obtained within a certain time frame.
 	// This method retries with exponential backoff to fetch the transaction receipt,
-	//  until a certain timeout is reached.
-	WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
+	//  until a certain timeout is reached or the context is cancelled.
+	WaitTransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 
 	// GetTransactionPoolStatus queries the transaction pool for the given transaction hash
 	// and returns whether it is pending, queued, or not present in the pool.
@@ -109,15 +109,22 @@ func (r Impl) Call(result interface{}, method string, args ...interface{}) error
 	return r.rpcClient.Call(result, method, args...)
 }
 
-func (r Impl) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error) {
+func (r Impl) WaitTransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
 	// Wait for the response with some exponential backoff.
 	const maxDelay = 5 * time.Second
 	begin := time.Now()
 	delay := time.Millisecond
 	for time.Since(begin) < r.txReceiptTimeout {
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("aborted while waiting for transaction receipt: %w", err)
+		}
 		receipt, err := r.transactionReceipt(txHash)
 		if errors.Is(err, ethereum.NotFound) {
-			time.Sleep(delay)
+			select {
+			case <-ctx.Done():
+				return nil, fmt.Errorf("aborted while waiting for transaction receipt: %w", ctx.Err())
+			case <-time.After(delay):
+			}
 			delay = 2 * delay
 			if delay > maxDelay {
 				delay = maxDelay

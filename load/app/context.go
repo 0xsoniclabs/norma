@@ -128,7 +128,7 @@ func (c *appContext) GetTransactOptions(account *Account) (*bind.TransactOpts, e
 
 // GetReceipt blocks until the receipt is available or the RPC client times out.
 func (c *appContext) GetReceipt(txHash common.Hash) (*types.Receipt, error) {
-	return c.rpcClient.WaitTransactionReceipt(txHash)
+	return c.rpcClient.WaitTransactionReceipt(context.Background(), txHash)
 }
 
 // Apply sends a transaction to the network using the network's validator account

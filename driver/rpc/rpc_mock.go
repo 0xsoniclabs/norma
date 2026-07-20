@@ -362,18 +362,18 @@ func (mr *MockClientMockRecorder) WaitForBundleInfo(ctx, planHash any) *gomock.C
 }
 
 // WaitTransactionReceipt mocks base method.
-func (m *MockClient) WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error) {
+func (m *MockClient) WaitTransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WaitTransactionReceipt", txHash)
+	ret := m.ctrl.Call(m, "WaitTransactionReceipt", ctx, txHash)
 	ret0, _ := ret[0].(*types.Receipt)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // WaitTransactionReceipt indicates an expected call of WaitTransactionReceipt.
-func (mr *MockClientMockRecorder) WaitTransactionReceipt(txHash any) *gomock.Call {
+func (mr *MockClientMockRecorder) WaitTransactionReceipt(ctx, txHash any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitTransactionReceipt", reflect.TypeOf((*MockClient)(nil).WaitTransactionReceipt), txHash)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitTransactionReceipt", reflect.TypeOf((*MockClient)(nil).WaitTransactionReceipt), ctx, txHash)
 }
 
 // MockethRpcClient is a mock of ethRpcClient interface.

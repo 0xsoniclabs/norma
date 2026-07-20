@@ -360,34 +360,34 @@ func (n *LocalNetwork) DialRandomRpc() (rpcdriver.Client, error) {
 	return nil, fmt.Errorf("no reachable node found among %d active nodes", len(reliable))
 }
 
-func (n *LocalNetwork) ApplyNetworkRules(rules driver.NetworkRules) error {
+func (n *LocalNetwork) ApplyNetworkRules(ctx context.Context, rules driver.NetworkRules) error {
 	client, err := n.DialRandomRpc()
 	if err != nil {
 		return fmt.Errorf("failed to connect to network: %w", err)
 	}
 	defer client.Close()
 
-	return network.ApplyNetworkRules(client, rules)
+	return network.ApplyNetworkRules(ctx, client, rules)
 }
 
-func (n *LocalNetwork) AdvanceEpoch(epochIncrement int) error {
+func (n *LocalNetwork) AdvanceEpoch(ctx context.Context, epochIncrement int) error {
 	client, err := n.DialRandomRpc()
 	if err != nil {
 		return fmt.Errorf("failed to connect to network: %w", err)
 	}
 	defer client.Close()
 
-	return network.AdvanceEpoch(client, epochIncrement)
+	return network.AdvanceEpoch(ctx, client, epochIncrement)
 }
 
-func (n *LocalNetwork) WaitForEpochChange() error {
+func (n *LocalNetwork) WaitForEpochChange(ctx context.Context) error {
 	client, err := n.DialRandomRpc()
 	if err != nil {
 		return fmt.Errorf("failed to connect to network: %w", err)
 	}
 	defer client.Close()
 
-	return network.WaitForEpochChange(client)
+	return network.WaitForEpochChange(ctx, client)
 }
 
 // treasureAccountPrivateKey is an account with tokens that can be used to

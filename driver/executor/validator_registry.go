@@ -17,6 +17,7 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -28,8 +29,8 @@ import (
 // validatorRegistry abstracts how an executor registers and unregisters
 // validator nodes with the network.
 type validatorRegistry interface {
-	registerNewValidator(stake uint64) (int, error)
-	unregisterValidator(validatorId int, stake uint64) error
+	registerNewValidator(ctx context.Context, stake uint64) (int, error)
+	unregisterValidator(ctx context.Context, validatorId int, stake uint64) error
 }
 
 // netBasedValidatorRegistry is the production implementation of
@@ -39,26 +40,26 @@ type netBasedValidatorRegistry struct {
 	net driver.Network
 }
 
-func (a netBasedValidatorRegistry) registerNewValidator(stake uint64) (int, error) {
+func (a netBasedValidatorRegistry) registerNewValidator(ctx context.Context, stake uint64) (int, error) {
 	rpcClient, err := a.net.DialRandomRpc()
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect to RPC; %v", err)
 	}
 	defer rpcClient.Close()
-	id, err := network.RegisterValidatorNode(rpcClient, stake)
+	id, err := network.RegisterValidatorNode(ctx, rpcClient, stake)
 	if err != nil {
 		return 0, fmt.Errorf("failed to register validator node; %v", err)
 	}
 	return id, nil
 }
 
-func (a netBasedValidatorRegistry) unregisterValidator(validatorId int, stake uint64) error {
+func (a netBasedValidatorRegistry) unregisterValidator(ctx context.Context, validatorId int, stake uint64) error {
 	rpcClient, err := a.net.DialRandomRpc()
 	if err != nil {
 		return fmt.Errorf("failed to connect to RPC; %v", err)
 	}
 	defer rpcClient.Close()
-	err = network.UnregisterValidatorNode(rpcClient, validatorId, stake)
+	err = network.UnregisterValidatorNode(ctx, rpcClient, validatorId, stake)
 	if err != nil {
 		return fmt.Errorf("failed to unregister validator node; %v", err)
 	}

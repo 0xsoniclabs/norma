@@ -221,23 +221,23 @@ func executeStep(
 	case parser.FuncStopNode:
 		return execStopNode(ctx, step, net, state)
 	case parser.FuncUndelegate:
-		return execUndelegate(step, net, registry, state)
+		return execUndelegate(ctx, step, net, registry, state)
 	case parser.FuncRunApp:
 		return execRunApp(ctx, step, net, state)
 	case parser.FuncStopApp:
 		return execStopApp(step, state)
 	case parser.FuncUpdateRules:
-		return execUpdateRules(step, net)
+		return execUpdateRules(ctx, step, net)
 	case parser.FuncAdvanceEpoch:
 		if err := waitForBlockProduction(ctx, net); err != nil {
 			return err
 		}
-		if err := net.AdvanceEpoch(1); err != nil {
+		if err := net.AdvanceEpoch(ctx, 1); err != nil {
 			return err
 		}
 		return waitForBlockProduction(ctx, net)
 	case parser.FuncWaitForEpoch:
-		return net.WaitForEpochChange()
+		return net.WaitForEpochChange(ctx)
 	case parser.FuncChecks:
 		for i, spec := range step.SubChecks {
 			checkerName, ok := checkFunctionToCheckerName[spec.Function]
@@ -329,7 +329,7 @@ func execStartNode(
 					instanceName,
 				)
 			} else {
-				id, err := registry.registerNewValidator(stakeAmount)
+				id, err := registry.registerNewValidator(ctx, stakeAmount)
 				if err != nil {
 					return fmt.Errorf("failed to register validator %s: %w",
 						instanceName, err,
@@ -504,6 +504,7 @@ func execStopNode(
 
 // execUndelegate undelegates stake from one or more validator nodes.
 func execUndelegate(
+	ctx context.Context,
 	step *parser.Step,
 	net driver.Network,
 	registry validatorRegistry,
@@ -536,7 +537,7 @@ func execUndelegate(
 			stakeAmount = *target.Stake
 		}
 		// stakeAmount=0 → UnregisterValidatorNode queries self-stake on-chain
-		if err := registry.unregisterValidator(*id, stakeAmount); err != nil {
+		if err := registry.unregisterValidator(ctx, *id, stakeAmount); err != nil {
 			return fmt.Errorf("failed to unregister validator %s: %w", target.Node, err)
 		}
 	}
@@ -613,9 +614,9 @@ func execStopApp(step *parser.Step, state *runState) error {
 }
 
 // execUpdateRules applies network rule updates.
-func execUpdateRules(step *parser.Step, net driver.Network) error {
+func execUpdateRules(ctx context.Context, step *parser.Step, net driver.Network) error {
 	rules := driver.NetworkRules(step.Rules)
-	if err := net.ApplyNetworkRules(rules); err != nil {
+	if err := net.ApplyNetworkRules(ctx, rules); err != nil {
 		return fmt.Errorf("failed to apply network rules: %w", err)
 	}
 

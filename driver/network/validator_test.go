@@ -1,6 +1,7 @@
 package network
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"testing"
@@ -12,9 +13,9 @@ import (
 
 func TestRegisterValidatorNode_Success(t *testing.T) {
 	mockBackendForCreateValidator(t, func(backend *MockContractBackend) {
-		backend.EXPECT().WaitTransactionReceipt(gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil)
+		backend.EXPECT().WaitTransactionReceipt(gomock.Any(), gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil)
 
-		valId, err := RegisterValidatorNode(backend, 0)
+		valId, err := RegisterValidatorNode(context.Background(), backend, 0)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
@@ -26,9 +27,9 @@ func TestRegisterValidatorNode_Success(t *testing.T) {
 
 func TestRegisterValidatorNode_Failure(t *testing.T) {
 	mockBackendForCreateValidator(t, func(backend *MockContractBackend) {
-		backend.EXPECT().WaitTransactionReceipt(gomock.Any()).Return(nil, fmt.Errorf("failed to get receipt")).AnyTimes()
+		backend.EXPECT().WaitTransactionReceipt(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("failed to get receipt")).AnyTimes()
 
-		if _, err := RegisterValidatorNode(backend, 0); err == nil {
+		if _, err := RegisterValidatorNode(context.Background(), backend, 0); err == nil {
 			t.Errorf("expected error, got %v", err)
 		}
 	})
@@ -36,9 +37,9 @@ func TestRegisterValidatorNode_Failure(t *testing.T) {
 
 func TestRegisterValidatorNode_Failure_TransactionReverted(t *testing.T) {
 	mockBackendForCreateValidator(t, func(backend *MockContractBackend) {
-		backend.EXPECT().WaitTransactionReceipt(gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusFailed}, nil).AnyTimes()
+		backend.EXPECT().WaitTransactionReceipt(gomock.Any(), gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusFailed}, nil).AnyTimes()
 
-		if _, err := RegisterValidatorNode(backend, 0); err == nil {
+		if _, err := RegisterValidatorNode(context.Background(), backend, 0); err == nil {
 			t.Errorf("expected error, got %v", err)
 		}
 	})

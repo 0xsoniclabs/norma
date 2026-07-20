@@ -1,6 +1,7 @@
 package network
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -15,7 +16,7 @@ import (
 )
 
 // ApplyNetworkRules updates the network rules on the network.
-func ApplyNetworkRules(backend ContractBackend, rules genesis.NetworkRulesPatch) error {
+func ApplyNetworkRules(ctx context.Context, backend ContractBackend, rules genesis.NetworkRulesPatch) error {
 	// Bind contract to update network rules
 	contract, err := driverauth100.NewContract(driverauth.ContractAddress, backend)
 	if err != nil {
@@ -34,6 +35,7 @@ func ApplyNetworkRules(backend ContractBackend, rules genesis.NetworkRulesPatch)
 	if err != nil {
 		return fmt.Errorf("failed to create txOpts; %v", err)
 	}
+	txOpts.Context = ctx
 	txOpts.GasTipCap = systemTxGasTipCap
 	txOpts.GasLimit = systemTxGasLimit
 
@@ -42,7 +44,7 @@ func ApplyNetworkRules(backend ContractBackend, rules genesis.NetworkRulesPatch)
 		return fmt.Errorf("failed to update network rules; %v", err)
 	}
 
-	rec, err := backend.WaitTransactionReceipt(tx.Hash())
+	rec, err := backend.WaitTransactionReceipt(ctx, tx.Hash())
 	if err != nil {
 		return fmt.Errorf("failed to get receipt; %v", err)
 	}

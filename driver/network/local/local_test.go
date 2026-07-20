@@ -636,7 +636,7 @@ func TestLocalNetworkApplyNetworkRules_Success(t *testing.T) {
 		},
 	}
 
-	if err := net.ApplyNetworkRules(rules); err != nil {
+	if err := net.ApplyNetworkRules(t.Context(), rules); err != nil {
 		t.Errorf("failed to apply network rules: %v", err)
 	}
 
@@ -676,7 +676,7 @@ func TestLocalNetworkAdvanceEpoch_Success(t *testing.T) {
 	}
 
 	epochIncrement := 3 // takes ~5-6 seconds per increment
-	if err := net.AdvanceEpoch(epochIncrement); err != nil {
+	if err := net.AdvanceEpoch(t.Context(), epochIncrement); err != nil {
 		t.Errorf("failed to advance epoch: %v", err)
 	}
 
