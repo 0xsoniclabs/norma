@@ -42,6 +42,7 @@ func RegisterValidatorNode(ctx context.Context, backend ContractBackend, stake u
 	if err != nil {
 		return 0, fmt.Errorf("failed to create txOpts; %v", err)
 	}
+	txOpts.Context = ctx
 	txOpts.GasTipCap = systemTxGasTipCap
 	txOpts.GasLimit = systemTxGasLimit
 
@@ -94,6 +95,7 @@ func UnregisterValidatorNode(ctx context.Context, client rpc.Client, validatorId
 	if err != nil {
 		return fmt.Errorf("failed to create txOpts; %v", err)
 	}
+	txOpts.Context = ctx
 	txOpts.GasTipCap = systemTxGasTipCap
 	txOpts.GasLimit = systemTxGasLimit
 

@@ -38,7 +38,7 @@ func TestGenerators_Bundles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	appCtx, err := app.NewContext(net, primaryAccount, rules)
+	appCtx, err := app.NewContext(context.Background(), net, primaryAccount, rules)
 	if err != nil {
 		t.Fatal(err)
 	}

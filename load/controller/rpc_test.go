@@ -52,7 +52,7 @@ func TestTrafficGenerating(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	appContext, err := app.NewContext(net, primaryAccount, driver.NetworkRules{})
+	appContext, err := app.NewContext(context.Background(), net, primaryAccount, driver.NetworkRules{})
 	if err != nil {
 		t.Fatal(err)
 	}

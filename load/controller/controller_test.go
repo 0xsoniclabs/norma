@@ -85,7 +85,7 @@ func TestLoadGeneration_CanRealizeConstantTrafficShape(t *testing.T) {
 			clientFactory.EXPECT().DialRandomRpc().AnyTimes().Return(rpcClient, nil)
 
 			shaper := shaper.NewConstantShaper(float64(rate))
-			appContext, err := app.NewContext(clientFactory, treasure, driver.NetworkRules{})
+			appContext, err := app.NewContext(context.Background(), clientFactory, treasure, driver.NetworkRules{})
 			if err != nil {
 				t.Fatalf("failed to create app context: %v", err)
 			}

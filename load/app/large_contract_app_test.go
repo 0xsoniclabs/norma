@@ -17,6 +17,7 @@
 package app_test
 
 import (
+	"context"
 	"math/big"
 	"strings"
 	"testing"
@@ -60,7 +61,7 @@ func TestLargeContractDeploymentFailsWithoutBrio(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctxt, err := app.NewContext(net, primaryAccount, rules)
+	ctxt, err := app.NewContext(context.Background(), net, primaryAccount, rules)
 	if err != nil {
 		t.Fatal(err)
 	}

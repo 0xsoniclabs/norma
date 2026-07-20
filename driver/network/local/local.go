@@ -454,11 +454,11 @@ func (n *LocalNetwork) ensureAppContext() error {
 	if n.appContext != nil {
 		return nil
 	}
-	ctx, err := app.NewContext(n, n.primaryAccount, n.config.NetworkRules)
+	appCtx, err := app.NewContext(n.ctx, n, n.primaryAccount, n.config.NetworkRules)
 	if err != nil {
 		return fmt.Errorf("failed to create app context: %w", err)
 	}
-	n.appContext = ctx
+	n.appContext = appCtx
 	return nil
 }
 

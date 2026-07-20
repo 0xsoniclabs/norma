@@ -361,7 +361,7 @@ func dumpNodeLogs(ctx context.Context, net driver.Network) {
 				slog.Error("failed to stream log", "node", node.GetLabel(), "error", err)
 				return
 			}
-			data, err := io.ReadAll(reader)
+			data, err := io.ReadAll(io.LimitReader(reader, 1<<20))
 			_ = reader.Close()
 
 			if len(data) > 0 {

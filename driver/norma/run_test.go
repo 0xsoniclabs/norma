@@ -26,17 +26,6 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-// ctxBlockingReader mimics a docker follow log stream on a running container:
-// Read never returns EOF and only unblocks when the context is cancelled.
-type ctxBlockingReader struct{ ctx context.Context }
-
-func (r *ctxBlockingReader) Read([]byte) (int, error) {
-	<-r.ctx.Done()
-	return 0, r.ctx.Err()
-}
-
-func (r *ctxBlockingReader) Close() error { return nil }
-
 // TestDumpNodeLogs_BoundedForRunningNode is a regression test: dumpNodeLogs must
 // return even when a node's log stream never reaches EOF.
 func TestDumpNodeLogs_BoundedForRunningNode(t *testing.T) {
@@ -67,3 +56,14 @@ func TestDumpNodeLogs_BoundedForRunningNode(t *testing.T) {
 		t.Fatal("dumpNodeLogs blocked on a running node's follow stream")
 	}
 }
+
+// ctxBlockingReader mimics a docker follow log stream on a running container:
+// Read never returns EOF and only unblocks when the context is cancelled.
+type ctxBlockingReader struct{ ctx context.Context }
+
+func (r *ctxBlockingReader) Read([]byte) (int, error) {
+	<-r.ctx.Done()
+	return 0, r.ctx.Err()
+}
+
+func (r *ctxBlockingReader) Close() error { return nil }
