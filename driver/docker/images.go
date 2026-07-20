@@ -287,9 +287,11 @@ func deduplicateAndSort(in []string) []string {
 // Starting from startDir, it walks up parent directories until it finds a
 // directory containing both:
 //   - Dockerfile
+//   - Makefile
 //
-// This guards against running docker build in unrelated directories while
-// keeping call sites simple.
+// This guards against running docker build in unrelated directories
+// (e.g. the vendored `sonic/` sub-tree, which also has a Dockerfile)
+// while keeping call sites simple.
 func resolveBuildRoot(startDir string) (string, error) {
 	return ResolveBuildRoot(startDir)
 }
@@ -299,9 +301,11 @@ func resolveBuildRoot(startDir string) (string, error) {
 // Starting from startDir, it walks up parent directories until it finds a
 // directory containing both:
 //   - Dockerfile
+//   - Makefile
 //
-// This guards against running docker build in unrelated directories while
-// keeping call sites simple.
+// This guards against running docker build in unrelated directories
+// (e.g. the vendored `sonic/` sub-tree, which also has a Dockerfile)
+// while keeping call sites simple.
 func ResolveBuildRoot(startDir string) (string, error) {
 	dir, err := filepath.Abs(startDir)
 	if err != nil {
@@ -309,7 +313,8 @@ func ResolveBuildRoot(startDir string) (string, error) {
 	}
 
 	for {
-		if fileExists(filepath.Join(dir, "Dockerfile")) {
+		if fileExists(filepath.Join(dir, "Dockerfile")) &&
+			fileExists(filepath.Join(dir, "Makefile")) {
 			return dir, nil
 		}
 
@@ -320,7 +325,7 @@ func ResolveBuildRoot(startDir string) (string, error) {
 		dir = parent
 	}
 
-	return "", errors.New("unable to locate norma build root with Dockerfile")
+	return "", errors.New("unable to locate norma build root with Dockerfile and Makefile")
 }
 
 // fileExists reports whether path exists and is a regular file-like entry

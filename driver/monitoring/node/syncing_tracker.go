@@ -63,5 +63,14 @@ func (s *syncingTracker) shouldSuppressAppendConflict(node monitoring.Node, err 
 	if !monitoring.IsOutOfOrderAppendError(err) {
 		return false
 	}
-	return s.isNodeSyncing(node)
+	if s.isNodeSyncing(node) {
+		return true
+	}
+	// The node was marked as synced but produced an out-of-order block,
+	// which means it restarted and is re-syncing. Force syncing state
+	// so subsequent out-of-order errors are suppressed.
+	s.syncingMutex.Lock()
+	s.syncingNodes[node] = true
+	s.syncingMutex.Unlock()
+	return true
 }

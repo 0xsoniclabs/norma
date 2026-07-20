@@ -1,0 +1,33 @@
+Name: db-heal
+Description: >
+  Kills a validator's sonicd process with SIGKILL (leaving the DB dirty),
+  runs sonictool heal, and confirms the node re-syncs with the network.
+
+Scenario:
+  - startNode: validator-1
+    type: validator
+    extraArguments: "--statedb.checkpointinterval 1"
+  - startNode: validator-2
+    type: validator
+  - startNode: validator-3
+    type: validator
+  - startNode: validator-4
+    type: validator
+  - waitFor: 10s
+
+  # Kill sonicd with SIGKILL — DB left dirty, container still running
+  - killSonic: validator-1
+
+  # Heal the database in-place
+  - healDb: validator-1
+
+  # Restart normally — should sync back up
+  - startNode: validator-1
+    type: validator
+
+  - waitFor: 10s
+
+  # All 4 validators should be at the same block height
+  - checks:
+    - blockHeights:
+        tolerance: 5
