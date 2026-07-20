@@ -3,7 +3,6 @@ package checking
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"maps"
 	"reflect"
 	"sort"
@@ -83,7 +82,6 @@ func (c *networkRulesChecker) Check(ctx context.Context) error {
 	}
 
 	deadline := time.Now().Add(c.timeout)
-	logged := false
 	ticker := time.NewTicker(networkRulesPollInterval)
 	defer ticker.Stop()
 
@@ -95,10 +93,6 @@ func (c *networkRulesChecker) Check(ctx context.Context) error {
 		if time.Now().After(deadline) {
 			return err
 		}
-		if !logged {
-			slog.Info("network rules not yet applied on all nodes; waiting for convergence", "timeout", c.timeout)
-			logged = true
-		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -109,7 +103,6 @@ func (c *networkRulesChecker) Check(ctx context.Context) error {
 
 func (c *networkRulesChecker) checkOnce(ctx context.Context) error {
 	nodes := c.net.GetActiveNodes()
-	slog.Info("checking applied network rules for nodes", "count", len(nodes))
 
 	expectedFailures := make(map[string]struct{})
 	gotFailures := make(map[string]struct{})
