@@ -3,11 +3,11 @@ package checking
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"maps"
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
@@ -15,9 +15,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// defaultNetworkRulesTimeout bounds how long Check waits for a rule update to
+// propagate to all nodes. Rules apply per node at the epoch seal, so a node
+// can briefly lag the one observed by waitForEpoch.
+const defaultNetworkRulesTimeout = 30 * time.Second
+
+// networkRulesPollInterval is the delay between convergence polls. Var so tests
+// can shorten it.
+var networkRulesPollInterval = 500 * time.Millisecond
+
 func init() {
 	RegisterNetworkCheck("networkRules", func(net driver.Network, monitor *monitoring.Monitor) Checker {
-		return &networkRulesChecker{net: net}
+		return &networkRulesChecker{net: net, timeout: defaultNetworkRulesTimeout}
 	})
 }
 
@@ -27,6 +36,8 @@ type networkRulesChecker struct {
 	net          driver.Network
 	rulesPatch   genesis.NetworkRulesPatch
 	configureErr error
+	// timeout bounds convergence polling. Zero means a single attempt.
+	timeout time.Duration
 }
 
 // Configure returns a copy of the checker with an optional rules patch from config.
@@ -39,6 +50,7 @@ func (c *networkRulesChecker) Configure(config CheckerConfig) Checker {
 		net:          c.net,
 		rulesPatch:   c.rulesPatch,
 		configureErr: c.configureErr,
+		timeout:      c.timeout,
 	}
 
 	rules, exists := config["rules"]
@@ -65,8 +77,32 @@ func (c *networkRulesChecker) Check(ctx context.Context) error {
 		return nil
 	}
 
+	if c.timeout <= 0 {
+		return c.checkOnce(ctx)
+	}
+
+	deadline := time.Now().Add(c.timeout)
+	ticker := time.NewTicker(networkRulesPollInterval)
+	defer ticker.Stop()
+
+	for {
+		err := c.checkOnce(ctx)
+		if err == nil {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func (c *networkRulesChecker) checkOnce(ctx context.Context) error {
 	nodes := c.net.GetActiveNodes()
-	slog.Info("checking applied network rules for nodes", "count", len(nodes))
 
 	expectedFailures := make(map[string]struct{})
 	gotFailures := make(map[string]struct{})

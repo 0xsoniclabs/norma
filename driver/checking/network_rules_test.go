@@ -5,6 +5,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/rpc"
@@ -150,6 +151,70 @@ func TestNetworkRulesChecker_Check_ExpectedFailingNode(t *testing.T) {
 
 	if err := checker.Check(t.Context()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestNetworkRulesChecker_Check_ConvergesAfterLag(t *testing.T) {
+	prev := networkRulesPollInterval
+	networkRulesPollInterval = time.Millisecond
+	defer func() { networkRulesPollInterval = prev }()
+
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	node := driver.NewMockNode(ctrl)
+	rpcClient := rpc.NewMockClient(ctrl)
+
+	old := opera.FakeNetRules(opera.GetSonicUpgrades())
+	updated := old
+	patch := genesis.NetworkRulesPatch{Blocks: &genesis.BlocksPatch{MaxBlockGas: new(uint64(20500000000))}}
+	if err := genesis.ApplyNetworkRulesPatch(&updated, patch); err != nil {
+		t.Fatalf("failed to prepare updated rules: %v", err)
+	}
+
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{node}).AnyTimes()
+	node.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
+	node.EXPECT().GetLabel().AnyTimes().Return("node-1")
+	node.EXPECT().DialRpc(gomock.Any()).Return(rpcClient, nil).AnyTimes()
+	rpcClient.EXPECT().Close().AnyTimes()
+	// The node reports the old rules first, then converges to the new ones.
+	gomock.InOrder(
+		rpcClient.EXPECT().GetNetworkRules("latest").Return(old, nil),
+		rpcClient.EXPECT().GetNetworkRules("latest").Return(updated, nil),
+	)
+
+	checker := &networkRulesChecker{net: net, rulesPatch: patch, timeout: 5 * time.Second}
+	if err := checker.Check(t.Context()); err != nil {
+		t.Fatalf("expected convergence, got: %v", err)
+	}
+}
+
+func TestNetworkRulesChecker_Check_ReturnsMismatchAfterTimeout(t *testing.T) {
+	prev := networkRulesPollInterval
+	networkRulesPollInterval = time.Millisecond
+	defer func() { networkRulesPollInterval = prev }()
+
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	node := driver.NewMockNode(ctrl)
+	rpcClient := rpc.NewMockClient(ctrl)
+
+	old := opera.FakeNetRules(opera.GetSonicUpgrades())
+
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{node}).AnyTimes()
+	node.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
+	node.EXPECT().GetLabel().AnyTimes().Return("node-1")
+	node.EXPECT().DialRpc(gomock.Any()).Return(rpcClient, nil).AnyTimes()
+	rpcClient.EXPECT().GetNetworkRules("latest").Return(old, nil).AnyTimes()
+	rpcClient.EXPECT().Close().AnyTimes()
+
+	checker := &networkRulesChecker{
+		net:        net,
+		rulesPatch: genesis.NetworkRulesPatch{Blocks: &genesis.BlocksPatch{MaxBlockGas: new(uint64(20500000000))}},
+		timeout:    20 * time.Millisecond,
+	}
+	err := checker.Check(t.Context())
+	if err == nil || !strings.Contains(err.Error(), "applied network rules mismatch") {
+		t.Fatalf("expected mismatch error after timeout, got: %v", err)
 	}
 }
 
