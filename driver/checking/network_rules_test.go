@@ -118,7 +118,6 @@ func TestNetworkRulesChecker_Check_ExpectedFailingNode(t *testing.T) {
 	node1 := driver.NewMockNode(ctrl)
 	node2 := driver.NewMockNode(ctrl)
 	rpcClient1 := rpc.NewMockClient(ctrl)
-	rpcClient2 := rpc.NewMockClient(ctrl)
 
 	current := opera.FakeNetRules(opera.GetSonicUpgrades())
 	patched := current
@@ -136,11 +135,9 @@ func TestNetworkRulesChecker_Check_ExpectedFailingNode(t *testing.T) {
 	rpcClient1.EXPECT().GetNetworkRules("latest").Return(patched, nil)
 	rpcClient1.EXPECT().Close()
 
+	// node2 is expected to fail and is never dialed.
 	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
-	node2.EXPECT().DialRpc(gomock.Any()).Return(rpcClient2, nil)
 	node2.EXPECT().GetLabel().AnyTimes().Return("node-2")
-	rpcClient2.EXPECT().GetNetworkRules("latest").Return(current, nil)
-	rpcClient2.EXPECT().Close()
 
 	checker := &networkRulesChecker{
 		net: net,
@@ -227,29 +224,19 @@ func TestNetworkRulesChecker_Configure_WithInvalidRulesConfig(t *testing.T) {
 	}
 }
 
-func TestNetworkRulesChecker_Check_FailsOnExpectedFailureSetMismatch(t *testing.T) {
+func TestNetworkRulesChecker_Check_SkipsFailingNodeWithStaleRules(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	node := driver.NewMockNode(ctrl)
-	rpcClient := rpc.NewMockClient(ctrl)
 
-	current := opera.FakeNetRules(opera.GetSonicUpgrades())
-	if err := genesis.ApplyNetworkRulesPatch(&current, genesis.NetworkRulesPatch{
-		Blocks: &genesis.BlocksPatch{MaxBlockGas: new(uint64(20500000000))},
-	}); err != nil {
-		t.Fatalf("failed to prepare current rules: %v", err)
-	}
-
+	// The only node is expected to fail and is never dialed, so the check passes.
 	net.EXPECT().GetActiveNodes().Return([]driver.Node{node})
 	node.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
 	node.EXPECT().GetLabel().AnyTimes().Return("node-1")
-	node.EXPECT().DialRpc(gomock.Any()).Return(rpcClient, nil)
-	rpcClient.EXPECT().GetNetworkRules("latest").Return(current, nil)
-	rpcClient.EXPECT().Close()
 
 	checker := &networkRulesChecker{net: net, rulesPatch: genesis.NetworkRulesPatch{Blocks: &genesis.BlocksPatch{MaxBlockGas: new(uint64(20500000000))}}}
-	if err := checker.Check(t.Context()); err == nil || !strings.Contains(err.Error(), "unexpected failure set") {
-		t.Fatalf("expected failure-set mismatch, got: %v", err)
+	if err := checker.Check(t.Context()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

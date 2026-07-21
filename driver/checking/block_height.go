@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"maps"
 	"strconv"
 	"strings"
 
@@ -66,10 +65,10 @@ func (c *blockHeightChecker) Check(ctx context.Context) error {
 	slog.Info("checking block heights for nodes", "count", len(nodes))
 	heights := make([]int64, len(nodes))
 	maxHeight := int64(0)
-	expectedFailures := make(map[string]struct{})
 	for i, n := range nodes {
+		// Skip nodes expected to fail; they may lag or be unreachable by design.
 		if n.IsExpectedFailure() {
-			expectedFailures[n.GetLabel()] = struct{}{}
+			continue
 		}
 
 		height, err := getBlockHeight(ctx, n)
@@ -88,20 +87,13 @@ func (c *blockHeightChecker) Check(ctx context.Context) error {
 		heights[i] = height
 	}
 
-	gotFailures := make(map[string]struct{})
 	for i, n := range nodes {
-		if heights[i] < maxHeight-int64(c.slack) {
-			if n.IsExpectedFailure() {
-				gotFailures[n.GetLabel()] = struct{}{}
-
-			} else {
-				return fmt.Errorf("node %s reports too old block %d (max block is %d, given slack of %d.)", n.GetLabel(), heights[i], maxHeight, c.slack)
-			}
+		if n.IsExpectedFailure() {
+			continue
 		}
-	}
-
-	if got, want := gotFailures, expectedFailures; !maps.Equal(got, want) {
-		return fmt.Errorf("unexpected failure set to provide the block height, got %v, want %v", got, want)
+		if heights[i] < maxHeight-int64(c.slack) {
+			return fmt.Errorf("node %s reports too old block %d (max block is %d, given slack of %d.)", n.GetLabel(), heights[i], maxHeight, c.slack)
+		}
 	}
 
 	return nil

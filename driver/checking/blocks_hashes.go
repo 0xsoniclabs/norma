@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"maps"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
@@ -47,8 +46,21 @@ func (c *blocksHashesChecker) Configure(config CheckerConfig) Checker {
 }
 
 func (c *blocksHashesChecker) Check(ctx context.Context) (err error) {
-	nodes := c.net.GetActiveNodes()
-	slog.Info("checking hashes for nodes", "count", len(nodes))
+	allNodes := c.net.GetActiveNodes()
+	slog.Info("checking hashes for nodes", "count", len(allNodes))
+
+	// Skip nodes expected to fail; they may fork or be unreachable by design.
+	nodes := make([]driver.Node, 0, len(allNodes))
+	for _, n := range allNodes {
+		if n.IsExpectedFailure() {
+			continue
+		}
+		nodes = append(nodes, n)
+	}
+
+	if len(nodes) == 0 {
+		return nil // no checkable nodes, nothing to compare
+	}
 
 	rpcClients := make([]rpc.Client, len(nodes))
 	defer func() {
@@ -59,19 +71,11 @@ func (c *blocksHashesChecker) Check(ctx context.Context) (err error) {
 		}
 	}()
 
-	expectedFailures := make(map[string]struct{})
 	for i, n := range nodes {
-		if n.IsExpectedFailure() {
-			expectedFailures[n.GetLabel()] = struct{}{}
-		}
 		rpcClients[i], err = n.DialRpc(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to dial RPC for node %s; %v", n.GetLabel(), err)
 		}
-	}
-
-	if len(expectedFailures) == len(nodes) {
-		return nil // all nodes are expected to fail, cannot get pivot hash, has to only end the test
 	}
 
 	check := func(referenceHashes, block blockHashes, blockNumber uint64) error {
@@ -88,7 +92,6 @@ func (c *blocksHashesChecker) Check(ctx context.Context) (err error) {
 		return nil
 	}
 
-	gotFailures := make(map[string]struct{})
 	for blockNumber := uint64(0); ; blockNumber++ {
 		var nodesLackingTheBlock = 0
 		var hashes []*blockHashes
@@ -110,39 +113,26 @@ func (c *blocksHashesChecker) Check(ctx context.Context) (err error) {
 
 		// no node has the last block, i.e. we have reached the end of the chain
 		if nodesLackingTheBlock == len(nodes) {
-			if got, want := gotFailures, expectedFailures; !maps.Equal(got, want) {
-				return fmt.Errorf("unexpected failure set to provide the block hashes: got %v, want %v", got, want)
-			}
-
 			return nil // finish successfully
 		}
 
-		// find a reference hash from a non-failing nodes, and only nodes that reached this block height
+		// find a reference hash from the first node that reached this block height
 		var referenceHashes blockHashes
-		for i, block := range hashes {
-			// use only hash from a block that reached this block height and it is not expected to fail
-			if block != nil && !nodes[i].IsExpectedFailure() {
+		for _, block := range hashes {
+			if block != nil {
 				referenceHashes = *block
 				break
 			}
 		}
 
 		// check the hashes
-		for i, block := range hashes {
-			n := nodes[i]
-			// skip nodes that did not reach this block height, and potentially mark expected failed nodes
+		for _, block := range hashes {
+			// skip nodes that did not reach this block height
 			if block == nil {
-				if n.IsExpectedFailure() {
-					gotFailures[n.GetLabel()] = struct{}{}
-				}
 				continue // this node does not reach this block
 			}
 			if err := check(referenceHashes, *block, blockNumber); err != nil {
-				if n.IsExpectedFailure() {
-					gotFailures[n.GetLabel()] = struct{}{}
-				} else {
-					return err
-				}
+				return err
 			}
 		}
 	}

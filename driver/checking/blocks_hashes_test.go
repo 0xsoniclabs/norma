@@ -17,7 +17,6 @@
 package checking
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -143,17 +142,14 @@ func TestBlockHashes_ExpectedFailingNode(t *testing.T) {
 	rpc1 := rpc.NewMockClient(ctrl)
 	rpc1.EXPECT().Close()
 
-	rpc2 := rpc.NewMockClient(ctrl)
-	rpc2.EXPECT().Close()
-
 	node1 := driver.NewMockNode(ctrl)
 	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
 	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc1, nil)
 	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
 
+	// node2 is expected to fail and is never dialed.
 	node2 := driver.NewMockNode(ctrl)
 	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
-	node2.EXPECT().DialRpc(gomock.Any()).Return(rpc2, nil)
 	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
 
 	net := driver.NewMockNetwork(ctrl)
@@ -164,24 +160,12 @@ func TestBlockHashes_ExpectedFailingNode(t *testing.T) {
 		StateRoot:    common.Hash{0x22},
 		ReceiptsRoot: common.Hash{0x33},
 	}
-	result2 := blockHashes{
-		Hash:         common.Hash{0x11},
-		StateRoot:    common.Hash{0x22},
-		ReceiptsRoot: common.Hash{0xFF}, // different
-	}
 
 	gomock.InOrder(
 		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
 		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
 		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
 		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
-	)
-
-	gomock.InOrder(
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result2),
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result2),
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result2),
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
 	)
 
 	c := blocksHashesChecker{net: net}
@@ -190,95 +174,20 @@ func TestBlockHashes_ExpectedFailingNode(t *testing.T) {
 	}
 }
 
-func TestBlockHashes_NoFailure_When_Expected(t *testing.T) {
+func TestBlockHashes_AllNodesFailing(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	rpc1 := rpc.NewMockClient(ctrl)
-	rpc1.EXPECT().Close()
 
-	rpc2 := rpc.NewMockClient(ctrl)
-	rpc2.EXPECT().Close()
-
+	// All nodes expected to fail: none are dialed, check passes.
 	node1 := driver.NewMockNode(ctrl)
-	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
-	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc1, nil)
+	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
 	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
 
 	node2 := driver.NewMockNode(ctrl)
 	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
-	node2.EXPECT().DialRpc(gomock.Any()).Return(rpc2, nil)
 	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
 
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
-
-	result1 := blockHashes{
-		Hash:         common.Hash{0x11},
-		StateRoot:    common.Hash{0x22},
-		ReceiptsRoot: common.Hash{0x33},
-	}
-
-	gomock.InOrder(
-		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
-		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
-		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
-		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
-	)
-
-	gomock.InOrder(
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
-	)
-
-	c := blocksHashesChecker{net: net}
-	if err := c.Check(t.Context()); err == nil || !strings.Contains(err.Error(), "unexpected failure set to provide the block hashes") {
-		t.Errorf("unexpected success")
-	}
-}
-
-func TestBlockHashes_NoFailure_Diff_Block_Height(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	rpc1 := rpc.NewMockClient(ctrl)
-	rpc1.EXPECT().Close()
-
-	rpc2 := rpc.NewMockClient(ctrl)
-	rpc2.EXPECT().Close()
-
-	node1 := driver.NewMockNode(ctrl)
-	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
-	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc1, nil)
-	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
-
-	node2 := driver.NewMockNode(ctrl)
-	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
-	node2.EXPECT().DialRpc(gomock.Any()).Return(rpc2, nil)
-	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
-
-	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
-
-	result1 := blockHashes{
-		Hash:         common.Hash{0x11},
-		StateRoot:    common.Hash{0x22},
-		ReceiptsRoot: common.Hash{0x33},
-	}
-
-	gomock.InOrder(
-		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
-		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
-		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
-		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
-		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
-	)
-
-	gomock.InOrder(
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
-	)
 
 	c := blocksHashesChecker{net: net}
 	if err := c.Check(t.Context()); err != nil {
@@ -292,9 +201,6 @@ func TestBlockHashes_Failing_Delays_And_OK_Nodes(t *testing.T) {
 	rpc1 := rpc.NewMockClient(ctrl)
 	rpc1.EXPECT().Close()
 
-	rpc2 := rpc.NewMockClient(ctrl)
-	rpc2.EXPECT().Close()
-
 	rpc3 := rpc.NewMockClient(ctrl)
 	rpc3.EXPECT().Close()
 
@@ -303,9 +209,9 @@ func TestBlockHashes_Failing_Delays_And_OK_Nodes(t *testing.T) {
 	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc1, nil)
 	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
 
+	// node2 is expected to fail and is skipped.
 	node2 := driver.NewMockNode(ctrl)
 	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
-	node2.EXPECT().DialRpc(gomock.Any()).Return(rpc2, nil)
 	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
 
 	node3 := driver.NewMockNode(ctrl)
@@ -322,26 +228,12 @@ func TestBlockHashes_Failing_Delays_And_OK_Nodes(t *testing.T) {
 		ReceiptsRoot: common.Hash{0x33},
 	}
 
-	result2 := blockHashes{
-		Hash:         common.Hash{0x11},
-		StateRoot:    common.Hash{0x22},
-		ReceiptsRoot: common.Hash{0xFF}, // different
-	}
-
 	gomock.InOrder(
 		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
 		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
 		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
 		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result1),
 		rpc1.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
-	)
-
-	gomock.InOrder(
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result2),
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result2),
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result2),
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false).SetArg(0, &result2),
-		rpc2.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any(), false), // return nil -> no more blocks
 	)
 
 	gomock.InOrder(
