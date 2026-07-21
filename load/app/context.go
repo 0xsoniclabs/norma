@@ -57,6 +57,10 @@ type RpcClientFactory interface {
 // cancelling it (for example on a check failure or timeout) aborts pending
 // receipt waits and RPC calls.
 func NewContext(ctx context.Context, factory RpcClientFactory, treasury *Account, networkRules genesis.NetworkRulesPatch) (AppContext, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context cannot be nil")
+	}
+
 	rpcClient, err := factory.DialRandomRpc()
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to network: %w", err)
