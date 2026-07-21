@@ -21,7 +21,7 @@ func TestApplyNetworkRules_Success(t *testing.T) {
 	backend.EXPECT().HeaderByNumber(gomock.Any(), gomock.Any()).Return(&header, nil)
 	backend.EXPECT().PendingNonceAt(gomock.Any(), gomock.Any()).Return(uint64(0), nil)
 	backend.EXPECT().SendTransaction(gomock.Any(), gomock.Any()).Return(nil)
-	backend.EXPECT().WaitTransactionReceipt(gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil)
+	backend.EXPECT().WaitTransactionReceipt(gomock.Any(), gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil)
 
 	fee := genesis.BigIntValue(*big.NewInt(456))
 	rules := genesis.NetworkRulesPatch{
@@ -30,7 +30,7 @@ func TestApplyNetworkRules_Success(t *testing.T) {
 		},
 	}
 
-	if err := ApplyNetworkRules(backend, rules); err != nil {
+	if err := ApplyNetworkRules(t.Context(), backend, rules); err != nil {
 		t.Errorf("failed to apply network rules: %v", err)
 	}
 }

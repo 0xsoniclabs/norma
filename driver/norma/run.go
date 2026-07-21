@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
@@ -339,23 +340,39 @@ func openBrowser(s string) error {
 	return cmd.Start()
 }
 
+// logDumpTimeout bounds each node log read, since StreamLog follows the
+// container and never reaches EOF for a running node. Var so tests can shorten it.
+var logDumpTimeout = 20 * time.Second
+
 // dumpNodeLogs prints the logs of all active nodes to help diagnose failures.
 func dumpNodeLogs(ctx context.Context, net driver.Network) {
 	nodes := net.GetActiveNodes()
+	var wg sync.WaitGroup
 	for _, node := range nodes {
-		reader, err := node.StreamLog(ctx)
-		if err != nil {
-			slog.Error("failed to stream log", "node", node.GetLabel(), "error", err)
-			continue
-		}
-		data, err := io.ReadAll(reader)
-		_ = reader.Close()
-		if err != nil {
-			slog.Error("failed to read log", "node", node.GetLabel(), "error", err)
-			continue
-		}
-		slog.Error("node log on failure", "node", node.GetLabel(), "log", string(data))
+		wg.Add(1)
+		go func(node driver.Node) {
+			defer wg.Done()
+
+			logCtx, cancel := context.WithTimeout(ctx, logDumpTimeout)
+			defer cancel()
+
+			reader, err := node.StreamLog(logCtx)
+			if err != nil {
+				slog.Error("failed to stream log", "node", node.GetLabel(), "error", err)
+				return
+			}
+			data, err := io.ReadAll(io.LimitReader(reader, 1<<20))
+			_ = reader.Close()
+
+			if len(data) > 0 {
+				slog.Error("node log on failure", "node", node.GetLabel(), "log", string(data))
+			}
+			if err != nil && logCtx.Err() == nil {
+				slog.Error("failed to read log", "node", node.GetLabel(), "error", err)
+			}
+		}(node)
 	}
+	wg.Wait()
 }
 
 func appendScenarioStepTimings(

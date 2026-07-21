@@ -37,7 +37,7 @@ func TestAdvanceEpoch_Success(t *testing.T) {
 	client.EXPECT().HeaderByNumber(gomock.Any(), gomock.Any()).Return(&header, nil)
 	client.EXPECT().PendingNonceAt(gomock.Any(), gomock.Any()).Return(uint64(0), nil)
 	client.EXPECT().SendTransaction(gomock.Any(), gomock.Any()).Return(nil)
-	client.EXPECT().WaitTransactionReceipt(gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil)
+	client.EXPECT().WaitTransactionReceipt(gomock.Any(), gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil)
 
 	// Report the updated epoch after advancing.
 	client.EXPECT().Call(gomock.Any(), "eth_currentEpoch").DoAndReturn(
@@ -52,7 +52,7 @@ func TestAdvanceEpoch_Success(t *testing.T) {
 	client.EXPECT().CallContract(any, any, any).Return(nil, nil)
 	client.EXPECT().CodeAt(any, any, any).Return(bytecode, nil)
 
-	if err := AdvanceEpoch(client, 1); err != nil {
+	if err := AdvanceEpoch(t.Context(), client, 1); err != nil {
 		t.Errorf("failed to advance epoch: %v", err)
 	}
 }

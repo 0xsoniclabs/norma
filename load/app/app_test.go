@@ -127,7 +127,7 @@ func TestGenerators(t *testing.T) {
 			primaryAccount, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
 			require.NoError(t, err, "failed to create primary account")
 
-			appCtx, err := app.NewContext(net, primaryAccount, rules)
+			appCtx, err := app.NewContext(context.Background(), net, primaryAccount, rules)
 			require.NoError(t, err, "failed to create application context")
 
 			for name, test := range tests {
@@ -191,7 +191,7 @@ func TestGenerators_Subsidies(t *testing.T) {
 	primaryAccount, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
 	require.NoError(t, err, "failed to create primary account")
 
-	appCtx, err := app.NewContext(net, primaryAccount, rules)
+	appCtx, err := app.NewContext(context.Background(), net, primaryAccount, rules)
 	require.NoError(t, err, "failed to create application context")
 
 	subsidiesApp, err := app.NewSubsidiesApplication(appCtx, 0, 0)

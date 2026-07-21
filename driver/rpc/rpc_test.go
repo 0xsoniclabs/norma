@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"strings"
@@ -49,7 +50,7 @@ func TestRpcClientImpl_WaitTransactionReceipt_Success(t *testing.T) {
 			return nil
 		})
 
-	receipt, err := client.WaitTransactionReceipt(common.Hash{})
+	receipt, err := client.WaitTransactionReceipt(context.Background(), common.Hash{})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -84,7 +85,7 @@ func TestRpcClientImpl_WaitTransactionReceipt_Timeout(t *testing.T) {
 		Call(gomock.Any(), "txpool_content", gomock.Any()).
 		MinTimes(1)
 
-	if _, err := client.WaitTransactionReceipt(common.Hash{}); err == nil || err.Error() != "failed to get transaction receipt: timeout, transaction pool status: not present" {
+	if _, err := client.WaitTransactionReceipt(context.Background(), common.Hash{}); err == nil || err.Error() != "failed to get transaction receipt: timeout, transaction pool status: not present" {
 		t.Fatalf("expected timeout error, got %v", err)
 	}
 }
@@ -107,7 +108,7 @@ func TestRpcClientImpl_WaitTransactionReceipt_Error(t *testing.T) {
 		Return(injectedError).
 		Times(1)
 
-	if _, err := client.WaitTransactionReceipt(common.Hash{}); !errors.Is(err, injectedError) {
+	if _, err := client.WaitTransactionReceipt(context.Background(), common.Hash{}); !errors.Is(err, injectedError) {
 		t.Fatalf("expected error %v, got %v", injectedError, err)
 	}
 }

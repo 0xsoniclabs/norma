@@ -59,10 +59,10 @@ func TestRun_StartAndStopNode(t *testing.T) {
 
 	validatorId := 2
 	gomock.InOrder(
-		registry.EXPECT().registerNewValidator(uint64(0)).Return(validatorId, nil),
+		registry.EXPECT().registerNewValidator(gomock.Any(), uint64(0)).Return(validatorId, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
 		node.EXPECT().GetValidatorId().Return(&validatorId),
-		registry.EXPECT().unregisterValidator(validatorId, gomock.Any()).Return(nil),
+		registry.EXPECT().unregisterValidator(gomock.Any(), validatorId, gomock.Any()).Return(nil),
 		net.EXPECT().RemoveNode(node).Return(nil),
 		node.EXPECT().Stop(gomock.Any()).Return(nil),
 		node.EXPECT().Cleanup(gomock.Any()).Return(nil),
@@ -110,7 +110,7 @@ func TestRun_StartNode_ForwardsCustomStake(t *testing.T) {
 
 	gomock.InOrder(
 		registry.EXPECT().
-			registerNewValidator(customStake).
+			registerNewValidator(gomock.Any(), customStake).
 			Return(validatorId, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
 	)
@@ -151,12 +151,12 @@ func TestRun_UndelegateSingleInstanceWithSuffix(t *testing.T) {
 
 	validatorId := 2
 	gomock.InOrder(
-		registry.EXPECT().registerNewValidator(uint64(0)).
+		registry.EXPECT().registerNewValidator(gomock.Any(), uint64(0)).
 			Return(validatorId, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
 		node.EXPECT().GetValidatorId().Return(&validatorId),
 		registry.EXPECT().
-			unregisterValidator(validatorId, uint64(0)).Return(nil),
+			unregisterValidator(gomock.Any(), validatorId, uint64(0)).Return(nil),
 	)
 
 	instances := 1
@@ -215,8 +215,8 @@ func TestRun_UndelegateMultiInstance(t *testing.T) {
 			node1.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 
 			instances := 2
-			registry.EXPECT().registerNewValidator(gomock.Any()).Return(2, nil)
-			registry.EXPECT().registerNewValidator(gomock.Any()).Return(3, nil)
+			registry.EXPECT().registerNewValidator(gomock.Any(), gomock.Any()).Return(2, nil)
+			registry.EXPECT().registerNewValidator(gomock.Any(), gomock.Any()).Return(3, nil)
 			net.EXPECT().CreateNode(gomock.Any()).DoAndReturn(func(config *driver.NodeConfig) (driver.Node, error) {
 				if config.Name == "validators-0" {
 					return node0, nil
@@ -227,7 +227,7 @@ func TestRun_UndelegateMultiInstance(t *testing.T) {
 			if !tc.expectErr {
 				validatorId0 := 2
 				node0.EXPECT().GetValidatorId().Return(&validatorId0)
-				registry.EXPECT().unregisterValidator(validatorId0, uint64(0)).Return(nil)
+				registry.EXPECT().unregisterValidator(gomock.Any(), validatorId0, uint64(0)).Return(nil)
 			}
 
 			scenario := parser.Scenario{
@@ -271,7 +271,7 @@ func TestRun_StopNodeWithoutUndelegate(t *testing.T) {
 
 	validatorId := 2
 	gomock.InOrder(
-		registry.EXPECT().registerNewValidator(gomock.Any()).Return(validatorId, nil),
+		registry.EXPECT().registerNewValidator(gomock.Any(), gomock.Any()).Return(validatorId, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
 		// No unregister call expected
 		net.EXPECT().RemoveNode(node).Return(nil),
@@ -317,7 +317,7 @@ func TestRun_RejoinNode(t *testing.T) {
 	validatorId := 2
 	gomock.InOrder(
 		// First start: registers as new validator
-		registry.EXPECT().registerNewValidator(gomock.Any()).Return(validatorId, nil),
+		registry.EXPECT().registerNewValidator(gomock.Any(), gomock.Any()).Return(validatorId, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Do(func(config *driver.NodeConfig) {
 			if config.ValidatorId == nil || *config.ValidatorId != validatorId {
 				t.Errorf("first start: expected ValidatorId=%d, got %v", validatorId, config.ValidatorId)
@@ -404,7 +404,7 @@ func TestRun_UpdateRules(t *testing.T) {
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 	baseFee := genesis.BigIntValue(*big.NewInt(3000000000))
 
-	net.EXPECT().ApplyNetworkRules(driver.NetworkRules{
+	net.EXPECT().ApplyNetworkRules(gomock.Any(), driver.NetworkRules{
 		Economy: &genesis.EconomyPatch{
 			MinBaseFee: &baseFee,
 		},
@@ -434,7 +434,7 @@ func TestRun_AdvanceEpoch(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 
-	net.EXPECT().AdvanceEpoch(1).Return(nil)
+	net.EXPECT().AdvanceEpoch(gomock.Any(), 1).Return(nil)
 	// DialRandomRpc returns error so waitForBlockProduction is skipped.
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
 
@@ -517,7 +517,7 @@ func TestRun_MultiInstanceNode(t *testing.T) {
 	ids := make(chan int, 2)
 	ids <- 2
 	ids <- 3
-	registry.EXPECT().registerNewValidator(uint64(0)).DoAndReturn(func(stake uint64) (int, error) {
+	registry.EXPECT().registerNewValidator(gomock.Any(), uint64(0)).DoAndReturn(func(ctx context.Context, stake uint64) (int, error) {
 		return <-ids, nil
 	}).Times(2)
 

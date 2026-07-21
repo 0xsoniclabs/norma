@@ -17,6 +17,7 @@
 package network
 
 import (
+	"context"
 	"encoding/hex"
 	"strings"
 
@@ -32,8 +33,9 @@ import (
 type ContractBackend interface {
 	bind.ContractBackend
 	// WaitTransactionReceipt waits for the receipt of the given transaction hash to be available.
-	// The function times out after 10 seconds.
-	WaitTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
+	// The function returns early if the context is cancelled, and otherwise times out
+	// after a fixed period.
+	WaitTransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 
 	// GetNetworkRules returns network rules for the selected block (for example: "latest").
 	GetNetworkRules(block string) (opera.Rules, error)

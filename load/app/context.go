@@ -52,15 +52,22 @@ type RpcClientFactory interface {
 }
 
 // NewContext initializes an application context bound to a random RPC client,
-// treasury account, and the scenario network rules patch.
-func NewContext(factory RpcClientFactory, treasury *Account, networkRules genesis.NetworkRulesPatch) (AppContext, error) {
+// treasury account, and the scenario network rules patch. The provided context
+// is used for the network operations performed through this app context, so
+// cancelling it (for example on a check failure or timeout) aborts pending
+// receipt waits and RPC calls.
+func NewContext(ctx context.Context, factory RpcClientFactory, treasury *Account, networkRules genesis.NetworkRulesPatch) (AppContext, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context cannot be nil")
+	}
+
 	rpcClient, err := factory.DialRandomRpc()
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to network: %w", err)
 	}
 
-	// Create a context to interact with the network.
 	res := &appContext{
+		ctx:          ctx,
 		rpcClient:    rpcClient,
 		treasury:     treasury,
 		networkRules: networkRules,
@@ -70,6 +77,7 @@ func NewContext(factory RpcClientFactory, treasury *Account, networkRules genesi
 }
 
 type appContext struct {
+	ctx          context.Context  // < bounds network operations to the scenario lifetime
 	rpcClient    rpc.Client       // < access to the network
 	treasury     *Account         // < the account paying for management tasks
 	helper       *contract.Helper // < a contract used for on-chain operations
@@ -101,7 +109,7 @@ func (c *appContext) GetNetworkRules() genesis.NetworkRulesPatch {
 func (c *appContext) GetTransactOptions(account *Account) (*bind.TransactOpts, error) {
 	client := c.rpcClient
 
-	ctxt := context.Background()
+	ctxt := c.ctx
 	chainId, err := client.ChainID(ctxt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain ID: %w", err)
@@ -126,9 +134,10 @@ func (c *appContext) GetTransactOptions(account *Account) (*bind.TransactOpts, e
 	return txOpts, nil
 }
 
-// GetReceipt blocks until the receipt is available or the RPC client times out.
+// GetReceipt blocks until the receipt is available, the context is cancelled,
+// or the RPC client times out.
 func (c *appContext) GetReceipt(txHash common.Hash) (*types.Receipt, error) {
-	return c.rpcClient.WaitTransactionReceipt(txHash)
+	return c.rpcClient.WaitTransactionReceipt(c.ctx, txHash)
 }
 
 // Apply sends a transaction to the network using the network's validator account
@@ -189,7 +198,7 @@ func (c *appContext) FundAccounts(accounts []common.Address, value *big.Int) err
 		}
 		txs = append(txs, tx)
 
-		nonce, err := c.rpcClient.PendingNonceAt(context.Background(), c.GetTreasure().address)
+		nonce, err := c.rpcClient.PendingNonceAt(c.ctx, c.GetTreasure().address)
 		if err != nil {
 			return fmt.Errorf("failed to refresh pending nonce: %w", err)
 		}

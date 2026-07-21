@@ -1,6 +1,7 @@
 package network
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -22,7 +23,7 @@ const defaultStakePerValidator = uint64(5_000_000)
 
 // RegisterValidatorNode registers a validator in the SFC contract.
 // If stake is 0, the default stake of 5,000,000 S is used.
-func RegisterValidatorNode(backend ContractBackend, stake uint64) (int, error) {
+func RegisterValidatorNode(ctx context.Context, backend ContractBackend, stake uint64) (int, error) {
 	// get a representation of the deployed contract
 	SFCContract, err := sfc100.NewContract(sfc.ContractAddress, backend)
 	if err != nil {
@@ -41,6 +42,7 @@ func RegisterValidatorNode(backend ContractBackend, stake uint64) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to create txOpts; %v", err)
 	}
+	txOpts.Context = ctx
 	txOpts.GasTipCap = systemTxGasTipCap
 	txOpts.GasLimit = systemTxGasLimit
 
@@ -59,7 +61,7 @@ func RegisterValidatorNode(backend ContractBackend, stake uint64) (int, error) {
 		return 0, fmt.Errorf("failed to create validator; %v", err)
 	}
 
-	receipt, err := backend.WaitTransactionReceipt(tx.Hash())
+	receipt, err := backend.WaitTransactionReceipt(ctx, tx.Hash())
 	if err != nil {
 		return 0, fmt.Errorf("failed to create validator, receipt error: %v", err)
 	}
@@ -79,7 +81,7 @@ func RegisterValidatorNode(backend ContractBackend, stake uint64) (int, error) {
 // UnregisterValidatorNode undelegates a validator's self-stake from the SFC
 // contract. If stake is 0, the currently staked amount is queried on-chain via
 // GetSelfStake and used as the undelegate amount.
-func UnregisterValidatorNode(client rpc.Client, validatorId int, stake uint64) error {
+func UnregisterValidatorNode(ctx context.Context, client rpc.Client, validatorId int, stake uint64) error {
 	slog.Info("start unregistering validator node", "validator_id", validatorId)
 
 	// get a representation of the deployed contract
@@ -93,6 +95,7 @@ func UnregisterValidatorNode(client rpc.Client, validatorId int, stake uint64) e
 	if err != nil {
 		return fmt.Errorf("failed to create txOpts; %v", err)
 	}
+	txOpts.Context = ctx
 	txOpts.GasTipCap = systemTxGasTipCap
 	txOpts.GasLimit = systemTxGasLimit
 
@@ -114,7 +117,7 @@ func UnregisterValidatorNode(client rpc.Client, validatorId int, stake uint64) e
 		return fmt.Errorf("failed to undelegate validator stake; %v", err)
 	}
 
-	receipt, err := client.WaitTransactionReceipt(tx.Hash())
+	receipt, err := client.WaitTransactionReceipt(ctx, tx.Hash())
 	if err != nil {
 		return fmt.Errorf("failed to unregister validator, receipt error: %v", err)
 	}

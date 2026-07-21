@@ -10,6 +10,7 @@
 package executor
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -40,30 +41,30 @@ func (m *MockvalidatorRegistry) EXPECT() *MockvalidatorRegistryMockRecorder {
 }
 
 // registerNewValidator mocks base method.
-func (m *MockvalidatorRegistry) registerNewValidator(stake uint64) (int, error) {
+func (m *MockvalidatorRegistry) registerNewValidator(ctx context.Context, stake uint64) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "registerNewValidator", stake)
+	ret := m.ctrl.Call(m, "registerNewValidator", ctx, stake)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // registerNewValidator indicates an expected call of registerNewValidator.
-func (mr *MockvalidatorRegistryMockRecorder) registerNewValidator(stake any) *gomock.Call {
+func (mr *MockvalidatorRegistryMockRecorder) registerNewValidator(ctx, stake any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "registerNewValidator", reflect.TypeOf((*MockvalidatorRegistry)(nil).registerNewValidator), stake)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "registerNewValidator", reflect.TypeOf((*MockvalidatorRegistry)(nil).registerNewValidator), ctx, stake)
 }
 
 // unregisterValidator mocks base method.
-func (m *MockvalidatorRegistry) unregisterValidator(validatorId int, stake uint64) error {
+func (m *MockvalidatorRegistry) unregisterValidator(ctx context.Context, validatorId int, stake uint64) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "unregisterValidator", validatorId, stake)
+	ret := m.ctrl.Call(m, "unregisterValidator", ctx, validatorId, stake)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // unregisterValidator indicates an expected call of unregisterValidator.
-func (mr *MockvalidatorRegistryMockRecorder) unregisterValidator(validatorId, stake any) *gomock.Call {
+func (mr *MockvalidatorRegistryMockRecorder) unregisterValidator(ctx, validatorId, stake any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "unregisterValidator", reflect.TypeOf((*MockvalidatorRegistry)(nil).unregisterValidator), validatorId, stake)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "unregisterValidator", reflect.TypeOf((*MockvalidatorRegistry)(nil).unregisterValidator), ctx, validatorId, stake)
 }
