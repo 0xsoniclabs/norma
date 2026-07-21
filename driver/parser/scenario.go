@@ -53,6 +53,7 @@ const (
 	FuncCheckBlocksProduced StepFunction = "blocksProduced"
 	FuncCheckEventThrottled StepFunction = "eventThrottled"
 	FuncCheckNetworkRules   StepFunction = "networkRules"
+	FuncCheckFailingNodes   StepFunction = "failingNodes"
 )
 
 // allStepFunctions lists every known top-level step function constant.
@@ -78,6 +79,7 @@ var allCheckFunctions = [...]StepFunction{
 	FuncCheckBlocksProduced,
 	FuncCheckEventThrottled,
 	FuncCheckNetworkRules,
+	FuncCheckFailingNodes,
 }
 
 // toStepFunction returns the StepFunction for a given string, or an error if not recognized.
@@ -610,6 +612,7 @@ func (s *Scenario) setDefaults() {
 				SubChecks: []CheckSpec{
 					{Function: FuncCheckBlockHashes},
 					{Function: FuncCheckBlockHeights},
+					{Function: FuncCheckFailingNodes},
 				},
 			},
 		)
@@ -625,6 +628,7 @@ var checkFunctionDescriptions = map[StepFunction]string{
 	FuncCheckBlocksProduced: "Assert that all nodes have produced blocks within tolerance.",
 	FuncCheckEventThrottled: "Assert that validators listed in throttledNodes emit events at a significantly lower rate than the rest.",
 	FuncCheckNetworkRules:   "Assert that the active network rules on all nodes match the expected rules patch.",
+	FuncCheckFailingNodes:   "Assert that every node marked as failing actually deviated from the healthy majority (unreachable, behind, or forked).",
 }
 
 // checkFunctionParams lists the optional parameters accepted by each sub-check function.
@@ -636,6 +640,7 @@ var checkFunctionParams = map[StepFunction][]string{
 	FuncCheckBlocksProduced: {"tolerance", "duration", "failing"},
 	FuncCheckEventThrottled: {"throttledNodes", "failing"},
 	FuncCheckNetworkRules:   {"rules", "failing"},
+	FuncCheckFailingNodes:   {"tolerance", "failing"},
 }
 
 // checkParamDescriptions provides a human-readable description for each sub-check parameter.

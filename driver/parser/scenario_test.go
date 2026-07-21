@@ -490,6 +490,15 @@ Scenario:
 	require.Equal(t, FuncAdvanceEpoch, scenario.Steps[1].Function)
 	require.Equal(t, FuncAdvanceEpoch, scenario.Steps[2].Function)
 	require.Equal(t, FuncChecks, scenario.Steps[3].Function)
+
+	// Default end checks include the failing-nodes assertion.
+	endChecks := make([]StepFunction, 0, len(scenario.Steps[3].SubChecks))
+	for _, sub := range scenario.Steps[3].SubChecks {
+		endChecks = append(endChecks, sub.Function)
+	}
+	require.Contains(t, endChecks, FuncCheckBlockHashes)
+	require.Contains(t, endChecks, FuncCheckBlockHeights)
+	require.Contains(t, endChecks, FuncCheckFailingNodes)
 }
 
 func TestParseBytes_DisableEndChecks(t *testing.T) {

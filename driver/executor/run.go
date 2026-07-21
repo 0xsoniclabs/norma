@@ -632,6 +632,7 @@ var checkFunctionToCheckerName = map[parser.StepFunction]string{
 	parser.FuncCheckBlocksProduced: "blocksRolling",
 	parser.FuncCheckEventThrottled: "eventThrottled",
 	parser.FuncCheckNetworkRules:   "networkRules",
+	parser.FuncCheckFailingNodes:   "failingNodes",
 }
 
 // execCheck runs a named checker with configuration from the check spec.

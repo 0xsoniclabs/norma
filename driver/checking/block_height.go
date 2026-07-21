@@ -25,6 +25,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
+	"github.com/0xsoniclabs/norma/driver/rpc"
 )
 
 // allow block height to fall short by this amount
@@ -105,8 +106,13 @@ func getBlockHeight(ctx context.Context, n driver.Node) (int64, error) {
 		return 0, fmt.Errorf("failed to dial node RPC; %v", err)
 	}
 	defer rpcClient.Close()
+	return blockHeightFromClient(rpcClient)
+}
+
+// blockHeightFromClient returns the latest block height from a connected RPC client.
+func blockHeightFromClient(rpcClient rpc.Client) (int64, error) {
 	var blockNumber string
-	err = rpcClient.Call(&blockNumber, "eth_blockNumber")
+	err := rpcClient.Call(&blockNumber, "eth_blockNumber")
 	if err != nil {
 		return 0, fmt.Errorf("failed to get block number from RPC; %v", err)
 	}
