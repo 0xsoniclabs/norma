@@ -1,11 +1,11 @@
-Name: Rules Upgrade Allegro To Brio Mixed Versions v215 Forks
+Name: Rules Upgrade Allegro To Brio Mixed Versions Forks
 
 Description: >-
   Upgrades network rules from Allegro to Brio with mixed validator versions.
-  A sonic:v2.1.5 validator forks after Brio activation and is treated as
-  expected failing behavior, while sonic:v2.1.6 and sonic:local validators
-  keep the network online via stake majority. Brio-specific large contract
-  load executes after enabling Brio.
+  The sonic:v2.1.6 validator forks after Brio activation and is treated as
+  expected failing behavior, while the sonic:local validator keeps the network
+  online via stake majority. Brio-specific large contract load executes after
+  enabling Brio.
 
 InitialNetworkRules:
   Upgrades:
@@ -25,12 +25,6 @@ Scenario:
     type: validator
     imageName: "sonic:v2.1.6"
     stake: 2000000
-    failing: true
-
-  - startNode: validator-v215
-    type: validator
-    imageName: "sonic:v2.1.5"
-    stake: 1000000
     failing: true
 
   - runApp: baseline-counter
