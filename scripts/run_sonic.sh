@@ -44,11 +44,15 @@ else
 fi
 
 # Create config.toml
-# when network starts with only one genesis validator, then he will not wait to start emitting
-# if there are two or more validators at genesis they have to wait 5 seconds after connecting to the network
-# if another validator connects to the network during run it will wait also 5 seconds to start emitting
+# A single genesis validator bootstrapping a brand-new network must emit
+# immediately: there are no peers to sync with, and with a non-zero
+# DoublesignProtection it would wait for a peer connection forever.
+# In every other case — including that same validator rejoining an already
+# running network (NETWORK_BOOTSTRAP=0) — keep the protection, otherwise the
+# validator may emit before it has synced its own earlier events and fork
+# itself, which permanently stops the node.
 echo '[Emitter.EmitIntervals]' >> config.toml
-if [[ $VALIDATORS_COUNT == 1 && $VALIDATOR_ID == 1 ]]
+if [[ $VALIDATORS_COUNT == 1 && $VALIDATOR_ID == 1 && "${NETWORK_BOOTSTRAP:-1}" == "1" ]]
 then
   echo DoublesignProtection = 0 >> config.toml
 else

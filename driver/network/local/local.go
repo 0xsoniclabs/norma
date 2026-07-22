@@ -219,6 +219,9 @@ func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaN
 // createNode is an internal version of CreateNode enabling the creation
 // of validator and non-validator nodes in the network.
 func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNodeConfig) (*node.OperaNode, error) {
+	n.nodesMutex.Lock()
+	nodeConfig.NetworkBootstrap = len(n.nodes) == 0
+	n.nodesMutex.Unlock()
 	node, err := node.StartOperaDockerNode(ctx, n.docker, n.network, nodeConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start opera docker; %v", err)
