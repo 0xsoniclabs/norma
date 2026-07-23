@@ -99,6 +99,15 @@ type NetworkRulesPatch struct {
 	Blocks   *BlocksPatch   `yaml:"Blocks,omitempty" json:"Blocks,omitempty"`
 	Economy  *EconomyPatch  `yaml:"Economy,omitempty" json:"Economy,omitempty"`
 	Upgrades *UpgradesPatch `yaml:"Upgrades,omitempty" json:"Upgrades,omitempty"`
+
+	// UseConsensusChain is a norma-only genesis control, not an opera network
+	// rule: it seeds the on-chain useConsensusChain flag so the Sonic consensus
+	// engine is the canonical block producer from block one. It is honored only
+	// in a scenario's InitialNetworkRules and requires the RunConsensusChain
+	// upgrade. The json:"-" tag keeps it out of the rules patch sent to the
+	// on-chain UpdateNetworkRules call (where it is not a valid field); the
+	// runtime hand-over uses a dedicated contract setter instead.
+	UseConsensusChain *bool `yaml:"UseConsensusChain,omitempty" json:"-"`
 }
 
 func NewRulesPatchFromOperaRules(rules opera.Rules) (NetworkRulesPatch, error) {

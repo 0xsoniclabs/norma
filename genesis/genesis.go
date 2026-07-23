@@ -15,13 +15,16 @@ import (
 // GenerateJsonGenesis generates a genesis json file with the given number of validators
 // and network rules configurations.
 // The file is written to the given path.
-func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera.Rules) error {
+//
+// useConsensusChain seeds the on-chain useConsensusChain flag on, making the
+// Sonic consensus engine canonical from block one. It is independent of the
+// RunConsensusChain upgrade (which only builds and runs the engine, in shadow):
+// a network can run the engine in shadow from genesis and hand over at runtime.
+func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera.Rules, useConsensusChain bool) error {
 	jsonGenesis := makefakegenesis.GenerateFakeJsonGenesis(rules.Upgrades, validatorStakes)
 	jsonGenesis.Rules = *rules
 	jsonGenesis.BlockZeroTime = time.Unix(100, 0) // Genesis files must have the same timestamp across all nodes.
-	// When the consensus chain is enabled from genesis, run it canonically from
-	// block one instead of going through the runtime hand-over.
-	jsonGenesis.UseConsensusChain = rules.Upgrades.RunConsensusChain
+	jsonGenesis.UseConsensusChain = useConsensusChain
 
 	// Fund validator accounts beyond the initial set so that validators
 	// joining the network later in a scenario can pay for their stake.

@@ -238,6 +238,11 @@ func executeStep(
 		return waitForBlockProduction(ctx, net)
 	case parser.FuncWaitForEpoch:
 		return net.WaitForEpochChange(ctx)
+	case parser.FuncHandOver:
+		if err := net.HandOverToConsensusChain(ctx); err != nil {
+			return err
+		}
+		return waitForBlockProduction(ctx, net)
 	case parser.FuncChecks:
 		for i, spec := range step.SubChecks {
 			checkerName, ok := checkFunctionToCheckerName[spec.Function]
@@ -632,6 +637,7 @@ var checkFunctionToCheckerName = map[parser.StepFunction]string{
 	parser.FuncCheckBlocksProduced: "blocksRolling",
 	parser.FuncCheckEventThrottled: "eventThrottled",
 	parser.FuncCheckNetworkRules:   "networkRules",
+	parser.FuncCheckConsensusChain: "consensusChainActive",
 }
 
 // execCheck runs a named checker with configuration from the check spec.
@@ -695,7 +701,7 @@ func requiresBlockProductionCheck(step parser.Step) bool {
 	switch step.Function {
 	case parser.FuncStartNode:
 		return !step.Failing
-	case parser.FuncRunApp, parser.FuncUpdateRules, parser.FuncAdvanceEpoch:
+	case parser.FuncRunApp, parser.FuncUpdateRules, parser.FuncAdvanceEpoch, parser.FuncHandOver:
 		return true
 	default:
 		// stopNode, undelegate, waitFor, waitForEpoch, stopApp, checks — skip

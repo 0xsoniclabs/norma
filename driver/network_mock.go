@@ -143,6 +143,20 @@ func (mr *MockNetworkMockRecorder) GetActiveNodes() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveNodes", reflect.TypeOf((*MockNetwork)(nil).GetActiveNodes))
 }
 
+// HandOverToConsensusChain mocks base method.
+func (m *MockNetwork) HandOverToConsensusChain(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HandOverToConsensusChain", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// HandOverToConsensusChain indicates an expected call of HandOverToConsensusChain.
+func (mr *MockNetworkMockRecorder) HandOverToConsensusChain(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandOverToConsensusChain", reflect.TypeOf((*MockNetwork)(nil).HandOverToConsensusChain), ctx)
+}
+
 // RegisterListener mocks base method.
 func (m *MockNetwork) RegisterListener(arg0 NetworkListener) {
 	m.ctrl.T.Helper()

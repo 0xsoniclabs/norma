@@ -15,7 +15,9 @@ func TestNetworkRulesPatch_HasSameFieldsAsOperaRules(t *testing.T) {
 	assertFieldParity(t,
 		reflect.TypeOf(opera.Rules{}),
 		reflect.TypeOf(NetworkRulesPatch{}),
-		"Name", "NetworkID")
+		// Name/NetworkID are opera rules norma does not patch; UseConsensusChain
+		// is a norma-only genesis control with no opera.Rules counterpart.
+		"Name", "NetworkID", "UseConsensusChain")
 
 	assertFieldParity(t,
 		reflect.TypeOf(opera.DagRules{}),
@@ -59,7 +61,7 @@ func assertFieldParity(t *testing.T, srcType, patchType reflect.Type, excludedFr
 	}
 
 	srcFields := collectFieldNames(srcType, excluded)
-	patchFields := collectFieldNames(patchType, nil)
+	patchFields := collectFieldNames(patchType, excluded)
 
 	if !reflect.DeepEqual(srcFields, patchFields) {
 		t.Fatalf(

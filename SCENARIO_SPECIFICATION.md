@@ -104,18 +104,19 @@ Rules:
 The table below lists every valid step function. Sections that follow give
 detailed parameter semantics for the non-trivial ones.
 
-| Function       | Purpose                                                  |
-| -------------- | -------------------------------------------------------- |
-| `startNode`    | Start a network node (validator, observer, or rpc).      |
-| `stopNode`     | Stop a running node.                                     |
-| `undelegate`   | Undelegate stake from one or more validators.            |
-| `updateRules`  | Change network rules at runtime.                         |
-| `advanceEpoch` | Force an epoch seal via an on-chain transaction.         |
-| `waitForEpoch` | Wait until the network reaches the next epoch boundary. |
-| `runApp`       | Start a load-generating application.                     |
-| `stopApp`      | Stop a running load-generating application.              |
-| `checks`       | Run one or more health checks.                           |
-| `waitFor`      | Pause scenario execution for a fixed duration.           |
+| Function                   | Purpose                                                  |
+| -------------------------- | -------------------------------------------------------- |
+| `startNode`                | Start a network node (validator, observer, or rpc).      |
+| `stopNode`                 | Stop a running node.                                     |
+| `undelegate`               | Undelegate stake from one or more validators.            |
+| `updateRules`              | Change network rules at runtime.                         |
+| `advanceEpoch`             | Force an epoch seal via an on-chain transaction.         |
+| `waitForEpoch`             | Wait until the network reaches the next epoch boundary.  |
+| `handOverToConsensusChain` | Hand block production over to the Sonic consensus engine. |
+| `runApp`                   | Start a load-generating application.                     |
+| `stopApp`                  | Stop a running load-generating application.              |
+| `checks`                   | Run one or more health checks.                           |
+| `waitFor`                  | Pause scenario execution for a fixed duration.           |
 
 ### 3.1 `startNode`
 
@@ -223,7 +224,38 @@ value.
 Use this to observe passive epoch transitions (e.g. after `MaxEpochDuration`
 elapses). Use `advanceEpoch` when you need to force one.
 
-### 3.7 `runApp`
+### 3.7 `handOverToConsensusChain`
+
+Hands block production over to the Sonic consensus engine by flipping the
+on-chain `useConsensusChain` flag. The hand-over takes effect at the next
+block. Takes no value.
+
+```yaml
+- handOverToConsensusChain
+```
+
+The Sonic consensus engine must already be **running in shadow** when this
+step executes — that is, the network must have started with the
+`RunConsensusChain` upgrade enabled in `InitialNetworkRules` (see
+[§4.1](#41-consensus-chain-fields)). The engine requires fakenet mode from
+container start, so it cannot be introduced into an already-running node;
+`RunConsensusChain` must be set at genesis, and this step performs the
+runtime transition from the legacy engine to the Sonic engine.
+
+Once the consensus chain is canonical, the network is homogeneous: every node
+must run the Sonic engine, and no other client version can participate. Epoch
+sealing is not yet supported under the consensus engine, so consensus-chain
+scenarios should set `DisableEndChecks: true` (the automatic end-checks issue
+`advanceEpoch`) and verify block agreement explicitly with a `checks` step.
+Use the [`consensusChainActive`](#5-check-functions) check to assert that the
+hand-over actually took effect (block agreement alone is also satisfied by the
+legacy engine).
+
+To start a network **already** on the consensus chain from block one instead
+of handing over at runtime, set `UseConsensusChain: true` in
+`InitialNetworkRules` and omit this step.
+
+### 3.8 `runApp`
 
 Starts a load-generating application. The value is the application’s
 **identifier**.
@@ -265,7 +297,7 @@ rate:
     decrease: 0.2          # optional; fractional decrease on overload
 ```
 
-### 3.8 `stopApp`
+### 3.9 `stopApp`
 
 Stops a running load-generating application by identifier. Takes no parameters.
 
@@ -273,7 +305,7 @@ Stops a running load-generating application by identifier. Takes no parameters.
 - stopApp: load
 ```
 
-### 3.9 `checks`
+### 3.10 `checks`
 
 Runs one or more health checks. The value is a **list** of check
 specifications (see [§5](#5-check-functions)).
@@ -290,7 +322,7 @@ specifications (see [§5](#5-check-functions)).
 Each item is either a bare check-function name or a mapping whose key is the
 check function and whose siblings are that check’s parameters.
 
-### 3.10 `waitFor`
+### 3.11 `waitFor`
 
 Pauses scenario execution for a fixed duration. The value is a Go duration
 string (`10s`, `1m`, `1h30m`, …) and must be positive.
@@ -359,6 +391,9 @@ Upgrades:
   SingleProposerBlockFormation: <bool>
   GasSubsidies: <bool>
   TransactionBundles: <bool>
+  RunConsensusChain: <bool>
+
+UseConsensusChain: <bool>   # genesis only; see §4.1
 ```
 
 Type notes:
@@ -372,6 +407,44 @@ Type notes:
 
 The canonical Go type is
 [`NetworkRulesPatch`](genesis/rules_patch.go).
+
+### 4.1 Consensus-chain fields
+
+Two related fields control the Sonic consensus engine:
+
+| Field                        | Where             | Effect                                                                                          |
+| ---------------------------- | ----------------- | ----------------------------------------------------------------------------------------------- |
+| `Upgrades.RunConsensusChain` | genesis + runtime | Builds and runs the Sonic consensus engine (in shadow) and starts nodes in the mode it requires. |
+| `UseConsensusChain`          | genesis only      | Seeds the on-chain `useConsensusChain` flag on, making the Sonic engine canonical from block one. |
+
+- `UseConsensusChain` is **not** an opera network rule; it is a norma-only
+  genesis control and is honored only in `InitialNetworkRules`. Setting it in
+  an `updateRules` patch has no effect — use the
+  [`handOverToConsensusChain`](#37-handovertoconsensuschain) step to switch a
+  running network instead.
+- `UseConsensusChain: true` requires `Upgrades.RunConsensusChain: true`.
+- Because the engine needs fakenet mode from container start,
+  `RunConsensusChain` must be set at genesis; it cannot be enabled at runtime
+  with `updateRules`.
+
+Two patterns:
+
+```yaml
+# Canonical from block one (no hand-over):
+InitialNetworkRules:
+  Upgrades:
+    RunConsensusChain: true
+  UseConsensusChain: true
+
+# Start under the legacy engine, then switch at runtime:
+InitialNetworkRules:
+  Upgrades:
+    RunConsensusChain: true    # engine runs in shadow; legacy stays canonical
+# ... later in Scenario:
+#   - handOverToConsensusChain
+```
+
+See [scenarios/consensus_chain/](scenarios/consensus_chain) for both.
 
 ---
 
@@ -388,6 +461,7 @@ function name or a mapping.
 | `blocksHalted`   | Assert block production has halted.                             | `failing`                        |
 | `blocksProduced` | Assert all nodes produce blocks within tolerance over duration. | `tolerance`, `duration`, `failing` |
 | `networkRules`   | Assert the active rules on all nodes match the given patch.     | `rules`, `failing`               |
+| `consensusChainActive` | Assert the Sonic consensus engine is canonical on all nodes (`useConsensusChain` active). | `failing` |
 
 ### Parameter reference
 
@@ -413,6 +487,7 @@ function name or a mapping.
     - blockHeights:
         tolerance: 5
     - blocksHalted
+    - consensusChainActive                  # Sonic engine is canonical
     - networkRules:
         rules:
           Epochs:
@@ -532,6 +607,10 @@ Use this list when writing or reviewing a scenario:
       one or two `waitForEpoch` steps if the next step depends on the change.
 - [ ] Scenarios that intentionally halt the network set
       `DisableEndChecks: true`.
+- [ ] Consensus-chain scenarios set `Upgrades.RunConsensusChain: true` in
+      `InitialNetworkRules`, use `DisableEndChecks: true` with explicit block
+      checks, and either set `UseConsensusChain: true` (canonical from genesis)
+      or include a `handOverToConsensusChain` step (runtime switch) — not both.
 - [ ] Every check that is expected to fail is marked `failing: true`.
 - [ ] Total wall-clock time (including waits and block production) fits
       within the 10-minute runner timeout.

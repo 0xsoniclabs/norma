@@ -103,6 +103,11 @@ type Network interface {
 
 	// WaitForEpochChange waits until the epoch changes.
 	WaitForEpochChange(ctx context.Context) error
+
+	// HandOverToConsensusChain hands block production over to the Sonic
+	// consensus engine by flipping the on-chain useConsensusChain flag. The
+	// engine must already be running in shadow (RunConsensusChain enabled).
+	HandOverToConsensusChain(ctx context.Context) error
 }
 
 // NetworkConfig is a collection of network parameters to be used by factories

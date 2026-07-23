@@ -214,7 +214,8 @@ func StartOperaDockerNode(
 		}
 
 		genesisPath := filepath.Join(tmpDir, "genesis.json")
-		if err := genesis.GenerateJsonGenesis(genesisPath, driver.GetValidatorStakes(config.NetworkConfig.Validators), &rules); err != nil {
+		useConsensusChain := config.NetworkConfig.NetworkRules.UseConsensusChain != nil && *config.NetworkConfig.NetworkRules.UseConsensusChain
+		if err := genesis.GenerateJsonGenesis(genesisPath, driver.GetValidatorStakes(config.NetworkConfig.Validators), &rules, useConsensusChain); err != nil {
 			return nil, fmt.Errorf("failed to generate temporary genesis: %w", err)
 		}
 

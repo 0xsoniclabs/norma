@@ -1,0 +1,42 @@
+Name: Switch To Consensus Chain
+Description: >-
+  Starts a network of three validators with the Sonic consensus engine running
+  in shadow (the RunConsensusChain upgrade is enabled, but the legacy engine is
+  still the canonical block producer). The network produces blocks under the
+  legacy engine, then hands block production over to the Sonic consensus engine
+  at runtime, and keeps producing agreed blocks afterwards.
+
+  The consensus engine requires fakenet mode, so it must be enabled from genesis
+  (a node cannot be reconfigured into it while running); the runtime transition
+  is therefore the hand-over, not the upgrade itself. Once the consensus chain
+  is canonical, every node in the network must run it — no mixed client
+  versions. End checks are disabled because they advance epochs, which the
+  consensus engine does not support yet; block agreement is checked explicitly.
+
+DisableEndChecks: true
+
+InitialNetworkRules:
+  Upgrades:
+    RunConsensusChain: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+    instances: 3
+
+  - runApp: normal
+    type: counter
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 20s
+
+  - handOverToConsensusChain
+
+  - waitFor: 20s
+
+  - checks:
+      - consensusChainActive
+      - blockHashes
+      - blockHeights

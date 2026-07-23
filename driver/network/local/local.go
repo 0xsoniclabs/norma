@@ -363,7 +363,8 @@ func (n *LocalNetwork) prepareGenesis() error {
 	n.runConsensusChain.Store(rules.Upgrades.RunConsensusChain)
 
 	genesisPath := filepath.Join(tmpDir, "genesis.json")
-	if err := genesis.GenerateJsonGenesis(genesisPath, driver.GetValidatorStakes(n.config.Validators), &rules); err != nil {
+	useConsensusChain := n.config.NetworkRules.UseConsensusChain != nil && *n.config.NetworkRules.UseConsensusChain
+	if err := genesis.GenerateJsonGenesis(genesisPath, driver.GetValidatorStakes(n.config.Validators), &rules, useConsensusChain); err != nil {
 		return errors.Join(fmt.Errorf("failed to generate genesis file: %w", err), os.RemoveAll(tmpDir))
 	}
 
@@ -457,6 +458,19 @@ func (n *LocalNetwork) ApplyNetworkRules(ctx context.Context, rules driver.Netwo
 		n.runConsensusChain.Store(*rules.Upgrades.RunConsensusChain)
 	}
 	return nil
+}
+
+func (n *LocalNetwork) HandOverToConsensusChain(ctx context.Context) error {
+	if !n.runConsensusChain.Load() {
+		return fmt.Errorf("cannot hand over: the consensus-chain engine is not running (enable the RunConsensusChain upgrade first)")
+	}
+	client, err := n.DialRandomRpc()
+	if err != nil {
+		return fmt.Errorf("failed to connect to network: %w", err)
+	}
+	defer client.Close()
+
+	return network.HandOverToConsensusChain(ctx, client)
 }
 
 func (n *LocalNetwork) AdvanceEpoch(ctx context.Context, epochIncrement int) error {

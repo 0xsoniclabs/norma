@@ -40,6 +40,7 @@ const (
 	FuncUpdateRules  StepFunction = "updateRules"
 	FuncAdvanceEpoch StepFunction = "advanceEpoch"
 	FuncWaitForEpoch StepFunction = "waitForEpoch"
+	FuncHandOver     StepFunction = "handOverToConsensusChain"
 	FuncRunApp       StepFunction = "runApp"
 	FuncStopApp      StepFunction = "stopApp"
 	FuncChecks       StepFunction = "checks"
@@ -53,6 +54,7 @@ const (
 	FuncCheckBlocksProduced StepFunction = "blocksProduced"
 	FuncCheckEventThrottled StepFunction = "eventThrottled"
 	FuncCheckNetworkRules   StepFunction = "networkRules"
+	FuncCheckConsensusChain StepFunction = "consensusChainActive"
 )
 
 // allStepFunctions lists every known top-level step function constant.
@@ -63,6 +65,7 @@ var allStepFunctions = [...]StepFunction{
 	FuncUpdateRules,
 	FuncAdvanceEpoch,
 	FuncWaitForEpoch,
+	FuncHandOver,
 	FuncRunApp,
 	FuncStopApp,
 	FuncChecks,
@@ -78,6 +81,7 @@ var allCheckFunctions = [...]StepFunction{
 	FuncCheckBlocksProduced,
 	FuncCheckEventThrottled,
 	FuncCheckNetworkRules,
+	FuncCheckConsensusChain,
 }
 
 // toStepFunction returns the StepFunction for a given string, or an error if not recognized.
@@ -405,7 +409,7 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 		default:
 			return fmt.Errorf("undelegate value must be a node name or a list of targets")
 		}
-	case FuncAdvanceEpoch, FuncWaitForEpoch:
+	case FuncAdvanceEpoch, FuncWaitForEpoch, FuncHandOver:
 		// These take no value (or null).
 		if val.Kind != yaml.ScalarNode || (val.Tag != "!!null" && val.Value != "" && val.Value != "null") {
 			return fmt.Errorf("%s does not take a value, got %q", fn, val.Value)
@@ -462,6 +466,7 @@ var stepFunctionDescriptions = map[StepFunction]string{
 	FuncUpdateRules:  "Update one or more network rules (key/value pairs).",
 	FuncAdvanceEpoch: "Advance the network to the next epoch by sending transactions.",
 	FuncWaitForEpoch: "Wait until the network reaches the next epoch boundary.",
+	FuncHandOver:     "Hand block production over to the Sonic consensus engine (requires the RunConsensusChain upgrade to be enabled).",
 	FuncRunApp:       "Start a load-generating application.",
 	FuncStopApp:      "Stop a running load-generating application by name.",
 	FuncChecks:       "Run one or more checks (see 'Available checks' below).",
@@ -491,6 +496,7 @@ var allowedParams = map[StepFunction][]string{
 	FuncUndelegate:   {},
 	FuncAdvanceEpoch: {},
 	FuncWaitForEpoch: {},
+	FuncHandOver:     {},
 	FuncWaitFor:      {},
 	FuncChecks:       {},
 }
@@ -625,6 +631,7 @@ var checkFunctionDescriptions = map[StepFunction]string{
 	FuncCheckBlocksProduced: "Assert that all nodes have produced blocks within tolerance.",
 	FuncCheckEventThrottled: "Assert that validators listed in throttledNodes emit events at a significantly lower rate than the rest.",
 	FuncCheckNetworkRules:   "Assert that the active network rules on all nodes match the expected rules patch.",
+	FuncCheckConsensusChain: "Assert that the Sonic consensus engine is the canonical block producer on all nodes (useConsensusChain is active).",
 }
 
 // checkFunctionParams lists the optional parameters accepted by each sub-check function.
@@ -636,6 +643,7 @@ var checkFunctionParams = map[StepFunction][]string{
 	FuncCheckBlocksProduced: {"tolerance", "duration", "failing"},
 	FuncCheckEventThrottled: {"throttledNodes", "failing"},
 	FuncCheckNetworkRules:   {"rules", "failing"},
+	FuncCheckConsensusChain: {"failing"},
 }
 
 // checkParamDescriptions provides a human-readable description for each sub-check parameter.

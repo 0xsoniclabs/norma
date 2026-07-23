@@ -82,7 +82,7 @@ func (s *Step) Check() error {
 			return fmt.Errorf("waitFor requires a positive duration, got %v", s.Duration)
 		}
 		return nil
-	case FuncAdvanceEpoch, FuncWaitForEpoch:
+	case FuncAdvanceEpoch, FuncWaitForEpoch, FuncHandOver:
 		return nil
 	case FuncChecks:
 		return s.checkSubChecks()

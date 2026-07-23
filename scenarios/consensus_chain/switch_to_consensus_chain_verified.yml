@@ -1,0 +1,36 @@
+Name: Switch To Consensus Chain Verified
+Description: >-
+  Starts a network of three validators with the Sonic consensus engine running
+  in shadow (RunConsensusChain enabled, legacy engine canonical), then hands
+  block production over to the Sonic consensus engine at runtime. Unlike the
+  basic switch scenario, this one explicitly verifies with the
+  consensusChainActive check that the on-chain useConsensusChain flag is active
+  on every node after the hand-over, so the assertion proves the new engine is
+  canonical rather than merely that blocks are still being produced (which the
+  legacy engine would also satisfy).
+
+  End checks are disabled because they advance epochs, which the consensus
+  engine does not support yet; block agreement and canonicity are checked
+  explicitly instead.
+
+DisableEndChecks: true
+
+InitialNetworkRules:
+  Upgrades:
+    RunConsensusChain: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+    instances: 3
+
+  - waitFor: 20s
+
+  - handOverToConsensusChain
+
+  - waitFor: 20s
+
+  - checks:
+      - consensusChainActive
+      - blockHashes
+      - blockHeights
