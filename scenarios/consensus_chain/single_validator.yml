@@ -1,0 +1,35 @@
+Name: Single Validator
+Description: >-
+  Starts a network with a single validator already running the Sonic consensus
+  engine as the canonical block producer from block one: the RunConsensusChain
+  upgrade builds the engine and the useConsensusChain flag is seeded on at
+  genesis, so there is no legacy phase and no hand-over. Basic load is applied
+  to keep the chain producing blocks.
+
+  End checks are disabled because they advance epochs, which the consensus
+  engine does not support yet; block agreement is checked explicitly instead.
+
+DisableEndChecks: true
+
+InitialNetworkRules:
+  Upgrades:
+    RunConsensusChain: true
+  UseConsensusChain: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+    instances: 1
+
+  - runApp: normal
+    type: counter
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - checks:
+      - consensusChainActive
+      - blockHashes
+      - blockHeights
