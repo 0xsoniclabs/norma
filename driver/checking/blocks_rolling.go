@@ -11,19 +11,24 @@ import (
 
 const defaultToleranceSamples int = 10
 
+// blockSampleInterval converts a tolerance expressed in samples into an
+// observation duration. Var so tests can shorten it.
+var blockSampleInterval = time.Second
+
 func init() {
 	RegisterNetworkCheck("blocksRolling", func(net driver.Network, monitor *monitoring.Monitor) Checker {
 		return &blocksRollingChecker{monitor: &monitoringDataAdapter{monitor}, toleranceSamples: defaultToleranceSamples}
 	})
 }
 
-// blocksRollingChecker is a Checker checking if all nodes keeps producing blocks.
+// blocksRollingChecker verifies the network is still producing blocks by
+// observing for a window and requiring at least one node to advance its
+// block height during it.
 type blocksRollingChecker struct {
 	monitor          MonitoringData
 	toleranceSamples int
-	// duration, when > 0, switches the checker into live-observation mode:
-	// Check blocks for that long and then verifies that at least one node
-	// advanced its block height during the observation window.
+	// duration overrides the observation window; when 0 it is derived from
+	// toleranceSamples.
 	duration time.Duration
 }
 
@@ -58,80 +63,36 @@ func (c *blocksRollingChecker) Check(ctx context.Context) error {
 		return fmt.Errorf("tolerance must be > 0, got %d", c.toleranceSamples)
 	}
 
-	// Two evaluation modes are supported:
-	//   * duration == 0 (default): a sliding window of size 'toleranceSamples'
-	//     is walked across the entire recorded series; the node is considered
-	//     functional if every window shows a strict block-height increase from
-	//     its oldest to its newest sample.
-	//   * duration > 0 (live-observation mode): mark the current time,
-	//     sleep for the configured duration, then require that at least one
-	//     node produced new blocks during the observation window. This models
-	//     the intuitive question "is the network making progress right now?"
-	//     without depending on samples recorded prior to this check.
-	var observationStart monitoring.Time
-	if c.duration > 0 {
-		observationStart = monitoring.Time(time.Now().UnixNano())
-		timer := time.NewTimer(c.duration)
-		defer timer.Stop()
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-timer.C:
-		}
+	window := c.duration
+	if window <= 0 {
+		window = time.Duration(c.toleranceSamples) * blockSampleInterval
 	}
 
-	// This function iterates through all nodes in the network and verifies whether their block height increases.
-	// A node with a stagnant block height indicates it is not actively participating in block production.
-	// If no nodes are found to be producing blocks, the network is deemed non-functional.
-	//
-	// The test ensures that at least one node is generating blocks, confirming that the network is operational
-	// to some extent. It does not verify the functionality of every node, as that is handled by other checks.
-	var networkFunctional bool
-	for _, node := range c.monitor.GetNodes() {
-		nodeFunctional := true
-		series := c.monitor.GetBlockStatus(node)
+	// Observing forward in time distinguishes a live network from one halted
+	// at check time and ignores history recorded before the check.
+	observationStart := monitoring.Time(time.Now().UnixNano())
+	timer := time.NewTimer(window)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+	}
 
+	for _, node := range c.monitor.GetNodes() {
+		series := c.monitor.GetBlockStatus(node)
 		last := series.GetLatest()
 		if last == nil {
-			//node produced no blocks
 			continue
 		}
-
-		if c.duration > 0 {
-			// Live-observation mode: find the first sample recorded after the
-			// observation window started and compare its block height to the
-			// latest sample. Missing new samples counts as no progress.
-			nodeFunctional = false
-			for _, dp := range series.GetRange(0, last.Position+1) {
-				if dp.Position >= observationStart {
-					if dp.Value.BlockHeight < last.Value.BlockHeight {
-						nodeFunctional = true
-					}
-					break
-				}
-			}
-		} else {
-			// Sliding-window mode over the entire history.
-			items := series.GetRange(0, last.Position+1)
-			window := make([]monitoring.BlockStatus, c.toleranceSamples)
-			for i, point := range items {
-				window[i%c.toleranceSamples] = point.Value
-				if i < c.toleranceSamples-1 {
-					continue
-				}
-				prev := (i - c.toleranceSamples + 1) % c.toleranceSamples
-				if window[prev].BlockHeight >= point.Value.BlockHeight {
-					nodeFunctional = false
-					break
-				}
-			}
+		items := series.GetRange(observationStart, last.Position+1)
+		if len(items) == 0 {
+			continue
 		}
-
-		networkFunctional = networkFunctional || nodeFunctional
+		if items[0].Value.BlockHeight < last.Value.BlockHeight {
+			return nil
+		}
 	}
 
-	if !networkFunctional {
-		return fmt.Errorf("network is down, nodes stopped producing blocks")
-	}
-	return nil
+	return fmt.Errorf("network is down, nodes stopped producing blocks")
 }

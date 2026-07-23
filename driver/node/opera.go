@@ -103,6 +103,9 @@ type OperaNodeConfig struct {
 	GenesisJsonPath *string
 	// ExtraArguments are additional command line arguments to pass to the node.
 	ExtraArguments string
+	// NetworkBootstrap is true if this node starts a brand-new network, i.e.
+	// there is no running node it could sync with.
+	NetworkBootstrap bool
 }
 
 // imageEnsureState stores the completion signal and final error for one
@@ -219,11 +222,16 @@ func StartOperaDockerNode(
 		genesisJSONPath = *config.GenesisJsonPath
 	}
 
+	networkBootstrap := "0"
+	if config.NetworkBootstrap {
+		networkBootstrap = "1"
+	}
 	envs := map[string]string{
-		"VALIDATOR_ID":     validatorId,
-		"VALIDATORS_COUNT": fmt.Sprintf("%d", config.NetworkConfig.Validators.GetNumValidators()),
-		"NETWORK_LATENCY":  fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
-		"EXTRA_ARGUMENTS":  config.ExtraArguments,
+		"VALIDATOR_ID":      validatorId,
+		"VALIDATORS_COUNT":  fmt.Sprintf("%d", config.NetworkConfig.Validators.GetNumValidators()),
+		"NETWORK_LATENCY":   fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
+		"EXTRA_ARGUMENTS":   config.ExtraArguments,
+		"NETWORK_BOOTSTRAP": networkBootstrap,
 	}
 
 	const dataDir = "/datadir"

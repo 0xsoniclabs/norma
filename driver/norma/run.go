@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -365,7 +366,9 @@ func dumpNodeLogs(ctx context.Context, net driver.Network) {
 			_ = reader.Close()
 
 			if len(data) > 0 {
-				slog.Error("node log on failure", "node", node.GetLabel(), "log", string(data))
+				label := node.GetLabel()
+				log := strings.TrimRight(string(data), "\n")
+				slog.Info("node log", "node", label, "log", log)
 			}
 			if err != nil && logCtx.Err() == nil {
 				slog.Error("failed to read log", "node", node.GetLabel(), "error", err)

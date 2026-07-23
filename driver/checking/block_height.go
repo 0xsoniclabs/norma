@@ -23,6 +23,7 @@ import (
 	"maps"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
@@ -64,7 +65,20 @@ func (c *blockHeightChecker) Configure(config CheckerConfig) Checker {
 func (c *blockHeightChecker) Check(ctx context.Context) error {
 	nodes := c.net.GetActiveNodes()
 	slog.Info("checking block heights for nodes", "count", len(nodes))
+
+	// Read all heights concurrently so the samples are taken at nearly the
+	// same instant; sequential reads let the chain advance between nodes and
+	// falsely flag early-read nodes as lagging.
 	heights := make([]int64, len(nodes))
+	errs := make([]error, len(nodes))
+	var wg sync.WaitGroup
+	for i, n := range nodes {
+		wg.Go(func() {
+			heights[i], errs[i] = getBlockHeight(ctx, n)
+		})
+	}
+	wg.Wait()
+
 	maxHeight := int64(0)
 	expectedFailures := make(map[string]struct{})
 	for i, n := range nodes {
@@ -72,20 +86,15 @@ func (c *blockHeightChecker) Check(ctx context.Context) error {
 			expectedFailures[n.GetLabel()] = struct{}{}
 		}
 
-		height, err := getBlockHeight(ctx, n)
-		if err != nil {
-			return fmt.Errorf("failed to get block height of node %s; %v", n.GetLabel(), err)
+		if errs[i] != nil {
+			return fmt.Errorf("failed to get block height of node %s; %v", n.GetLabel(), errs[i])
 		}
-		if height == 1 {
-			return fmt.Errorf("node %s reports it is at block 1 (only genesis is applied)", n.GetLabel())
+		if heights[i] < 1 {
+			return fmt.Errorf("node %s reports it is at invalid block %d", n.GetLabel(), heights[i])
 		}
-		if height < 1 {
-			return fmt.Errorf("node %s reports it is at invalid block %d", n.GetLabel(), height)
+		if maxHeight < heights[i] {
+			maxHeight = heights[i]
 		}
-		if maxHeight < height {
-			maxHeight = height
-		}
-		heights[i] = height
 	}
 
 	gotFailures := make(map[string]struct{})

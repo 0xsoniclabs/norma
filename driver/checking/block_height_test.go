@@ -117,26 +117,26 @@ func TestBlockHeightCheckerInvalid_WithSlack(t *testing.T) {
 
 func TestBlockHeight_ExpectedFailingNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	rpc := rpc.NewMockClient(ctrl)
-	rpc.EXPECT().Close().Times(2)
+	rpc1 := rpc.NewMockClient(ctrl)
+	rpc2 := rpc.NewMockClient(ctrl)
 
 	node1 := driver.NewMockNode(ctrl)
 	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
-	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc, nil)
+	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc1, nil)
 	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
 
 	node2 := driver.NewMockNode(ctrl)
 	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
-	node2.EXPECT().DialRpc(gomock.Any()).Return(rpc, nil)
+	node2.EXPECT().DialRpc(gomock.Any()).Return(rpc2, nil)
 	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
 
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
 
-	gomock.InOrder(
-		rpc.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, "1000"),
-		rpc.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, "10"), // block is late
-	)
+	rpc1.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, "1000")
+	rpc1.EXPECT().Close()
+	rpc2.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, "10") // block is late
+	rpc2.EXPECT().Close()
 
 	c := blockHeightChecker{net: net}
 	if err := c.Check(t.Context()); err != nil {
@@ -146,29 +146,58 @@ func TestBlockHeight_ExpectedFailingNode(t *testing.T) {
 
 func TestBlockHeight_NoFailure_When_Expected(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	rpc := rpc.NewMockClient(ctrl)
-	rpc.EXPECT().Close().Times(2)
+	rpc1 := rpc.NewMockClient(ctrl)
+	rpc2 := rpc.NewMockClient(ctrl)
 
 	node1 := driver.NewMockNode(ctrl)
 	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
-	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc, nil)
+	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc1, nil)
 	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
 
 	node2 := driver.NewMockNode(ctrl)
 	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
-	node2.EXPECT().DialRpc(gomock.Any()).Return(rpc, nil)
+	node2.EXPECT().DialRpc(gomock.Any()).Return(rpc2, nil)
 	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
 
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
 
-	gomock.InOrder(
-		rpc.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, "1000"),
-		rpc.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, "1000"),
-	)
+	rpc1.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, "1000")
+	rpc1.EXPECT().Close()
+	rpc2.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, "1000")
+	rpc2.EXPECT().Close()
 
 	c := blockHeightChecker{net: net}
 	if err := c.Check(t.Context()); err == nil || !strings.Contains(err.Error(), "unexpected failure set to provide the block height") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestBlockHeight_GenesisWithinSlackDoesNotFail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	rpc1 := rpc.NewMockClient(ctrl)
+	rpc2 := rpc.NewMockClient(ctrl)
+
+	node1 := driver.NewMockNode(ctrl)
+	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
+	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc1, nil)
+	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
+
+	node2 := driver.NewMockNode(ctrl)
+	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
+	node2.EXPECT().DialRpc(gomock.Any()).Return(rpc2, nil)
+	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
+
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().MinTimes(1).Return([]driver.Node{node1, node2})
+
+	rpc1.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, "1") // genesis
+	rpc1.EXPECT().Close()
+	rpc2.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, "3")
+	rpc2.EXPECT().Close()
+
+	c := blockHeightChecker{net: net, slack: defaultSlack}
+	if err := c.Check(t.Context()); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
