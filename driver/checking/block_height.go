@@ -73,11 +73,9 @@ func (c *blockHeightChecker) Check(ctx context.Context) error {
 	errs := make([]error, len(nodes))
 	var wg sync.WaitGroup
 	for i, n := range nodes {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			heights[i], errs[i] = getBlockHeight(ctx, n)
-		}()
+		})
 	}
 	wg.Wait()
 
