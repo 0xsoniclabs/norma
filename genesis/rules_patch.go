@@ -191,6 +191,7 @@ type UpgradesPatch struct {
 	SingleProposerBlockFormation *bool `yaml:"SingleProposerBlockFormation,omitempty" json:"SingleProposerBlockFormation,omitempty"`
 	GasSubsidies                 *bool `yaml:"GasSubsidies,omitempty" json:"GasSubsidies,omitempty"`
 	TransactionBundles           *bool `yaml:"TransactionBundles,omitempty" json:"TransactionBundles,omitempty"`
+	RunConsensusChain            *bool `yaml:"RunConsensusChain,omitempty" json:"RunConsensusChain,omitempty"`
 }
 
 func ApplyNetworkRulesPatch(rules *opera.Rules, patch NetworkRulesPatch) error {

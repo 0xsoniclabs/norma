@@ -43,6 +43,25 @@ else
 	echo "Sonic is now running as an observer"
 fi
 
+# The Sonic consensus-chain engine currently requires fakenet mode: it derives
+# validator keys (including the BLS attestation key) from the fake-key table.
+# In fakenet mode the validator key is provided by the client itself, so the
+# --validator.* flags must not be passed alongside a non-zero fakenet ID.
+# The mesh listens on all interfaces on a fixed port so that peers in other
+# containers can dial it; the port is private to the container's namespace.
+if [[ "${CONSENSUS_CHAIN:-}" == "true" ]]; then
+  echo "Consensus-chain engine enabled; running in fakenet mode"
+  fakenet_denominator=${VALIDATORS_COUNT}
+  if [[ $VALIDATOR_ID -gt $fakenet_denominator ]]; then
+    fakenet_denominator=$VALIDATOR_ID
+  fi
+  val_flag="--fakenet ${VALIDATOR_ID}/${fakenet_denominator}"
+  if [[ $VALIDATOR_ID -ne 0 ]]; then
+    val_flag="${val_flag} --mode rpc"
+  fi
+  export SONIC_CONSENSUSCHAIN_LISTEN_ADDRS="/ip4/0.0.0.0/udp/5052/quic-v1,/ip4/0.0.0.0/tcp/5052"
+fi
+
 # Create config.toml
 # when network starts with only one genesis validator, then he will not wait to start emitting
 # if there are two or more validators at genesis they have to wait 5 seconds after connecting to the network
@@ -70,14 +89,23 @@ if [[ -n "${NETWORK_LATENCY}" ]]; then
 fi
 
 
+# Enable the test-only API when the client supports it. It provides the
+# bootstrap RPCs used to seed the consensus-chain p2p mesh; older clients do
+# not know the flag. Unknown API namespaces in --http.api are ignored.
+test_api_flag=""
+if ./sonicd --help 2>/dev/null | grep -q "enable-test-only-api"; then
+  test_api_flag="--enable-test-only-api"
+fi
+
 # Start sonic as part of a fake net with RPC service.
 export GOMEMLIMIT="1GiB"
 # shellcheck disable=SC2086
 ./sonicd \
     --datadir="${datadir}" \
     ${val_flag} \
-    --http --http.addr 0.0.0.0 --http.port 18545 --http.api admin,eth,sonic,txpool \
-    --ws --ws.addr 0.0.0.0 --ws.port 18546 --ws.api admin,eth,sonic,txpool \
+    ${test_api_flag} \
+    --http --http.addr 0.0.0.0 --http.port 18545 --http.api admin,eth,sonic,txpool,test \
+    --ws --ws.addr 0.0.0.0 --ws.port 18546 --ws.api admin,eth,sonic,txpool,test \
     --pprof --pprof.addr 0.0.0.0 \
     --nat="extip:${external_ip}" \
     --metrics \

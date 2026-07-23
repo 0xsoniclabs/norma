@@ -3,21 +3,11 @@ package genesis
 import (
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"os"
 	"time"
 
-	gas_subsidies_registry "github.com/0xsoniclabs/sonic/gossip/blockproc/subsidies/registry"
 	"github.com/0xsoniclabs/sonic/integration/makefakegenesis"
 	"github.com/0xsoniclabs/sonic/opera"
-	"github.com/0xsoniclabs/sonic/opera/contracts/driver"
-	"github.com/0xsoniclabs/sonic/opera/contracts/driver/drivercall"
-	"github.com/0xsoniclabs/sonic/opera/contracts/driverauth"
-	"github.com/0xsoniclabs/sonic/opera/contracts/evmwriter"
-	"github.com/0xsoniclabs/sonic/opera/contracts/netinit"
-	"github.com/0xsoniclabs/sonic/opera/contracts/sfc"
-	"github.com/0xsoniclabs/sonic/scc"
-	"github.com/0xsoniclabs/sonic/scc/bls"
 	"github.com/0xsoniclabs/sonic/utils"
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 )
@@ -26,103 +16,33 @@ import (
 // and network rules configurations.
 // The file is written to the given path.
 func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera.Rules) error {
-	validatorsCount := len(validatorStakes)
-	jsonGenesis := makefakegenesis.GenesisJson{
-		Rules:         *rules,
-		BlockZeroTime: time.Unix(100, 0), // Genesis files must have the same timestamp across all nodes.
-	}
+	jsonGenesis := makefakegenesis.GenerateFakeJsonGenesis(rules.Upgrades, validatorStakes)
+	jsonGenesis.Rules = *rules
+	jsonGenesis.BlockZeroTime = time.Unix(100, 0) // Genesis files must have the same timestamp across all nodes.
+	// When the consensus chain is enabled from genesis, run it canonically from
+	// block one instead of going through the runtime hand-over.
+	jsonGenesis.UseConsensusChain = rules.Upgrades.RunConsensusChain
 
-	// Create infrastructure contracts.
-	jsonGenesis.Accounts = []makefakegenesis.Account{
-		{
-			Name:    "NetworkInitializer",
-			Address: netinit.ContractAddress,
-			Code:    netinit.GetContractBin(),
-			Nonce:   1,
-		},
-		{
-			Name:    "NodeDriver",
-			Address: driver.ContractAddress,
-			Code:    driver.GetContractBin(),
-			Nonce:   1,
-		},
-		{
-			Name:    "NodeDriverAuth",
-			Address: driverauth.ContractAddress,
-			Code:    driverauth.GetContractBin(),
-			Nonce:   1,
-		},
-		{
-			Name:    "SFC",
-			Address: sfc.ContractAddress,
-			Code:    sfc.GetContractBin(),
-			Nonce:   1,
-		},
-		{
-			Name:    "ContractAddress",
-			Address: evmwriter.ContractAddress,
-			Code:    []byte{0},
-			Nonce:   1,
-		},
-		{
-			Name:    "SubsidiesRegistry",
-			Address: gas_subsidies_registry.GetAddress(),
-			Code:    gas_subsidies_registry.GetCode(),
-			Nonce:   1,
-		},
-	}
-
-	// Create validator accounts and distribute initial supply.
+	// Fund validator accounts beyond the initial set so that validators
+	// joining the network later in a scenario can pay for their stake.
 	const maxValidators = 100
-	totalSupply := utils.ToFtm(1_000_000_000_000_000)
+	tokensPerValidator := utils.ToFtmU256(1_000_000_000)
 	validators := makefakegenesis.GetFakeValidators(idx.Validator(maxValidators))
-	supplyEach := new(big.Int).Div(totalSupply, big.NewInt(int64(len(validators))))
-	for _, validator := range validators {
+	for _, validator := range validators[len(validatorStakes):] {
 		jsonGenesis.Accounts = append(jsonGenesis.Accounts, makefakegenesis.Account{
 			Name:    fmt.Sprintf("validator_%d", validator.ID),
 			Address: validator.Address,
-			Balance: supplyEach,
+			Balance: tokensPerValidator,
 		})
 	}
 
-	// Configure genesis validators only for the configured number of validators.
-	validators = validators[0:validatorsCount]
-	delegations := make([]drivercall.Delegation, 0, validatorsCount)
-	for i, stake := range validatorStakes {
-		val := validators[i]
-		delegations = append(delegations, drivercall.Delegation{
-			Address:            val.Address,
-			ValidatorID:        val.ID,
-			Stake:              utils.ToFtm(stake),
-			LockedStake:        new(big.Int),
-			LockupFromEpoch:    0,
-			LockupEndTime:      0,
-			LockupDuration:     0,
-			EarlyUnlockPenalty: new(big.Int),
-			Rewards:            new(big.Int),
-		})
+	// The rules were replaced after the genesis was generated, so the on-chain
+	// network-rules contract storage must be re-seeded from them.
+	if err := jsonGenesis.SeedNetworkRules(); err != nil {
+		return fmt.Errorf("failed to seed network rules: %w", err)
 	}
 
-	// Create genesis transactions.
-	genesisTxs := makefakegenesis.GetGenesisTxs(0, validators, totalSupply, delegations, validators[0].Address)
-	for i, tx := range genesisTxs {
-		jsonGenesis.Txs = append(jsonGenesis.Txs, makefakegenesis.Transaction{
-			Name: fmt.Sprintf("tx_%d", i),
-			To:   *tx.To(),
-			Data: tx.Data(),
-		})
-	}
-
-	// Create the genesis SCC committee.
-	key := bls.NewPrivateKeyForTests(0)
-	committee := scc.NewCommittee(scc.Member{
-		PublicKey:         key.PublicKey(),
-		ProofOfPossession: key.GetProofOfPossession(),
-		VotingPower:       1,
-	})
-	jsonGenesis.GenesisCommittee = &committee
-
-	encoded, err := json.MarshalIndent(jsonGenesis, "", "  ")
+	encoded, err := encodeGenesisJson(jsonGenesis)
 	if err != nil {
 		return fmt.Errorf("failed to encode genesis json: %w", err)
 	}
@@ -132,4 +52,40 @@ func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera
 	}
 
 	return nil
+}
+
+// encodeGenesisJson encodes the genesis with account balances as JSON numbers.
+// The client's Account.Balance type (*uint256.Int) marshals into a quoted
+// decimal string, which pre-restructure clients (*big.Int) cannot parse; both
+// old and new clients accept a plain JSON number.
+func encodeGenesisJson(jsonGenesis *makefakegenesis.GenesisJson) ([]byte, error) {
+	encoded, err := json.Marshal(jsonGenesis)
+	if err != nil {
+		return nil, err
+	}
+
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &document); err != nil {
+		return nil, err
+	}
+	if rawAccounts, ok := document["Accounts"]; ok {
+		var accounts []map[string]json.RawMessage
+		if err := json.Unmarshal(rawAccounts, &accounts); err != nil {
+			return nil, err
+		}
+		for _, account := range accounts {
+			var balance string
+			if raw, ok := account["Balance"]; ok {
+				if err := json.Unmarshal(raw, &balance); err != nil {
+					return nil, fmt.Errorf("unexpected account balance encoding: %w", err)
+				}
+				account["Balance"] = json.RawMessage(balance)
+			}
+		}
+		if document["Accounts"], err = json.Marshal(accounts); err != nil {
+			return nil, err
+		}
+	}
+
+	return json.MarshalIndent(document, "", "  ")
 }

@@ -11,6 +11,5 @@ Scenario:
 
   - startNode: validator-1
     type: validator
-    imageName: "sonic:v2.1.6"
 
   - waitFor: 10s

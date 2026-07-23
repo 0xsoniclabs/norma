@@ -103,6 +103,10 @@ type OperaNodeConfig struct {
 	GenesisJsonPath *string
 	// ExtraArguments are additional command line arguments to pass to the node.
 	ExtraArguments string
+	// ConsensusChainEnabled indicates that the network rules enable the Sonic
+	// consensus-chain engine, which requires nodes to run in fakenet mode with
+	// a cross-container reachable p2p mesh (see run_sonic.sh).
+	ConsensusChainEnabled bool
 }
 
 // imageEnsureState stores the completion signal and final error for one
@@ -224,6 +228,7 @@ func StartOperaDockerNode(
 		"VALIDATORS_COUNT": fmt.Sprintf("%d", config.NetworkConfig.Validators.GetNumValidators()),
 		"NETWORK_LATENCY":  fmt.Sprintf("%v", config.NetworkConfig.RoundTripTime/2),
 		"EXTRA_ARGUMENTS":  config.ExtraArguments,
+		"CONSENSUS_CHAIN":  fmt.Sprintf("%t", config.ConsensusChainEnabled),
 	}
 
 	const dataDir = "/datadir"
@@ -251,7 +256,11 @@ func StartOperaDockerNode(
 		envs["VALIDATOR_PUBKEY"] = pubKey
 		envs["VALIDATOR_ADDRESS"] = address
 
-		if config.MountDataDir != nil {
+		if config.ConsensusChainEnabled {
+			// In fakenet mode the client provisions the validator keys itself
+			// from the fake-key table, and importing them requires the
+			// keystore to be writable, so no pre-built keystore is mounted.
+		} else if config.MountDataDir != nil {
 			if err := genesis.WriteValidatorKeystore(privKey, *config.MountDataDir); err != nil {
 				return nil, fmt.Errorf("failed to write validator keystore in mounted datadir: %w", err)
 			}
@@ -478,6 +487,40 @@ func (n *OperaNode) AddPeer(ctx context.Context, id driver.NodeID) error {
 			}
 			return rpcClient.Call(nil, "admin_addPeer", id)
 		})
+}
+
+// ConsensusChainAddresses returns the multiaddrs of the node's consensus-chain
+// mesh identity, as strings another node can dial. It fails while the
+// consensus-chain engine is not (yet) running on the node, so callers are
+// expected to retry.
+func (n *OperaNode) ConsensusChainAddresses(ctx context.Context) ([]string, error) {
+	rpcClient, err := n.DialRpc(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer rpcClient.Close()
+	var addresses []string
+	if err := rpcClient.Call(&addresses, "test_consensusChainAddresses"); err != nil {
+		return nil, fmt.Errorf("failed to get consensus-chain addresses of node %s: %w", n.GetLabel(), err)
+	}
+	return addresses, nil
+}
+
+// ConsensusChainConnect instructs the node to dial the peer named by the given
+// multiaddrs, seeding it into the consensus-chain mesh. One successful dial is
+// enough: the validator directory carries the remaining mesh membership. It
+// fails while the consensus-chain engine is not (yet) running on the node, so
+// callers are expected to retry.
+func (n *OperaNode) ConsensusChainConnect(ctx context.Context, addresses []string) error {
+	rpcClient, err := n.DialRpc(ctx)
+	if err != nil {
+		return err
+	}
+	defer rpcClient.Close()
+	if err := rpcClient.Call(nil, "test_consensusChainConnect", addresses); err != nil {
+		return fmt.Errorf("failed to seed node %s into the consensus-chain mesh: %w", n.GetLabel(), err)
+	}
+	return nil
 }
 
 // RemovePeer informs the client instance represented by the OperaNode

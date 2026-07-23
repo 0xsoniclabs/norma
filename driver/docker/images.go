@@ -40,7 +40,7 @@ const sonicRepositoryURL = "https://github.com/0xsoniclabs/sonic.git"
 // building the "sonic:local" image. It is interpreted relative to the Norma
 // build root (see ResolveBuildRoot) unless overridden with SetSonicLocalPath
 // to point at an arbitrary location on disk.
-const DefaultSonicLocalPath = "sonic"
+const DefaultSonicLocalPath = "../dev-sonic"
 
 // sonicLocalPath is the currently configured path used as the docker build
 // context for the "sonic:local" image. It defaults to DefaultSonicLocalPath

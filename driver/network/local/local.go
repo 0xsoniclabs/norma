@@ -85,6 +85,12 @@ type LocalNetwork struct {
 	genesisTmpDir string
 	// host path to the generated genesis.json file
 	genesisJsonPath string
+
+	// runConsensusChain tracks whether the network rules enable the Sonic
+	// consensus-chain engine, whose libp2p mesh requires explicit seeding
+	// (see seedConsensusChainNode). It is set from the initial rules and
+	// updated when a rules patch toggles the RunConsensusChain upgrade.
+	runConsensusChain atomic.Bool
 }
 
 // NewLocalLegacyNetwork creates a network and starts all validators
@@ -212,13 +218,85 @@ func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaN
 	if len(n.nodes) > 0 && succeeded == 0 {
 		return fmt.Errorf("failed to add peer; no existing node was reachable")
 	}
+
+	// When the consensus-chain engine is running, its libp2p mesh uses
+	// ephemeral peer identities that are not known ahead of time, so the new
+	// node must additionally be seeded into the mesh through an existing one.
+	if n.runConsensusChain.Load() && len(n.nodes) > 0 {
+		if err := seedConsensusChainNode(ctx, node, n.nodes); err != nil {
+			return err
+		}
+	}
+
 	n.nodes[id] = node
+	return nil
+}
+
+// seedConsensusChainNode dials one of the given existing nodes from the new
+// node, seeding it into the consensus-chain mesh; the validator directory
+// carries the remaining membership. The bootstrap RPCs answer with an error
+// until the engine is up, so both sides are retried.
+func seedConsensusChainNode(ctx context.Context, newNode *node.OperaNode, others map[driver.NodeID]*node.OperaNode) error {
+	addresses, err := network.RetryReturn(ctx, network.DefaultRetryAttempts, 1*time.Second,
+		func(ctx context.Context) ([]string, error) {
+			for _, other := range others {
+				if addresses, err := other.ConsensusChainAddresses(ctx); err == nil && len(addresses) > 0 {
+					return addresses, nil
+				}
+			}
+			return nil, fmt.Errorf("no existing node answered the consensus-chain bootstrap RPC")
+		})
+	if err != nil {
+		return fmt.Errorf("failed to get consensus-chain addresses to seed node %s: %w", newNode.GetLabel(), err)
+	}
+	return network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second,
+		func(ctx context.Context) error {
+			return newNode.ConsensusChainConnect(ctx, addresses)
+		})
+}
+
+// connectConsensusChainMesh seeds every node in the network into the
+// consensus-chain mesh by dialing one common node from all others. It is used
+// after the RunConsensusChain upgrade is enabled on a running network, where
+// all nodes bring up fresh engines at once; for an already-formed mesh it is
+// a cheap no-op.
+func (n *LocalNetwork) connectConsensusChainMesh(ctx context.Context) error {
+	n.nodesMutex.Lock()
+	nodes := make([]*node.OperaNode, 0, len(n.nodes))
+	for _, item := range n.nodes {
+		nodes = append(nodes, item)
+	}
+	n.nodesMutex.Unlock()
+
+	if len(nodes) < 2 {
+		return nil
+	}
+
+	first := nodes[0]
+	addresses, err := network.RetryReturn(ctx, network.DefaultRetryAttempts, 1*time.Second,
+		func(ctx context.Context) ([]string, error) {
+			return first.ConsensusChainAddresses(ctx)
+		})
+	if err != nil {
+		return fmt.Errorf("node %s's consensus-chain engine did not come up: %w", first.GetLabel(), err)
+	}
+
+	for _, item := range nodes[1:] {
+		err := network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second,
+			func(ctx context.Context) error {
+				return item.ConsensusChainConnect(ctx, addresses)
+			})
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 // createNode is an internal version of CreateNode enabling the creation
 // of validator and non-validator nodes in the network.
 func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNodeConfig) (*node.OperaNode, error) {
+	nodeConfig.ConsensusChainEnabled = n.runConsensusChain.Load()
 	node, err := node.StartOperaDockerNode(ctx, n.docker, n.network, nodeConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start opera docker; %v", err)
@@ -282,6 +360,7 @@ func (n *LocalNetwork) prepareGenesis() error {
 	if err := genesis.ApplyNetworkRulesPatch(&rules, n.config.NetworkRules); err != nil {
 		return errors.Join(fmt.Errorf("failed to apply network rules to genesis: %w", err), os.RemoveAll(tmpDir))
 	}
+	n.runConsensusChain.Store(rules.Upgrades.RunConsensusChain)
 
 	genesisPath := filepath.Join(tmpDir, "genesis.json")
 	if err := genesis.GenerateJsonGenesis(genesisPath, driver.GetValidatorStakes(n.config.Validators), &rules); err != nil {
@@ -367,7 +446,17 @@ func (n *LocalNetwork) ApplyNetworkRules(ctx context.Context, rules driver.Netwo
 	}
 	defer client.Close()
 
-	return network.ApplyNetworkRules(ctx, client, rules)
+	if err := network.ApplyNetworkRules(ctx, client, rules); err != nil {
+		return err
+	}
+
+	// A patch toggling the RunConsensusChain upgrade changes whether nodes run
+	// the consensus-chain engine. The engines come up on the next epoch seal,
+	// so the mesh is seeded in AdvanceEpoch rather than here.
+	if rules.Upgrades != nil && rules.Upgrades.RunConsensusChain != nil {
+		n.runConsensusChain.Store(*rules.Upgrades.RunConsensusChain)
+	}
+	return nil
 }
 
 func (n *LocalNetwork) AdvanceEpoch(ctx context.Context, epochIncrement int) error {
@@ -377,7 +466,20 @@ func (n *LocalNetwork) AdvanceEpoch(ctx context.Context, epochIncrement int) err
 	}
 	defer client.Close()
 
-	return network.AdvanceEpoch(ctx, client, epochIncrement)
+	if err := network.AdvanceEpoch(ctx, client, epochIncrement); err != nil {
+		return err
+	}
+
+	// When the RunConsensusChain upgrade was enabled by a rules patch, the
+	// engines are built by the nodes on the epoch seal that just happened, and
+	// their fresh mesh identities must be connected. This is a no-op for an
+	// already-formed mesh, as re-dialing a connected peer does nothing.
+	if n.runConsensusChain.Load() {
+		if err := n.connectConsensusChainMesh(ctx); err != nil {
+			return fmt.Errorf("failed to seed the consensus-chain mesh: %w", err)
+		}
+	}
+	return nil
 }
 
 func (n *LocalNetwork) WaitForEpochChange(ctx context.Context) error {

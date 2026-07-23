@@ -42,7 +42,7 @@ func TestPlanImage(t *testing.T) {
 			imageRef: "sonic:local",
 			want: imageBuildPlan{
 				kind:      imageBuildSonicLocal,
-				clientSrc: "sonic",
+				clientSrc: DefaultSonicLocalPath,
 			},
 		},
 		{
