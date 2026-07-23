@@ -52,7 +52,7 @@ fi
 # validator may emit before it has synced its own earlier events and fork
 # itself, which permanently stops the node.
 echo '[Emitter.EmitIntervals]' >> config.toml
-if [[ $VALIDATORS_COUNT == 1 && $VALIDATOR_ID == 1 && "${NETWORK_BOOTSTRAP:-1}" == "1" ]]
+if [[ $VALIDATORS_COUNT == 1 && $VALIDATOR_ID == 1 && "${NETWORK_BOOTSTRAP:-0}" == "1" ]]
 then
   echo DoublesignProtection = 0 >> config.toml
 else

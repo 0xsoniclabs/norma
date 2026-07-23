@@ -85,13 +85,12 @@ func (c *blocksRollingChecker) Check(ctx context.Context) error {
 		if last == nil {
 			continue
 		}
-		for _, dp := range series.GetRange(0, last.Position+1) {
-			if dp.Position >= observationStart {
-				if dp.Value.BlockHeight < last.Value.BlockHeight {
-					return nil
-				}
-				break
-			}
+		items := series.GetRange(observationStart, last.Position+1)
+		if len(items) == 0 {
+			continue
+		}
+		if items[0].Value.BlockHeight < last.Value.BlockHeight {
+			return nil
 		}
 	}
 

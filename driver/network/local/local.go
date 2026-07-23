@@ -58,6 +58,12 @@ type LocalNetwork struct {
 	// nodesMutex synchronizes access to the list of nodes.
 	nodesMutex sync.Mutex
 
+	// bootstrapped is set once the first node has joined and never resets:
+	// the chain has history from then on, so a later (re)join must not be
+	// treated as a fresh bootstrap even if all nodes have been removed in
+	// the meantime. Guarded by nodesMutex.
+	bootstrapped bool
+
 	// apps maintains a list of all applications created on the network.
 	apps []driver.Application
 
@@ -213,6 +219,7 @@ func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaN
 		return fmt.Errorf("failed to add peer; no existing node was reachable")
 	}
 	n.nodes[id] = node
+	n.bootstrapped = true
 	return nil
 }
 
@@ -220,7 +227,7 @@ func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaN
 // of validator and non-validator nodes in the network.
 func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNodeConfig) (*node.OperaNode, error) {
 	n.nodesMutex.Lock()
-	nodeConfig.NetworkBootstrap = len(n.nodes) == 0
+	nodeConfig.NetworkBootstrap = !n.bootstrapped
 	n.nodesMutex.Unlock()
 	node, err := node.StartOperaDockerNode(ctx, n.docker, n.network, nodeConfig)
 	if err != nil {
