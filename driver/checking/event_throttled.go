@@ -46,6 +46,12 @@ const defaultSampleWindow = 5 * time.Second
 // two snapshots that make up the window.
 const maxSampleAttempts = 5
 
+// defaultRetryBackoff is the pause between discarded sampling attempts. A
+// freshly rolled-over epoch briefly exposes no DAG heads; without this
+// pause all maxSampleAttempts are consumed within milliseconds, before the
+// new epoch emits its first events, and the check fails spuriously.
+const defaultRetryBackoff = 2 * time.Second
+
 func init() {
 	RegisterNetworkCheck("eventThrottled",
 		func(net driver.Network, _ *monitoring.Monitor) Checker {
@@ -57,6 +63,7 @@ func newEventThrottledChecker(net driver.Network) *eventThrottledChecker {
 	return &eventThrottledChecker{
 		net:          net,
 		sampleWindow: defaultSampleWindow,
+		retryBackoff: defaultRetryBackoff,
 		collectRates: collectEmissionRates,
 	}
 }
@@ -69,10 +76,13 @@ type eventThrottledChecker struct {
 	net            driver.Network
 	throttledNodes []string // node labels expected to be throttled
 	sampleWindow   time.Duration
+	retryBackoff   time.Duration // pause between discarded sampling attempts
 	// collectRates measures per-validator emission rates over the given
-	// window. Overridable for tests.
+	// window, pausing for backoff between discarded attempts. Overridable
+	// for tests.
 	collectRates func(
-		ctx context.Context, client rpc.Client, window time.Duration,
+		ctx context.Context, client rpc.Client,
+		window, backoff time.Duration,
 	) (map[uint64]float64, error)
 }
 
@@ -94,6 +104,7 @@ func (c *eventThrottledChecker) Configure(config CheckerConfig) Checker {
 		net:            c.net,
 		throttledNodes: throttled,
 		sampleWindow:   c.sampleWindow,
+		retryBackoff:   c.retryBackoff,
 		collectRates:   c.collectRates,
 	}
 }
@@ -121,7 +132,7 @@ func (c *eventThrottledChecker) Check(ctx context.Context) error {
 	}
 	defer client.Close()
 
-	rates, err := c.collectRates(ctx, client, c.sampleWindow)
+	rates, err := c.collectRates(ctx, client, c.sampleWindow, c.retryBackoff)
 	if err != nil {
 		return err
 	}
@@ -195,7 +206,7 @@ type rawEvent struct {
 // giving up after maxSampleAttempts. This is necessary because Sonic
 // epochs can be shorter than a useful sampling window.
 func collectEmissionRates(
-	ctx context.Context, client rpc.Client, window time.Duration,
+	ctx context.Context, client rpc.Client, window, backoff time.Duration,
 ) (map[uint64]float64, error) {
 	var lastErr error
 	for attempt := range maxSampleAttempts {
@@ -213,6 +224,16 @@ func collectEmissionRates(
 			"max_attempts", maxSampleAttempts,
 			"error", err,
 		)
+		// Give a freshly rolled-over epoch time to emit its first events
+		// and expose DAG heads before retrying. Skipped after the final
+		// attempt so the check fails fast once retries are exhausted.
+		if attempt < maxSampleAttempts-1 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoff):
+			}
+		}
 	}
 	return nil, fmt.Errorf(
 		"could not obtain a stable emission-rate sample after %d "+
