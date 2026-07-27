@@ -265,7 +265,7 @@ func TestEventThrottledChecker_Passes_WhenExplicitThrottledNodeMatches(t *testin
 	checker := newEventThrottledChecker(net)
 	checker.throttledNodes = []string{"throttled"}
 	checker.collectRates = func(
-		context.Context, rpc.Client, time.Duration,
+		context.Context, rpc.Client, time.Duration, time.Duration,
 	) (map[uint64]float64, error) {
 		return map[uint64]float64{1: 10.0, 2: 1.0}, nil
 	}
@@ -297,7 +297,7 @@ func TestEventThrottledChecker_Fails_WhenListedNodeIsUnthrottled(t *testing.T) {
 	checker := newEventThrottledChecker(net)
 	checker.throttledNodes = []string{"also-dominant"}
 	checker.collectRates = func(
-		context.Context, rpc.Client, time.Duration,
+		context.Context, rpc.Client, time.Duration, time.Duration,
 	) (map[uint64]float64, error) {
 		return map[uint64]float64{1: 10.0, 2: 10.0}, nil
 	}
@@ -353,7 +353,7 @@ func TestCollectEmissionRates_ReturnsDeltaRates_WhenEpochStable(t *testing.T) {
 	}
 
 	window := 100 * time.Millisecond
-	rates, err := collectEmissionRates(t.Context(), rpcClient, window)
+	rates, err := collectEmissionRates(t.Context(), rpcClient, window, 0)
 	require.NoError(t, err)
 	// Delta creator 1: 15 - 5 = 10 events over 0.1s => 100/s.
 	// Delta creator 2: 3 - 1 = 2 events over 0.1s => 20/s.
@@ -459,11 +459,88 @@ func TestCollectEmissionRates_Retries_OnEpochChange(t *testing.T) {
 	}
 
 	rates, err := collectEmissionRates(
-		t.Context(), rpcClient, 100*time.Millisecond,
+		t.Context(), rpcClient, 100*time.Millisecond, 0,
 	)
 	require.NoError(t, err)
 	// Delta for creator 1: 2 - 1 = 1 event over 0.1s => 10/s.
 	require.InDelta(t, 10.0, rates[1], 0.01)
+}
+
+// TestCollectEmissionRates_Retries_WhenEpochHasNoHeadsYet reproduces the
+// reported failure: right after an epoch rolls over, dag_getHeads returns
+// no heads and the first snapshot fails immediately. Because this path
+// does not wait out the sampling window, the retry must not be consumed
+// instantly — the collector retries and succeeds once heads appear.
+func TestCollectEmissionRates_Retries_WhenEpochHasNoHeadsYet(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	rpcClient := rpc.NewMockClient(ctrl)
+
+	// --- Attempt 1: epoch 1 has rolled over but exposes no heads yet.
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "eth_currentEpoch").
+		SetArg(0, hexutil.Uint64(1))
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "dag_getHeads", "0x1").
+		SetArg(0, []string{})
+
+	// --- Attempt 2: same epoch, now populated, succeeds.
+	a2s1Heads, a2s1Events := buildIndependentHeads([]uint64{1})
+	a2s2Heads, a2s2Events := buildIndependentHeads([]uint64{1, 1})
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "eth_currentEpoch").
+		SetArg(0, hexutil.Uint64(1))
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "dag_getHeads", "0x1").
+		SetArg(0, a2s1Heads)
+	for h, ev := range a2s1Events {
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "dag_getEvent", h).
+			SetArg(0, ev)
+	}
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "eth_currentEpoch").
+		SetArg(0, hexutil.Uint64(1))
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "dag_getHeads", "0x1").
+		SetArg(0, a2s2Heads)
+	for h, ev := range a2s2Events {
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "dag_getEvent", h).
+			SetArg(0, ev)
+	}
+
+	rates, err := collectEmissionRates(
+		t.Context(), rpcClient, 100*time.Millisecond, 0,
+	)
+	require.NoError(t, err)
+	// Delta for creator 1: 2 - 1 = 1 event over 0.1s => 10/s.
+	require.InDelta(t, 10.0, rates[1], 0.01)
+}
+
+// TestCollectEmissionRates_StopsRetrying_WhenContextCancelled verifies that
+// once the context is cancelled the collector returns promptly and does not
+// start another sampling attempt, rather than burning through the remaining
+// attempts. A large backoff makes any missed cancellation observable.
+func TestCollectEmissionRates_StopsRetrying_WhenContextCancelled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	rpcClient := rpc.NewMockClient(ctrl)
+
+	ctx, cancel := context.WithCancel(t.Context())
+
+	// First snapshot fails (no heads) and cancels the context. No second
+	// snapshot must be attempted; unexpected extra calls fail the mock.
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "eth_currentEpoch").
+		SetArg(0, hexutil.Uint64(1))
+	rpcClient.EXPECT().
+		Call(gomock.Any(), "dag_getHeads", "0x1").
+		DoAndReturn(func(any, string, ...any) error {
+			cancel()
+			return nil
+		})
+
+	_, err := collectEmissionRates(ctx, rpcClient, time.Second, time.Hour)
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 // buildIndependentHeads constructs a set of disconnected head events,
