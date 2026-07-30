@@ -12,25 +12,21 @@ Scenario:
     type: validator
     imageName: "sonic:v2.1.6"
     dataVolume: validator-1-data
-    stake: 2500000
 
   - startNode: validator-2
     type: validator
     imageName: "sonic:v2.1.6"
     dataVolume: validator-2-data
-    stake: 2500000
 
   - startNode: validator-3
     type: validator
     imageName: "sonic:v2.2.0"
     dataVolume: validator-3-data
-    stake: 2500000
 
   - startNode: validator-4
     type: validator
     imageName: "sonic:v2.2.0"
     dataVolume: validator-4-data
-    stake: 2500000
 
   - runApp: migration-load
     type: counter

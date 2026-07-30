@@ -20,7 +20,6 @@ InitialNetworkRules:
 Scenario:
   - startNode: validator-main
     type: validator
-    stake: 10000000
 
   - runApp: counter-load
     type: counter

@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/stretchr/testify/require"
 )
@@ -41,6 +42,40 @@ func TestCheckScenarios(t *testing.T) {
 		})
 	}
 }
+
+// TestReleaseTestingScenarios_UseLocalClient checks that every release testing
+// scenario starts at least one node running the local sonic sources. A scenario
+// that only uses released images would not test the code under release.
+func TestReleaseTestingScenarios_UseLocalClient(t *testing.T) {
+	files, err := listAll()
+	require.NoError(t, err, "failed to get list of all scenario files")
+
+	prefix := releaseTestingDir + string(filepath.Separator)
+	found := false
+	for _, file := range files {
+		if !strings.HasPrefix(file, prefix) {
+			continue
+		}
+		found = true
+		t.Run(file, func(t *testing.T) {
+			scenario, err := parser.ParseFile(file)
+			require.NoError(t, err, "failed to parse file", file)
+
+			for _, step := range scenario.Steps {
+				if step.Function != parser.FuncStartNode {
+					continue
+				}
+				if driver.ResolveClientImageName(step.ImageName) == driver.DefaultClientDockerImageName {
+					return
+				}
+			}
+			t.Errorf("scenario starts no node using %s", driver.DefaultClientDockerImageName)
+		})
+	}
+	require.True(t, found, "failed to locate any scenario in %s", releaseTestingDir)
+}
+
+const releaseTestingDir = "release_testing"
 
 func listAll() ([]string, error) {
 	files := []string{}

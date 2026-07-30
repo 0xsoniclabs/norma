@@ -114,15 +114,24 @@ proven that claim about a shipped artifact. Freeze it:
 
     <feature>_fork_<old>_local.yml   →   <feature>_fork_<old>_v<NEW>.yml
 
-by giving the unpinned node an explicit `sonic:vNEW`. The renamed file becomes the
-permanent regression test for that boundary. It is a **rename, not a copy** —
-the candidate keeps its coverage of the same fork through the unpinned
-`rules/enable_<feature>.yml` scenarios, so a `_local` sibling would be
-redundant.
+by pinning `sonic:vNEW` on the surviving side of the fork. The renamed file
+becomes the permanent regression test for that boundary. It is a **rename, not a
+copy** — a separate `_local` sibling would duplicate a boundary the candidate
+already crosses in the unpinned `rules/enable_<feature>.yml` scenarios.
+
+Graduating **splits** the surviving side, it does not convert it: `vNEW` joins as
+a feature peer and the candidate keeps a node in the file, holding the ⅔ of §5a.
+Converting the last unpinned node instead leaves a scenario made entirely of
+released images, which no longer exercises the code being released —
+`TestReleaseTestingScenarios_UseLocalClient` in
+[scenarios/scenario_test.go](scenarios/scenario_test.go) fails if that happens.
+The boundary node itself is untouched and stays frozen.
 
 The repository already follows this convention:
-`subsidies_fork_v215_v216.yml` is a graduated pair and has
-no `_v215_local` sibling, because `local` moved past that boundary.
+`subsidies_fork_v215_v216.yml` is a graduated pair and has no `_v215_local`
+sibling, because `local` moved past that boundary. It sits in
+[scenarios/examples/](scenarios/examples) under the retirement rule below, where
+the candidate requirement no longer applies.
 
 ### Retiring frozen scenarios
 
@@ -198,9 +207,8 @@ Three constraints when adding a peer:
    a peer fork *stalls* consensus, which reports as "no blocks produced" and
    tells you nothing about who was wrong. At equal stakes three validators put
    any two at exactly ⅔ — not a quorum — so defaults are usually wrong here.
-   Two scenario shapes are exempt because the candidate cannot hold ⅔ by
-   construction: frozen fork boundaries with no candidate node, and migration
-   scenarios, where every validator starts on a released version.
+   Migration scenarios are the one exemption: every validator there starts on
+   a released version, so the candidate cannot hold ⅔ by construction.
 3. **Do not write a `blockHashes` check.** Hash agreement is what makes a peer
    worth adding — `blocksProduced` cannot see a fork that leaves a quorum behind
    — but the parser already appends `advanceEpoch`, `advanceEpoch` and
@@ -306,7 +314,9 @@ or the suite becomes actively misleading:
 ### Step 5 — Verify
 
 ```
-go test ./scenarios/                        # parses and checks every scenario
+go test ./scenarios/                        # parses every scenario, and asserts
+                                            # each release_testing one runs the
+                                            # candidate on at least one node
 build/norma build scenarios/release_testing # pre-builds all referenced images
 build/norma run scenarios/release_testing   # runs the suite (accepts directories)
 ```
@@ -326,10 +336,12 @@ done
 grep -rn 'blockHashes\|blockHeights' scenarios/
 ```
 
-`go test ./scenarios/` only parses — it will not catch a Boundary pin that was
-wrongly rotated. That failure mode is invisible to CI: the scenario still
-passes, it just no longer tests anything. Classification review in Step 3 is the
-only guard.
+The `local` column above is the one property now asserted in Go, so treat it as
+a cross-check rather than the guard. Everything else here is prose: `go test
+./scenarios/` will not catch a Boundary pin that was wrongly rotated, or a peer
+added below the ⅔ threshold. Those failure modes are invisible to CI — the
+scenario still passes, it just no longer tests what it claims. Classification
+review in Step 3 is the only guard.
 
 ---
 
