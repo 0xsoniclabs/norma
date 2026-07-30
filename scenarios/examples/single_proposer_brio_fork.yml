@@ -1,17 +1,18 @@
-Name: Enable Brio Test
+Name: Single Proposer Brio Fork
 Description: >-
-  Starts with Brio disabled, enables it via updateRules,
-  and verifies the network continues producing blocks.
+  Verifies block production under single proposer
+  block formation mode with multiple validators.
 
 InitialNetworkRules:
   Upgrades:
     Sonic: true
     Allegro: true
-    GasSubsidies: true
     Brio: false
+    GasSubsidies: true
+    SingleProposerBlockFormation: true
 
 Scenario:
-  - startNode: validator-new
+  - startNode: validator
     type: validator
     instances: 5 # ensure the network continues after failures of other nodes
 

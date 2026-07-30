@@ -1,4 +1,4 @@
-Name: Rejoin With Volume Test
+Name: Rejoin Upgraded With Data Volume
 Description: >-
   Tests that a validator can be stopped, upgraded, and
   rejoined using a persistent data volume.

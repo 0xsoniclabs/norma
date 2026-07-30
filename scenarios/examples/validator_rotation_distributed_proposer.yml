@@ -1,13 +1,14 @@
-Name: Single Proposer Gradual Exchange Test
+Name: Validator Rotation Distributed Proposer
 Description: >-
-  Gradually replaces validators one by one under single
-  proposer mode while maintaining network liveness.
+  Gradually replaces validators one by one under
+  distributed proposer mode while maintaining network
+  liveness.
 
 InitialNetworkRules:
   Upgrades:
     Sonic: true
     Allegro: false
-    SingleProposerBlockFormation: true
+    SingleProposerBlockFormation: false
   Epochs:
     MaxEpochDuration: 1000s
 

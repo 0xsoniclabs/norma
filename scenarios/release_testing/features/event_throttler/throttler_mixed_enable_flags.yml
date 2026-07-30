@@ -1,4 +1,4 @@
-Name: Release Features Event Throttler Mixed Flags
+Name: Throttler Mixed Enable Flags
 
 Description: >-
   Tests event throttler behavior with mixed feature flags. Some nodes

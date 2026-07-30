@@ -1,4 +1,4 @@
-Name: Liveness Forked DB Remains Forked After Update
+Name: Forked DB Stays Forked
 
 Description: >-
   Verifies that a validator that forked before an upgrade remains

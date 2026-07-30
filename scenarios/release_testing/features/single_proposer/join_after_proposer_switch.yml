@@ -1,4 +1,4 @@
-Name: Release Features Single Proposer Clients Can Join After Flag Switch
+Name: Join After Proposer Switch
 
 Description: >-
   Verifies that new validators can join the network after single

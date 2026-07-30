@@ -1,4 +1,4 @@
-Name: Release Features Single Proposer Mixed Versions
+Name: Proposer Switch With Old Client
 
 Description: >-
   Verifies single proposer mode works correctly with validators

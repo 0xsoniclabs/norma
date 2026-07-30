@@ -1,4 +1,4 @@
-Name: Release Features Single Proposer Stress Test
+Name: High Load Five Validators
 
 Description: >-
   Stress-tests single proposer mode under heavy transaction load

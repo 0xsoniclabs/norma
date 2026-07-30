@@ -1,4 +1,4 @@
-Name: Release Validator Restart with Migrated Volume Quorum
+Name: Restart Validator Migrated Volume
 
 Description: >-
   Verifies stopping and restarting one validator with a migrated
