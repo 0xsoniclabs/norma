@@ -2,8 +2,9 @@ Name: Enable Subsidies By Rules Update
 
 Description: >-
   Enables GasSubsidies at runtime via a rules update on a mixed-version
-  validator set. After activation, both client versions support the
-  feature and subsidies traffic executes successfully.
+  validator set - v2.1.6, v2.2.0 and the candidate. All three support
+  the feature, so activation must be coherent and subsidies traffic
+  executes successfully afterwards.
 
 InitialNetworkRules:
   Upgrades:
@@ -12,14 +13,21 @@ InitialNetworkRules:
     GasSubsidies: false
 
 Scenario:
+  # The candidate keeps more than two thirds of the stake so that a fork by
+  # either released client is a hash mismatch on a live network, not a stall.
   - startNode: validator-local
     type: validator
-    stake: 5000000
+    stake: 7000000
 
   - startNode: validator-v216
     type: validator
     imageName: "sonic:v2.1.6"
-    stake: 3000000
+    stake: 1500000
+
+  - startNode: validator-v220
+    type: validator
+    imageName: "sonic:v2.2.0"
+    stake: 1500000
 
   - waitFor: 15s
 

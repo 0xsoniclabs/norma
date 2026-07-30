@@ -6,6 +6,10 @@ Description: >-
   Brio and TransactionBundles at runtime, subsidized bundle traffic is
   accepted, and a late-joining validator stays in sync.
 
+  The peer runs v2.2.0, the oldest release that implements bundles, so
+  the activation is checked across versions rather than between two
+  copies of the same build. The late joiner is the candidate.
+
 InitialNetworkRules:
   Upgrades:
     Sonic: true
@@ -19,8 +23,9 @@ Scenario:
     type: validator
     stake: 8000000
 
-  - startNode: validator-peer
+  - startNode: validator-v220-peer
     type: validator
+    imageName: "sonic:v2.2.0"
     stake: 2000000
 
   - runApp: baseline

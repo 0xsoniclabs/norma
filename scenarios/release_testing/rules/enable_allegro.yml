@@ -2,7 +2,9 @@ Name: Release Rules Enable Allegro
 
 Description: >-
   Enables Allegro from a Sonic-only baseline and verifies network
-  liveness plus Allegro-era BLS12-Add traffic after activation.
+  liveness plus Allegro-era BLS12-Add traffic after activation. The
+  validator set spans v2.1.6, v2.2.0 and the candidate, all of which
+  support Allegro, so the activation must be coherent across versions.
 
 InitialNetworkRules:
   Upgrades:
@@ -13,10 +15,18 @@ Scenario:
   - startNode: validators
     type: validator
     instances: 2
+    stake: 4000000 # 80% of stake, so a released-client fork shows up as a hash
+                   # mismatch instead of stalling the network
 
-  - startNode: validator-old
+  - startNode: validator-v216
     type: validator
     imageName: "sonic:v2.1.6"
+    stake: 1000000
+
+  - startNode: validator-v220
+    type: validator
+    imageName: "sonic:v2.2.0"
+    stake: 1000000
 
   - runApp: baseline
     type: counter

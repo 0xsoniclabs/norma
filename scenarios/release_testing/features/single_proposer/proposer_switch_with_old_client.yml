@@ -2,8 +2,9 @@ Name: Proposer Switch With Old Client
 
 Description: >-
   Verifies single proposer mode works correctly with validators
-  running different Sonic versions. Block production continues and
-  hashes remain consistent across all version combinations.
+  running different Sonic versions - v2.1.6, v2.2.0 and the candidate.
+  Block production continues and hashes remain consistent across all
+  version combinations, before and after the proposer switch.
 
 InitialNetworkRules:
   Upgrades:
@@ -14,15 +15,26 @@ InitialNetworkRules:
     MaxEpochDuration: 1000s
 
 Scenario:
+  # The candidate holds more than two thirds of the stake, so a fork by either
+  # released client leaves the network live and shows up as a hash mismatch
+  # rather than a stall.
   - startNode: validator-local-1
     type: validator
+    stake: 4000000
 
   - startNode: validator-local-2
     type: validator
+    stake: 4000000
 
-  - startNode: validator-old
+  - startNode: validator-v216
     type: validator
     imageName: "sonic:v2.1.6"
+    stake: 1000000
+
+  - startNode: validator-v220
+    type: validator
+    imageName: "sonic:v2.2.0"
+    stake: 1000000
 
   - runApp: load
     type: counter

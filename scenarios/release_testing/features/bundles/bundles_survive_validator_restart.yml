@@ -2,9 +2,10 @@ Name: Bundles Survive Validator Restart
 
 Description: >-
   Validates bundle-processing compatibility among all currently
-  bundle-capable clients. Validators process subsidized bundles
-  concurrently while nodes remain synchronized and block production
-  stays stable.
+  bundle-capable clients - v2.2.0 and the candidate. Validators process
+  subsidized bundles concurrently while nodes remain synchronized and
+  block production stays stable, including across the restart of one
+  candidate validator. v2.1.6 has no bundle support and is excluded.
 
 InitialNetworkRules:
   Upgrades:
@@ -19,8 +20,9 @@ Scenario:
     type: validator
     stake: 4000000
 
-  - startNode: validator-local-b
+  - startNode: validator-v220
     type: validator
+    imageName: "sonic:v2.2.0"
     stake: 3000000
 
   - startNode: validator-local-c

@@ -2,7 +2,9 @@ Name: Toggle Subsidies Off And On
 
 Description: >-
   Toggles GasSubsidies off and on while keeping the network live.
-  Subsidies traffic runs again after re-enabling the feature.
+  Subsidies traffic runs again after re-enabling the feature. The
+  validator set spans v2.1.6, v2.2.0 and the candidate, so both rule
+  transitions have to be applied coherently by every version.
 
 InitialNetworkRules:
   Upgrades:
@@ -14,10 +16,18 @@ Scenario:
   - startNode: validators
     type: validator
     instances: 2
+    stake: 4000000 # 80% of stake, so a released-client fork shows up as a hash
+                   # mismatch instead of stalling the network
 
-  - startNode: validator-old
+  - startNode: validator-v216
     type: validator
     imageName: "sonic:v2.1.6"
+    stake: 1000000
+
+  - startNode: validator-v220
+    type: validator
+    imageName: "sonic:v2.2.0"
+    stake: 1000000
 
   - runApp: baseline
     type: counter
