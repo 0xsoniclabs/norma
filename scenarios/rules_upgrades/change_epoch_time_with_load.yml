@@ -16,7 +16,6 @@ InitialNetworkRules:
 Scenario:
   - startNode: validator-main
     type: validator
-    imageName: "sonic:local"
     stake: 10000000
 
   - runApp: counter-load

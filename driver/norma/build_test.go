@@ -91,7 +91,8 @@ Scenario:
 		t.Fatalf("collectBuildableImages() failed: %v", err)
 	}
 
-	want := []string{"sonic", "sonic:local", "sonic:v2.1.2"}
+	// node-b omits imageName and so resolves to the default, sonic:local.
+	want := []string{"sonic:local", "sonic:v2.1.2"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("invalid images\ngot:  %#v\nwant: %#v", got, want)
 	}

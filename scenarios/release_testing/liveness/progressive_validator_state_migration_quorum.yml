@@ -45,7 +45,6 @@ Scenario:
           tolerance: 10
   - startNode: validator-1
     type: validator
-    imageName: "sonic:local"
     dataVolume: validator-1-data
   - waitFor: 15s
   - checks:
@@ -59,7 +58,6 @@ Scenario:
           tolerance: 10
   - startNode: validator-2
     type: validator
-    imageName: "sonic:local"
     dataVolume: validator-2-data
   - waitFor: 15s
   - checks:
@@ -73,7 +71,6 @@ Scenario:
           tolerance: 10
   - startNode: validator-3
     type: validator
-    imageName: "sonic:local"
     dataVolume: validator-3-data
   - waitFor: 15s
   - checks:
@@ -87,7 +84,6 @@ Scenario:
           tolerance: 10
   - startNode: validator-4
     type: validator
-    imageName: "sonic:local"
     dataVolume: validator-4-data
   - waitFor: 15s
   - checks:

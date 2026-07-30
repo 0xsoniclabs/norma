@@ -16,7 +16,6 @@ InitialNetworkRules:
 Scenario:
   - startNode: validator-initial
     type: validator
-    imageName: "sonic:local"
     instances: 3
 
   - runApp: load
@@ -47,7 +46,6 @@ Scenario:
   # Start a new validator after the flag switch.
   - startNode: validator-late
     type: validator
-    imageName: "sonic:local"
 
   - advanceEpoch
 

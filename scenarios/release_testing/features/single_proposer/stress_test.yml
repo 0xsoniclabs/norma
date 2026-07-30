@@ -14,7 +14,6 @@ InitialNetworkRules:
 Scenario:
   - startNode: validator
     type: validator
-    imageName: "sonic:local"
     instances: 5
 
   - runApp: heavy-load

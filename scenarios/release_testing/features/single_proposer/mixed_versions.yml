@@ -16,11 +16,9 @@ InitialNetworkRules:
 Scenario:
   - startNode: validator-local-1
     type: validator
-    imageName: "sonic:local"
 
   - startNode: validator-local-2
     type: validator
-    imageName: "sonic:local"
 
   - startNode: validator-old
     type: validator

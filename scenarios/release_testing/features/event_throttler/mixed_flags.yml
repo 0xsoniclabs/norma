@@ -11,19 +11,16 @@ Description: >-
 Scenario:
   - startNode: validator-dominant
     type: validator
-    imageName: "sonic:local"
     stake: 8000000 # 80% of stake => dominant set alone
     extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
 
   - startNode: validator-minor-throttled
     type: validator
-    imageName: "sonic:local"
     stake: 1000000 # 10% of stake => non-dominant, throttler enabled
     extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
 
   - startNode: validator-minor-unthrottled
     type: validator
-    imageName: "sonic:local"
     stake: 1000000 # 10% of stake => non-dominant, throttler disabled
     extraArguments: "--event-throttler=false --http.api admin,eth,sonic,txpool,dag"
 

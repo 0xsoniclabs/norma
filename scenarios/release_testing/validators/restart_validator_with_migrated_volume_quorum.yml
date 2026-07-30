@@ -8,7 +8,6 @@ Description: >-
 Scenario:
   - startNode: validator-stable
     type: validator
-    imageName: "sonic:local"
     stake: 4500000
     instances: 2
 
@@ -40,7 +39,6 @@ Scenario:
 
   - startNode: validator-migrating
     type: validator
-    imageName: "sonic:local"
     dataVolume: validator-migrating-data
 
   - waitFor: 20s

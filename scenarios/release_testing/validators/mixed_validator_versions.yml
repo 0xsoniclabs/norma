@@ -13,12 +13,10 @@ Scenario:
 
   - startNode: validator-local-a
     type: validator
-    imageName: "sonic:local"
     stake: 5000000
 
   - startNode: validator-local-b
     type: validator
-    imageName: "sonic:local"
     stake: 3000000
 
   - runApp: normal

@@ -8,12 +8,10 @@ Description: >-
 Scenario:
   - startNode: validator-majority
     type: validator
-    imageName: "sonic:local"
     stake: 7000000
 
   - startNode: validator-minority
     type: validator
-    imageName: "sonic:local"
     stake: 3000000
 
   - runApp: blackout-load
@@ -37,7 +35,6 @@ Scenario:
 
   - startNode: validator-majority
     type: validator
-    imageName: "sonic:local"
 
   - waitFor: 20s
 

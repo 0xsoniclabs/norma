@@ -31,7 +31,13 @@ import (
 //go:generate mockgen -source network.go -destination network_mock.go -package driver
 
 // DefaultClientDockerImageName is the name of the docker image to use for clients.
-const DefaultClientDockerImageName = "sonic"
+//
+// This is "sonic:local", which builds from the sonic submodule, so a scenario
+// that omits imageName tests the local sources. The alternative, "sonic",
+// builds from the remote repository's default branch and therefore ignores the
+// checked-out submodule entirely; scenarios that want that must ask for it
+// explicitly.
+const DefaultClientDockerImageName = "sonic:local"
 
 // DefaultValidators is a default configuration for a single validator.
 func DefaultValidators(name string) Validators {

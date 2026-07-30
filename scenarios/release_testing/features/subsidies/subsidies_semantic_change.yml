@@ -23,7 +23,6 @@ InitialNetworkRules:
 Scenario:
   - startNode: validator-local
     type: validator
-    imageName: "sonic:local"
     stake: 5000000
 
   - startNode: validator-v216

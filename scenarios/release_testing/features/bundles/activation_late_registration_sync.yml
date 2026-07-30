@@ -17,12 +17,10 @@ InitialNetworkRules:
 Scenario:
   - startNode: validator-majority
     type: validator
-    imageName: "sonic:local"
     stake: 8000000
 
   - startNode: validator-peer
     type: validator
-    imageName: "sonic:local"
     stake: 2000000
 
   - runApp: baseline
@@ -67,7 +65,6 @@ Scenario:
 
   - startNode: validator-late
     type: validator
-    imageName: "sonic:local"
     stake: 1000000
 
   - waitFor: 30s

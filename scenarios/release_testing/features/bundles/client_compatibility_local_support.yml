@@ -17,17 +17,14 @@ InitialNetworkRules:
 Scenario:
   - startNode: validator-local-a
     type: validator
-    imageName: "sonic:local"
     stake: 4000000
 
   - startNode: validator-local-b
     type: validator
-    imageName: "sonic:local"
     stake: 3000000
 
   - startNode: validator-local-c
     type: validator
-    imageName: "sonic:local"
     stake: 3000000
 
   - runApp: baseline
@@ -59,7 +56,6 @@ Scenario:
 
   - startNode: validator-local-c
     type: validator
-    imageName: "sonic:local"
 
   - waitFor: 20s
 
