@@ -7,8 +7,9 @@ InitialNetworkRules:
   Upgrades:
     Sonic: true
     Allegro: true
-    GasSubsidies: true
     Brio: false
+    GasSubsidies: true
+    SingleProposerBlockFormation: true
 
 Scenario:
   - startNode: validator
