@@ -8,7 +8,7 @@ Description: >-
 Scenario:
   - startNode: validator-old
     type: validator
-    imageName: "sonic:v2.1.6"
+    imageName: "sonic:v2.2.0"
 
   - startNode: validators
     type: validator

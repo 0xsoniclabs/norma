@@ -2,31 +2,31 @@ Name: Liveness Progressive Validator State Migration Quorum
 
 Description: >-
   Verifies liveness while progressively migrating four validators
-  from v2.1.6 to local without undelegation. Block production
+  from v2.2.0 to local without undelegation. Block production
   continues throughout every stop/restart window.
 
 Scenario:
   - startNode: validator-1
     type: validator
-    imageName: "sonic:v2.1.6"
+    imageName: "sonic:v2.2.0"
     dataVolume: validator-1-data
     stake: 2500000
 
   - startNode: validator-2
     type: validator
-    imageName: "sonic:v2.1.6"
+    imageName: "sonic:v2.2.0"
     dataVolume: validator-2-data
     stake: 2500000
 
   - startNode: validator-3
     type: validator
-    imageName: "sonic:v2.1.6"
+    imageName: "sonic:v2.2.0"
     dataVolume: validator-3-data
     stake: 2500000
 
   - startNode: validator-4
     type: validator
-    imageName: "sonic:v2.1.6"
+    imageName: "sonic:v2.2.0"
     dataVolume: validator-4-data
     stake: 2500000
 

@@ -12,7 +12,7 @@ Scenario:
 
   - startNode: migrating-validator
     type: validator
-    imageName: "sonic:v2.1.6"
+    imageName: "sonic:v2.2.0"
     dataVolume: validator-data
 
   - waitForEpoch

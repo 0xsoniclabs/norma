@@ -1,8 +1,8 @@
-Name: Liveness Supermajority After Brio Fork v2.1.6 Local
+Name: Brio Fork Supermajority v2.1.6 v2.2.0
 
 Description: >-
-  Verifies supermajority liveness across a mixed v2.1.6/local
-  validator set when Brio is enabled. The sonic:local supermajority
+  Verifies supermajority liveness across a mixed v2.1.6/v2.2.0
+  validator set when Brio is enabled. The sonic:v2.2.0 supermajority
   keeps the network online while Brio-era load executes.
 
 InitialNetworkRules:
@@ -12,8 +12,9 @@ InitialNetworkRules:
     Brio: false
 
 Scenario:
-  - startNode: validator-local
+  - startNode: validator-v220
     type: validator
+    imageName: "sonic:v2.2.0"
     stake: 7000000
 
   - startNode: validator-v216

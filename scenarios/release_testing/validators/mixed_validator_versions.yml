@@ -1,19 +1,26 @@
-Name: Release Validators Mixed Versions v2.1.6 and Local
+Name: Release Validators Mixed Versions v2.1.6, v2.2.0 and Local
 
 Description: >-
-  Verifies a validator set with mixed client versions (v2.1.6 and
-  local) sustains normal load for 60 seconds with consistent block
-  hashes.
+  Verifies a validator set with mixed client versions (v2.1.6,
+  v2.2.0 and local) sustains normal load for 60 seconds with
+  consistent block hashes. This is the designated wide-matrix
+  scenario: it accumulates the last two released versions so older
+  clients keep interop coverage in exactly one place.
 
 Scenario:
   - startNode: validator-v216
     type: validator
     imageName: "sonic:v2.1.6"
-    stake: 2000000
+    stake: 1500000
+
+  - startNode: validator-v220
+    type: validator
+    imageName: "sonic:v2.2.0"
+    stake: 1500000
 
   - startNode: validator-local-a
     type: validator
-    stake: 5000000
+    stake: 4000000
 
   - startNode: validator-local-b
     type: validator

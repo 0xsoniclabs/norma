@@ -13,7 +13,7 @@ Scenario:
 
   - startNode: validator-migrating
     type: validator
-    imageName: "sonic:v2.1.6"
+    imageName: "sonic:v2.2.0"
     dataVolume: validator-migrating-data
     stake: 1000000
 
