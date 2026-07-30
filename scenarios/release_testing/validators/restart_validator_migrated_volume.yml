@@ -43,3 +43,7 @@ Scenario:
 
   - waitFor: 20s
 
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+
