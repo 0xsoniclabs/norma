@@ -1,4 +1,4 @@
-Name: Release Stress Multi Node Mix Payload Bundle Constant
+Name: Multi Node Mixed Bundle Load
 
 Description: >-
   Multi-validator stress test with mixed payloads including
@@ -16,7 +16,6 @@ InitialNetworkRules:
 Scenario:
   - startNode: validators
     type: validator
-    imageName: "sonic:local"
     instances: 4
 
   - runApp: counter-constant

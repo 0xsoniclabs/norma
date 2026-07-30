@@ -1,8 +1,11 @@
-Name: Release Rules Enable Bundles
+Name: Toggle Bundles Off And On
 
 Description: >-
   Toggles TransactionBundles off and on while keeping the network
   live. Subsidized bundle traffic runs again after re-enabling.
+  v2.2.0 is the oldest release that implements bundles, so it joins
+  the candidate for both rule transitions. v2.1.6 has no bundle
+  support at all and cannot participate.
 
 InitialNetworkRules:
   Upgrades:
@@ -15,8 +18,14 @@ InitialNetworkRules:
 Scenario:
   - startNode: validators
     type: validator
-    imageName: "sonic:local"
-    instances: 3
+    instances: 2
+    stake: 4000000 # 80% of stake, so a v2.2.0 fork shows up as a hash
+                   # mismatch instead of stalling the network
+
+  - startNode: validator-v220
+    type: validator
+    imageName: "sonic:v2.2.0"
+    stake: 2000000
 
   - runApp: baseline
     type: counter

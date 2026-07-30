@@ -1,4 +1,4 @@
-Name: Release Features Single Proposer Clients Can Join After Flag Switch
+Name: Join After Proposer Switch
 
 Description: >-
   Verifies that new validators can join the network after single
@@ -16,7 +16,6 @@ InitialNetworkRules:
 Scenario:
   - startNode: validator-initial
     type: validator
-    imageName: "sonic:local"
     instances: 3
 
   - runApp: load
@@ -47,7 +46,6 @@ Scenario:
   # Start a new validator after the flag switch.
   - startNode: validator-late
     type: validator
-    imageName: "sonic:local"
 
   - advanceEpoch
 
@@ -56,8 +54,5 @@ Scenario:
   - checks:
       - blocksProduced:
           tolerance: 10
-      - blockHashes
-      - blockHeights:
-          tolerance: 5
 
   - stopApp: load

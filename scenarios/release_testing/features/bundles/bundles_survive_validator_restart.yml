@@ -1,10 +1,11 @@
-Name: Release Features Bundles Client Compatibility Local Support
+Name: Bundles Survive Validator Restart
 
 Description: >-
   Validates bundle-processing compatibility among all currently
-  bundle-capable clients. Validators process subsidized bundles
-  concurrently while nodes remain synchronized and block production
-  stays stable.
+  bundle-capable clients - v2.2.0 and the candidate. Validators process
+  subsidized bundles concurrently while nodes remain synchronized and
+  block production stays stable, including across the restart of one
+  candidate validator. v2.1.6 has no bundle support and is excluded.
 
 InitialNetworkRules:
   Upgrades:
@@ -17,17 +18,15 @@ InitialNetworkRules:
 Scenario:
   - startNode: validator-local-a
     type: validator
-    imageName: "sonic:local"
     stake: 4000000
 
-  - startNode: validator-local-b
+  - startNode: validator-v220
     type: validator
-    imageName: "sonic:local"
+    imageName: "sonic:v2.2.0"
     stake: 3000000
 
   - startNode: validator-local-c
     type: validator
-    imageName: "sonic:local"
     stake: 3000000
 
   - runApp: baseline
@@ -47,6 +46,9 @@ Scenario:
   - checks:
       - blocksProduced:
           tolerance: 10
+      # Not redundant with the implicit end checks: validator-local-c restarts
+      # without a dataVolume, so it re-syncs from the network and any divergence
+      # it had before the stop is gone from its own history by then.
       - blockHashes
 
   - stopNode: validator-local-c
@@ -59,7 +61,6 @@ Scenario:
 
   - startNode: validator-local-c
     type: validator
-    imageName: "sonic:local"
 
   - waitFor: 20s
 

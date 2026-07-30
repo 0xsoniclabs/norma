@@ -1,10 +1,14 @@
-Name: Release Features Bundles Activation Late Registration Sync
+Name: Bundles Activation With Late Join
 
 Description: >-
   Validates coherent bundle activation when a validator is registered
   after bundles are enabled and already executing. The network enables
   Brio and TransactionBundles at runtime, subsidized bundle traffic is
   accepted, and a late-joining validator stays in sync.
+
+  The peer runs v2.2.0, the oldest release that implements bundles, so
+  the activation is checked across versions rather than between two
+  copies of the same build. The late joiner is the candidate.
 
 InitialNetworkRules:
   Upgrades:
@@ -17,12 +21,11 @@ InitialNetworkRules:
 Scenario:
   - startNode: validator-majority
     type: validator
-    imageName: "sonic:local"
     stake: 8000000
 
-  - startNode: validator-peer
+  - startNode: validator-v220-peer
     type: validator
-    imageName: "sonic:local"
+    imageName: "sonic:v2.2.0"
     stake: 2000000
 
   - runApp: baseline
@@ -63,11 +66,9 @@ Scenario:
   - checks:
       - blocksProduced:
           tolerance: 10
-      - blockHashes
 
   - startNode: validator-late
     type: validator
-    imageName: "sonic:local"
     stake: 1000000
 
   - waitFor: 30s

@@ -1,4 +1,4 @@
-Name: Single Block Proposer Test
+Name: Single Proposer Brio Fork
 Description: >-
   Verifies block production under single proposer
   block formation mode with multiple validators.
@@ -7,8 +7,9 @@ InitialNetworkRules:
   Upgrades:
     Sonic: true
     Allegro: true
-    GasSubsidies: true
     Brio: false
+    GasSubsidies: true
+    SingleProposerBlockFormation: true
 
 Scenario:
   - startNode: validator

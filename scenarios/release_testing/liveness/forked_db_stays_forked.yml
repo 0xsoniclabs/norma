@@ -1,4 +1,4 @@
-Name: Liveness Forked DB Remains Forked After Update
+Name: Forked DB Stays Forked
 
 Description: >-
   Verifies that a validator that forked before an upgrade remains
@@ -14,7 +14,6 @@ InitialNetworkRules:
 Scenario:
   - startNode: validator-stable
     type: validator
-    imageName: "sonic:local"
     stake: 9000000
 
   - startNode: validator-forked
@@ -52,7 +51,6 @@ Scenario:
 
   - startNode: validator-forked
     type: validator
-    imageName: "sonic:local"
     dataVolume: validator-forked-data
     failing: true
 

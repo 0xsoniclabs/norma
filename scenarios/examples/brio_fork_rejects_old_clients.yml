@@ -1,4 +1,4 @@
-Name: Enable Brio Test
+Name: Brio Fork Rejects Old Clients
 Description: >-
   Starts with Brio disabled, enables it via updateRules,
   and verifies the network continues producing blocks.

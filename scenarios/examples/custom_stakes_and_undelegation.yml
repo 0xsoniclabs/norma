@@ -2,7 +2,7 @@
 # Validators with different stakes receive proportional voting weight
 # in the consensus, reflected in the stake distribution shown in progress logs.
 
-Name: Custom Stake Test
+Name: Custom Stakes And Undelegation
 Description: >-
   Tests validators with different stake amounts and
   verifies partial and full undelegation.

@@ -1,4 +1,4 @@
-Name: Release Features Event Throttler Load With Different Stakes
+Name: Throttler Throttles Minor Stakes
 
 Description: >-
   Verifies that the event throttler correctly limits event emission
@@ -11,19 +11,16 @@ Description: >-
 Scenario:
   - startNode: validator-heavy
     type: validator
-    imageName: "sonic:local"
     stake: 8000000 # 80% of stake => dominant set alone
     extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag" # required for event throttler check
 
   - startNode: validator-medium
     type: validator
-    imageName: "sonic:local"
     stake: 1000000 # 10% of stake => non-dominant, throttler-eligible
     extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
 
   - startNode: validator-light
     type: validator
-    imageName: "sonic:local"
     stake: 1000000 # 10% of stake => non-dominant, throttler-eligible
     extraArguments: "--event-throttler=true --http.api admin,eth,sonic,txpool,dag"
 

@@ -1,4 +1,4 @@
-Name: Two Nodes Test
+Name: Mixed Version Two Validators
 Description: >-
   Runs two validator nodes with different images to
   verify multi-node consensus and compatibility.

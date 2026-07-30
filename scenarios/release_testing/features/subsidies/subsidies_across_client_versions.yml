@@ -1,0 +1,48 @@
+Name: Subsidies Across Client Versions
+
+Description: >-
+  Validates subsidies compatibility among validators running every
+  subsidies-capable version - v2.1.6, v2.2.0 and the candidate. Nodes
+  remain synchronized while processing mixed subsidized traffic and
+  block production stays stable.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    GasSubsidies: true
+
+Scenario:
+  # The candidate keeps more than two thirds of the stake so that a fork by
+  # either released client is a hash mismatch on a live network, not a stall.
+  - startNode: validator-local
+    type: validator
+    stake: 7000000
+
+  - startNode: validator-v216
+    type: validator
+    imageName: "sonic:v2.1.6"
+    stake: 1500000
+
+  - startNode: validator-v220
+    type: validator
+    imageName: "sonic:v2.2.0"
+    stake: 1500000
+
+  - runApp: baseline
+    type: counter
+    users: 20
+    rate:
+      constant: 15
+
+  - runApp: subsidies-load
+    type: subsidies
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10

@@ -1,0 +1,59 @@
+Name: Brio Fork Supermajority v2.1.6 v2.2.0 and Local
+
+Description: >-
+  Verifies supermajority liveness across a mixed v2.1.6/v2.2.0/local
+  validator set when Brio is enabled. v2.1.6 is the frozen boundary:
+  it has the Brio rule but not the implementation, so it forks on
+  activation. The Brio-capable supermajority of the candidate and
+  v2.2.0 keeps the network online while Brio-era load executes, and
+  has to agree on every hash while doing so.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: false
+
+Scenario:
+  - startNode: validator-local
+    type: validator
+    stake: 7000000 # 70% of stake, so a v2.2.0 divergence after activation
+                   # shows up as a hash mismatch instead of stalling the
+                   # network
+
+  - startNode: validator-v220
+    type: validator
+    imageName: "sonic:v2.2.0"
+    stake: 2000000
+
+  - startNode: validator-v216
+    type: validator
+    imageName: "sonic:v2.1.6"
+    stake: 1000000
+    failing: true
+
+  - runApp: baseline
+    type: counter
+    users: 20
+    rate:
+      constant: 20
+
+  - waitFor: 20s
+
+  - updateRules:
+      Upgrades:
+        Brio: true
+
+  - waitForEpoch
+
+  - runApp: brio-large-contract
+    type: largecontract
+    users: 10
+    rate:
+      constant: 6
+
+  - waitFor: 40s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10

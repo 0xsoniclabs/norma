@@ -1,4 +1,4 @@
-Name: Release Validator Restart with Migrated Volume Quorum
+Name: Restart Validator Migrated Volume
 
 Description: >-
   Verifies stopping and restarting one validator with a migrated
@@ -8,13 +8,12 @@ Description: >-
 Scenario:
   - startNode: validator-stable
     type: validator
-    imageName: "sonic:local"
     stake: 4500000
     instances: 2
 
   - startNode: validator-migrating
     type: validator
-    imageName: "sonic:v2.1.6"
+    imageName: "sonic:v2.2.0"
     dataVolume: validator-migrating-data
     stake: 1000000
 
@@ -40,8 +39,11 @@ Scenario:
 
   - startNode: validator-migrating
     type: validator
-    imageName: "sonic:local"
     dataVolume: validator-migrating-data
 
   - waitFor: 20s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
 

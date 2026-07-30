@@ -1,4 +1,4 @@
-Name: Run Application Test
+Name: Multiple Load Apps
 Description: >-
   Starts multiple load-generating applications with
   different types and rates to verify transaction

@@ -3,6 +3,10 @@ Name: Release Rules Enable Brio
 Description: >-
   Enables Brio from a Brio-disabled baseline and verifies network
   liveness plus Brio-dependent large contract load after activation.
+  v2.2.0 is the oldest release that implements Brio, so it joins the
+  candidate here: the activation has to be coherent between them.
+  v2.1.6 cannot participate - it forks on Brio, which is covered by
+  brio_fork_supermajority_v216_v220.yml.
 
 InitialNetworkRules:
   Upgrades:
@@ -14,8 +18,14 @@ InitialNetworkRules:
 Scenario:
   - startNode: validators
     type: validator
-    imageName: "sonic:local"
-    instances: 3
+    instances: 2
+    stake: 4000000 # 80% of stake, so a v2.2.0 fork shows up as a hash
+                   # mismatch instead of stalling the network
+
+  - startNode: validator-v220
+    type: validator
+    imageName: "sonic:v2.2.0"
+    stake: 2000000
 
   - runApp: baseline
     type: counter
