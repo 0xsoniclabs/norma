@@ -35,9 +35,6 @@ Scenario:
   - checks:
       - blocksProduced:
           tolerance: 10
-      - blockHashes
-      - blockHeights:
-          tolerance: 5
 
   # Enable single proposer mode.
   - updateRules:
@@ -51,8 +48,5 @@ Scenario:
   - checks:
       - blocksProduced:
           tolerance: 10
-      - blockHashes
-      - blockHeights:
-          tolerance: 5
 
   - stopApp: load

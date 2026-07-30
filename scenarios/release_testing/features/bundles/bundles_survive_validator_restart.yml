@@ -44,6 +44,9 @@ Scenario:
   - checks:
       - blocksProduced:
           tolerance: 10
+      # Not redundant with the implicit end checks: validator-local-c restarts
+      # without a dataVolume, so it re-syncs from the network and any divergence
+      # it had before the stop is gone from its own history by then.
       - blockHashes
 
   - stopNode: validator-local-c

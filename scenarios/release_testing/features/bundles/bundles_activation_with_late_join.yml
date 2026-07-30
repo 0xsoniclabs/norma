@@ -61,7 +61,6 @@ Scenario:
   - checks:
       - blocksProduced:
           tolerance: 10
-      - blockHashes
 
   - startNode: validator-late
     type: validator

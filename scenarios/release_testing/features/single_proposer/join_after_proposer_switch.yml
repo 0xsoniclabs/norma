@@ -54,8 +54,5 @@ Scenario:
   - checks:
       - blocksProduced:
           tolerance: 10
-      - blockHashes
-      - blockHeights:
-          tolerance: 5
 
   - stopApp: load
