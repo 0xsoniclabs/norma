@@ -56,6 +56,7 @@ The role, not the version string, decides what happens at release time.
 | **Candidate** | The code under test. Spelled as the *absence* of a pin. Deliberately contrasted against pinned versions in the same file. | unchanged, but graduates in fork-boundary scenarios (§4) |
 | **Baseline**  | "Some older client that must keep working." Interchangeable.          | rotate to `sonic:vNEW`    |
 | **Boundary**  | Pinned *because* it is the last client without feature X, so it must fork or fail. | **frozen forever** |
+| **Feature peer** | A released client that *implements* the feature under test, present so the scenario exercises the feature across versions instead of between copies of one build. | **join** if `vNEW` implements the feature; existing peers stay |
 | **Agnostic**  | Also unpinned, but the scenario tests topology, load or an app — it has no version dimension at all. | unchanged, and never graduates |
 
 ### Distinguishing Baseline from Boundary
@@ -91,6 +92,19 @@ Old-version interop coverage lives in **one** designated file that is allowed to
 accumulate: [scenarios/release_testing/validators/mixed_validator_versions.yml](scenarios/release_testing/validators/mixed_validator_versions.yml).
 It carries the last two released versions plus the candidate. Nowhere else.
 
+Two things are **not** accumulation and are not covered by this rule:
+
+- **Feature peers.** A released client in a feature scenario is not a second
+  Baseline; it is the only way that scenario can test the feature across
+  versions at all. See §5a.
+- **Migration source versions.** A migration scenario tests an *upgrade path*,
+  and each supported source version is a different path, not a redundant node.
+  [progressive_validator_state_migration_quorum.yml](scenarios/release_testing/liveness/progressive_validator_state_migration_quorum.yml)
+  therefore starts two validators on v2.1.6 and two on v2.2.0 and migrates all
+  four to the candidate. Rotating the older pair away would delete the
+  v2.1.6 → candidate path, which is the one more likely to break. The node
+  count stays fixed: split the existing validators, do not add more.
+
 ## 4. Graduation: the candidate becomes `sonic:vNEW`
 
 This is the step that is easy to miss. During the `vNEW` development cycle,
@@ -125,11 +139,11 @@ longer says anything about the current release: move it to
 | ------------------------------------------ | --------------------------------------------------------------------------------------- |
 | `load_generators/`                         | **Never add a version.** One validator, no `imageName`. Purpose is "does this generator emit valid transactions" — there is no version dimension. |
 | `examples/`                                | Documentation surface. Never widen. Bump a pin only when it falls out of the support window, so the docs do not cite ancient tags. |
-| `release_testing/features/*` (unpinned)    | No change. These test features no released client has; adding one either does nothing or breaks the test. |
-| `release_testing/features/*` (compat)      | Do **not** rotate. The interesting pin is the *oldest* client that supports the feature. |
-| `release_testing/liveness/`, `validators/` (migration) | Rotate. The upgrade path worth testing is "newest release → candidate". |
+| `release_testing/features/*` (unpinned)    | **Add `vNEW` as a feature peer** if `vNEW` implements the feature (§5a). Only stay all-candidate while no release implements it. |
+| `release_testing/features/*` (compat)      | Do **not** rotate. The interesting pin is the *oldest* client that supports the feature — and `vNEW` joins it. |
+| `release_testing/liveness/`, `validators/` (migration) | Rotate, except migration *source* versions, which accumulate one node per supported upgrade path (§3). |
 | `release_testing/stress/`                  | Rotate the Baseline pin. Leave single-version scenarios alone.                          |
-| `release_testing/rules/`                   | Do **not** rotate — the pin is the oldest client supporting that rule.                  |
+| `release_testing/rules/`                   | Do **not** rotate — the pin is the oldest client supporting that rule, and `vNEW` joins as a feature peer (§5a). |
 | `rules_upgrades/`                          | Boundary pins, frozen. Only the graduation step applies.                                |
 
 The "compat vs migration" split is the one judgement call. A *feature
@@ -138,6 +152,78 @@ compatibility* scenario asks "do all clients that have feature X interoperate?"
 A *migration or interop* scenario asks "does an older client keep up / can its
 database be upgraded?" — there the realistic pin is the newest release, so it
 rotates.
+
+### 5a. Feature scenarios: derive who *can* participate
+
+A feature scenario written during the `vNEW` development cycle has every node
+unpinned, because no release implemented the feature yet. Once `vNEW` ships, that
+is no longer true, and leaving the scenario all-candidate means the feature is
+never tested across versions — the failure this suite exists to catch.
+
+So at each release, for every feature scenario, work out which versions *can*
+join. Do not infer it from the `Upgrades` struct: the flag often exists a release
+before the implementation. Count implementation files per tag instead:
+
+```
+for tag in v2.1.6 v2.2.0; do
+  git -C sonic grep -l 'TransactionBundles' $tag -- '*.go' | grep -v _test | wc -l
+done
+```
+
+A handful of hits means the rule plumbing only; a dozen or more means the feature
+is really there. As of v2.2.0:
+
+| Feature                      | v2.1.6              | v2.2.0 | candidate |
+| ---------------------------- | ------------------- | ------ | --------- |
+| Allegro                      | ✅                  | ✅     | ✅        |
+| GasSubsidies                 | ✅                  | ✅     | ✅        |
+| SingleProposerBlockFormation | ✅                  | ✅     | ✅        |
+| Brio                         | ❌ rule only, forks | ✅     | ✅        |
+| TransactionBundles           | ❌ absent           | ✅     | ✅        |
+
+Three-way coverage is therefore possible for Allegro, subsidies and single
+proposer; Brio and bundles can only be two-way (`v2.2.0` + candidate) until the
+next release, and v2.1.6 appears there **only** as a Boundary node that forks.
+
+Three constraints when adding a peer:
+
+1. **Keep the node count flat.** Convert an existing node rather than appending
+   one: pin one of the `instances` in the candidate group, or repin a
+   same-versioned sibling. `rules/enable_brio.yml` went from `instances: 3` to
+   `instances: 2` plus a `v2.2.0` node, so runtime is unchanged and the scenario
+   gained a version dimension.
+2. **Give the candidate more than ⅔ of the stake**, with explicit stakes if the
+   group was using defaults. Then any combination of peer divergence leaves a
+   live network and `blockHashes` names the diverging node; below that threshold
+   a peer fork *stalls* consensus, which reports as "no blocks produced" and
+   tells you nothing about who was wrong. At equal stakes three validators put
+   any two at exactly ⅔ — not a quorum — so defaults are usually wrong here.
+   Two scenario shapes are exempt because the candidate cannot hold ⅔ by
+   construction: frozen fork boundaries with no candidate node, and migration
+   scenarios, where every validator starts on a released version.
+3. **Do not write a `blockHashes` check.** Hash agreement is what makes a peer
+   worth adding — `blocksProduced` cannot see a fork that leaves a quorum behind
+   — but the parser already appends `advanceEpoch`, `advanceEpoch` and
+   `checks: [blockHashes, blockHeights]` to every scenario (`setDefaults` in
+   [driver/parser/scenario.go](driver/parser/scenario.go)), so writing it out
+   duplicates the harness. `blockHeights` there uses the same slack of 5 that
+   the explicit checks were passing as `tolerance: 5`.
+
+   `blockHashes` walks the chain from block 0, so the implicit run also covers
+   every earlier point in the scenario. An explicit check mid-scenario is
+   therefore only worth writing when the implicit one cannot see what it sees:
+
+   - a node is stopped before the end and never restarted, so it is absent from
+     `GetActiveNodes()` at the end;
+   - a node restarts **without** a `dataVolume`, which re-syncs it from the
+     network and erases the divergence from its own history — the case in
+     [bundles_survive_validator_restart.yml](scenarios/release_testing/features/bundles/bundles_survive_validator_restart.yml),
+     the one place in the suite that still writes the check;
+   - the scenario needs the check with `failing: true`, which the implicit one
+     does not supply.
+
+   Set `DisableEndChecks: true` only when the scenario deliberately ends in a
+   state where hash agreement is not expected.
 
 ---
 
@@ -202,8 +288,11 @@ In this order:
 1. **Graduate** boundary scenarios (§4): `git mv`, then pin the previously
    unpinned node to `sonic:vNEW`.
 2. **Rotate** Baseline pins: `sonic:vOLD` → `sonic:vNEW`.
-3. **Widen** `mixed_validator_versions.yml` only.
-4. **Leave** Boundary, all-local, and agnostic scenarios untouched.
+3. **Join** every feature and `rules/` scenario whose feature `vNEW` implements
+   (§5a), keeping the node count flat and adding `blockHashes`.
+4. **Split** migration scenarios so each supported source version has a node (§3).
+5. **Widen** `mixed_validator_versions.yml` only.
+6. **Leave** Boundary and agnostic scenarios untouched.
 
 When a pin changes, also update the things that encode the version in prose,
 or the suite becomes actively misleading:
@@ -220,6 +309,21 @@ or the suite becomes actively misleading:
 go test ./scenarios/                        # parses and checks every scenario
 build/norma build scenarios/release_testing # pre-builds all referenced images
 build/norma run scenarios/release_testing   # runs the suite (accepts directories)
+```
+
+Then check the two properties this document is about — that every feature has a
+peer where one is possible, and that no scenario restates the implicit checks:
+
+```
+# version coverage per scenario
+for f in $(find scenarios/release_testing -name '*.yml'); do
+  printf '%-62s %s %s\n' "$f" \
+    "$(grep -o 'sonic:v[0-9.]*' $f | sort -u | tr '\n' ' ')" \
+    "$([ $(grep -c imageName $f) -lt $(grep -c startNode $f) ] && echo local)"
+done
+
+# explicit hash/height checks - each hit needs a §5a reason next to it
+grep -rn 'blockHashes\|blockHeights' scenarios/
 ```
 
 `go test ./scenarios/` only parses — it will not catch a Boundary pin that was
@@ -275,17 +379,44 @@ convert a fork test into a silent no-op:
   this retired scenario is the only remaining coverage of v2.1.5 forking on
   subsidies, and it sits in `examples/` rather than the release gate.
 
-Not rotated — the pin is the *oldest* client supporting the feature under test:
+Joined by `v2.2.0` as a feature peer (§5a) — the existing v2.1.6 pin stays, since
+it is the oldest client supporting the feature, and `v2.2.0` is added beside it:
 
 - `features/subsidies/subsidies_across_client_versions.yml`
 - `features/subsidies/enable_subsidies_by_rules_update.yml`
 - `features/single_proposer/proposer_switch_with_old_client.yml`
 - `rules/enable_allegro.yml`, `rules/toggle_subsidies_off_and_on.yml`
 
-Untouched — every node is already the candidate, testing features no released
-client has: the `bundles/`, `event_throttler/`, `single_proposer/high_load_five_validators`,
-`rules/enable_brio`, `rules/toggle_bundles_off_and_on`, `rules_upgrades/change_*` and
-`stress/*bundle*` scenarios.
+These four were all-candidate because Brio and bundles had never shipped. v2.2.0
+is the first release with both, so it joins them too — replacing one candidate
+node rather than adding a fourth, so runtime is unchanged:
+
+- `rules/enable_brio.yml`, `rules/toggle_bundles_off_and_on.yml`
+  (`instances: 3` → `instances: 2` + a `v2.2.0` node at 20% stake)
+- `features/bundles/bundles_activation_with_late_join.yml` (the peer becomes
+  `v2.2.0`; the late joiner stays the candidate)
+- `features/bundles/bundles_survive_validator_restart.yml` (one of three
+  identical candidates becomes `v2.2.0`; the restarted node stays the candidate)
+
+Split by source version (§3) — `liveness/progressive_validator_state_migration_quorum.yml`
+keeps four validators but starts two on v2.1.6 and two on v2.2.0, so both
+supported upgrade paths to the candidate are covered in one run.
+
+**Checks removed.** Hash agreement in all of these comes from the implicit end
+checks, so the 26 explicit `blockHashes` and `blockHeights` entries the suite had
+accumulated across 17 files were restating the harness and were dropped. Only
+`features/bundles/bundles_survive_validator_restart.yml` still writes one, for
+the reason given in §5a. What the mixed scenarios do need explicitly is
+`blocksProduced`, which is *not* implicit —
+`validators/mixed_validator_versions.yml` had no explicit check at all and now
+asserts it.
+
+Untouched — genuinely no version dimension: `event_throttler/` (flag-driven),
+`single_proposer/high_load_five_validators`,
+`single_proposer/{join_after_proposer_switch,network_recovers_from_blackout}`,
+`liveness/blackout_recovery_after_quorum_loss`, `rules_upgrades/change_*`,
+`stress/{single_node_*,progressive_node_addition_*,*bundle*}`,
+`validators/{mixed_validator_stakes,restart_validator_keep_stake_quorum}`.
 
 **Retired.** `liveness/supermajority_after_subsidies_fork_v215_v216.yml` moved to
 `examples/subsidies_fork_v215_v216.yml`. Both sides are now outside the
