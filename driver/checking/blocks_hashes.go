@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"math"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
@@ -28,6 +29,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
+
+// minComparableBlock is the lowest chain head that makes the comparison
+// meaningful. Below it the network has barely started and there is nothing to
+// disagree about.
+const minComparableBlock = 2
 
 func init() {
 	RegisterNetworkCheck("blocksHashes",
@@ -37,6 +43,12 @@ func init() {
 }
 
 // blocksHashesChecker is a Checker checking if all Opera nodes provides the same hashes for all blocks/stateRoots.
+//
+// The range of blocks to compare is fixed from a snapshot of the node heights
+// taken when the check starts, and covers only blocks that every healthy node
+// already has. The check therefore never chases a chain that is still growing
+// underneath it: it terminates, and its verdict does not depend on which node
+// happened to be ahead of which while it was running.
 type blocksHashesChecker struct {
 	net driver.Network
 }
@@ -46,106 +58,186 @@ func (c *blocksHashesChecker) Configure(config CheckerConfig) Checker {
 	return c
 }
 
-func (c *blocksHashesChecker) Check(ctx context.Context) (err error) {
+func (c *blocksHashesChecker) Check(ctx context.Context) error {
 	nodes := c.net.GetActiveNodes()
 	slog.Info("checking hashes for nodes", "count", len(nodes))
 
-	rpcClients := make([]rpc.Client, len(nodes))
+	clients := make([]rpc.Client, len(nodes))
 	defer func() {
-		for _, rpcClient := range rpcClients {
-			if rpcClient != nil {
-				rpcClient.Close()
+		for _, client := range clients {
+			if client != nil {
+				client.Close()
 			}
 		}
 	}()
 
 	expectedFailures := make(map[string]struct{})
+	gotFailures := make(map[string]struct{})
 	for i, n := range nodes {
 		if n.IsExpectedFailure() {
 			expectedFailures[n.GetLabel()] = struct{}{}
 		}
-		rpcClients[i], err = n.DialRpc(ctx)
+
+		client, err := n.DialRpc(ctx)
 		if err != nil {
+			// Being unreachable is one of the ways a node that is expected to
+			// fail is allowed to fail.
+			if n.IsExpectedFailure() {
+				gotFailures[n.GetLabel()] = struct{}{}
+				continue
+			}
 			return fmt.Errorf("failed to dial RPC for node %s; %v", n.GetLabel(), err)
 		}
+		clients[i] = client
 	}
 
 	if len(expectedFailures) == len(nodes) {
 		return nil // all nodes are expected to fail, cannot get pivot hash, has to only end the test
 	}
 
-	check := func(referenceHashes, block blockHashes, blockNumber uint64) error {
-		if referenceHashes.StateRoot != block.StateRoot {
-			return fmt.Errorf("stateRoot of the block %d does not match", blockNumber)
-		}
-		if referenceHashes.ReceiptsRoot != block.ReceiptsRoot {
-			return fmt.Errorf("receiptsRoot of the block %d does not match", blockNumber)
-		}
-		if referenceHashes.Hash != block.Hash {
-			return fmt.Errorf("hash of the block %d does not match", blockNumber)
-		}
+	limit, err := c.commonHeight(ctx, nodes, clients)
+	if err != nil {
+		return err
+	}
+	slog.Info("comparing block hashes", "up_to_block", limit)
 
-		return nil
+	for blockNumber := uint64(0); blockNumber <= limit; blockNumber++ {
+		reference, err := compareHealthyNodes(nodes, clients, blockNumber)
+		if err != nil {
+			return err
+		}
+		recordFailingNodes(nodes, clients, blockNumber, reference, gotFailures)
 	}
 
-	gotFailures := make(map[string]struct{})
-	for blockNumber := uint64(0); ; blockNumber++ {
-		var nodesLackingTheBlock = 0
-		var hashes []*blockHashes
-		for i, n := range nodes {
-			block, err := getBlockHashes(rpcClients[i], blockNumber)
-			if err != nil {
-				return fmt.Errorf("failed to get block %d detail at node %s; %v", blockNumber, n.GetLabel(), err)
-			}
+	if got, want := gotFailures, expectedFailures; !maps.Equal(got, want) {
+		return fmt.Errorf("unexpected failure set to provide the block hashes: got %v, want %v", got, want)
+	}
 
-			if block == nil { // block does not exist on the node
-				if blockNumber <= 2 {
-					return fmt.Errorf("unable to check block hashes - block %d does not exists at node %s", blockNumber, n.GetLabel())
-				}
-				nodesLackingTheBlock++
-			}
+	return nil
+}
 
-			hashes = append(hashes, block)
+// commonHeight returns the highest block that every healthy node already
+// reports as being part of its chain. Blocks up to it are settled everywhere,
+// so comparing them cannot race block production.
+func (c *blocksHashesChecker) commonHeight(
+	ctx context.Context, nodes []driver.Node, clients []rpc.Client,
+) (uint64, error) {
+	limit := uint64(math.MaxUint64)
+	healthy := 0
+	// Read the heights one by one: the result is a minimum, so a height read a
+	// moment later can only be larger and the bound only more conservative.
+	for i, n := range nodes {
+		if clients[i] == nil || n.IsExpectedFailure() {
+			continue
 		}
-
-		// no node has the last block, i.e. we have reached the end of the chain
-		if nodesLackingTheBlock == len(nodes) {
-			if got, want := gotFailures, expectedFailures; !maps.Equal(got, want) {
-				return fmt.Errorf("unexpected failure set to provide the block hashes: got %v, want %v", got, want)
-			}
-
-			return nil // finish successfully
+		healthy++
+		height, err := clients[i].BlockNumber(ctx)
+		if err != nil {
+			return 0, fmt.Errorf(
+				"failed to get block height of node %s; %w", n.GetLabel(), err,
+			)
 		}
-
-		// find a reference hash from a non-failing nodes, and only nodes that reached this block height
-		var referenceHashes blockHashes
-		for i, block := range hashes {
-			// use only hash from a block that reached this block height and it is not expected to fail
-			if block != nil && !nodes[i].IsExpectedFailure() {
-				referenceHashes = *block
-				break
-			}
-		}
-
-		// check the hashes
-		for i, block := range hashes {
-			n := nodes[i]
-			// skip nodes that did not reach this block height, and potentially mark expected failed nodes
-			if block == nil {
-				if n.IsExpectedFailure() {
-					gotFailures[n.GetLabel()] = struct{}{}
-				}
-				continue // this node does not reach this block
-			}
-			if err := check(referenceHashes, *block, blockNumber); err != nil {
-				if n.IsExpectedFailure() {
-					gotFailures[n.GetLabel()] = struct{}{}
-				} else {
-					return err
-				}
-			}
+		if height < limit {
+			limit = height
 		}
 	}
+
+	if healthy == 0 {
+		return 0, fmt.Errorf("unable to check block hashes: no reachable node")
+	}
+	if limit < minComparableBlock {
+		return 0, fmt.Errorf(
+			"unable to check block hashes: the network is only at block %d, "+
+				"at least block %d is required",
+			limit, minComparableBlock,
+		)
+	}
+	return limit, nil
+}
+
+// compareHealthyNodes verifies that all nodes that are not expected to fail
+// report the same hashes for the given block, and returns those hashes as the
+// reference for the nodes that are.
+func compareHealthyNodes(
+	nodes []driver.Node, clients []rpc.Client, blockNumber uint64,
+) (blockHashes, error) {
+	var reference *blockHashes
+	var referenceNode string
+
+	for i, n := range nodes {
+		if clients[i] == nil || n.IsExpectedFailure() {
+			continue
+		}
+
+		block, err := getBlockHashes(clients[i], blockNumber)
+		if err != nil {
+			return blockHashes{}, fmt.Errorf(
+				"failed to get block %d detail at node %s; %v",
+				blockNumber, n.GetLabel(), err,
+			)
+		}
+		if block == nil {
+			return blockHashes{}, fmt.Errorf(
+				"node %s does not have block %d, although it reported a "+
+					"higher chain head", n.GetLabel(), blockNumber,
+			)
+		}
+
+		if reference == nil {
+			reference, referenceNode = block, n.GetLabel()
+			continue
+		}
+		if err := compareBlockHashes(*reference, *block, blockNumber); err != nil {
+			return blockHashes{}, fmt.Errorf(
+				"%w (nodes %s and %s)", err, referenceNode, n.GetLabel(),
+			)
+		}
+	}
+
+	return *reference, nil
+}
+
+// recordFailingNodes notes which of the nodes expected to fail actually do so
+// for the given block, either by not having it or by disagreeing about it.
+func recordFailingNodes(
+	nodes []driver.Node,
+	clients []rpc.Client,
+	blockNumber uint64,
+	reference blockHashes,
+	gotFailures map[string]struct{},
+) {
+	for i, n := range nodes {
+		if clients[i] == nil || !n.IsExpectedFailure() {
+			continue
+		}
+		label := n.GetLabel()
+		if _, alreadyFailed := gotFailures[label]; alreadyFailed {
+			continue
+		}
+
+		block, err := getBlockHashes(clients[i], blockNumber)
+		if err != nil || block == nil ||
+			compareBlockHashes(reference, *block, blockNumber) != nil {
+			gotFailures[label] = struct{}{}
+		}
+	}
+}
+
+// compareBlockHashes reports whether two views of the same block agree.
+func compareBlockHashes(
+	referenceHashes, block blockHashes, blockNumber uint64,
+) error {
+	if referenceHashes.StateRoot != block.StateRoot {
+		return fmt.Errorf("stateRoot of the block %d does not match", blockNumber)
+	}
+	if referenceHashes.ReceiptsRoot != block.ReceiptsRoot {
+		return fmt.Errorf("receiptsRoot of the block %d does not match", blockNumber)
+	}
+	if referenceHashes.Hash != block.Hash {
+		return fmt.Errorf("hash of the block %d does not match", blockNumber)
+	}
+
+	return nil
 }
 
 type blockHashes struct {
