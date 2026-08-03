@@ -898,6 +898,40 @@ func TestCheck_EmptySubChecks(t *testing.T) {
 	require.Contains(t, err.Error(), "at least one sub-check")
 }
 
+func TestCheck_ObservationWindowTooShort(t *testing.T) {
+	tooShort := MinObservationDuration - time.Millisecond
+	scenario := Scenario{
+		Name:        "Test",
+		Description: "A test scenario.",
+		Steps: []Step{{
+			Function: FuncChecks,
+			SubChecks: []CheckSpec{{
+				Function: FuncCheckBlocksProduced,
+				Duration: &tooShort,
+			}},
+		}},
+	}
+	err := scenario.Check()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duration must be at least")
+}
+
+func TestCheck_ObservationWindowAtTheMinimumIsAccepted(t *testing.T) {
+	minimum := MinObservationDuration
+	scenario := Scenario{
+		Name:        "Test",
+		Description: "A test scenario.",
+		Steps: []Step{{
+			Function: FuncChecks,
+			SubChecks: []CheckSpec{{
+				Function: FuncCheckBlocksProduced,
+				Duration: &minimum,
+			}},
+		}},
+	}
+	require.NoError(t, scenario.Check())
+}
+
 func TestParseBytes_UnknownCheckFunction(t *testing.T) {
 	input := `
 Name: Bad Check

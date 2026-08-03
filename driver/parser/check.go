@@ -198,6 +198,15 @@ func (s *Step) checkSubChecks() error {
 				errs = append(errs, fmt.Errorf("sub-check %d (%s): invalid rules: %w", i+1, check.Function, err))
 			}
 		}
+
+		// Reject observation windows too short to hold two samples, here
+		// rather than minutes into the run.
+		if check.Duration != nil && *check.Duration < MinObservationDuration {
+			errs = append(errs, fmt.Errorf(
+				"sub-check %d (%s): duration must be at least %s, got %s",
+				i+1, check.Function, MinObservationDuration, *check.Duration,
+			))
+		}
 	}
 
 	return errors.Join(errs...)

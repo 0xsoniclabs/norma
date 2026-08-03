@@ -10,6 +10,14 @@ import (
 // MaxEpochDuration in their network rules.
 const DefaultMaxEpochDuration = 15 * time.Second
 
+// MinObservationDuration is the shortest observation window a check may
+// request. Deciding whether a block height changed takes two monitoring
+// samples, and the monitor samples once per second, so a shorter window could
+// only ever report that nothing was observed. It mirrors the limit the
+// checking package enforces at run time; the constant is duplicated because
+// checking depends on this package.
+const MinObservationDuration = 2 * time.Second
+
 // ensureDefaultEpochDuration sets the default MaxEpochDuration on a patch
 // if it is not already set.
 func ensureDefaultEpochDuration(patch *genesis.NetworkRulesPatch) {

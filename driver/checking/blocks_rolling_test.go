@@ -1,142 +1,263 @@
 package checking
 
 import (
+	"context"
+	"errors"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"go.uber.org/mock/gomock"
 )
 
-const testObservation = time.Millisecond
+// rollingWindow is the observation window used by these tests. The bubble's
+// fake clock makes it free.
+const rollingWindow = 10 * time.Second
 
-const networkDown = "network is down, nodes stopped producing blocks"
+func TestBlocksRolling_PassesWhileTheNetworkProduces(t *testing.T) {
+	// Whatever the sampling phase, jitter or dropped reads, a network that
+	// keeps producing during the window must be reported as alive. A window
+	// holding fewer than two samples cannot show progress; that case is
+	// counted rather than asserted, and required to stay rare.
+	conclusive := 0
+	eachSeed(t, func(t *testing.T, seed int64) {
+		net := newSimulation(t, seed)
+		net.addNode("A", net.randomSampling(
+			production{blockInterval: 300 * time.Millisecond}.heightAt,
+		))
 
-func TestBlocksRolling_ProducingNetworkPasses(t *testing.T) {
-	tests := map[string][]uint64{
-		"monotonic-increasing": {1, 2, 3, 4, 5},
-		"flat-then-increase":   {5, 5, 5, 6, 7},
-		"increase-then-flat":   {1, 2, 3, 3, 3},
-		"single-late-increase": {4, 4, 4, 4, 5},
-	}
-	for name, blocks := range tests {
-		t.Run(name, func(t *testing.T) {
-			series := futureSeries(t, blocks)
-			ctrl := gomock.NewController(t)
-			monitor := NewMockMonitoringData(ctrl)
-			monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
-			monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
+		net.run(15 * time.Second)
 
-			c := blocksRollingChecker{monitor: monitor, toleranceSamples: 5, duration: testObservation}
-			if err := c.Check(t.Context()); err != nil {
-				t.Errorf("unexpected error: %v", err)
+		start := time.Now()
+		c := &blocksRollingChecker{
+			monitor: net, duration: rollingWindow,
+		}
+		err := c.Check(t.Context())
+
+		observed := net.heightsIn("A", start, start.Add(rollingWindow+time.Second))
+		if len(observed) < 2 {
+			if err == nil {
+				t.Errorf("seed %d: reported progress from %d sample(s)",
+					seed, len(observed))
 			}
+			return
+		}
+		conclusive++
+		if err != nil {
+			t.Errorf("seed %d: unexpected error: %v (observed heights %v)",
+				seed, err, observed)
+		}
+	})
+
+	if min := len(seeds()) * 9 / 10; conclusive < min {
+		t.Errorf("only %d of %d seeds observed enough samples to conclude, "+
+			"want at least %d", conclusive, len(seeds()), min)
+	}
+}
+
+func TestBlocksRolling_FailsWhenProductionStoppedBeforeTheCheck(t *testing.T) {
+	// A network that produced blocks right up to the start of the check, and
+	// then halted, must not pass on that history.
+	eachSeed(t, func(t *testing.T, seed int64) {
+		net := newSimulation(t, seed)
+		haltAt := simulationEpoch.Add(30 * time.Second)
+		net.addNode("A", net.randomSampling(production{
+			blockInterval: 300 * time.Millisecond,
+			haltAt:        haltAt,
+		}.heightAt))
+
+		net.run(30 * time.Second)
+
+		c := &blocksRollingChecker{
+			monitor: net, duration: rollingWindow,
+		}
+		if err := c.Check(t.Context()); err == nil {
+			t.Errorf("seed %d: expected an error, got nil", seed)
+		}
+	})
+}
+
+func TestBlocksRolling_PassesWhenProductionResumesDuringTheWindow(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		net := newSimulation(t, 1)
+		net.addNode("A", nodeBehavior{
+			height: production{
+				blockInterval: 300 * time.Millisecond,
+				haltAt:        simulationEpoch.Add(10 * time.Second),
+				resumeAt:      simulationEpoch.Add(22 * time.Second),
+			}.heightAt,
+			interval: time.Second,
 		})
-	}
-}
 
-func TestBlocksRolling_HaltedNetworkFails(t *testing.T) {
-	tests := map[string][]uint64{
-		"empty":         {},
-		"single-sample": {7},
-		"constant":      {5, 5, 5, 5, 5},
-	}
-	for name, blocks := range tests {
-		t.Run(name, func(t *testing.T) {
-			series := futureSeries(t, blocks)
-			ctrl := gomock.NewController(t)
-			monitor := NewMockMonitoringData(ctrl)
-			monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
-			monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
+		net.run(20 * time.Second)
 
-			c := blocksRollingChecker{monitor: monitor, toleranceSamples: 5, duration: testObservation}
-			if err := c.Check(t.Context()); err == nil || err.Error() != networkDown {
-				t.Errorf("unexpected error: %v", err)
-			}
-		})
-	}
-}
-
-func TestBlocksRolling_NoSamplesInWindowFails(t *testing.T) {
-	series := createBlockSeries(t, []uint64{1, 2, 3, 4, 5})
-	ctrl := gomock.NewController(t)
-	monitor := NewMockMonitoringData(ctrl)
-	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
-	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
-
-	c := blocksRollingChecker{monitor: monitor, toleranceSamples: 5, duration: testObservation}
-	if err := c.Check(t.Context()); err == nil || err.Error() != networkDown {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-func TestBlocksRolling_IgnoresPastProduction(t *testing.T) {
-	series := mixedSeries(t, []uint64{1, 2, 3}, []uint64{3, 3, 3})
-	ctrl := gomock.NewController(t)
-	monitor := NewMockMonitoringData(ctrl)
-	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
-	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
-
-	c := blocksRollingChecker{monitor: monitor, toleranceSamples: 5, duration: testObservation}
-	if err := c.Check(t.Context()); err == nil || err.Error() != networkDown {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-func TestBlocksRolling_DetectsProductionAfterPastStall(t *testing.T) {
-	series := mixedSeries(t, []uint64{5, 5, 5}, []uint64{5, 6, 7})
-	ctrl := gomock.NewController(t)
-	monitor := NewMockMonitoringData(ctrl)
-	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
-	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
-
-	c := blocksRollingChecker{monitor: monitor, toleranceSamples: 5, duration: testObservation}
-	if err := c.Check(t.Context()); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+		c := &blocksRollingChecker{
+			monitor: net, duration: rollingWindow,
+		}
+		if err := c.Check(t.Context()); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
 }
 
 func TestBlocksRolling_PassesWhenAnyNodeProduces(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	monitor := NewMockMonitoringData(ctrl)
-	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A", "B"})
-	monitor.EXPECT().GetBlockStatus(monitoring.Node("A")).Return(futureSeries(t, []uint64{5, 5, 5}))
-	monitor.EXPECT().GetBlockStatus(monitoring.Node("B")).Return(futureSeries(t, []uint64{1, 2, 3}))
+	synctest.Test(t, func(t *testing.T) {
+		net := newSimulation(t, 1)
+		net.addNode("halted", nodeBehavior{
+			height: production{
+				blockInterval: 300 * time.Millisecond,
+				haltAt:        simulationEpoch.Add(5 * time.Second),
+			}.heightAt,
+			interval: time.Second,
+		})
+		net.addNode("alive", nodeBehavior{
+			height:   production{blockInterval: 300 * time.Millisecond}.heightAt,
+			interval: time.Second,
+		})
 
-	c := blocksRollingChecker{monitor: monitor, toleranceSamples: 5, duration: testObservation}
-	if err := c.Check(t.Context()); err != nil {
-		t.Errorf("unexpected error: %v", err)
+		net.run(10 * time.Second)
+
+		c := &blocksRollingChecker{
+			monitor: net, duration: rollingWindow,
+		}
+		if err := c.Check(t.Context()); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestBlocksRolling_FailsWhenAllNodesAreHalted(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		net := newSimulation(t, 1)
+		haltAt := simulationEpoch.Add(5 * time.Second)
+		for _, label := range []monitoring.Node{"A", "B"} {
+			net.addNode(label, nodeBehavior{
+				height: production{
+					blockInterval: 300 * time.Millisecond,
+					haltAt:        haltAt,
+				}.heightAt,
+				interval: time.Second,
+			})
+		}
+
+		net.run(10 * time.Second)
+
+		c := &blocksRollingChecker{
+			monitor: net, duration: rollingWindow,
+		}
+		if err := c.Check(t.Context()); err == nil {
+			t.Errorf("expected an error, got nil")
+		}
+	})
+}
+
+func TestBlocksRolling_FailsWhenNodesStoppedReporting(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		net := newSimulation(t, 1)
+		net.addNode("A", nodeBehavior{
+			height:          production{blockInterval: 300 * time.Millisecond}.heightAt,
+			interval:        time.Second,
+			unreachableFrom: simulationEpoch.Add(10 * time.Second),
+		})
+
+		net.run(10 * time.Second)
+
+		c := &blocksRollingChecker{
+			monitor: net, duration: rollingWindow,
+		}
+		if err := c.Check(t.Context()); err == nil {
+			t.Errorf("expected an error, got nil")
+		}
+	})
+}
+
+func TestBlocksRolling_FailsWithoutAnyMonitoredNode(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		c := &blocksRollingChecker{
+			monitor: newSimulation(t, 1), duration: rollingWindow,
+		}
+		if err := c.Check(t.Context()); err == nil {
+			t.Errorf("expected an error, got nil")
+		}
+	})
+}
+
+func TestBlocksRolling_IgnoresNodesWithoutData(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		monitor := NewMockMonitoringData(ctrl)
+		monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
+		monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(
+			&monitoring.SyncedSeries[monitoring.Time, monitoring.BlockStatus]{},
+		)
+
+		c := &blocksRollingChecker{
+			monitor: monitor, duration: rollingWindow,
+		}
+		if err := c.Check(t.Context()); err == nil {
+			t.Errorf("expected an error, got nil")
+		}
+	})
+}
+
+func TestBlocksRolling_DerivesTheWindowFromTolerance(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		net := newSimulation(t, 1)
+		net.addNode("A", nodeBehavior{
+			height:   production{blockInterval: 300 * time.Millisecond}.heightAt,
+			interval: time.Second,
+		})
+
+		start := time.Now()
+		c := &blocksRollingChecker{
+			monitor: net, toleranceSamples: 6,
+		}
+		if err := c.Check(t.Context()); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if got, want := time.Since(start), 6*time.Second; got != want {
+			t.Errorf("observed for %v, want %v derived from the tolerance", got, want)
+		}
+	})
+}
+
+func TestBlocksRolling_RejectsUnusableWindows(t *testing.T) {
+	tests := map[string]blocksRollingChecker{
+		"zero tolerance":     {toleranceSamples: 0},
+		"negative tolerance": {toleranceSamples: -1},
+		// A window shorter than two sample intervals could never observe a
+		// change and would report every network as down.
+		"window too short": {duration: time.Millisecond},
+	}
+	for name, checker := range tests {
+		// No bubble needed: an unusable window is rejected before any wait.
+		t.Run(name, func(t *testing.T) {
+			if err := checker.Check(t.Context()); err == nil {
+				t.Errorf("expected an error, got nil")
+			}
+		})
 	}
 }
 
-func TestBlocksRolling_FailsWhenAllNodesHalted(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	monitor := NewMockMonitoringData(ctrl)
-	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A", "B"})
-	monitor.EXPECT().GetBlockStatus(monitoring.Node("A")).Return(futureSeries(t, []uint64{5, 5, 5}))
-	monitor.EXPECT().GetBlockStatus(monitoring.Node("B")).Return(futureSeries(t, []uint64{9, 9, 9}))
+func TestBlocksRolling_ReturnsContextError(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
 
-	c := blocksRollingChecker{monitor: monitor, toleranceSamples: 5, duration: testObservation}
-	if err := c.Check(t.Context()); err == nil || err.Error() != networkDown {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-func TestBlocksRolling_DerivesWindowFromTolerance(t *testing.T) {
-	prev := blockSampleInterval
-	blockSampleInterval = time.Millisecond
-	defer func() { blockSampleInterval = prev }()
-
-	series := futureSeries(t, []uint64{1, 2, 3})
-	ctrl := gomock.NewController(t)
-	monitor := NewMockMonitoringData(ctrl)
-	monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
-	monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(series)
-
-	c := blocksRollingChecker{monitor: monitor, toleranceSamples: 3}
-	if err := c.Check(t.Context()); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+		start := time.Now()
+		c := &blocksRollingChecker{
+			monitor: newSimulation(t, 1), duration: rollingWindow,
+		}
+		if err := c.Check(ctx); !errors.Is(err, context.Canceled) {
+			t.Errorf("expected a context error, got %v", err)
+		}
+		// A checker that ignored the cancellation would wait out the window;
+		// on a fake clock that is only visible as elapsed virtual time.
+		if elapsed := time.Since(start); elapsed != 0 {
+			t.Errorf("waited %v after cancellation, want no wait", elapsed)
+		}
+	})
 }
 
 func TestBlocksRolling_Configure(t *testing.T) {
@@ -151,60 +272,10 @@ func TestBlocksRolling_Configure(t *testing.T) {
 		t.Errorf("empty config should copy original values, got %+v", empty)
 	}
 
-	set := orig.Configure(CheckerConfig{"tolerance": 7, "duration": int64(time.Millisecond)}).(*blocksRollingChecker)
-	if set.toleranceSamples != 7 || set.duration != time.Millisecond {
+	set := orig.Configure(CheckerConfig{
+		"tolerance": 7, "duration": int64(20 * time.Second),
+	}).(*blocksRollingChecker)
+	if set.toleranceSamples != 7 || set.duration != 20*time.Second {
 		t.Errorf("config values not applied, got %+v", set)
 	}
-}
-
-func TestBlocksRolling_ZeroTolerance_ReturnsErrorInsteadOfPanic(t *testing.T) {
-	checker := &blocksRollingChecker{toleranceSamples: 0}
-	err := checker.Check(t.Context())
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
-	if got := err.Error(); got != "tolerance must be > 0, got 0" {
-		t.Fatalf("unexpected error: %s", got)
-	}
-}
-
-func createBlockSeries(t *testing.T, blocks []uint64) monitoring.Series[monitoring.Time, monitoring.BlockStatus] {
-	t.Helper()
-	return createBlockSeriesAt(t, 0, blocks)
-}
-
-func futureSeries(t *testing.T, blocks []uint64) monitoring.Series[monitoring.Time, monitoring.BlockStatus] {
-	t.Helper()
-	base := monitoring.Time(time.Now().UnixNano() + int64(time.Hour))
-	return createBlockSeriesAt(t, base, blocks)
-}
-
-func createBlockSeriesAt(t *testing.T, base monitoring.Time, blocks []uint64) monitoring.Series[monitoring.Time, monitoring.BlockStatus] {
-	t.Helper()
-
-	series := monitoring.SyncedSeries[monitoring.Time, monitoring.BlockStatus]{}
-	for i, block := range blocks {
-		pos := base + monitoring.Time(i)
-		if err := series.Append(pos, monitoring.BlockStatus{BlockHeight: block}); err != nil {
-			t.Fatalf("failed to append block %d: %v", block, err)
-		}
-	}
-	return &series
-}
-
-func mixedSeries(t *testing.T, past, future []uint64) monitoring.Series[monitoring.Time, monitoring.BlockStatus] {
-	t.Helper()
-
-	series := monitoring.SyncedSeries[monitoring.Time, monitoring.BlockStatus]{}
-	base := monitoring.Time(time.Now().UnixNano() + int64(time.Hour))
-	appendAt := func(offset monitoring.Time, blocks []uint64) {
-		for i, block := range blocks {
-			if err := series.Append(offset+monitoring.Time(i), monitoring.BlockStatus{BlockHeight: block}); err != nil {
-				t.Fatalf("failed to append block %d: %v", block, err)
-			}
-		}
-	}
-	appendAt(0, past)
-	appendAt(base, future)
-	return &series
 }
