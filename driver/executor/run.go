@@ -309,6 +309,10 @@ func execStartNode(
 	// safe for concurrent use, so we do this before the parallel fan-out.
 	instanceNames := make([]string, instances)
 	validatorIds := make([]*int, instances)
+	// Validators newly created in the SFC contract by this step. They only
+	// join the validator set once the epoch is sealed, which happens below
+	// after their nodes are up.
+	registered := make([]int, 0, instances)
 	for instance := range instances {
 		instanceName := name
 		if instances > 1 {
@@ -336,6 +340,7 @@ func execStartNode(
 					)
 				}
 				validatorIds[instance] = &id
+				registered = append(registered, id)
 			}
 		}
 	}
@@ -392,6 +397,21 @@ func execStartNode(
 			if err := waitForNodeSync(ctx, node, targetBlock+1); err != nil {
 				slog.Warn("node sync wait failed", "node", node.GetLabel(), "error", err)
 			}
+		}
+	}
+
+	// Sealing happens only now that the nodes are up and synced: a validator
+	// gains stake weight the moment it joins the set, so admitting it earlier
+	// would deprive the network of that share of its online stake. Genesis
+	// validators and rejoins register nothing and are already in the set.
+	//
+	// Nodes expected to fail are left out, as they are for the sync wait above
+	// and the between-step block production wait: a node that may never come
+	// up must not be the subject of an assertion. They join at the next seal
+	// the scenario performs, as they did before activation existed.
+	if len(registered) > 0 && !step.Failing {
+		if err := registry.activateValidators(ctx, registered); err != nil {
+			return fmt.Errorf("failed to activate validators for %s: %w", name, err)
 		}
 	}
 
@@ -625,13 +645,14 @@ func execUpdateRules(ctx context.Context, step *parser.Step, net driver.Network)
 
 // checkFunctionToCheckerName maps check step functions to their checker names.
 var checkFunctionToCheckerName = map[parser.StepFunction]string{
-	parser.FuncCheckBlockGasRate:   "blockGasRate",
-	parser.FuncCheckBlockHashes:    "blocksHashes",
-	parser.FuncCheckBlockHeights:   "blockHeight",
-	parser.FuncCheckBlocksHalted:   "blocksHalted",
-	parser.FuncCheckBlocksProduced: "blocksRolling",
-	parser.FuncCheckEventThrottled: "eventThrottled",
-	parser.FuncCheckNetworkRules:   "networkRules",
+	parser.FuncCheckBlockGasRate:     "blockGasRate",
+	parser.FuncCheckBlockHashes:      "blocksHashes",
+	parser.FuncCheckBlockHeights:     "blockHeight",
+	parser.FuncCheckBlocksHalted:     "blocksHalted",
+	parser.FuncCheckBlocksProduced:   "blocksRolling",
+	parser.FuncCheckEventThrottled:   "eventThrottled",
+	parser.FuncCheckNetworkRules:     "networkRules",
+	parser.FuncCheckValidatorsActive: "validatorsActive",
 }
 
 // execCheck runs a named checker with configuration from the check spec.

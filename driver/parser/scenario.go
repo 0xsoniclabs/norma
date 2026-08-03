@@ -46,13 +46,14 @@ const (
 	FuncWaitFor      StepFunction = "waitFor"
 
 	// Check functions used as items inside a checks: step.
-	FuncCheckBlockGasRate   StepFunction = "blockGasRate"
-	FuncCheckBlockHashes    StepFunction = "blockHashes"
-	FuncCheckBlockHeights   StepFunction = "blockHeights"
-	FuncCheckBlocksHalted   StepFunction = "blocksHalted"
-	FuncCheckBlocksProduced StepFunction = "blocksProduced"
-	FuncCheckEventThrottled StepFunction = "eventThrottled"
-	FuncCheckNetworkRules   StepFunction = "networkRules"
+	FuncCheckBlockGasRate     StepFunction = "blockGasRate"
+	FuncCheckBlockHashes      StepFunction = "blockHashes"
+	FuncCheckBlockHeights     StepFunction = "blockHeights"
+	FuncCheckBlocksHalted     StepFunction = "blocksHalted"
+	FuncCheckBlocksProduced   StepFunction = "blocksProduced"
+	FuncCheckEventThrottled   StepFunction = "eventThrottled"
+	FuncCheckNetworkRules     StepFunction = "networkRules"
+	FuncCheckValidatorsActive StepFunction = "validatorsActive"
 )
 
 // allStepFunctions lists every known top-level step function constant.
@@ -78,6 +79,7 @@ var allCheckFunctions = [...]StepFunction{
 	FuncCheckBlocksProduced,
 	FuncCheckEventThrottled,
 	FuncCheckNetworkRules,
+	FuncCheckValidatorsActive,
 }
 
 // toStepFunction returns the StepFunction for a given string, or an error if not recognized.
@@ -625,6 +627,8 @@ var checkFunctionDescriptions = map[StepFunction]string{
 	FuncCheckBlocksProduced: "Assert that all nodes have produced blocks within tolerance.",
 	FuncCheckEventThrottled: "Assert that validators listed in throttledNodes emit events at a significantly lower rate than the rest.",
 	FuncCheckNetworkRules:   "Assert that the active network rules on all nodes match the expected rules patch.",
+
+	FuncCheckValidatorsActive: "Assert that every running validator node is in the current epoch's validator set.",
 }
 
 // checkFunctionParams lists the optional parameters accepted by each sub-check function.
@@ -636,6 +640,8 @@ var checkFunctionParams = map[StepFunction][]string{
 	FuncCheckBlocksProduced: {"tolerance", "duration", "failing"},
 	FuncCheckEventThrottled: {"throttledNodes", "failing"},
 	FuncCheckNetworkRules:   {"rules", "failing"},
+
+	FuncCheckValidatorsActive: {"failing"},
 }
 
 // checkParamDescriptions provides a human-readable description for each sub-check parameter.

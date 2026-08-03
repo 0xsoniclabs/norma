@@ -40,6 +40,20 @@ func (m *MockvalidatorRegistry) EXPECT() *MockvalidatorRegistryMockRecorder {
 	return m.recorder
 }
 
+// activateValidators mocks base method.
+func (m *MockvalidatorRegistry) activateValidators(ctx context.Context, validatorIds []int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "activateValidators", ctx, validatorIds)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// activateValidators indicates an expected call of activateValidators.
+func (mr *MockvalidatorRegistryMockRecorder) activateValidators(ctx, validatorIds any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "activateValidators", reflect.TypeOf((*MockvalidatorRegistry)(nil).activateValidators), ctx, validatorIds)
+}
+
 // registerNewValidator mocks base method.
 func (m *MockvalidatorRegistry) registerNewValidator(ctx context.Context, stake uint64) (int, error) {
 	m.ctrl.T.Helper()

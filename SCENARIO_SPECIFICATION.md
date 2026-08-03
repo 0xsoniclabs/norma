@@ -380,14 +380,15 @@ The canonical Go type is
 Checks appear as items inside a `checks:` step. Each entry is either a bare
 function name or a mapping.
 
-| Function         | Purpose                                                         | Parameters                       |
-| ---------------- | --------------------------------------------------------------- | -------------------------------- |
-| `blockGasRate`   | Assert block gas rate ≤ ceiling.                                | `ceiling`, `failing`             |
-| `blockHashes`    | Assert all nodes agree on block hashes.                         | `failing`                        |
-| `blockHeights`   | Assert all nodes are within tolerance of the same height.       | `tolerance`, `failing`           |
-| `blocksHalted`   | Assert block production has halted.                             | `failing`                        |
-| `blocksProduced` | Assert all nodes produce blocks within tolerance over duration. | `tolerance`, `duration`, `failing` |
-| `networkRules`   | Assert the active rules on all nodes match the given patch.     | `rules`, `failing`               |
+| Function           | Purpose                                                         | Parameters                       |
+| ------------------ | --------------------------------------------------------------- | -------------------------------- |
+| `blockGasRate`     | Assert block gas rate ≤ ceiling.                                | `ceiling`, `failing`             |
+| `blockHashes`      | Assert all nodes agree on block hashes.                         | `failing`                        |
+| `blockHeights`     | Assert all nodes are within tolerance of the same height.       | `tolerance`, `failing`           |
+| `blocksHalted`     | Assert block production has halted.                             | `failing`                        |
+| `blocksProduced`   | Assert all nodes produce blocks within tolerance over duration. | `tolerance`, `duration`, `failing` |
+| `networkRules`     | Assert the active rules on all nodes match the given patch.     | `rules`, `failing`               |
+| `validatorsActive` | Assert every running validator is in the epoch's validator set. | `failing`                        |
 
 ### Parameter reference
 
@@ -419,7 +420,16 @@ function name or a mapping.
             MaxEpochDuration: 10s
           Blocks:
             MaxBlockGas: 10_000_000_000
+    - validatorsActive
 ```
+
+> `validatorsActive` asserts the guarantee described in
+> [§6.4](#64-validator-activation): a node started as `type: validator` is
+> really a validator. It compares the running validator nodes against the
+> validator set of the epoch being built, rather than observing event
+> emission — a validator that just joined, or whose empty events the event
+> throttler suppresses, is a full member yet emits rarely. See
+> [`validators_are_really_validators.yml`](scenarios/examples/validators_are_really_validators.yml).
 
 ---
 
@@ -447,12 +457,38 @@ node to reach the current network block height before proceeding. This
 means the network must already have a live block source before adding
 observers or RPC nodes.
 
-### 6.4 Genesis validators
+### 6.4 Validator activation
 
-Nodes named in the genesis (via the driver’s genesis validator map) are
-started **without** an on-chain registration step, and their pre-assigned
-validator IDs are reused. This lets a scenario’s first `startNode` step
-simply reference a genesis validator by label.
+Every node started as `type: validator` is guaranteed to be a validator in
+the network by the time the step completes — a scenario needs no epoch
+handling of its own for that.
+
+Only the first `startNode` step forms the genesis validator set. A validator
+introduced by any later step is created in the SFC contract instead, and SFC
+validator sets are **per-epoch**: such a validator carries no stake weight
+and emits no events until the epoch it was created in is sealed. Left alone
+it would sit in the network as an observer while the genesis validators
+carried the whole consensus load.
+
+So `startNode` seals the epoch itself and then waits until the validators it
+registered are reported in the active set, failing the step if they never
+arrive. The seal happens *after* the new nodes are up and synced (§6.3),
+because a validator gains stake weight the moment it joins the set —
+admitting it earlier would deprive the network of that share of its online
+stake.
+
+Two cases register nothing and are therefore not affected: genesis
+validators, whose pre-assigned IDs are reused, and rejoins (a `startNode`
+reusing an earlier identifier), which keep their preserved validator ID and
+are already in the set.
+
+A `startNode` with `failing: true` is registered but not activated, as it is
+also excluded from the waits of §6.2 and §6.3: a node that may never come up
+must not be the subject of an assertion. Such a validator joins at the next
+epoch the scenario seals, so the guarantee above covers working nodes only —
+which is also why [`validatorsActive`](#5-check-functions) skips them.
+
+The [`validatorsActive`](#5-check-functions) check asserts this end to end.
 
 ### 6.5 Error surfaces
 
