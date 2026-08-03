@@ -384,7 +384,7 @@ function name or a mapping.
 | ------------------ | --------------------------------------------------------------- | --------------------------------------------- |
 | `blockGasRate`     | Assert block gas rate ≤ ceiling over an observation window.     | `ceiling`, `tolerance`, `duration`, `failing` |
 | `blockHashes`      | Assert all nodes agree on block hashes.                         | `failing`                                     |
-| `blockHeights`     | Assert all nodes are within tolerance of the same height.       | `tolerance`, `failing`                        |
+| `blockHeights`     | Assert all nodes are within tolerance of the same height.       | `tolerance`, `duration`, `failing`            |
 | `blocksHalted`     | Assert block production has halted over an observation window.  | `tolerance`, `duration`, `failing`            |
 | `blocksProduced`   | Assert all nodes produce blocks within tolerance over duration. | `tolerance`, `duration`, `failing`            |
 | `networkRules`     | Assert the active rules on all nodes match the given patch.     | `rules`, `failing`                            |
@@ -396,7 +396,7 @@ function name or a mapping.
 | ----------- | ----------------- | ------------------------------------------------------------------------------------------------ |
 | `ceiling`   | float             | Maximum allowed value (used by `blockGasRate`).                                                  |
 | `tolerance` | int               | For `blockHeights`, the allowed deviation between nodes, in blocks. For `blocksProduced`, `blocksHalted` and `blockGasRate`, the length of the observation window in monitoring samples (one per second); `duration` overrides it. |
-| `duration`  | duration string   | Window over which to observe the network. Must be at least 2s so that the monitor can collect enough samples to see a change. |
+| `duration`  | duration string   | Window over which to observe the network. Must be at least 2s so that the monitor can collect enough samples to see a change. For `blockHeights` it is instead the time allowed for the nodes to converge (default 30s). |
 | `rules`     | `NetworkRulesPatch` | Expected rule set; every set field must equal the value reported by every node.                |
 | `failing`   | bool              | When `true`, the check is **expected to fail**; a passing result is treated as an error.        |
 

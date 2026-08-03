@@ -622,7 +622,7 @@ func (s *Scenario) setDefaults() {
 var checkFunctionDescriptions = map[StepFunction]string{
 	FuncCheckBlockGasRate:   "Assert that every block produced during the observation window has a gas rate at or below a ceiling.",
 	FuncCheckBlockHashes:    "Assert that all nodes agree on the same block hashes.",
-	FuncCheckBlockHeights:   "Assert that all nodes are within tolerance of the same block height.",
+	FuncCheckBlockHeights:   "Assert that all nodes are within tolerance of the same block height, waiting up to duration for them to agree.",
 	FuncCheckBlocksHalted:   "Assert that block production has halted, by observing the network for the given duration.",
 	FuncCheckBlocksProduced: "Assert that all nodes have produced blocks within tolerance.",
 	FuncCheckEventThrottled: "Assert that validators listed in throttledNodes emit events at a significantly lower rate than the rest.",
@@ -635,7 +635,7 @@ var checkFunctionDescriptions = map[StepFunction]string{
 var checkFunctionParams = map[StepFunction][]string{
 	FuncCheckBlockGasRate:   {"ceiling", "tolerance", "duration", "failing"},
 	FuncCheckBlockHashes:    {"failing"},
-	FuncCheckBlockHeights:   {"tolerance", "failing"},
+	FuncCheckBlockHeights:   {"tolerance", "duration", "failing"},
 	FuncCheckBlocksHalted:   {"tolerance", "duration", "failing"},
 	FuncCheckBlocksProduced: {"tolerance", "duration", "failing"},
 	FuncCheckEventThrottled: {"throttledNodes", "failing"},
