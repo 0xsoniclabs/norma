@@ -35,10 +35,11 @@ import (
 // throttling is occurring.
 const minGapRatio = 2.0
 
-// defaultSampleWindow is the interval between the two DAG snapshots used
-// to compute per-validator emission rates. Longer windows produce more
+// defaultSampleWindow is the nominal interval between the two DAG snapshots
+// used to compute per-validator emission rates. Longer windows produce more
 // stable rate estimates but are more likely to straddle an epoch
-// boundary and force a retry.
+// boundary and force a retry. The rates themselves are computed from the
+// interval that was actually measured, not from this value.
 const defaultSampleWindow = 5 * time.Second
 
 // maxSampleAttempts caps the number of sampling attempts before giving
@@ -64,7 +65,6 @@ func newEventThrottledChecker(net driver.Network) *eventThrottledChecker {
 		net:          net,
 		sampleWindow: defaultSampleWindow,
 		retryBackoff: defaultRetryBackoff,
-		collectRates: collectEmissionRates,
 	}
 }
 
@@ -77,13 +77,23 @@ type eventThrottledChecker struct {
 	throttledNodes []string // node labels expected to be throttled
 	sampleWindow   time.Duration
 	retryBackoff   time.Duration // pause between discarded sampling attempts
-	// collectRates measures per-validator emission rates over the given
-	// window, pausing for backoff between discarded attempts. Overridable
-	// for tests.
+	// collectRates replaces the measurement of per-validator emission rates.
+	// Nil means the real one is used; set by tests that do not want to walk a
+	// DAG.
 	collectRates func(
 		ctx context.Context, client rpc.Client,
-		window, backoff time.Duration,
 	) (map[uint64]float64, error)
+}
+
+// rates measures the per-validator emission rates, through the test seam when
+// one is installed.
+func (c *eventThrottledChecker) rates(
+	ctx context.Context, client rpc.Client,
+) (map[uint64]float64, error) {
+	if c.collectRates != nil {
+		return c.collectRates(ctx, client)
+	}
+	return c.collectEmissionRates(ctx, client)
 }
 
 func (c *eventThrottledChecker) Configure(config CheckerConfig) Checker {
@@ -132,7 +142,7 @@ func (c *eventThrottledChecker) Check(ctx context.Context) error {
 	}
 	defer client.Close()
 
-	rates, err := c.collectRates(ctx, client, c.sampleWindow, c.retryBackoff)
+	rates, err := c.rates(ctx, client)
 	if err != nil {
 		return err
 	}
@@ -205,12 +215,12 @@ type rawEvent struct {
 // attempt produces a window that does not straddle an epoch boundary,
 // giving up after maxSampleAttempts. This is necessary because Sonic
 // epochs can be shorter than a useful sampling window.
-func collectEmissionRates(
-	ctx context.Context, client rpc.Client, window, backoff time.Duration,
+func (c *eventThrottledChecker) collectEmissionRates(
+	ctx context.Context, client rpc.Client,
 ) (map[uint64]float64, error) {
 	var lastErr error
 	for attempt := range maxSampleAttempts {
-		rates, err := sampleEmissionRates(ctx, client, window)
+		rates, err := c.sampleEmissionRates(ctx, client)
 		if err == nil {
 			return rates, nil
 		}
@@ -228,10 +238,8 @@ func collectEmissionRates(
 		// and expose DAG heads before retrying. Skipped after the final
 		// attempt so the check fails fast once retries are exhausted.
 		if attempt < maxSampleAttempts-1 {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(backoff):
+			if err := sleep(ctx, c.retryBackoff); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -242,78 +250,114 @@ func collectEmissionRates(
 	)
 }
 
-// sampleEmissionRates takes two DAG snapshots separated by `window` and
-// returns each validator's emission rate in events per second. The
-// current epoch must not roll over during the window; on rollover an
-// error is returned so the caller can retry.
-func sampleEmissionRates(
-	ctx context.Context, client rpc.Client, window time.Duration,
+// sampleEmissionRates takes two DAG snapshots about sampleWindow apart and
+// returns each validator's emission rate in events per second. The current
+// epoch must not roll over between them; on rollover an error is returned so
+// the caller can retry.
+func (c *eventThrottledChecker) sampleEmissionRates(
+	ctx context.Context, client rpc.Client,
 ) (map[uint64]float64, error) {
-	epoch1, counts1, err := snapshotEpochCounts(ctx, client)
+	first, err := c.snapshotEpochCounts(ctx, client)
 	if err != nil {
 		return nil, fmt.Errorf("first snapshot failed: %w", err)
 	}
 
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-time.After(window):
+	if err := sleep(ctx, c.sampleWindow); err != nil {
+		return nil, err
 	}
 
-	epoch2, counts2, err := snapshotEpochCounts(ctx, client)
+	second, err := c.snapshotEpochCounts(ctx, client)
 	if err != nil {
 		return nil, fmt.Errorf("second snapshot failed: %w", err)
 	}
 
-	if epoch1 != epoch2 {
+	if first.epoch != second.epoch {
 		return nil, fmt.Errorf(
 			"epoch changed during sampling window (%d -> %d)",
-			epoch1, epoch2,
+			first.epoch, second.epoch,
 		)
 	}
 
-	seconds := window.Seconds()
-	rates := make(map[uint64]float64, len(counts2))
-	// Both snapshots walk the same epoch's DAG, so counts2[id] is always
-	// >= counts1[id] and every id in counts1 is also in counts2.
-	for id, c2 := range counts2 {
-		rates[id] = float64(c2-counts1[id]) / seconds
+	// Divide by the interval that was actually measured. Walking the DAG takes
+	// real time - one RPC per event, and the DAG grows with the epoch - so the
+	// two snapshots can be considerably further apart than the nominal window.
+	// Using the nominal window here overstates every rate, by an amount that
+	// grows with load.
+	elapsed := second.takenAt.Sub(first.takenAt)
+	if elapsed <= 0 {
+		return nil, fmt.Errorf(
+			"snapshots are not %s apart, measured %s", c.sampleWindow, elapsed,
+		)
+	}
+	if elapsed > 2*c.sampleWindow {
+		slog.Warn(
+			"DAG sampling took much longer than the requested window; "+
+				"emission rates are averaged over the longer interval",
+			"requested", c.sampleWindow,
+			"measured", elapsed,
+		)
+	}
+
+	seconds := elapsed.Seconds()
+	rates := make(map[uint64]float64, len(second.counts))
+	// Both snapshots walk the same epoch's DAG, so second.counts[id] is always
+	// >= first.counts[id] and every id in the first is also in the second.
+	for id, count := range second.counts {
+		rates[id] = float64(count-first.counts[id]) / seconds
 	}
 	return rates, nil
 }
 
+// dagSnapshot is a view of one epoch's DAG.
+type dagSnapshot struct {
+	epoch uint64
+	// takenAt is when the heads were queried. The events reachable from those
+	// heads are exactly the ones that existed at that instant, so this - not
+	// the moment the walk over them finished - is when the snapshot was taken.
+	takenAt time.Time
+	counts  map[uint64]int
+}
+
 // snapshotEpochCounts queries the current epoch and counts events per
 // validator by walking the DAG of that epoch.
-func snapshotEpochCounts(
+func (c *eventThrottledChecker) snapshotEpochCounts(
 	ctx context.Context, client rpc.Client,
-) (uint64, map[uint64]int, error) {
+) (dagSnapshot, error) {
 	var epoch hexutil.Uint64
 	if err := client.Call(
 		&epoch, "eth_currentEpoch",
 	); err != nil {
-		return 0, nil, fmt.Errorf("failed to get current epoch: %w", err)
+		return dagSnapshot{}, fmt.Errorf("failed to get current epoch: %w", err)
 	}
+
+	takenAt := time.Now()
 	var headHexes []string
 	if err := client.Call(
 		&headHexes, "dag_getHeads", epoch.String(),
 	); err != nil {
-		return 0, nil, fmt.Errorf("failed to get DAG heads: %w", err)
+		return dagSnapshot{}, fmt.Errorf("failed to get DAG heads: %w", err)
 	}
 	if len(headHexes) == 0 {
 		// Transient: a freshly rolled-over epoch may have no heads yet.
 		// Returning an error triggers a retry in collectEmissionRates.
-		return 0, nil, fmt.Errorf(
+		return dagSnapshot{}, fmt.Errorf(
 			"epoch %s has no DAG heads yet", epoch.String(),
 		)
 	}
+
 	counts, err := countEventsFromHeads(ctx, client, headHexes)
 	if err != nil {
-		return 0, nil, err
+		return dagSnapshot{}, err
 	}
 	if len(counts) == 0 {
-		return 0, nil, fmt.Errorf("collected no events from DAG")
+		return dagSnapshot{}, fmt.Errorf("collected no events from DAG")
 	}
-	return uint64(epoch), counts, nil
+
+	return dagSnapshot{
+		epoch:   uint64(epoch),
+		takenAt: takenAt,
+		counts:  counts,
+	}, nil
 }
 
 // countEventsFromHeads walks the DAG from the given head hashes via DFS
