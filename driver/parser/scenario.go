@@ -620,7 +620,7 @@ func (s *Scenario) setDefaults() {
 
 // checkFunctionDescriptions provides a human-readable description for each sub-check function.
 var checkFunctionDescriptions = map[StepFunction]string{
-	FuncCheckBlockGasRate:   "Assert that the block gas rate is at or below a ceiling.",
+	FuncCheckBlockGasRate:   "Assert that every block produced during the observation window has a gas rate at or below a ceiling.",
 	FuncCheckBlockHashes:    "Assert that all nodes agree on the same block hashes.",
 	FuncCheckBlockHeights:   "Assert that all nodes are within tolerance of the same block height.",
 	FuncCheckBlocksHalted:   "Assert that block production has halted, by observing the network for the given duration.",
@@ -633,7 +633,7 @@ var checkFunctionDescriptions = map[StepFunction]string{
 
 // checkFunctionParams lists the optional parameters accepted by each sub-check function.
 var checkFunctionParams = map[StepFunction][]string{
-	FuncCheckBlockGasRate:   {"ceiling", "failing"},
+	FuncCheckBlockGasRate:   {"ceiling", "tolerance", "duration", "failing"},
 	FuncCheckBlockHashes:    {"failing"},
 	FuncCheckBlockHeights:   {"tolerance", "failing"},
 	FuncCheckBlocksHalted:   {"tolerance", "duration", "failing"},

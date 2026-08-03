@@ -380,22 +380,22 @@ The canonical Go type is
 Checks appear as items inside a `checks:` step. Each entry is either a bare
 function name or a mapping.
 
-| Function           | Purpose                                                         | Parameters                       |
-| ------------------ | --------------------------------------------------------------- | -------------------------------- |
-| `blockGasRate`     | Assert block gas rate ≤ ceiling.                                | `ceiling`, `failing`             |
-| `blockHashes`      | Assert all nodes agree on block hashes.                         | `failing`                        |
-| `blockHeights`     | Assert all nodes are within tolerance of the same height.       | `tolerance`, `failing`           |
-| `blocksHalted`     | Assert block production has halted over an observation window.  | `tolerance`, `duration`, `failing` |
-| `blocksProduced`   | Assert all nodes produce blocks within tolerance over duration. | `tolerance`, `duration`, `failing` |
-| `networkRules`     | Assert the active rules on all nodes match the given patch.     | `rules`, `failing`               |
-| `validatorsActive` | Assert every running validator is in the epoch's validator set. | `failing`                        |
+| Function           | Purpose                                                         | Parameters                                    |
+| ------------------ | --------------------------------------------------------------- | --------------------------------------------- |
+| `blockGasRate`     | Assert block gas rate ≤ ceiling over an observation window.     | `ceiling`, `tolerance`, `duration`, `failing` |
+| `blockHashes`      | Assert all nodes agree on block hashes.                         | `failing`                                     |
+| `blockHeights`     | Assert all nodes are within tolerance of the same height.       | `tolerance`, `failing`                        |
+| `blocksHalted`     | Assert block production has halted over an observation window.  | `tolerance`, `duration`, `failing`            |
+| `blocksProduced`   | Assert all nodes produce blocks within tolerance over duration. | `tolerance`, `duration`, `failing`            |
+| `networkRules`     | Assert the active rules on all nodes match the given patch.     | `rules`, `failing`                            |
+| `validatorsActive` | Assert every running validator is in the epoch's validator set. | `failing`                                     |
 
 ### Parameter reference
 
 | Parameter   | Type              | Meaning                                                                                          |
 | ----------- | ----------------- | ------------------------------------------------------------------------------------------------ |
 | `ceiling`   | float             | Maximum allowed value (used by `blockGasRate`).                                                  |
-| `tolerance` | int               | For `blockHeights`, the allowed deviation between nodes, in blocks. For `blocksProduced` and `blocksHalted`, the length of the observation window in monitoring samples (one per second); `duration` overrides it. |
+| `tolerance` | int               | For `blockHeights`, the allowed deviation between nodes, in blocks. For `blocksProduced`, `blocksHalted` and `blockGasRate`, the length of the observation window in monitoring samples (one per second); `duration` overrides it. |
 | `duration`  | duration string   | Window over which to observe the network. Must be at least 2s so that the monitor can collect enough samples to see a change. |
 | `rules`     | `NetworkRulesPatch` | Expected rule set; every set field must equal the value reported by every node.                |
 | `failing`   | bool              | When `true`, the check is **expected to fail**; a passing result is treated as an error.        |
