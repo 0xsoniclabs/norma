@@ -18,6 +18,7 @@ package checking
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -42,4 +43,37 @@ func sleep(ctx context.Context, d time.Duration) error {
 	case <-timer.C:
 		return nil
 	}
+}
+
+// minObservationSamples is the smallest number of monitoring samples an
+// observation window must be able to hold. Deciding whether a block height
+// changed takes two samples, so a shorter window could only ever report that
+// nothing was observed.
+const minObservationSamples = 2
+
+// observationWindow returns how long a checker should observe the network. An
+// explicit duration wins; otherwise the window is derived from a tolerance
+// expressed in monitoring samples. The result is never so short that the
+// monitor could not take enough samples to see a change.
+func observationWindow(
+	duration time.Duration, toleranceSamples int,
+) (time.Duration, error) {
+	window := duration
+	if window <= 0 {
+		if toleranceSamples <= 0 {
+			return 0, fmt.Errorf(
+				"tolerance must be > 0, got %d", toleranceSamples,
+			)
+		}
+		window = time.Duration(toleranceSamples) * blockSampleInterval
+	}
+
+	if minimum := minObservationSamples * blockSampleInterval; window < minimum {
+		return 0, fmt.Errorf(
+			"observation window of %s is shorter than the %s needed to "+
+				"collect %d monitoring samples",
+			window, minimum, minObservationSamples,
+		)
+	}
+	return window, nil
 }

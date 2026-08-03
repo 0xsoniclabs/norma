@@ -385,7 +385,7 @@ function name or a mapping.
 | `blockGasRate`     | Assert block gas rate ≤ ceiling.                                | `ceiling`, `failing`             |
 | `blockHashes`      | Assert all nodes agree on block hashes.                         | `failing`                        |
 | `blockHeights`     | Assert all nodes are within tolerance of the same height.       | `tolerance`, `failing`           |
-| `blocksHalted`     | Assert block production has halted.                             | `failing`                        |
+| `blocksHalted`     | Assert block production has halted over an observation window.  | `tolerance`, `duration`, `failing` |
 | `blocksProduced`   | Assert all nodes produce blocks within tolerance over duration. | `tolerance`, `duration`, `failing` |
 | `networkRules`     | Assert the active rules on all nodes match the given patch.     | `rules`, `failing`               |
 | `validatorsActive` | Assert every running validator is in the epoch's validator set. | `failing`                        |
@@ -395,10 +395,27 @@ function name or a mapping.
 | Parameter   | Type              | Meaning                                                                                          |
 | ----------- | ----------------- | ------------------------------------------------------------------------------------------------ |
 | `ceiling`   | float             | Maximum allowed value (used by `blockGasRate`).                                                  |
-| `tolerance` | int (blocks)      | Allowed deviation between nodes.                                                                 |
-| `duration`  | duration string   | Non-negative window over which to observe the network (used by `blocksProduced`).                |
+| `tolerance` | int               | For `blockHeights`, the allowed deviation between nodes, in blocks. For `blocksProduced` and `blocksHalted`, the length of the observation window in monitoring samples (one per second); `duration` overrides it. |
+| `duration`  | duration string   | Window over which to observe the network. Must be at least 2s so that the monitor can collect enough samples to see a change. |
 | `rules`     | `NetworkRulesPatch` | Expected rule set; every set field must equal the value reported by every node.                |
 | `failing`   | bool              | When `true`, the check is **expected to fail**; a passing result is treated as an error.        |
+
+### Observation windows
+
+Checks that judge whether the network is progressing observe it **forward in
+time**: the check notes the current instant, waits for its observation window,
+and then looks only at the data collected while it waited. Data recorded before
+the check started is ignored.
+
+This matters because a step is not guaranteed to leave the network in its final
+state the moment it returns — after a `stopNode`, blocks keep being produced for
+a few seconds until the remaining validators time out. A check that looked
+backwards would see that production and fail. A forward window cannot, so
+scenarios do not need to pad every transition with a `waitFor` long enough to
+push the transition out of the check's field of view.
+
+The trade-off is that such a check takes at least its window to run. Budget for
+it: the scenario deadline is 10 minutes.
 
 ### Examples
 

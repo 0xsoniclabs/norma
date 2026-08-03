@@ -84,3 +84,43 @@ func TestSleep_DoesNotWaitForNonPositiveDurations(t *testing.T) {
 		}
 	})
 }
+
+func TestObservationWindow_PrefersAnExplicitDuration(t *testing.T) {
+	got, err := observationWindow(42*time.Second, 3)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := 42 * time.Second; got != want {
+		t.Errorf("window is %v, want the explicit %v", got, want)
+	}
+}
+
+func TestObservationWindow_DerivesFromToleranceSamples(t *testing.T) {
+	got, err := observationWindow(0, 7)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := 7 * blockSampleInterval; got != want {
+		t.Errorf("window is %v, want %v", got, want)
+	}
+}
+
+func TestObservationWindow_RejectsUnusableInputs(t *testing.T) {
+	tests := map[string]struct {
+		duration  time.Duration
+		tolerance int
+	}{
+		"no duration and no tolerance": {0, 0},
+		"negative tolerance":           {0, -1},
+		"duration below two samples":   {blockSampleInterval, 0},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			if _, err := observationWindow(
+				test.duration, test.tolerance,
+			); err == nil {
+				t.Errorf("expected an error, got nil")
+			}
+		})
+	}
+}
