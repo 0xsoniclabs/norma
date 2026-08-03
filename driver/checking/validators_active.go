@@ -69,6 +69,12 @@ func newValidatorsActiveChecker(net driver.Network) *validatorsActiveChecker {
 // Membership is checked rather than observed event emission, which is a flaky
 // proxy: a validator that recently joined, or one whose empty events are
 // suppressed by the event throttler, is a full member yet emits rarely.
+//
+// The requirement runs in one direction only — every running validator node
+// must be in the set, not the reverse — but it does hold for all of them, so a
+// scenario that leaves a validator running after taking it out of the set fails
+// this check by design. An undelegated node that has not been stopped yet is
+// the usual case; nodes expected to fail are the one exemption.
 type validatorsActiveChecker struct {
 	net driver.Network
 	// getActiveValidators reads the current epoch's validator set.

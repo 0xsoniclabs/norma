@@ -430,6 +430,13 @@ function name or a mapping.
 > emission — a validator that just joined, or whose empty events the event
 > throttler suppresses, is a full member yet emits rarely. See
 > [`validators_are_really_validators.yml`](scenarios/examples/validators_are_really_validators.yml).
+>
+> Every running validator node has to be a member, so the check does not fit a
+> scenario that leaves one running after taking it out of the set: a node that
+> has been [`undelegate`](#4-step-functions)d but not yet stopped fails it, by
+> design, because it is no longer in the set. Place the check where the running
+> validators are the ones the scenario means to have, or use `failing: true` on
+> nodes that are expected to have left.
 
 ---
 
