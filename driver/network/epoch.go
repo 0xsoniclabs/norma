@@ -123,29 +123,62 @@ func GetCurrentEpoch(client rpc.Client) (hexutil.Uint64, error) {
 	return currentEpoch, nil
 }
 
+// GetActiveValidatorIDs returns the ids of the validators taking part in
+// consensus in the epoch currently being built. SFC validator sets are
+// per-epoch: a validator registered mid-epoch is absent from this set until
+// that epoch is sealed.
+func GetActiveValidatorIDs(client rpc.Client) ([]int, error) {
+	sfcContract, err := sfc100.NewContract(sfc.ContractAddress, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get SFC contract representation; %v", err)
+	}
+
+	epoch, err := sfcContract.CurrentEpoch(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current epoch: %w", err)
+	}
+
+	return getValidatorIDsOfEpoch(sfcContract, epoch)
+}
+
+// getValidatorIDsOfEpoch returns the ids of the validators of the given epoch.
+// Callers that already know the epoch use this to avoid reading it twice, which
+// would let the two reads straddle a seal and report a mismatched pair.
+func getValidatorIDsOfEpoch(
+	sfcContract *sfc100.Contract, epoch *big.Int,
+) ([]int, error) {
+	validators, err := sfcContract.GetEpochValidatorIDs(nil, epoch)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to get epoch validator IDs for epoch %v: %w", epoch, err,
+		)
+	}
+
+	ids := make([]int, 0, len(validators))
+	for _, id := range validators {
+		ids = append(ids, int(id.Int64()))
+	}
+	return ids, nil
+}
+
 func logEpochSummary(client rpc.Client) {
 	// get a representation of the deployed contract
-	sfc, err := sfc100.NewContract(sfc.ContractAddress, client)
+	sfcContract, err := sfc100.NewContract(sfc.ContractAddress, client)
 	if err != nil {
 		slog.Error("failed to get SFC contract representation", "error", err)
 		return
 	}
 
-	epoch, err := sfc.CurrentEpoch(nil)
+	epoch, err := sfcContract.CurrentEpoch(nil)
 	if err != nil {
 		slog.Error("failed to get current epoch", "error", err)
 		return
 	}
 
-	validators, err := sfc.GetEpochValidatorIDs(nil, epoch)
+	validatorIds, err := getValidatorIDsOfEpoch(sfcContract, epoch)
 	if err != nil {
-		slog.Error("failed to get epoch validator IDs", "epoch", epoch, "error", err)
+		slog.Error("failed to get active validators", "error", err)
 		return
-	}
-
-	validatorIds := []int{}
-	for _, id := range validators {
-		validatorIds = append(validatorIds, int(id.Int64()))
 	}
 
 	slog.Info("epoch summary",

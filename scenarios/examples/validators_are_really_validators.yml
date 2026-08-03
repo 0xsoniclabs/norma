@@ -1,0 +1,35 @@
+# This scenario verifies that every node started as "type: validator" really
+# is a validator in the network, with no epoch handling in the scenario itself.
+#
+# Only the first startNode step forms the genesis validator set; later
+# validators are registered through the SFC contract, and SFC validator sets
+# are per-epoch. startNode therefore seals the epoch once its nodes are up, so
+# the validators it registered join the set instead of idling as observers
+# while the genesis validators carry the whole consensus load.
+
+Name: Validators Are Really Validators
+Description: >-
+  Verifies that every node started as type validator joins
+  the validator set, whether it comes from genesis, a later
+  step, or a multi-instance step.
+
+InitialNetworkRules:
+  Epochs:
+    MaxEpochDuration: 1000s
+    MaxEpochGas: 10_000_000_000
+
+Scenario:
+  - startNode: genesis-validator
+    type: validator
+
+  - startNode: joining-validator
+    type: validator
+
+  - startNode: joining-pair
+    type: validator
+    instances: 2
+
+  # All four validators must be in the validator set. No advanceEpoch here:
+  # making that true is startNode's job.
+  - checks:
+      - validatorsActive
