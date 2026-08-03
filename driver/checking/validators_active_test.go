@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/rpc"
@@ -122,11 +123,10 @@ func TestValidatorsActiveChecker_Fails_WhenNetworkHasNoValidators(t *testing.T) 
 
 func TestValidatorsActiveChecker_ReportsValidatorMissingFromTheSet(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	checker, client := checkerWithNodes(ctrl, map[int]string{
+	checker := checkerWithNodes(ctrl, map[int]string{
 		1: "genesis-validator",
 		2: "joining-validator",
 	})
-	client.EXPECT().Close()
 	checker.getActiveValidators = func(rpc.Client) ([]int, error) {
 		return []int{1}, nil
 	}
@@ -138,10 +138,9 @@ func TestValidatorsActiveChecker_ReportsValidatorMissingFromTheSet(t *testing.T)
 
 func TestValidatorsActiveChecker_Passes_WhenAllValidatorsAreInTheSet(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	checker, client := checkerWithNodes(ctrl, map[int]string{
+	checker := checkerWithNodes(ctrl, map[int]string{
 		1: "alpha", 2: "beta",
 	})
-	client.EXPECT().Close()
 	checker.getActiveValidators = func(rpc.Client) ([]int, error) {
 		return []int{1, 2}, nil
 	}
@@ -151,8 +150,7 @@ func TestValidatorsActiveChecker_Passes_WhenAllValidatorsAreInTheSet(t *testing.
 
 func TestValidatorsActiveChecker_PropagatesValidatorSetReadFailure(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	checker, client := checkerWithNodes(ctrl, map[int]string{1: "alpha"})
-	client.EXPECT().Close()
+	checker := checkerWithNodes(ctrl, map[int]string{1: "alpha"})
 	checker.getActiveValidators = func(rpc.Client) ([]int, error) {
 		return nil, fmt.Errorf("SFC unreachable")
 	}
@@ -161,16 +159,92 @@ func TestValidatorsActiveChecker_PropagatesValidatorSetReadFailure(t *testing.T)
 	require.ErrorContains(t, err, "SFC unreachable")
 }
 
+// A node queried right after the epoch seal can still report the previous
+// validator set, which is a lag and not a validator sitting out consensus.
+func TestValidatorsActiveChecker_Passes_OnceALaggingNodeCatchesUp(t *testing.T) {
+	pollFast(t)
+	ctrl := gomock.NewController(t)
+	checker := checkerWithNodes(ctrl, map[int]string{1: "alpha", 2: "beta"})
+	checker.timeout = time.Minute
+
+	reads := 0
+	checker.getActiveValidators = func(rpc.Client) ([]int, error) {
+		reads++
+		if reads < 3 {
+			return []int{1}, nil
+		}
+		return []int{1, 2}, nil
+	}
+
+	require.NoError(t, checker.Check(context.Background()))
+	require.Equal(t, 3, reads)
+}
+
+func TestValidatorsActiveChecker_Fails_WhenTheLagOutlastsTheTimeout(t *testing.T) {
+	pollFast(t)
+	ctrl := gomock.NewController(t)
+	checker := checkerWithNodes(ctrl, map[int]string{1: "alpha", 2: "beta"})
+	checker.timeout = 100 * time.Millisecond
+
+	reads := 0
+	checker.getActiveValidators = func(rpc.Client) ([]int, error) {
+		reads++
+		return []int{1}, nil
+	}
+
+	err := checker.Check(context.Background())
+	require.ErrorContains(t, err, "beta (validator 2)")
+	require.Greater(t, reads, 1, "the check gave up without polling")
+}
+
+// A read failure is retried like any other disagreement: a node that is
+// restarting or briefly unresponsive recovers within the timeout.
+func TestValidatorsActiveChecker_Passes_OnceAFailingReadRecovers(t *testing.T) {
+	pollFast(t)
+	ctrl := gomock.NewController(t)
+	checker := checkerWithNodes(ctrl, map[int]string{1: "alpha"})
+	checker.timeout = time.Minute
+
+	reads := 0
+	checker.getActiveValidators = func(rpc.Client) ([]int, error) {
+		reads++
+		if reads < 2 {
+			return nil, fmt.Errorf("SFC unreachable")
+		}
+		return []int{1}, nil
+	}
+
+	require.NoError(t, checker.Check(context.Background()))
+}
+
+func TestValidatorsActiveChecker_Aborts_WhenTheContextIsCancelled(t *testing.T) {
+	pollFast(t)
+	ctrl := gomock.NewController(t)
+	checker := checkerWithNodes(ctrl, map[int]string{1: "alpha", 2: "beta"})
+	checker.timeout = time.Minute
+
+	ctx, cancel := context.WithCancel(context.Background())
+	checker.getActiveValidators = func(rpc.Client) ([]int, error) {
+		cancel()
+		return []int{1}, nil
+	}
+
+	require.ErrorIs(t, checker.Check(ctx), context.Canceled)
+}
+
 // checkerWithNodes builds a checker over a network of validator nodes with the
 // given validator id to label mapping, all reachable over the returned client.
+// The checker makes a single attempt; tests that exercise the convergence poll
+// set a timeout themselves.
 func checkerWithNodes(
 	ctrl *gomock.Controller, validators map[int]string,
-) (*validatorsActiveChecker, *rpc.MockClient) {
+) *validatorsActiveChecker {
 	client := rpc.NewMockClient(ctrl)
+	// Every read closes its client, and a polling checker reads repeatedly.
+	client.EXPECT().Close().MinTimes(1)
 
 	nodes := make([]driver.Node, 0, len(validators))
 	for id, label := range validators {
-		id := id
 		node := driver.NewMockNode(ctrl)
 		node.EXPECT().IsExpectedFailure().Return(false).AnyTimes()
 		node.EXPECT().GetValidatorId().Return(&id)
@@ -185,5 +259,14 @@ func checkerWithNodes(
 	net.EXPECT().GetActiveNodes().Return(nodes)
 
 	checker := newValidatorsActiveChecker(net)
-	return checker, client
+	checker.timeout = 0
+	return checker
+}
+
+// pollFast shortens the convergence poll interval for the duration of a test.
+func pollFast(t *testing.T) {
+	t.Helper()
+	original := validatorsActivePollInterval
+	validatorsActivePollInterval = time.Millisecond
+	t.Cleanup(func() { validatorsActivePollInterval = original })
 }

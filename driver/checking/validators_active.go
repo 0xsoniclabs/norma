@@ -22,12 +22,24 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"github.com/0xsoniclabs/norma/driver/network"
 	"github.com/0xsoniclabs/norma/driver/rpc"
 )
+
+// defaultValidatorsActiveTimeout bounds how long Check waits for the queried
+// node to report a validator set holding every running validator. The set is
+// written at the epoch seal and read per node, so a node that has just started,
+// or one that briefly lags the node which observed the seal, is behind for a
+// moment without anything being wrong.
+const defaultValidatorsActiveTimeout = 30 * time.Second
+
+// validatorsActivePollInterval is the delay between convergence polls. Var so
+// tests can shorten it.
+var validatorsActivePollInterval = 500 * time.Millisecond
 
 func init() {
 	RegisterNetworkCheck("validatorsActive",
@@ -40,6 +52,7 @@ func newValidatorsActiveChecker(net driver.Network) *validatorsActiveChecker {
 	return &validatorsActiveChecker{
 		net:                 net,
 		getActiveValidators: network.GetActiveValidatorIDs,
+		timeout:             defaultValidatorsActiveTimeout,
 	}
 }
 
@@ -61,39 +74,74 @@ type validatorsActiveChecker struct {
 	// getActiveValidators reads the current epoch's validator set.
 	// Overridable for tests.
 	getActiveValidators func(rpc.Client) ([]int, error)
+	// timeout bounds convergence polling. Zero means a single attempt.
+	timeout time.Duration
 }
 
 func (c *validatorsActiveChecker) Configure(CheckerConfig) Checker {
-	return c
+	return &validatorsActiveChecker{
+		net:                 c.net,
+		getActiveValidators: c.getActiveValidators,
+		timeout:             c.timeout,
+	}
 }
 
 func (c *validatorsActiveChecker) Check(ctx context.Context) error {
+	// Which nodes are running is the driver's own bookkeeping rather than
+	// network state, so these two failures are not something the network can
+	// converge out of and are reported without polling.
 	nodes := c.net.GetActiveNodes()
 	if len(nodes) == 0 {
 		return fmt.Errorf("no active nodes")
 	}
-
 	expected := expectedValidatorLabels(nodes)
 	if len(expected) == 0 {
 		return fmt.Errorf("no active validator nodes")
 	}
 
+	// The membership of a node in the set is on-chain state, so a disagreement
+	// is either permanent or a lag of at most a moment. Poll until it is gone,
+	// and only report what the deadline still finds.
+	deadline := time.Now().Add(c.timeout)
+	ticker := time.NewTicker(validatorsActivePollInterval)
+	defer ticker.Stop()
+
+	for {
+		active, err := c.readActiveValidators(ctx, nodes)
+		if err == nil {
+			err = verifyAllActive(expected, active)
+			if err == nil {
+				slog.Info("validator set",
+					"active_validators", active,
+					"running_validators", expected,
+				)
+				return nil
+			}
+		}
+		// A non-positive timeout leaves the deadline in the past, which makes
+		// this the single attempt such a checker is configured for.
+		if !time.Now().Before(deadline) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+// readActiveValidators reads the validator set of the epoch currently being
+// built from the first node that answers.
+func (c *validatorsActiveChecker) readActiveValidators(
+	ctx context.Context, nodes []driver.Node,
+) ([]int, error) {
 	client, err := dialFirstReachable(ctx, nodes)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer client.Close()
-
-	active, err := c.getActiveValidators(client)
-	if err != nil {
-		return err
-	}
-	slog.Info("validator set",
-		"active_validators", active,
-		"running_validators", expected,
-	)
-
-	return verifyAllActive(expected, active)
+	return c.getActiveValidators(client)
 }
 
 // expectedValidatorLabels maps the validator id of every running validator
