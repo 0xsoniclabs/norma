@@ -190,7 +190,7 @@ func dialFirstReachable(
 			return client, nil
 		}
 	}
-	return nil, fmt.Errorf("no reachable node for DAG query")
+	return nil, fmt.Errorf("no reachable node among %d active nodes", len(nodes))
 }
 
 // rawEvent is the wire representation of a DAG event as returned by
