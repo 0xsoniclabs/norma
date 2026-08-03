@@ -380,57 +380,151 @@ The canonical Go type is
 Checks appear as items inside a `checks:` step. Each entry is either a bare
 function name or a mapping.
 
-| Function           | Purpose                                                         | Parameters                                    |
-| ------------------ | --------------------------------------------------------------- | --------------------------------------------- |
-| `blockGasRate`     | Assert block gas rate ≤ ceiling over an observation window.     | `ceiling`, `tolerance`, `duration`, `failing` |
-| `blockHashes`      | Assert all nodes agree on block hashes.                         | `failing`                                     |
-| `blockHeights`     | Assert all nodes are within tolerance of the same height.       | `tolerance`, `duration`, `failing`            |
-| `blocksHalted`     | Assert block production has halted over an observation window.  | `tolerance`, `duration`, `failing`            |
-| `blocksProduced`   | Assert all nodes produce blocks within tolerance over duration. | `tolerance`, `duration`, `failing`            |
-| `networkRules`     | Assert the active rules on all nodes match the given patch.     | `rules`, `duration`, `failing`                |
-| `validatorsActive` | Assert every running validator is in the epoch's validator set. | `failing`                                     |
+| Function           | Purpose                                                          | Parameters                                    |
+| ------------------ | ---------------------------------------------------------------- | --------------------------------------------- |
+| `blockGasRate`     | Assert block gas rate ≤ ceiling over an observation window.      | `ceiling`, `tolerance`, `duration`, `failing` |
+| `blockHashes`      | Assert all nodes agree on block hashes.                          | `failing`                                     |
+| `blockHeights`     | Assert all nodes are within tolerance of the same height.        | `tolerance`, `duration`, `failing`            |
+| `blocksHalted`     | Assert block production has halted over an observation window.   | `tolerance`, `duration`, `failing`            |
+| `blocksProduced`   | Assert the network produces blocks over an observation window.   | `tolerance`, `duration`, `failing`            |
+| `eventThrottled`   | Assert the listed validators emit events far slower than others. | `throttledNodes`, `failing`                   |
+| `networkRules`     | Assert the active rules on all nodes match the given patch.      | `rules`, `duration`, `failing`                |
+| `validatorsActive` | Assert every running validator is in the epoch's validator set.  | `failing`                                     |
 
-### Parameter reference
+### 5.1 Windows of time
 
-| Parameter   | Type              | Meaning                                                                                          |
-| ----------- | ----------------- | ------------------------------------------------------------------------------------------------ |
-| `ceiling`   | float             | Maximum allowed value (used by `blockGasRate`).                                                  |
-| `tolerance` | int               | For `blockHeights`, the allowed deviation between nodes, in blocks. For `blocksProduced`, `blocksHalted` and `blockGasRate`, the length of the observation window in monitoring samples (one per second); `duration` overrides it. |
-| `duration`  | duration string   | Window over which to observe the network. Must be at least 2s so that the monitor can collect enough samples to see a change. For `blockHeights` and `networkRules` it is instead the time allowed for the nodes to converge (default 30s). |
-| `rules`     | `NetworkRulesPatch` | Expected rule set; every set field must equal the value reported by every node.                |
-| `failing`   | bool              | When `true`, the check is **expected to fail**; a passing result is treated as an error.        |
+Every check fixes the span it judges **when it starts**, and never reads data
+recorded before that instant. There are four shapes.
 
-### Observation windows
+| Check            | Window kind            | Anchored at                  | Judges                                 |
+| ---------------- | ---------------------- | ---------------------------- | -------------------------------------- |
+| `blocksProduced` | Forward observation    | now, at entry                | Height samples taken while waiting     |
+| `blocksHalted`   | Forward observation    | now, at entry                | Height samples taken while waiting     |
+| `blockGasRate`   | Forward observation    | chain head, at entry         | Blocks produced while waiting          |
+| `blockHeights`   | Convergence budget     | now + budget, at entry       | Live heights, re-read until they agree |
+| `networkRules`   | Convergence budget     | now + budget, at entry       | Live rules, re-read until they agree   |
+| `blockHashes`    | Fixed block range      | lowest head of healthy nodes | Blocks 0…that head, settled everywhere |
+| `eventThrottled` | Two measured snapshots | each DAG head query          | Event delta ÷ the interval measured    |
 
-Checks that judge whether the network is progressing observe it **forward in
-time**: the check notes the current instant, waits for its observation window,
-and then looks only at the data collected while it waited. Data recorded before
-the check started is ignored.
-
-This matters because a step is not guaranteed to leave the network in its final
+**Forward observation.** The check notes the current instant, waits for its
+window, and then looks only at what the monitor collected while it waited.
+This matters because a step does not necessarily leave the network in its final
 state the moment it returns — after a `stopNode`, blocks keep being produced for
-a few seconds until the remaining validators time out. A check that looked
-backwards would see that production and fail. A forward window cannot, so
-scenarios do not need to pad every transition with a `waitFor` long enough to
-push the transition out of the check's field of view.
+a few seconds until the remaining validators time out. A check looking backwards
+would see that production and fail; a forward window cannot see it at all. So
+scenarios do **not** need to pad a transition with a `waitFor` long enough to
+push it out of a check's field of view.
 
-The trade-off is that such a check takes at least its window to run. Budget for
-it: the scenario deadline is 10 minutes.
+`blockGasRate` is a forward window expressed in block numbers rather than
+timestamps: it records the chain head, waits, and inspects the blocks that
+appeared in between.
 
-### Examples
+**Convergence budget.** These checks compare nodes against each other at one
+instant, which asks the network to be settled exactly then. It often is not: an
+epoch seal reaches nodes a moment apart, and a rejoining validator is behind for
+a while. So they re-read every 500ms until the nodes agree, and report the last
+disagreement only if it outlives the budget. A network in the expected state
+passes on the first read and costs nothing.
+
+**Fixed block range.** `blockHashes` compares immutable history, so a forward
+window makes no sense; instead it reads every healthy node's head once and
+compares blocks 0 to the lowest of them. Those blocks exist on every node, so
+the walk terminates and the verdict does not depend on which node was ahead
+while it ran. Blocks above that point are left for the next check rather than
+being read as a disagreement.
+
+**Measured snapshots.** `eventThrottled` derives emission rates from two DAG
+snapshots. Walking a DAG costs one RPC per event, so the snapshots can end up
+further apart than the requested window; the rates are divided by the interval
+actually measured, not by the requested one. A snapshot is timestamped when its
+heads are queried, since the heads fix which events get counted.
+
+### 5.2 Parameter reference and defaults
+
+| Parameter        | Type                | Meaning                                                                         |
+| ---------------- | ------------------- | ------------------------------------------------------------------------------- |
+| `ceiling`        | float               | Maximum allowed gas rate.                                                       |
+| `tolerance`      | int                 | Meaning depends on the check — see below.                                       |
+| `duration`       | duration string     | Observation window, or convergence budget — see below. Minimum **2s**.          |
+| `rules`          | `NetworkRulesPatch` | Expected rule set; every field set must equal the value reported by every node. |
+| `throttledNodes` | list of strings     | Node labels expected to be throttled. Required; every label must resolve.       |
+| `failing`        | bool                | When `true` the check is **expected to fail**; a passing result is an error.    |
+
+`tolerance` and `duration` are deliberately overloaded; this is what they mean
+per check, with the value used when the parameter is omitted:
+
+| Check            | `tolerance`                       | `duration`                   | Other                       |
+| ---------------- | --------------------------------- | ---------------------------- | --------------------------- |
+| `blocksProduced` | window, in samples — **10** (10s) | overrides the window — unset | —                           |
+| `blocksHalted`   | window, in samples — **10** (10s) | overrides the window — unset | —                           |
+| `blockGasRate`   | window, in samples — **10** (10s) | overrides the window — unset | `ceiling` — **unbounded**   |
+| `blockHeights`   | height slack, in blocks — **5**   | convergence budget — **30s** | —                           |
+| `networkRules`   | —                                 | convergence budget — **30s** | `rules` — required          |
+| `blockHashes`    | —                                 | —                            | —                           |
+| `eventThrottled` | —                                 | —                            | `throttledNodes` — required |
+
+Two things to keep in mind:
+
+- For `blocksProduced`, `blocksHalted` and `blockGasRate`, `tolerance` is a
+  **window length counted in monitoring samples** (the monitor samples each node
+  once per second, so 10 ≈ 10s). For `blockHeights` it is a **height deviation
+  in blocks**. `duration`, when given, always wins over `tolerance`.
+- `duration` is an observation window for the three observing checks, but a
+  convergence budget for `blockHeights` and `networkRules`.
+
+A `duration` below 2s is rejected when the scenario is loaded: deciding whether
+a height changed takes two samples, and a shorter window could only ever report
+that nothing was seen.
+
+### 5.3 Values not configurable from a scenario
+
+These are compiled in. They are listed because they explain the numbers above
+and the cost of a check.
+
+| Constant                    | Value | Role                                                               |
+| --------------------------- | ----- | ------------------------------------------------------------------ |
+| Monitor sampling interval   | 1s    | Converts a `tolerance` in samples into a duration.                 |
+| Minimum observation samples | 2     | Floor behind the 2s minimum `duration`.                            |
+| Convergence poll interval   | 500ms | How often `blockHeights` and `networkRules` re-read.               |
+| Minimum comparable block    | 2     | `blockHashes` refuses to judge a shorter chain.                    |
+| Minimum gap ratio           | 2.0   | `eventThrottled`: unthrottled must emit ≥2× the fastest throttled. |
+| DAG sample window           | 5s    | `eventThrottled` interval between snapshots.                       |
+| DAG sample attempts         | 5     | Retries when a window straddles an epoch seal.                     |
+| DAG retry backoff           | 2s    | Pause between discarded attempts.                                  |
+
+### 5.4 What a check costs
+
+| Check                                            | Wall-clock cost                                                                                                              |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `blocksProduced`, `blocksHalted`, `blockGasRate` | Always the full window (10s by default).                                                                                     |
+| `blockHeights`, `networkRules`                   | Nothing when the network is already in the expected state; up to the budget (30s) otherwise, including when `failing: true`. |
+| `blockHashes`                                    | No waiting; RPC-bound, roughly one call per block per node.                                                                  |
+| `eventThrottled`                                 | 5s plus DAG walking time per attempt, up to 5 attempts with 2s pauses.                                                       |
+
+The scenario deadline is 10 minutes, so budget the observing checks accordingly.
+Against the default 15s epoch a 10s window will often span an epoch seal, which
+is harmless for all of them: a seal does not stop block production, and each
+block is compared on its own.
+
+### 5.5 Examples
 
 ```yaml
 - checks:
-    - blocksProduced                        # bare form
+    - blocksProduced                        # bare form, 10s window
     - blocksProduced:                       # with parameters
         tolerance: 10
         duration: 30s
     - blockGasRate:
         ceiling: 1_000_000_000_000_000
+        duration: 20s
     - blockHashes
     - blockHeights:
-        tolerance: 5
-    - blocksHalted
+        tolerance: 5                        # blocks of slack, not a window
+        duration: 60s                       # time allowed to converge
+    - blocksHalted:
+        duration: 15s
+    - eventThrottled:
+        throttledNodes: [validator-2, validator-3]
     - networkRules:
         rules:
           Epochs:
