@@ -94,7 +94,10 @@ func (c *networkRulesChecker) Check(ctx context.Context) error {
 			return nil
 		}
 		if time.Now().After(deadline) {
-			return err
+			return fmt.Errorf(
+				"nodes did not converge on the expected network rules "+
+					"within %s: %w", c.timeout, err,
+			)
 		}
 		if err := sleep(ctx, networkRulesPollInterval); err != nil {
 			return err

@@ -40,9 +40,8 @@ const defaultSlack = 5
 // disagreement right after a transition is not yet a failure.
 const defaultHeightConvergenceTimeout = 30 * time.Second
 
-// heightPollInterval is the delay between convergence polls. Var so tests can
-// shorten it.
-var heightPollInterval = 500 * time.Millisecond
+// heightPollInterval is the delay between convergence polls.
+const heightPollInterval = 500 * time.Millisecond
 
 func init() {
 	RegisterNetworkCheck("blockHeight", func(net driver.Network, monitor *monitoring.Monitor) Checker {

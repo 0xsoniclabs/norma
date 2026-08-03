@@ -231,6 +231,12 @@ func TestNetworkRulesChecker_Check_ReturnsMismatchAfterTimeout(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "applied network rules mismatch") {
 			t.Fatalf("expected mismatch error after timeout, got: %v", err)
 		}
+		// The error must say the nodes were given time and still did not converge,
+		// so a log does not read like an instant mismatch.
+		if !strings.Contains(err.Error(), "did not converge") ||
+			!strings.Contains(err.Error(), "20s") {
+			t.Errorf("error does not report the expired timeout: %v", err)
+		}
 	})
 }
 

@@ -194,6 +194,12 @@ func compareHealthyNodes(
 		}
 	}
 
+	if reference == nil {
+		return blockHashes{}, fmt.Errorf(
+			"unable to check block hashes: no reachable healthy node to "+
+				"compare block %d against", blockNumber,
+		)
+	}
 	return *reference, nil
 }
 

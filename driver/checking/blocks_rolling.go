@@ -13,8 +13,8 @@ const defaultToleranceSamples int = 10
 
 // blockSampleInterval is the interval at which the monitor samples the block
 // height of each node. It converts an observation window expressed in samples
-// into a duration. Var so tests can shorten it.
-var blockSampleInterval = time.Second
+// into a duration.
+const blockSampleInterval = time.Second
 
 func init() {
 	RegisterNetworkCheck("blocksRolling", func(net driver.Network, monitor *monitoring.Monitor) Checker {

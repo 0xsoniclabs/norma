@@ -76,9 +76,10 @@ func (c *blocksHaltedChecker) Check(ctx context.Context) error {
 		}
 
 		points := series.GetRange(observationStart, last.Position+1)
-		if len(points) == 0 {
-			// The node reported nothing while we were observing: it is
-			// unreachable or was removed, which is consistent with a halt.
+		if len(points) < minObservationSamples {
+			// Too few samples to tell whether the height changed: the node is
+			// unreachable, was removed, or its reads kept failing. That is
+			// consistent with a halt, but it does not witness one.
 			continue
 		}
 		observedNodes++
@@ -100,13 +101,15 @@ func (c *blocksHaltedChecker) Check(ctx context.Context) error {
 	}
 
 	if observedNodes == 0 {
-		// Nothing reported a block height at all. The network is not
-		// producing blocks, but we did not actually watch it do so.
+		// No node was watched long enough to see its height stay put. The
+		// network is considered halted, but on absent data rather than on an
+		// observation.
 		slog.Warn(
-			"blocksHalted: no node reported a block height during the "+
+			"blocksHalted: no node reported enough block heights during the "+
 				"observation window; the network is considered halted "+
-				"because no data was available",
+				"because no change could be observed",
 			"window", window,
+			"samples_needed", minObservationSamples,
 		)
 	}
 

@@ -338,6 +338,23 @@ func TestBlockHashes_FailsWhenTheChainIsTooShort(t *testing.T) {
 	}
 }
 
+func TestBlockHashes_ComparisonNeedsAReferenceNode(t *testing.T) {
+	// Check establishes that at least one healthy node is reachable before it
+	// compares anything. The guard keeps a violation of that an error rather
+	// than a nil dereference.
+	ctrl := gomock.NewController(t)
+	node := driver.NewMockNode(ctrl)
+	node.EXPECT().GetLabel().AnyTimes().Return("failing")
+	node.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
+
+	_, err := compareHealthyNodes(
+		[]driver.Node{node}, []rpc.Client{rpc.NewMockClient(ctrl)}, 1,
+	)
+	if err == nil || !strings.Contains(err.Error(), "no reachable healthy node") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
 func TestBlockHashes_ConfigureReturnsItself(t *testing.T) {
 	c := &blocksHashesChecker{}
 	if got := c.Configure(CheckerConfig{"failing": true}); got != c {

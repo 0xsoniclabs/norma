@@ -1,7 +1,9 @@
 package checking
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -162,6 +164,79 @@ func TestBlocksHalted_PassesWhenTheNetworkIsGone(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 		}
 	})
+}
+
+// captureWarnings installs a logger recording warnings for the rest of the
+// test, and returns an accessor for what was recorded.
+func captureWarnings(t *testing.T) func() string {
+	t.Helper()
+	buffer := &bytes.Buffer{}
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(
+		buffer, &slog.HandlerOptions{Level: slog.LevelWarn},
+	)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	return buffer.String
+}
+
+func TestBlocksHalted_WarnsWhenNoNodeWasWatchedLongEnough(t *testing.T) {
+	// A node whose reads keep failing is sampled far more sparsely than once a
+	// second - here every three - so a short window holds a single sample,
+	// which cannot show whether the height changed. The network below produces
+	// a block every 200ms, so reporting a halt on that one sample would be
+	// wrong; the check has to say it had nothing to go on.
+	warnings := captureWarnings(t)
+
+	synctest.Test(t, func(t *testing.T) {
+		net := newSimulation(t, 1)
+		net.addNode("A", nodeBehavior{
+			height:   production{blockInterval: 200 * time.Millisecond}.heightAt,
+			interval: 3 * time.Second,
+		})
+
+		net.run(6 * time.Second)
+
+		start := time.Now()
+		c := &blocksHaltedChecker{monitor: net, duration: 2 * time.Second}
+		if err := c.Check(t.Context()); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if observed := net.heightsIn("A", start, time.Now()); len(observed) != 1 {
+			t.Fatalf("the window held %d samples, want exactly 1", len(observed))
+		}
+	})
+
+	if got := warnings(); !strings.Contains(
+		got, "no node reported enough block heights",
+	) {
+		t.Errorf("expected a warning about missing data, got %q", got)
+	}
+}
+
+func TestBlocksHalted_DoesNotWarnWhenTheHaltWasObserved(t *testing.T) {
+	warnings := captureWarnings(t)
+
+	synctest.Test(t, func(t *testing.T) {
+		net := newSimulation(t, 1)
+		net.addNode("A", nodeBehavior{
+			height: production{
+				blockInterval: 200 * time.Millisecond,
+				haltAt:        simulationEpoch.Add(5 * time.Second),
+			}.heightAt,
+			interval: time.Second,
+		})
+
+		net.run(5 * time.Second)
+
+		c := &blocksHaltedChecker{monitor: net, duration: haltedWindow}
+		if err := c.Check(t.Context()); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	if got := warnings(); got != "" {
+		t.Errorf("unexpected warning for an observed halt: %q", got)
+	}
 }
 
 func TestBlocksHalted_IgnoresNodesWithoutData(t *testing.T) {

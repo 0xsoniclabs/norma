@@ -932,6 +932,65 @@ func TestCheck_ObservationWindowAtTheMinimumIsAccepted(t *testing.T) {
 	require.NoError(t, scenario.Check())
 }
 
+// checkScenario wraps a single sub-check into an otherwise valid scenario.
+func checkScenario(spec CheckSpec) *Scenario {
+	return &Scenario{
+		Name:        "Test",
+		Description: "A test scenario.",
+		Steps:       []Step{{Function: FuncChecks, SubChecks: []CheckSpec{spec}}},
+	}
+}
+
+func TestCheck_ToleranceTooShortForAnObservationWindow(t *testing.T) {
+	// tolerance is the window most scenarios actually use, so it must be
+	// rejected here rather than minutes into the run, just like duration.
+	for _, function := range []StepFunction{
+		FuncCheckBlocksProduced, FuncCheckBlocksHalted, FuncCheckBlockGasRate,
+	} {
+		t.Run(string(function), func(t *testing.T) {
+			for _, tolerance := range []int{0, 1} {
+				tolerance := tolerance
+				err := checkScenario(CheckSpec{
+					Function:  function,
+					Tolerance: &tolerance,
+				}).Check()
+				require.Error(t, err, "tolerance %d", tolerance)
+				require.Contains(t, err.Error(), "tolerance is an observation window")
+			}
+		})
+	}
+}
+
+func TestCheck_ToleranceAtTheMinimumIsAccepted(t *testing.T) {
+	minimum := MinObservationSamples
+	require.NoError(t, checkScenario(CheckSpec{
+		Function:  FuncCheckBlocksProduced,
+		Tolerance: &minimum,
+	}).Check())
+}
+
+func TestCheck_ShortToleranceIsAcceptedWhenDurationOverridesIt(t *testing.T) {
+	// duration wins over tolerance at run time, so a small tolerance next to a
+	// usable duration never reaches the checker.
+	tolerance := 1
+	duration := MinObservationDuration
+	require.NoError(t, checkScenario(CheckSpec{
+		Function:  FuncCheckBlocksProduced,
+		Tolerance: &tolerance,
+		Duration:  &duration,
+	}).Check())
+}
+
+func TestCheck_ZeroToleranceIsAcceptedForAHeightCheck(t *testing.T) {
+	// For blockHeights, tolerance is a slack in blocks; demanding exact
+	// agreement is legitimate.
+	zero := 0
+	require.NoError(t, checkScenario(CheckSpec{
+		Function:  FuncCheckBlockHeights,
+		Tolerance: &zero,
+	}).Check())
+}
+
 func TestParseBytes_UnknownCheckFunction(t *testing.T) {
 	input := `
 Name: Bad Check

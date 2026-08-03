@@ -472,9 +472,10 @@ Two things to keep in mind:
 - `duration` is an observation window for the three observing checks, but a
   convergence budget for `blockHeights` and `networkRules`.
 
-A `duration` below 2s is rejected when the scenario is loaded: deciding whether
-a height changed takes two samples, and a shorter window could only ever report
-that nothing was seen.
+Both floors are enforced when the scenario is loaded, not minutes into the run:
+a `duration` below 2s is rejected, and so is a `tolerance` below 2 on a check
+that reads it as a window. Deciding whether a height changed takes two samples,
+and a shorter window could only ever report that nothing was seen.
 
 ### 5.3 Values not configurable from a scenario
 
