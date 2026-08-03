@@ -309,10 +309,12 @@ func execStartNode(
 	// safe for concurrent use, so we do this before the parallel fan-out.
 	instanceNames := make([]string, instances)
 	validatorIds := make([]*int, instances)
-	// Validators newly created in the SFC contract by this step. They only
-	// join the validator set once the epoch is sealed, which happens below
-	// after their nodes are up.
-	registered := make([]int, 0, instances)
+	// Validators this step has to see in the validator set before it completes:
+	// the ones it creates in the SFC contract, which only join once the epoch is
+	// sealed, and the ones a rejoining node brings back, which are expected to
+	// be in it already. Genesis validators are left out — they are in the set
+	// from the first block on.
+	mustBeActive := make([]int, 0, instances)
 	for instance := range instances {
 		instanceName := name
 		if instances > 1 {
@@ -328,6 +330,9 @@ func execStartNode(
 			if id, ok := state.validatorIds[instanceName]; ok {
 				// Reuse existing ID (genesis validator or rejoin).
 				validatorIds[instance] = &id
+				if isRejoin {
+					mustBeActive = append(mustBeActive, id)
+				}
 			} else if isRejoin {
 				return fmt.Errorf("validator %s is rejoining but has no preserved validator ID",
 					instanceName,
@@ -340,7 +345,7 @@ func execStartNode(
 					)
 				}
 				validatorIds[instance] = &id
-				registered = append(registered, id)
+				mustBeActive = append(mustBeActive, id)
 			}
 		}
 	}
@@ -400,17 +405,16 @@ func execStartNode(
 		}
 	}
 
-	// Sealing happens only now that the nodes are up and synced: a validator
+	// Activation happens only now that the nodes are up and synced: a validator
 	// gains stake weight the moment it joins the set, so admitting it earlier
-	// would deprive the network of that share of its online stake. Genesis
-	// validators and rejoins register nothing and are already in the set.
+	// would deprive the network of that share of its online stake.
 	//
 	// Nodes expected to fail are left out, as they are for the sync wait above
 	// and the between-step block production wait: a node that may never come
 	// up must not be the subject of an assertion. They join at the next seal
 	// the scenario performs, as they did before activation existed.
-	if len(registered) > 0 && !step.Failing {
-		if err := registry.activateValidators(ctx, registered); err != nil {
+	if len(mustBeActive) > 0 && !step.Failing {
+		if err := registry.ensureValidatorsActive(ctx, mustBeActive); err != nil {
 			return fmt.Errorf("failed to activate validators for %s: %w", name, err)
 		}
 	}

@@ -30,77 +30,144 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func TestActivateValidators_DoesNothing_WhenNothingWasRegistered(t *testing.T) {
+func TestEnsureValidatorsActive_DoesNothing_WhenNoValidatorIsGiven(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	// Any call on the network would be an unexpected call on this mock.
 	net := driver.NewMockNetwork(ctrl)
 
 	registry := netBasedValidatorRegistry{net: net}
-	require.NoError(t, registry.activateValidators(context.Background(), nil))
+	require.NoError(t, registry.ensureValidatorsActive(context.Background(), nil))
 }
 
-func TestActivateValidators_Fails_WhenEpochCannotBeSealed(t *testing.T) {
+func TestEnsureValidatorsActive_Fails_WhenNoNodeIsReachable(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().AdvanceEpoch(gomock.Any(), 1).
-		Return(fmt.Errorf("network is halted"))
-
-	registry := netBasedValidatorRegistry{net: net}
-	err := registry.activateValidators(context.Background(), []int{2, 3})
-	require.ErrorContains(t, err, "[2 3]")
-	require.ErrorContains(t, err, "network is halted")
-}
-
-func TestActivateValidators_Fails_WhenNoNodeIsReachable(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().AdvanceEpoch(gomock.Any(), 1).Return(nil)
+	// Without a node to ask, there is nothing to seal an epoch for either.
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes"))
 
 	registry := netBasedValidatorRegistry{net: net}
-	err := registry.activateValidators(context.Background(), []int{2})
+	err := registry.ensureValidatorsActive(context.Background(), []int{2})
 	require.ErrorContains(t, err, "no nodes")
 }
 
-func TestActivateValidators_Succeeds_WhenValidatorsAreInTheActiveSet(t *testing.T) {
+// The case of a rejoining node, whose validator never left the set: reading it
+// is enough, and sealing an epoch for it would cost the scenario an epoch it
+// did not ask for. An AdvanceEpoch call would be unexpected on this mock.
+func TestEnsureValidatorsActive_SealsNothing_WhenValidatorsAreAlreadyInTheSet(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	set := []int64{1, 2, 3}
+	client := sfcClientReporting(t, ctrl, 7, &set)
 	net := driver.NewMockNetwork(ctrl)
-	client := sfcClientReporting(t, ctrl, 7, []int64{1, 2, 3})
-	net.EXPECT().AdvanceEpoch(gomock.Any(), 1).Return(nil)
 	net.EXPECT().DialRandomRpc().Return(client, nil)
-	client.EXPECT().Close()
 
 	registry := netBasedValidatorRegistry{net: net}
 	require.NoError(t,
-		registry.activateValidators(context.Background(), []int{2, 3}))
+		registry.ensureValidatorsActive(context.Background(), []int{2, 3}))
 }
 
-func TestActivateValidators_Fails_WhenAValidatorNeverJoinsTheSet(t *testing.T) {
+func TestEnsureValidatorsActive_SealsAnEpoch_WhenAValidatorIsMissing(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	// Validator 3 has been registered but not yet admitted to the set.
+	set := []int64{1, 2}
+	client := sfcClientReporting(t, ctrl, 7, &set)
+	client.EXPECT().BlockNumber(gomock.Any()).
+		DoAndReturn(growingBlockHeight()).AnyTimes()
 	net := driver.NewMockNetwork(ctrl)
-	// Validator 3 is missing from the sealed epoch's validator set.
-	client := sfcClientReporting(t, ctrl, 7, []int64{1, 2})
+	net.EXPECT().DialRandomRpc().Return(client, nil).AnyTimes()
+	net.EXPECT().AdvanceEpoch(gomock.Any(), 1).
+		DoAndReturn(func(context.Context, int) error {
+			set = append(set, 3)
+			return nil
+		})
+
+	registry := netBasedValidatorRegistry{net: net}
+	require.NoError(t,
+		registry.ensureValidatorsActive(context.Background(), []int{2, 3}))
+}
+
+// Sealing an epoch means landing a transaction, so a network that is not
+// producing blocks is reported as such instead of as a missing receipt.
+func TestEnsureValidatorsActive_Fails_WhenNoBlockIsProduced(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	set := []int64{1}
+	client := sfcClientReporting(t, ctrl, 7, &set)
+	client.EXPECT().BlockNumber(gomock.Any()).
+		Return(uint64(0), fmt.Errorf("network is halted"))
+	net := driver.NewMockNetwork(ctrl)
+	// No AdvanceEpoch: the seal is never attempted.
+	net.EXPECT().DialRandomRpc().Return(client, nil).AnyTimes()
+
+	registry := netBasedValidatorRegistry{net: net}
+	err := registry.ensureValidatorsActive(context.Background(), []int{2})
+	require.ErrorContains(t, err, "no block produced to seal an epoch on")
+	require.ErrorContains(t, err, "[2]")
+	require.ErrorContains(t, err, "network is halted")
+}
+
+func TestEnsureValidatorsActive_Fails_WhenEpochCannotBeSealed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	set := []int64{1}
+	client := sfcClientReporting(t, ctrl, 7, &set)
+	client.EXPECT().BlockNumber(gomock.Any()).
+		DoAndReturn(growingBlockHeight()).AnyTimes()
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().DialRandomRpc().Return(client, nil).AnyTimes()
+	net.EXPECT().AdvanceEpoch(gomock.Any(), 1).
+		Return(fmt.Errorf("epoch seal rejected"))
+
+	registry := netBasedValidatorRegistry{net: net}
+	err := registry.ensureValidatorsActive(context.Background(), []int{2, 3})
+	require.ErrorContains(t, err, "[2 3]")
+	require.ErrorContains(t, err, "epoch seal rejected")
+}
+
+// A validator that is missing and stays missing after the seal — undelegated,
+// say — is reported instead of quietly running as an observer.
+func TestEnsureValidatorsActive_Fails_WhenAValidatorNeverJoinsTheSet(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	set := []int64{1, 2}
+	client := sfcClientReporting(t, ctrl, 7, &set)
+	client.EXPECT().BlockNumber(gomock.Any()).
+		DoAndReturn(growingBlockHeight()).AnyTimes()
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().DialRandomRpc().Return(client, nil).AnyTimes()
 	net.EXPECT().AdvanceEpoch(gomock.Any(), 1).Return(nil)
-	net.EXPECT().DialRandomRpc().Return(client, nil)
-	client.EXPECT().Close()
 
 	// Negative, so the deadline is unambiguously in the past after the first
 	// poll and the test does not depend on the clock advancing.
 	original := validatorActivationTimeout
 	validatorActivationTimeout = -1
-	defer func() { validatorActivationTimeout = original }()
+	t.Cleanup(func() { validatorActivationTimeout = original })
 
 	registry := netBasedValidatorRegistry{net: net}
-	err := registry.activateValidators(context.Background(), []int{2, 3})
+	err := registry.ensureValidatorsActive(context.Background(), []int{2, 3})
 	require.ErrorContains(t, err, "validators [3] did not join")
 	require.ErrorContains(t, err, "active validators are [1 2]")
 }
 
+func TestMissingValidators_ReportsWhatTheSetDoesNotHold(t *testing.T) {
+	require.Empty(t, missingValidators([]int{2, 3}, []int{1, 2, 3}))
+	require.Equal(t, []int{3}, missingValidators([]int{2, 3}, []int{1, 2}))
+	require.Equal(t, []int{2, 3}, missingValidators([]int{2, 3}, nil))
+}
+
+// growingBlockHeight answers BlockNumber with an ever-growing height, which is
+// what waitForBlockProduction waits for.
+func growingBlockHeight() func(context.Context) (uint64, error) {
+	height := uint64(0)
+	return func(context.Context) (uint64, error) {
+		height++
+		return height, nil
+	}
+}
+
 // sfcClientReporting returns an RPC client mock that answers SFC
 // currentEpoch() and getEpochValidatorIDs() calls with the given values, so
-// that network.GetActiveValidatorIDs sees the described validator set.
+// that network.GetActiveValidatorIDs sees the described validator set. The
+// validator set is read through the pointer on every call, so a test can let an
+// epoch seal change it.
 func sfcClientReporting(
-	t *testing.T, ctrl *gomock.Controller, epoch int64, validators []int64,
+	t *testing.T, ctrl *gomock.Controller, epoch int64, validators *[]int64,
 ) *rpc.MockClient {
 	t.Helper()
 
@@ -113,14 +180,9 @@ func sfcClientReporting(
 	epochOut, err := currentEpoch.Outputs.Pack(big.NewInt(epoch))
 	require.NoError(t, err)
 
-	ids := make([]*big.Int, 0, len(validators))
-	for _, v := range validators {
-		ids = append(ids, big.NewInt(v))
-	}
-	validatorsOut, err := epochValidators.Outputs.Pack(ids)
-	require.NoError(t, err)
-
 	client := rpc.NewMockClient(ctrl)
+	// The set is read once per attempt, and every read closes its client.
+	client.EXPECT().Close().MinTimes(1)
 	client.EXPECT().CodeAt(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return([]byte{1}, nil).AnyTimes()
 	client.EXPECT().
@@ -134,7 +196,11 @@ func sfcClientReporting(
 				return epochOut, nil
 			case len(call.Data) >= 4 &&
 				string(call.Data[:4]) == string(epochValidators.ID):
-				return validatorsOut, nil
+				ids := make([]*big.Int, 0, len(*validators))
+				for _, v := range *validators {
+					ids = append(ids, big.NewInt(v))
+				}
+				return epochValidators.Outputs.Pack(ids)
 			}
 			return nil, fmt.Errorf("unexpected contract call")
 		}).AnyTimes()

@@ -61,7 +61,7 @@ func TestRun_StartAndStopNode(t *testing.T) {
 	gomock.InOrder(
 		registry.EXPECT().registerNewValidator(gomock.Any(), uint64(0)).Return(validatorId, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
-		registry.EXPECT().activateValidators(gomock.Any(), []int{validatorId}).Return(nil),
+		registry.EXPECT().ensureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil),
 		node.EXPECT().GetValidatorId().Return(&validatorId),
 		registry.EXPECT().unregisterValidator(gomock.Any(), validatorId, gomock.Any()).Return(nil),
 		net.EXPECT().RemoveNode(node).Return(nil),
@@ -115,7 +115,7 @@ func TestRun_StartNode_ForwardsCustomStake(t *testing.T) {
 			Return(validatorId, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
 		registry.EXPECT().
-			activateValidators(gomock.Any(), []int{validatorId}).Return(nil),
+			ensureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil),
 	)
 
 	stake := customStake
@@ -158,7 +158,7 @@ func TestRun_UndelegateSingleInstanceWithSuffix(t *testing.T) {
 			Return(validatorId, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
 		registry.EXPECT().
-			activateValidators(gomock.Any(), []int{validatorId}).Return(nil),
+			ensureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil),
 		node.EXPECT().GetValidatorId().Return(&validatorId),
 		registry.EXPECT().
 			unregisterValidator(gomock.Any(), validatorId, uint64(0)).Return(nil),
@@ -229,7 +229,7 @@ func TestRun_UndelegateMultiInstance(t *testing.T) {
 				return node1, nil
 			}).Times(2)
 			// Both instances are admitted to the validator set by a single seal.
-			registry.EXPECT().activateValidators(gomock.Any(), []int{2, 3}).Return(nil)
+			registry.EXPECT().ensureValidatorsActive(gomock.Any(), []int{2, 3}).Return(nil)
 
 			if !tc.expectErr {
 				validatorId0 := 2
@@ -280,7 +280,7 @@ func TestRun_StopNodeWithoutUndelegate(t *testing.T) {
 	gomock.InOrder(
 		registry.EXPECT().registerNewValidator(gomock.Any(), gomock.Any()).Return(validatorId, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
-		registry.EXPECT().activateValidators(gomock.Any(), []int{validatorId}).Return(nil),
+		registry.EXPECT().ensureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil),
 		// No unregister call expected
 		net.EXPECT().RemoveNode(node).Return(nil),
 		node.EXPECT().Stop(gomock.Any()).Return(nil),
@@ -331,19 +331,21 @@ func TestRun_RejoinNode(t *testing.T) {
 				t.Errorf("first start: expected ValidatorId=%d, got %v", validatorId, config.ValidatorId)
 			}
 		}).Return(node1, nil),
-		registry.EXPECT().activateValidators(gomock.Any(), []int{validatorId}).Return(nil),
+		registry.EXPECT().ensureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil),
 		// Stop without undelegate
 		net.EXPECT().RemoveNode(node1).Return(nil),
 		node1.EXPECT().Stop(gomock.Any()).Return(nil),
 		node1.EXPECT().Cleanup(gomock.Any()).Return(nil),
-		// Rejoin: no registration, but validator ID is preserved. The
-		// validator is still in the set, so no further activation is
-		// expected — a second call would fail this test.
+		// Rejoin: no registration, but validator ID is preserved.
 		net.EXPECT().CreateNode(gomock.Any()).Do(func(config *driver.NodeConfig) {
 			if config.ValidatorId == nil || *config.ValidatorId != validatorId {
 				t.Errorf("rejoin: expected ValidatorId=%d, got %v", validatorId, config.ValidatorId)
 			}
 		}).Return(node2, nil),
+		// The preserved validator is expected to be in the set, but that is
+		// checked rather than assumed: a node whose validator was undelegated
+		// while it was down would otherwise rejoin as an observer.
+		registry.EXPECT().ensureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil),
 	)
 
 	scenario := parser.Scenario{
@@ -543,7 +545,7 @@ func TestRun_MultiInstanceNode(t *testing.T) {
 		}
 	}).Times(2)
 
-	registry.EXPECT().activateValidators(gomock.Any(), []int{2, 3}).Return(nil)
+	registry.EXPECT().ensureValidatorsActive(gomock.Any(), []int{2, 3}).Return(nil)
 
 	instances := 2
 	scenario := parser.Scenario{

@@ -470,23 +470,27 @@ and emits no events until the epoch it was created in is sealed. Left alone
 it would sit in the network as an observer while the genesis validators
 carried the whole consensus load.
 
-So `startNode` seals the epoch itself and then waits until the validators it
-registered are reported in the active set, failing the step if they never
-arrive. The seal happens *after* the new nodes are up and synced (§6.3),
-because a validator gains stake weight the moment it joins the set —
-admitting it earlier would deprive the network of that share of its online
-stake.
+So `startNode` reads the validator set, seals an epoch if a validator it
+started is missing from it, and waits until all of them are reported in it,
+failing the step if they never arrive. The seal happens *after* the new nodes
+are up and synced (§6.3), because a validator gains stake weight the moment it
+joins the set — admitting it earlier would deprive the network of that share
+of its online stake.
 
-Two cases register nothing and are therefore not affected: genesis
-validators, whose pre-assigned IDs are reused, and rejoins (a `startNode`
-reusing an earlier identifier), which keep their preserved validator ID and
-are already in the set.
+Membership is read rather than assumed, so a rejoin (a `startNode` reusing an
+earlier identifier) is held to the same guarantee as a first start. It keeps
+its preserved validator ID and normally is still in the set, which costs the
+scenario nothing but that read; if it is not — its stake was undelegated while
+it was down, say — the step fails instead of letting the node rejoin as an
+observer. Genesis validators, whose pre-assigned IDs are reused, are in the
+set from the first block and are not checked.
 
 A `startNode` with `failing: true` is registered but not activated, as it is
 also excluded from the waits of §6.2 and §6.3: a node that may never come up
 must not be the subject of an assertion. Such a validator joins at the next
-epoch the scenario seals, so the guarantee above covers working nodes only —
-which is also why [`validatorsActive`](#5-check-functions) skips them.
+epoch the scenario seals, or at the next `startNode` that has to seal one, so
+the guarantee above covers working nodes only — which is also why
+[`validatorsActive`](#5-check-functions) skips them.
 
 The [`validatorsActive`](#5-check-functions) check asserts this end to end.
 
