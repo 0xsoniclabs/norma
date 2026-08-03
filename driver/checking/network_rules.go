@@ -20,13 +20,15 @@ import (
 // can briefly lag the one observed by waitForEpoch.
 const defaultNetworkRulesTimeout = 30 * time.Second
 
-// networkRulesPollInterval is the delay between convergence polls. Var so tests
-// can shorten it.
-var networkRulesPollInterval = 500 * time.Millisecond
+// networkRulesPollInterval is the delay between convergence polls.
+const networkRulesPollInterval = 500 * time.Millisecond
 
 func init() {
 	RegisterNetworkCheck("networkRules", func(net driver.Network, monitor *monitoring.Monitor) Checker {
-		return &networkRulesChecker{net: net, timeout: defaultNetworkRulesTimeout}
+		return &networkRulesChecker{
+			net:     net,
+			timeout: defaultNetworkRulesTimeout,
+		}
 	})
 }
 
@@ -51,6 +53,10 @@ func (c *networkRulesChecker) Configure(config CheckerConfig) Checker {
 		rulesPatch:   c.rulesPatch,
 		configureErr: c.configureErr,
 		timeout:      c.timeout,
+	}
+
+	if val, exists := config["duration"]; exists {
+		configured.timeout = time.Duration(val.(int64))
 	}
 
 	rules, exists := config["rules"]
@@ -82,9 +88,6 @@ func (c *networkRulesChecker) Check(ctx context.Context) error {
 	}
 
 	deadline := time.Now().Add(c.timeout)
-	ticker := time.NewTicker(networkRulesPollInterval)
-	defer ticker.Stop()
-
 	for {
 		err := c.checkOnce(ctx)
 		if err == nil {
@@ -93,10 +96,8 @@ func (c *networkRulesChecker) Check(ctx context.Context) error {
 		if time.Now().After(deadline) {
 			return err
 		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
+		if err := sleep(ctx, networkRulesPollInterval); err != nil {
+			return err
 		}
 	}
 }

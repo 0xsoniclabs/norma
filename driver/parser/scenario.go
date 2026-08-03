@@ -639,7 +639,7 @@ var checkFunctionParams = map[StepFunction][]string{
 	FuncCheckBlocksHalted:   {"tolerance", "duration", "failing"},
 	FuncCheckBlocksProduced: {"tolerance", "duration", "failing"},
 	FuncCheckEventThrottled: {"throttledNodes", "failing"},
-	FuncCheckNetworkRules:   {"rules", "failing"},
+	FuncCheckNetworkRules:   {"rules", "duration", "failing"},
 
 	FuncCheckValidatorsActive: {"failing"},
 }
