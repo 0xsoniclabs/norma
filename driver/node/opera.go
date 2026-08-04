@@ -76,14 +76,20 @@ func init() {
 }
 
 // OperaNode implements the driver's Node interface by running a go-opera
-// client on a generic host.
+// client inside a Docker container.
+//
+// The client is started as a `docker exec` rather than as the container's
+// entrypoint, which is what allows a scenario to stop, kill, heal and
+// restart it without discarding the container and its data directory.
+// Because that lifecycle control is docker-specific, the node holds a
+// *docker.Container directly instead of the generic network.Host.
 type OperaNode struct {
-	host       network.Host
-	container  *docker.Container
-	config     *OperaNodeConfig
-	tempDirs   []string
+	container *docker.Container
+	config    *OperaNodeConfig
+	tempDirs  []string
+	// sonicd is the handle of the currently running client process, or nil
+	// when no client process has been started yet.
 	sonicd     *docker.ExecHandle
-	logsDir    string
 	state      NodeState
 	stateMutex sync.Mutex
 }
@@ -117,6 +123,10 @@ type OperaNodeConfig struct {
 	PrivKey string
 	// Address is the address of the validator, if the node is a validator.
 	Address string
+	// LogsDir is the host directory the client's output is written to. When
+	// empty, a temporary directory is used that is removed on cleanup, so
+	// callers that want the logs to outlive the run must set this.
+	LogsDir string
 }
 
 // imageEnsureState stores the completion signal and final error for one
@@ -203,12 +213,7 @@ func StartOperaDockerNode(
 		config.Address = address
 	}
 
-	var logsDir string
-	if logsDir, err = os.MkdirTemp("", "norma-node-logs-*"); err != nil {
-		return nil, fmt.Errorf("failed to create logs dir: %w", err)
-	}
-
-	node, err := NewOperaNode(ctx, client, dn, config, logsDir)
+	node, err := NewOperaNode(ctx, client, dn, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start docker node: %w", err)
 	}
@@ -249,7 +254,7 @@ func StartOperaDockerNode(
 
 // connectivityCheck attempts to connect to the Opera RPC service of the given host.
 func connectivityCheck(ctx context.Context, node *OperaNode) error {
-	addr, err := node.host.GetAddressForService(&OperaRpcService)
+	addr, err := node.container.GetAddressForService(&OperaRpcService)
 	if err != nil {
 		return fmt.Errorf("failed to get RPC service address: %w", err)
 	}
@@ -266,12 +271,21 @@ func connectivityCheck(ctx context.Context, node *OperaNode) error {
 	return nil
 }
 
+// startupLogTimeout bounds how long printLog collects output. The log
+// stream follows the node and only ends when the container stops, so the
+// read has to be bounded explicitly or a failed startup would hang instead
+// of reporting why it failed.
+const startupLogTimeout = 10 * time.Second
+
 // printLog streams and prints the logs of the given OperaNode, to help
 // diagnose the cause of a startup failure. Emits structured slog
 // entries tagged with the node label so the output is greppable and
 // consistent with the rest of the driver's logging.
 func printLog(ctx context.Context, node *OperaNode) error {
-	reader, err := node.StreamLog(ctx)
+	logCtx, cancel := context.WithTimeout(ctx, startupLogTimeout)
+	defer cancel()
+
+	reader, err := node.StreamLog(logCtx)
 	if err != nil {
 		return fmt.Errorf("cannot read node logs: %w", err)
 	}
@@ -281,81 +295,69 @@ func printLog(ctx context.Context, node *OperaNode) error {
 			"node", node.GetLabel(),
 			"line", scanner.Text())
 	}
-	return reader.Close()
+	return errors.Join(scanner.Err(), reader.Close())
 }
 
-// datadir is a constat needed in both NewOperaNode, buildSonicdCmd and StartOperaDockerNode.
-// It is the path where the node stores its state inside the container.
+// dataDir is the path where the node stores its state inside the container.
 const dataDir = "/datadir"
 
+// containerShutdownTimeout bounds how long docker waits for the container
+// to exit after being signalled before it is killed.
+const containerShutdownTimeout = 180 * time.Second
+
+// containerEntrypoint keeps the container alive without running the
+// client: the client itself is started later as a background exec, so that
+// it can be stopped and restarted without losing the container.
+var containerEntrypoint = []string{"sleep", "infinity"}
+
+// NewOperaNode creates the container hosting an Opera node and returns it
+// in NodeStateUninitialized. The client process is not started; see
+// Initialize and StartSonicd.
 func NewOperaNode(
 	ctx context.Context,
 	client *docker.Client,
 	dn *docker.Network,
 	config *OperaNodeConfig,
-	logsDir string,
-) (
-	*OperaNode,
-	error) {
+) (*OperaNode, error) {
 	image := driver.ResolveClientImageName(config.Image)
 	if err := ensureImageAvailable(ctx, image); err != nil {
 		return nil, fmt.Errorf("failed to ensure image %q: %w", image, err)
 	}
 
-	shutdownTimeout := 180 * time.Second
-
-	isValidator := config.ValidatorId != nil && *config.ValidatorId > 0
+	// tempDirs collects host directories owned by this node so they can be
+	// released by Cleanup, or right here if construction fails. The helpers
+	// below report a directory they created even when they then fail, so
+	// that a partially prepared directory is still cleaned up.
 	tempDirs := make([]string, 0)
-	genesisJSONPath := ""
-	if config.GenesisJsonPath == nil || *config.GenesisJsonPath == "" {
-		if config.NetworkConfig == nil {
-			return nil, fmt.Errorf("missing network config for genesis generation")
+	cleanupTempDirs := func() {
+		for _, dir := range tempDirs {
+			_ = os.RemoveAll(dir)
 		}
-
-		tmpDir, err := os.MkdirTemp("", "norma-node-genesis-*")
-		if err != nil {
-			return nil, fmt.Errorf("failed to create temporary genesis dir: %w", err)
+	}
+	track := func(dir string) {
+		if dir != "" {
+			tempDirs = append(tempDirs, dir)
 		}
-		tempDirs = append(tempDirs, tmpDir)
-
-		rules := opera.FakeNetRules(opera.GetSonicUpgrades())
-		if err = genesis.ApplyNetworkRulesPatch(&rules, config.NetworkConfig.NetworkRules); err != nil {
-			return nil, fmt.Errorf("failed to configure rules for temporary genesis: %w", err)
-		}
-
-		genesisPath := filepath.Join(tmpDir, "genesis.json")
-		if err = genesis.GenerateJsonGenesis(genesisPath, driver.GetValidatorStakes(config.NetworkConfig.Validators), &rules); err != nil {
-			return nil, fmt.Errorf("failed to generate temporary genesis: %w", err)
-		}
-
-		genesisJSONPath = genesisPath
-		// verify a file is created in genesisJSONPath
-		if info, err := os.Stat(genesisJSONPath); err != nil {
-			return nil, fmt.Errorf("failed to verify temporary genesis file: %w", err)
-		} else {
-			if info.IsDir() {
-				return nil, fmt.Errorf("temporary genesis path is a directory, expected a file: %s", genesisJSONPath)
-			} else if info.Size() == 0 {
-				return nil, fmt.Errorf("temporary genesis file is empty: %s", genesisJSONPath)
-			}
-		}
-	} else {
-		genesisJSONPath = *config.GenesisJsonPath
 	}
 
-	// Container-level env vars (shared state only).
+	genesisJSONPath, genesisTempDir, err := resolveGenesisFile(config)
+	track(genesisTempDir)
+	if err != nil {
+		cleanupTempDirs()
+		return nil, err
+	}
+
 	envs := map[string]string{
-		"STATE_DB_IMPL":   "geth",
-		"VM_IMPL":         "geth",
-		"LD_LIBRARY_PATH": "./",
-		"GOMEMLIMIT":      "1GiB",
+		// The remaining client environment (STATE_DB_IMPL, VM_IMPL,
+		// LD_LIBRARY_PATH, GOMEMLIMIT) is baked into the image; exec'd
+		// processes inherit it from the container.
+		"STATE_DB_DATADIR": dataDir,
 	}
 
-	// when configured, mount the datadir to the host
-	envs["STATE_DB_DATADIR"] = dataDir
 	var dataDirBinding *string
 	if config.MountDataDir != nil {
 		if err := os.MkdirAll(*config.MountDataDir, 0777); err != nil {
+			cleanupTempDirs()
 			return nil, fmt.Errorf("failed to create mount data dir: %w", err)
 		}
 
@@ -365,43 +367,33 @@ func NewOperaNode(
 
 	genesisBind := fmt.Sprintf("%s:/genesis.json:ro", genesisJSONPath)
 
-	var keystoreBinding *string
-	var err error
-	if isValidator {
-		envs["VALIDATOR_PUBKEY"] = config.PubKey
-		envs["VALIDATOR_ADDRESS"] = config.Address
-
-		if config.MountDataDir != nil {
-			if err := genesis.WriteValidatorKeystore(config.PrivKey, *config.MountDataDir); err != nil {
-				return nil, fmt.Errorf("failed to write validator keystore in mounted datadir: %w", err)
-			}
-		} else {
-			validatorDir, err := os.MkdirTemp("", fmt.Sprintf("norma-validator-%d-*", *config.ValidatorId))
-			if err != nil {
-				return nil, fmt.Errorf("failed to create validator temp dir: %w", err)
-			}
-			tempDirs = append(tempDirs, validatorDir)
-
-			if err := genesis.WriteValidatorKeystore(config.PrivKey, validatorDir); err != nil {
-				return nil, fmt.Errorf("failed to write validator keystore: %w", err)
-			}
-
-			keystorePath := filepath.Join(validatorDir, "keystore")
-			keystoreBinding = new(string)
-			*keystoreBinding = fmt.Sprintf("%s:%s/keystore:ro", keystorePath, dataDir)
-		}
+	keystoreBinding, keystoreTempDir, err := resolveValidatorKeystore(config, envs)
+	track(keystoreTempDir)
+	if err != nil {
+		cleanupTempDirs()
+		return nil, err
 	}
 
-	// Create a host-side logs directory for exec output.
-	tempDirs = append(tempDirs, logsDir)
+	logsDir, logsDirIsTemporary, err := resolveLogsDir(config)
+	if err != nil {
+		cleanupTempDirs()
+		return nil, err
+	}
+	if logsDirIsTemporary {
+		track(logsDir)
+	}
+	slog.Debug("node logs directory resolved",
+		"node", config.Label, "path", logsDir,
+		"temporary", logsDirIsTemporary)
 
-	host, err := client.Start(ctx,
+	shutdownTimeout := containerShutdownTimeout
+	container, err := client.Start(ctx,
 		&docker.ContainerConfig{
 			Hostname:        config.Label,
 			ImageName:       image,
 			ShutdownTimeout: &shutdownTimeout,
 			Environment:     envs,
-			Entrypoint:      []string{"sleep", "infinity"},
+			Entrypoint:      containerEntrypoint,
 			Network:         dn,
 			DataDirBinding:  dataDirBinding,
 			GenesisFileBind: &genesisBind,
@@ -409,8 +401,10 @@ func NewOperaNode(
 			LogsDir:         &logsDir,
 		})
 	if err != nil {
+		cleanupTempDirs()
 		return nil, err
 	}
+
 	// Use a private copy of the config to avoid modifying the original.
 	nodeConfig := *config
 	nodeConfig.Image = image
@@ -424,15 +418,120 @@ func NewOperaNode(
 		*nodeConfig.ValidatorId = *config.ValidatorId
 	}
 
-	node := &OperaNode{
-		host:      host,
-		container: host,
+	return &OperaNode{
+		container: container,
 		config:    &nodeConfig,
 		tempDirs:  tempDirs,
-		logsDir:   logsDir,
 		state:     NodeStateUninitialized,
+	}, nil
+}
+
+// resolveGenesisFile returns the host path of the genesis file to mount.
+// When the config does not name one, a genesis is generated into a fresh
+// temporary directory, whose path is returned as the second result so the
+// caller can register it for cleanup.
+func resolveGenesisFile(config *OperaNodeConfig) (path, tempDir string, err error) {
+	if config.GenesisJsonPath != nil && *config.GenesisJsonPath != "" {
+		return *config.GenesisJsonPath, "", nil
 	}
-	return node, nil
+	if config.NetworkConfig == nil {
+		return "", "", fmt.Errorf("missing network config for genesis generation")
+	}
+
+	tempDir, err = os.MkdirTemp("", "norma-node-genesis-*")
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create temporary genesis dir: %w", err)
+	}
+
+	rules := opera.FakeNetRules(opera.GetSonicUpgrades())
+	if err := genesis.ApplyNetworkRulesPatch(
+		&rules, config.NetworkConfig.NetworkRules); err != nil {
+		return "", tempDir, fmt.Errorf(
+			"failed to configure rules for temporary genesis: %w", err)
+	}
+
+	path = filepath.Join(tempDir, "genesis.json")
+	if err := genesis.GenerateJsonGenesis(path,
+		driver.GetValidatorStakes(config.NetworkConfig.Validators),
+		&rules); err != nil {
+		return "", tempDir, fmt.Errorf(
+			"failed to generate temporary genesis: %w", err)
+	}
+
+	// A missing or empty genesis file surfaces as an obscure client startup
+	// failure much later, so fail here where the cause is still obvious.
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", tempDir, fmt.Errorf(
+			"failed to verify temporary genesis file: %w", err)
+	}
+	if info.IsDir() {
+		return "", tempDir, fmt.Errorf(
+			"temporary genesis path is a directory, expected a file: %s", path)
+	}
+	if info.Size() == 0 {
+		return "", tempDir, fmt.Errorf("temporary genesis file is empty: %s", path)
+	}
+	return path, tempDir, nil
+}
+
+// resolveValidatorKeystore writes the validator keystore for validator
+// nodes and returns the bind mount exposing it to the container, if any.
+// It also records the validator identity in envs. The returned tempDir is
+// non-empty when a temporary directory was created for the keystore.
+func resolveValidatorKeystore(
+	config *OperaNodeConfig,
+	envs map[string]string,
+) (binding *string, tempDir string, err error) {
+	if config.ValidatorId == nil || *config.ValidatorId <= 0 {
+		return nil, "", nil
+	}
+
+	envs["VALIDATOR_PUBKEY"] = config.PubKey
+	envs["VALIDATOR_ADDRESS"] = config.Address
+
+	if config.MountDataDir != nil {
+		if err := genesis.WriteValidatorKeystore(
+			config.PrivKey, *config.MountDataDir); err != nil {
+			return nil, "", fmt.Errorf(
+				"failed to write validator keystore in mounted datadir: %w", err)
+		}
+		return nil, "", nil
+	}
+
+	tempDir, err = os.MkdirTemp("",
+		fmt.Sprintf("norma-validator-%d-*", *config.ValidatorId))
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create validator temp dir: %w", err)
+	}
+	if err := genesis.WriteValidatorKeystore(config.PrivKey, tempDir); err != nil {
+		return nil, tempDir, fmt.Errorf("failed to write validator keystore: %w", err)
+	}
+
+	binding = new(string)
+	*binding = fmt.Sprintf("%s:%s/keystore:ro",
+		filepath.Join(tempDir, "keystore"), dataDir)
+	return binding, tempDir, nil
+}
+
+// resolveLogsDir determines where the client's output is written on the
+// host. When the config names a directory (the scenario's output
+// directory) the logs are placed there and survive teardown, which is the
+// whole point of keeping them; temporary is true only for the unconfigured
+// fallback, whose directory the caller registers for cleanup.
+func resolveLogsDir(config *OperaNodeConfig) (dir string, temporary bool, err error) {
+	if config.LogsDir == "" {
+		dir, err = os.MkdirTemp("", "norma-node-logs-*")
+		if err != nil {
+			return "", false, fmt.Errorf("failed to create logs dir: %w", err)
+		}
+		return dir, true, nil
+	}
+	dir = filepath.Join(config.LogsDir, "client-logs")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", false, fmt.Errorf("failed to create logs dir %s: %w", dir, err)
+	}
+	return dir, false, nil
 }
 
 func (n *OperaNode) GetLabel() string {
@@ -446,7 +545,7 @@ func (n *OperaNode) IsExpectedFailure() bool {
 // Hostname returns the hostname of the node.
 // The hostname is accessible only inside the Docker network.
 func (n *OperaNode) Hostname() string {
-	return n.host.Hostname()
+	return n.container.Hostname()
 }
 
 // MetricsPort returns the port on which the node exports its metrics.
@@ -456,17 +555,17 @@ func (n *OperaNode) MetricsPort() int {
 }
 
 func (n *OperaNode) IsRunning() bool {
-	return n.host.IsRunning()
+	return n.container.IsRunning()
 }
 
 // CheckRunning returns an error if the node's container process is no longer
 // running (e.g. it crashed or exited unexpectedly).
 func (n *OperaNode) CheckRunning(ctx context.Context) error {
-	return n.host.CheckRunning(ctx)
+	return n.container.CheckRunning(ctx)
 }
 
 func (n *OperaNode) GetServiceUrl(service *network.ServiceDescription) (*driver.URL, error) {
-	addr, err := n.host.GetAddressForService(service)
+	addr, err := n.container.GetAddressForService(service)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get service address for %s: %w", service.Name, err)
 	}
@@ -501,32 +600,23 @@ func (n *OperaNode) GetValidatorId() *int {
 }
 
 func (n *OperaNode) StreamLog(ctx context.Context) (io.ReadCloser, error) {
-	return n.host.StreamLog(ctx)
+	return n.container.StreamLog(ctx)
 }
 
-// StreamExecLog opens the sonicd exec log file for a one-shot read.
-// Use this only after the sonicd process has exited and the log file
-// is fully flushed. For continuous tailing, use StreamLog instead.
+// StreamExecLog opens the client's log file for a one-shot read of the
+// complete output of the most recent client process. Use this only after
+// the process has exited, i.e. after <-ExecDone; for continuous tailing,
+// use StreamLog instead.
 func (n *OperaNode) StreamExecLog() (io.ReadCloser, error) {
-	path, err := n.execLogPath()
-	if err != nil {
-		return nil, err
+	if n.sonicd == nil {
+		return nil, fmt.Errorf("node %q has no client process", n.GetLabel())
 	}
-	//nolint:gosec // path is constructed internally from logsDir
-	return os.Open(path)
-}
-
-// execLogPath returns the path to the latest sonicd exec log file.
-func (n *OperaNode) execLogPath() (string, error) {
-	matches, err := filepath.Glob(filepath.Join(n.logsDir, "*_sonicd_*.log"))
-	if err != nil {
-		return "", fmt.Errorf("failed to glob sonicd logs: %w", err)
+	if n.sonicd.LogPath == "" {
+		return nil, fmt.Errorf(
+			"node %q does not persist client output; no logs directory configured",
+			n.GetLabel())
 	}
-	if len(matches) == 0 {
-		return "", fmt.Errorf("no sonicd log file found in %s", n.logsDir)
-	}
-	slices.Sort(matches)
-	return matches[len(matches)-1], nil
+	return os.Open(n.sonicd.LogPath) //#nosec G304 -- path is constructed internally
 }
 
 // Exec runs a command inside the node's container and returns its output.
@@ -534,9 +624,8 @@ func (n *OperaNode) Exec(ctx context.Context, cmd []string) (string, error) {
 	return n.container.Exec(ctx, cmd)
 }
 
-// ExecDone returns a channel that is closed when the sonicd background
-// exec finishes. This can be used to wait for the log file to be fully
-// flushed before reading it.
+// ExecDone returns a channel that is closed once the client process has
+// exited and its log file has been flushed and closed.
 func (n *OperaNode) ExecDone() <-chan struct{} {
 	if n.sonicd == nil {
 		ch := make(chan struct{})
@@ -546,28 +635,38 @@ func (n *OperaNode) ExecDone() <-chan struct{} {
 	return n.sonicd.Done
 }
 
-// Stop stops the node's container and waits for it to exit.
+// Stop shuts the node down: the client process first, then the container.
+//
+// The client is stopped on a best-effort basis. A node that was killed,
+// never started, or already stopped is not an error here: Stop is also the
+// teardown path, and refusing to release the container because the client
+// was already gone would leak it and fail otherwise-successful scenarios.
 func (n *OperaNode) Stop(ctx context.Context) error {
-
 	if err := n.StopSonicd(ctx); err != nil {
-		return err
+		slog.Debug("client process was not stopped gracefully",
+			"node", n.GetLabel(), "error", err)
 	}
 
 	// Fix permissions on the bind-mounted datadir while the container is
 	// still running, so non-root host users can clean up afterwards.
 	if n.container != nil && n.config.MountDataDir != nil {
-		_, _ = n.container.ExecWithEnv(
-			ctx, []string{"chmod", "-R", "777", "/datadir"}, nil, "",
-		)
+		if _, err := n.container.Exec(ctx,
+			[]string{"chmod", "-R", "777", dataDir}); err != nil {
+			slog.Debug("failed to relax datadir permissions",
+				"node", n.GetLabel(), "error", err)
+		}
 	}
 
-	return n.host.Stop(ctx)
+	if n.container == nil {
+		return nil
+	}
+	return n.container.Stop(ctx)
 }
 
 func (n *OperaNode) Cleanup(ctx context.Context) error {
 	var err error
-	if n.host != nil {
-		err = n.host.Cleanup(ctx)
+	if n.container != nil {
+		err = n.container.Cleanup(ctx)
 	}
 	for _, dir := range n.tempDirs {
 		if cleanupErr := os.RemoveAll(dir); cleanupErr != nil {
@@ -681,18 +780,19 @@ func (n *OperaNode) forceSetState(s NodeState) {
 	n.state = s
 }
 
-// buildSonicdCmd constructs the sonicd command-line from the given
-// parameters. The command is wrapped with a shell redirect to
-// /proc/1/fd/1 so that sonicd output appears in the container's
-// stdout (captured by Docker ContainerLogs), while the exec attach
-// stream still writes it to the host-side log file.
+// buildSonicdCmd constructs the sonicd argument vector.
+//
+// The command is returned in exec form and is run without a shell: the
+// output is captured from the exec stream on the host, so there is nothing
+// to redirect, and keeping the arguments as separate argv entries means
+// values are never re-parsed or word-split by a shell.
 func buildSonicdCmd(
 	validatorId *int,
-	pubKey, address, externalIP string,
+	pubKey, externalIP string,
 	extraArguments string,
 ) []string {
 	args := []string{
-		"./sonicd",
+		sonicdBinaryPath,
 		"--datadir=" + dataDir,
 		"--http", "--http.addr", "0.0.0.0",
 		"--http.port", "18545",
@@ -703,7 +803,7 @@ func buildSonicdCmd(
 		"--pprof", "--pprof.addr", "0.0.0.0",
 		"--nat", "extip:" + externalIP,
 		"--metrics", "--metrics.expensive",
-		"--config", "config.toml",
+		"--config", configFilePath,
 		"--datadir.minfreedisk", "0",
 		"--statedb.livecache", "1",
 	}
@@ -712,7 +812,7 @@ func buildSonicdCmd(
 		args = append(args,
 			"--validator.id", fmt.Sprintf("%d", *validatorId),
 			"--validator.pubkey", pubKey,
-			"--validator.password", "password.txt",
+			"--validator.password", passwordFilePath,
 			"--mode", "rpc",
 		)
 	}
@@ -721,8 +821,5 @@ func buildSonicdCmd(
 		args = append(args, strings.Fields(extraArguments)...)
 	}
 
-	// Wrap in sh -c with a tee to /proc/1/fd/1 so Docker ContainerLogs
-	// captures sonicd output (exec stdout also goes to the log file).
-	shellCmd := strings.Join(args, " ") + " 2>&1 | tee /proc/1/fd/1"
-	return []string{"sh", "-c", shellCmd}
+	return args
 }

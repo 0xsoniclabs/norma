@@ -254,6 +254,9 @@ func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNod
 	n.nodesMutex.Lock()
 	nodeConfig.NetworkBootstrap = !n.bootstrapped
 	n.nodesMutex.Unlock()
+	// Direct the client's output into the run's output directory so it
+	// survives the teardown that follows a failed scenario.
+	nodeConfig.LogsDir = n.config.OutputDir
 	node, err := node.StartOperaDockerNode(ctx, n.docker, n.network, nodeConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start opera docker; %v", err)

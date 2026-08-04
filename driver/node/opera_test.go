@@ -29,30 +29,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
-	"github.com/0xsoniclabs/norma/driver/network"
 )
-
-type cleanupHostStub struct{}
-
-func (cleanupHostStub) Hostname() string { return "" }
-
-func (cleanupHostStub) IsRunning() bool { return false }
-
-func (cleanupHostStub) CheckRunning(ctx context.Context) error { return nil }
-
-func (cleanupHostStub) GetAddressForService(*network.ServiceDescription) (*network.AddressPort, error) {
-	return nil, nil
-}
-
-func (cleanupHostStub) Stop(ctx context.Context) error { return nil }
-
-func (cleanupHostStub) SaveLogTo(ctx context.Context, path string) error { return nil }
-
-func (cleanupHostStub) StreamLog(context.Context) (io.ReadCloser, error) {
-	return io.NopCloser(strings.NewReader("")), nil
-}
-
-func (cleanupHostStub) Cleanup(ctx context.Context) error { return nil }
 
 func TestImplements(t *testing.T) {
 	var inst OperaNode
@@ -91,7 +68,7 @@ func TestOperaNode_StartAndStop(t *testing.T) {
 			t.Errorf("failed to cleanup node: %v", err)
 		}
 	})
-	if err = node.host.Stop(t.Context()); err != nil {
+	if err = node.Stop(t.Context()); err != nil {
 		t.Errorf("failed to stop Opera node: %v", err)
 	}
 }

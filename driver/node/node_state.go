@@ -1,21 +1,46 @@
+// Copyright 2024 Fantom Foundation
+// This file is part of Norma System Testing Infrastructure for Sonic.
+//
+// Norma is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Norma is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Norma. If not, see <http://www.gnu.org/licenses/>.
+
 package node
 
 // NodeState represents the lifecycle state of an OperaNode.
 //
-// Legal transitions are enforced by OperaNode.transition:
+// Every action claims a transitional state before doing any work, so that
+// two concurrent actions cannot interleave, and restores the previous
+// state if it fails. Transitions are enforced by OperaNode.transition:
 //
-//	Uninitialized --Initialize--> Ready
-//	Ready         --StartSonicd--> Syncing
-//	Syncing       --WaitForSync--> Running
-//	Running       --StopSonicd--> Stopping --> Ready
+//	Uninitialized --Initialize-------> Initializing --> Ready
+//	Ready         --StartSonicd------> Syncing
+//	Syncing       --WaitForSync------> Running
+//	Running       --StopSonicd-------> Stopping     --> Ready
 //	Running       --ForceStopSonicd--> Killed
-//	Killed        --HealSonicd--> Healing --> Ready
+//	Killed        --HealSonicd-------> Healing      --> Ready
+//
+// Failure returns the node to the state the action started from, except
+// for ForceStopSonicd: once a kill has been attempted the database must be
+// assumed dirty, so the node stays in Killed and heal is the only way out.
 type NodeState int
 
 const (
 	// NodeStateUninitialized is the initial state: container exists but
 	// nothing has been written to the data directory yet.
 	NodeStateUninitialized NodeState = iota
+	// NodeStateInitializing is the transitional state entered while the
+	// data directory is being populated.
+	NodeStateInitializing
 	// NodeStateReady means the data directory is initialized and sonicd
 	// can be started.
 	NodeStateReady
@@ -41,6 +66,8 @@ func (s NodeState) String() string {
 	switch s {
 	case NodeStateUninitialized:
 		return "uninitialized"
+	case NodeStateInitializing:
+		return "initializing"
 	case NodeStateReady:
 		return "ready"
 	case NodeStateSyncing:
