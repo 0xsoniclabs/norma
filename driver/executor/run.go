@@ -84,6 +84,12 @@ func RunAndCaptureEventExecution(
 // allowed to run before being aborted.
 const defaultScenarioTimeout = 10 * time.Minute
 
+// healDbTimeout caps how long a single `sonictool heal` invocation may
+// run before we consider it hung. Healing a small test DB is expected
+// to take seconds; the timeout is generous so that CI on slow hosts
+// still succeeds.
+const healDbTimeout = 15 * time.Minute
+
 // run is the internal implementation, allowing injection of
 // a validatorRegistry for testing.
 func run(
@@ -268,6 +274,74 @@ func executeStep(
 	}
 }
 
+// restartNodeInPlace restarts the client process of a node whose container
+// is still alive, as is the case after killSonic followed by healDb. The
+// data directory is preserved, so the node rejoins with the history it
+// already had rather than syncing from genesis.
+func restartNodeInPlace(
+	ctx context.Context,
+	step *parser.Step,
+	net driver.Network,
+	existing driver.Node,
+) error {
+	name := step.Identifier
+	opera, ok := existing.(*node.OperaNode)
+	if !ok {
+		return fmt.Errorf("node %q is not an OperaNode", name)
+	}
+
+	// Capture the network's height before the node comes back, so we know
+	// how far it has to catch up.
+	targetBlock, err := getNetworkBlockHeight(ctx, net)
+	if err != nil {
+		if !errors.Is(err, driver.ErrEmptyNetwork) {
+			return fmt.Errorf(
+				"failed to determine sync target for restart of %s: %w", name, err)
+		}
+		targetBlock = 0
+	}
+	slog.Info("restarting node in place",
+		"node", name, "type", step.NodeType, "target_block", targetBlock)
+
+	// Restart with the role the step asks for. Silently demoting a
+	// validator to an observer would remove it from consensus for the rest
+	// of the scenario while still reporting success.
+	if step.NodeType == "validator" {
+		if err := opera.StartSonicd(ctx); err != nil {
+			return fmt.Errorf("failed to restart sonicd on %s: %w", name, err)
+		}
+	} else {
+		if err := opera.StartSonicdAsObserver(ctx); err != nil {
+			return fmt.Errorf("failed to restart sonicd on %s: %w", name, err)
+		}
+	}
+
+	if err := opera.WaitForSync(ctx); err != nil {
+		return fmt.Errorf("failed to sync restarted node %s: %w", name, err)
+	}
+
+	// Re-establish peer connections so other nodes discover the restarted
+	// client (the peer table does not survive the restart).
+	if err := net.ReconnectNode(ctx, existing); err != nil {
+		return fmt.Errorf("failed to reconnect node %s: %w", name, err)
+	}
+
+	// Announce availability before waiting for the node to catch up, so
+	// monitoring observes the blocks it processes while doing so.
+	net.ResumeNode(existing)
+
+	if targetBlock > 0 {
+		if err := waitForNodeSync(ctx, existing, targetBlock+1); err != nil {
+			return fmt.Errorf(
+				"restarted node %s did not reach block %d: %w",
+				name, targetBlock+1, err)
+		}
+	}
+
+	slog.Info("node restarted in place", "node", name)
+	return nil
+}
+
 // execStartNode creates a node. If the same name was previously started and
 // stopped, this is treated as a rejoin (no new validator registration).
 // If the node is still in state.nodes (e.g. after killSonic + healDb),
@@ -285,53 +359,7 @@ func execStartNode(
 	// killSonic + healDb), restart sonicd inside the existing container
 	// instead of creating a new one.
 	if existing, ok := state.nodes[name]; ok {
-		opera, ok := existing.(*node.OperaNode)
-		if !ok {
-			return fmt.Errorf("node %q is not an OperaNode", name)
-		}
-
-		slog.Info("in-place restart: starting sonicd", "node", name)
-
-		// Capture the current network block height so we can wait for
-		// the restarted node to catch up after it comes back online.
-		targetBlock, err := getNetworkBlockHeight(ctx, net)
-		if err != nil && !errors.Is(err, driver.ErrEmptyNetwork) {
-			slog.Warn("failed to get target block for in-place restart", "error", err)
-		}
-		slog.Info("in-place restart: target block", "node", name, "block", targetBlock)
-
-		if err := opera.StartSonicdAsObserver(ctx); err != nil {
-			return fmt.Errorf("failed to restart sonicd on %s: %w", name, err)
-		}
-		slog.Info("in-place restart: sonicd started, waiting for sync", "node", name)
-
-		if err := opera.WaitForSync(ctx); err != nil {
-			return fmt.Errorf("failed to sync restarted node %s: %w", name, err)
-		}
-		slog.Info("in-place restart: node synced, reconnecting peers", "node", name)
-
-		// Re-establish peer connections so other nodes discover the
-		// restarted sonicd instance (peer table is lost after heal).
-		if err := net.ReconnectNode(ctx, existing); err != nil {
-			return fmt.Errorf(
-				"failed to reconnect node %s: %w", name, err,
-			)
-		}
-		slog.Info("in-place restart: peers reconnected", "node", name)
-
-		// Wait for the node to reach the network's block height.
-		if targetBlock > 0 {
-			slog.Info("in-place restart: waiting for block sync", "node", name, "target_block", targetBlock)
-			if err := waitForNodeSync(ctx, existing, targetBlock+1); err != nil {
-				slog.Warn("restarted node sync wait failed", "node", name, "error", err)
-			}
-		}
-
-		// Notify monitoring that the node is back online.
-		net.ResumeNode(existing)
-
-		slog.Info("in-place restart: complete", "node", name)
-		return nil
+		return restartNodeInPlace(ctx, step, net, existing)
 	}
 
 	isRejoin := state.nodeHistory[name]
@@ -732,12 +760,6 @@ func execHealDb(
 	defer cancel()
 	return opera.HealSonicd(healCtx)
 }
-
-// healDbTimeout caps how long a single `sonictool heal` invocation may
-// run before we consider it hung. Healing a small test DB is expected
-// to take seconds; the timeout is generous so that CI on slow hosts
-// still succeeds.
-const healDbTimeout = 15 * time.Minute
 
 // execStopApp stops a running application.
 func execStopApp(step *parser.Step, state *runState) error {
