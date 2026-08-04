@@ -30,6 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -73,6 +74,14 @@ type Client interface {
 
 	// GetNetworkRules calls eth_getRules for the given block selector, such as "latest".
 	GetNetworkRules(block string) (opera.Rules, error)
+
+	// GetTransactionReceipt returns the receipt of the given transaction, or nil if
+	// the transaction has not been included in a block.
+	GetTransactionReceipt(txHash common.Hash) (*types.Receipt, error)
+
+	// GetBlockReceipts returns the receipts of all transactions of the given block
+	// in one request.
+	GetBlockReceipts(blockNumber uint64) ([]*types.Receipt, error)
 }
 
 func WrapRpcClient(rpcClient *rpc.Client) *Impl {
@@ -202,10 +211,43 @@ func (r Impl) transactionReceipt(txHash common.Hash) (*types.Receipt, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err == nil && result == nil {
+	if result == nil {
 		return nil, ethereum.NotFound
 	}
+	return decodeReceipt(result)
+}
 
+// GetTransactionReceipt returns the receipt of the given transaction, or nil if the
+// transaction has not been included in a block.
+func (r Impl) GetTransactionReceipt(txHash common.Hash) (*types.Receipt, error) {
+	receipt, err := r.transactionReceipt(txHash)
+	if errors.Is(err, ethereum.NotFound) {
+		return nil, nil
+	}
+	return receipt, err
+}
+
+// GetBlockReceipts returns the receipts of all transactions of the given block in
+// one request.
+func (r Impl) GetBlockReceipts(blockNumber uint64) ([]*types.Receipt, error) {
+	var results []map[string]any
+	if err := r.Call(&results, "eth_getBlockReceipts", hexutil.Uint64(blockNumber)); err != nil {
+		return nil, err
+	}
+	receipts := make([]*types.Receipt, 0, len(results))
+	for _, result := range results {
+		receipt, err := decodeReceipt(result)
+		if err != nil {
+			return nil, err
+		}
+		receipts = append(receipts, receipt)
+	}
+	return receipts, nil
+}
+
+// decodeReceipt converts the raw JSON representation of a receipt into a
+// types.Receipt.
+func decodeReceipt(result map[string]any) (*types.Receipt, error) {
 	// Remove all log.blockTimestamps to provide backward compatibility.
 	// This fields was introduced in geth 1.16.1 or 1.16.2, but some versions
 	// of Sonic (at least up to 2.1.2) are using 1.16.0. However, the client
@@ -227,11 +269,9 @@ func (r Impl) transactionReceipt(txHash common.Hash) (*types.Receipt, error) {
 	}
 
 	var receipt *types.Receipt
-	err = json.Unmarshal(jsonEncoded, &receipt)
-	if err != nil {
+	if err := json.Unmarshal(jsonEncoded, &receipt); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal transaction receipt: %w", err)
 	}
-
 	return receipt, nil
 }
 

@@ -182,6 +182,21 @@ func (mr *MockClientMockRecorder) FilterLogs(ctx, q any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterLogs", reflect.TypeOf((*MockClient)(nil).FilterLogs), ctx, q)
 }
 
+// GetBlockReceipts mocks base method.
+func (m *MockClient) GetBlockReceipts(blockNumber uint64) ([]*types.Receipt, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBlockReceipts", blockNumber)
+	ret0, _ := ret[0].([]*types.Receipt)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBlockReceipts indicates an expected call of GetBlockReceipts.
+func (mr *MockClientMockRecorder) GetBlockReceipts(blockNumber any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlockReceipts", reflect.TypeOf((*MockClient)(nil).GetBlockReceipts), blockNumber)
+}
+
 // GetBundleInfo mocks base method.
 func (m *MockClient) GetBundleInfo(planHash common.Hash) (*sonicapi.RPCBundleInfo, error) {
 	m.ctrl.T.Helper()
@@ -225,6 +240,21 @@ func (m *MockClient) GetTransactionPoolStatus(txHash common.Hash) (TxPoolStatus,
 func (mr *MockClientMockRecorder) GetTransactionPoolStatus(txHash any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactionPoolStatus", reflect.TypeOf((*MockClient)(nil).GetTransactionPoolStatus), txHash)
+}
+
+// GetTransactionReceipt mocks base method.
+func (m *MockClient) GetTransactionReceipt(txHash common.Hash) (*types.Receipt, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTransactionReceipt", txHash)
+	ret0, _ := ret[0].(*types.Receipt)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTransactionReceipt indicates an expected call of GetTransactionReceipt.
+func (mr *MockClientMockRecorder) GetTransactionReceipt(txHash any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactionReceipt", reflect.TypeOf((*MockClient)(nil).GetTransactionReceipt), txHash)
 }
 
 // HeaderByNumber mocks base method.
