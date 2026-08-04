@@ -36,7 +36,9 @@ type StepFunction string
 const (
 	FuncStartNode    StepFunction = "startNode"
 	FuncStopNode     StepFunction = "stopNode"
+	FuncDelegate     StepFunction = "delegate"
 	FuncUndelegate   StepFunction = "undelegate"
+	FuncVerifyStakes StepFunction = "verifyStakes"
 	FuncUpdateRules  StepFunction = "updateRules"
 	FuncAdvanceEpoch StepFunction = "advanceEpoch"
 	FuncWaitForEpoch StepFunction = "waitForEpoch"
@@ -62,7 +64,9 @@ const (
 var allStepFunctions = [...]StepFunction{
 	FuncStartNode,
 	FuncStopNode,
+	FuncDelegate,
 	FuncUndelegate,
+	FuncVerifyStakes,
 	FuncUpdateRules,
 	FuncAdvanceEpoch,
 	FuncWaitForEpoch,
@@ -299,6 +303,9 @@ type Step struct {
 	// Checks step parameters
 	SubChecks []CheckSpec
 
+	// Delegate parameters
+	DelegateTargets []DelegateTarget
+
 	// Undelegate parameters
 	UndelegateTargets []UndelegateTarget
 
@@ -306,11 +313,27 @@ type Step struct {
 	Duration time.Duration
 }
 
+// DelegateTarget specifies a single delegation from a named external
+// delegator account to a validator node. Both Stake and Delegator are
+// required: unlike undelegate, delegate never derives values from
+// on-chain state.
+type DelegateTarget struct {
+	Node      string `yaml:"node"`
+	Stake     uint64 `yaml:"stake"`
+	Delegator string `yaml:"delegator"`
+}
+
 // UndelegateTarget specifies a single validator node to undelegate from.
-// Stake is optional; if omitted (nil), the full self-stake is queried on-chain.
+// Stake is optional; if omitted (nil), the full stake for the effective
+// delegator is queried on-chain.
+// Delegator is optional; when set, the undelegation is performed by that
+// named external delegator account (created by a prior delegate step).
+// When Delegator is empty, the operation is a validator self-undelegation
+// using the validator's own key (existing behavior).
 type UndelegateTarget struct {
-	Node  string  `yaml:"node"`
-	Stake *uint64 `yaml:"stake,omitempty"`
+	Node      string  `yaml:"node"`
+	Stake     *uint64 `yaml:"stake,omitempty"`
+	Delegator string  `yaml:"delegator,omitempty"`
 }
 
 // UnmarshalYAML implements custom YAML unmarshalling for Step.
@@ -417,7 +440,21 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 			val.Value != "" {
 			s.Identifier = val.Value
 		}
-	case FuncAdvanceEpoch, FuncWaitForEpoch:
+	case FuncDelegate:
+		// Delegate always requires a list of targets. Unlike undelegate,
+		// there is no scalar shorthand because both stake and delegator
+		// must be specified explicitly.
+		if val.Kind != yaml.SequenceNode {
+			return fmt.Errorf("delegate value must be a list of targets")
+		}
+		for i, item := range val.Content {
+			var target DelegateTarget
+			if err := item.Decode(&target); err != nil {
+				return fmt.Errorf("delegate target %d: %w", i+1, err)
+			}
+			s.DelegateTargets = append(s.DelegateTargets, target)
+		}
+	case FuncVerifyStakes, FuncAdvanceEpoch, FuncWaitForEpoch:
 		// These take no value (or null).
 		if val.Kind != yaml.ScalarNode || (val.Tag != "!!null" && val.Value != "" && val.Value != "null") {
 			return fmt.Errorf("%s does not take a value, got %q", fn, val.Value)
@@ -459,18 +496,44 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 var stepFunctionDescriptions = map[StepFunction]string{
 	FuncStartNode: "Start a new network node (validator, observer, or rpc).",
 	FuncStopNode:  "Stop a running network node by name.",
+	FuncDelegate: `Delegate stake from one or more named external delegator accounts
+    to validator nodes.
+    Each target in the list has three required fields:
+      node:      name of the validator node receiving the delegation.
+      delegator: name of the delegator account (created on first use, funded
+                 automatically from the treasury).
+      stake:     amount in S to delegate.
+    Example:
+      - delegate:
+        - node: val-1
+          delegator: alice
+          stake: 2000000
+        - node: val-1
+          delegator: bob
+          stake: 1000000`,
 	FuncUndelegate: `Undelegate stake from one or more validator nodes.
-    Each target in the list has two fields:
-      node:  (required) name of the validator node to undelegate from.
-      stake: (optional) amount in S to undelegate; if omitted, the full
-             self-stake is queried on-chain and undelegated.
+    Each target in the list has the fields:
+      node:      (required) name of the validator node to undelegate from.
+      delegator: (optional) name of the delegator account to undelegate as.
+                 When omitted, the validator's self-stake is undelegated
+                 using its own key (existing behavior).
+      stake:     (optional) amount in S to undelegate; if omitted, the full
+                 stake for the effective delegator is queried on-chain
+                 and undelegated.
     Shorthand: a bare node name may be used instead of a list when
-    undelegating a single node with its full stake.
+    undelegating a single node with its full self-stake.
     Example:
       - undelegate:
         - node: val-1
         - node: val-2
-          stake: 1000000`,
+          stake: 1000000
+        - node: val-3
+          delegator: alice
+          stake: 500000`,
+	FuncVerifyStakes: `Verify that on-chain stake state matches the executor's
+    internal bookkeeping for every delegator that participated in the
+    scenario so far. Fails if any tracked (delegator, validator) pair
+    has an on-chain stake that differs from the expected value.`,
 	FuncUpdateRules:  "Update one or more network rules (key/value pairs).",
 	FuncAdvanceEpoch: "Advance the network to the next epoch by sending transactions.",
 	FuncWaitForEpoch: "Wait until the network reaches the next epoch boundary.",
@@ -502,7 +565,9 @@ var allowedParams = map[StepFunction][]string{
 	FuncRunApp:       {"type", "users", "rate"},
 	FuncStopApp:      {},
 	FuncUpdateRules:  {},
+	FuncDelegate:     {},
 	FuncUndelegate:   {},
+	FuncVerifyStakes: {},
 	FuncAdvanceEpoch: {},
 	FuncWaitForEpoch: {},
 	FuncWaitFor:      {},

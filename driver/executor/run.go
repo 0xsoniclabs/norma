@@ -18,6 +18,7 @@ package executor
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -30,6 +31,8 @@ import (
 	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/genesis"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -127,10 +130,12 @@ func runWithObserver(
 	defer cancel()
 
 	state := &runState{
-		nodes:        make(map[string]driver.Node),
-		apps:         make(map[string]driver.Application),
-		nodeHistory:  make(map[string]bool),
-		validatorIds: make(map[string]int),
+		nodes:          make(map[string]driver.Node),
+		apps:           make(map[string]driver.Application),
+		nodeHistory:    make(map[string]bool),
+		validatorIds:   make(map[string]int),
+		delegators:     make(map[string]*delegatorAccount),
+		expectedStakes: make(map[stakeKey]uint64),
 	}
 	for label, id := range genesisValidatorIds {
 		state.validatorIds[label] = id
@@ -211,6 +216,29 @@ type runState struct {
 	// validatorIds preserves validator IDs for nodes that were stopped,
 	// so they can be reused on rejoin.
 	validatorIds map[string]int
+	// delegators maps a scenario-scoped delegator name to a deterministically
+	// derived key/address pair. Accounts are created lazily on first
+	// reference in a delegate/undelegate step.
+	delegators map[string]*delegatorAccount
+	// expectedStakes tracks the running expected stake (in S) for every
+	// (delegator, validator) pair the executor has touched. Used by the
+	// verifyStakes step to compare against on-chain state. Fully
+	// undelegated pairs stay tracked with an expected stake of 0.
+	expectedStakes map[stakeKey]uint64
+}
+
+// stakeKey identifies a tracked (delegator, validator) stake pair.
+type stakeKey struct {
+	delegator   string
+	validatorId int
+}
+
+// delegatorAccount holds the private key and derived address for a named
+// external delegator used in a scenario.
+type delegatorAccount struct {
+	name       string
+	privateKey *ecdsa.PrivateKey
+	address    common.Address
 }
 
 // executeStep dispatches a single step to the appropriate handler.
@@ -231,8 +259,12 @@ func executeStep(
 		return execKillSonic(ctx, step, net, state)
 	case parser.FuncHealDb:
 		return execHealDb(ctx, step, state)
+	case parser.FuncDelegate:
+		return execDelegate(ctx, step, registry, state)
 	case parser.FuncUndelegate:
-		return execUndelegate(ctx, step, net, registry, state)
+		return execUndelegate(ctx, step, registry, state)
+	case parser.FuncVerifyStakes:
+		return execVerifyStakes(step, registry, state)
 	case parser.FuncRunApp:
 		return execRunApp(ctx, step, net, state)
 	case parser.FuncStopApp:
@@ -616,45 +648,162 @@ func execStopNode(
 }
 
 // execUndelegate undelegates stake from one or more validator nodes.
+// When a target specifies a delegator, the operation is performed as that
+// external delegator using its key. Otherwise the legacy validator
+// self-undelegation path is used.
 func execUndelegate(
 	ctx context.Context,
 	step *parser.Step,
-	net driver.Network,
 	registry validatorRegistry,
 	state *runState,
 ) error {
 	for _, target := range step.UndelegateTargets {
-		node, ok := state.nodes[target.Node]
-		if !ok {
-			node, ok = state.nodes[target.Node+"-0"]
-			if !ok {
-				return fmt.Errorf("node %q not found in active nodes", target.Node)
-			} else {
-				// Ensure it is truly a single-instance node. If
-				// other numbered instances exist, require an
-				// explicit instance name.
-				if hasMultipleInstances(state, target.Node) {
-					return fmt.Errorf(
-						"node %q has multiple instances; use an explicit instance name (e.g. %q)",
-						target.Node, target.Node+"-0",
-					)
-				}
-			}
-		}
-		id := node.GetValidatorId()
-		if id == nil {
-			return fmt.Errorf("node %q is not a validator", target.Node)
+		id, err := resolveValidatorId(state, target.Node)
+		if err != nil {
+			return err
 		}
 		var stakeAmount uint64
 		if target.Stake != nil {
 			stakeAmount = *target.Stake
 		}
-		// stakeAmount=0 → UnregisterValidatorNode queries self-stake on-chain
-		if err := registry.unregisterValidator(ctx, *id, stakeAmount); err != nil {
-			return fmt.Errorf("failed to unregister validator %s: %w", target.Node, err)
+
+		if target.Delegator == "" {
+			// Legacy self-undelegation using the validator key.
+			// stakeAmount=0 → UnregisterValidatorNode queries self-stake on-chain
+			if err := registry.unregisterValidator(ctx, id, stakeAmount); err != nil {
+				return fmt.Errorf("failed to unregister validator %s: %w", target.Node, err)
+			}
+			continue
+		}
+
+		// External-delegator undelegation.
+		delegator, ok := state.delegators[target.Delegator]
+		if !ok {
+			return fmt.Errorf(
+				"undelegate: delegator %q was never used in a prior delegate step",
+				target.Delegator,
+			)
+		}
+
+		// If no explicit amount, undelegate the full expected stake.
+		effectiveStake := stakeAmount
+		key := stakeKey{target.Delegator, id}
+		if effectiveStake == 0 {
+			effectiveStake = state.expectedStakes[key]
+		}
+
+		if err := registry.undelegateAs(
+			ctx, id, stakeAmount, delegator.privateKey,
+		); err != nil {
+			return fmt.Errorf(
+				"failed to undelegate from validator %s as %s: %w",
+				target.Node, target.Delegator, err,
+			)
+		}
+
+		// Bookkeeping: reduce expected stake, keeping fully undelegated
+		// pairs at 0 so verifyStakes asserts the stake is gone on-chain.
+		if remaining, ok := state.expectedStakes[key]; ok {
+			state.expectedStakes[key] = remaining - min(effectiveStake, remaining)
 		}
 	}
 	return nil
+}
+
+// execDelegate delegates stake from named external delegator accounts to
+// validator nodes. Delegator accounts are created lazily; every delegation
+// is funded from the treasury with its stake plus a gas budget.
+func execDelegate(
+	ctx context.Context,
+	step *parser.Step,
+	registry validatorRegistry,
+	state *runState,
+) error {
+	for _, target := range step.DelegateTargets {
+		id, err := resolveValidatorId(state, target.Node)
+		if err != nil {
+			return err
+		}
+		delegator, err := getOrCreateDelegator(state, target.Delegator)
+		if err != nil {
+			return fmt.Errorf("failed to derive delegator %q: %w", target.Delegator, err)
+		}
+
+		// Fund the delegator: stake + gas budget.
+		fundAmount := target.Stake + delegatorGasBudget
+		if err := registry.fundDelegator(ctx, delegator.address, fundAmount); err != nil {
+			return fmt.Errorf(
+				"failed to fund delegator %q: %w", target.Delegator, err,
+			)
+		}
+
+		if err := registry.delegate(ctx, id, target.Stake, delegator.privateKey); err != nil {
+			return fmt.Errorf(
+				"failed to delegate from %s to %s: %w",
+				target.Delegator, target.Node, err,
+			)
+		}
+
+		state.expectedStakes[stakeKey{target.Delegator, id}] += target.Stake
+	}
+	return nil
+}
+
+// execVerifyStakes queries the on-chain stake for every tracked
+// (delegator, validator) pair and asserts it matches the executor's
+// internal bookkeeping.
+func execVerifyStakes(
+	_ *parser.Step,
+	registry validatorRegistry,
+	state *runState,
+) error {
+	var errs []error
+	for key, expected := range state.expectedStakes {
+		delegator, ok := state.delegators[key.delegator]
+		if !ok {
+			errs = append(errs, fmt.Errorf(
+				"verifyStakes: unknown delegator %q in tracked state", key.delegator,
+			))
+			continue
+		}
+		actual, err := registry.getDelegatorStake(delegator.address, key.validatorId)
+		if err != nil {
+			errs = append(errs, fmt.Errorf(
+				"verifyStakes: query failed for %s@%d: %w", key.delegator, key.validatorId, err,
+			))
+			continue
+		}
+		if actual != expected {
+			errs = append(errs, fmt.Errorf(
+				"verifyStakes: mismatch for delegator %s on validator %d: expected %d S, got %d S",
+				key.delegator, key.validatorId, expected, actual,
+			))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// resolveValidatorId maps a scenario-level node name to its validator ID,
+// applying the same suffix-fallback logic used elsewhere for undelegate.
+func resolveValidatorId(state *runState, name string) (int, error) {
+	node, ok := state.nodes[name]
+	if !ok {
+		node, ok = state.nodes[name+"-0"]
+		if !ok {
+			return 0, fmt.Errorf("node %q not found in active nodes", name)
+		}
+		if hasMultipleInstances(state, name) {
+			return 0, fmt.Errorf(
+				"node %q has multiple instances; use an explicit instance name (e.g. %q)",
+				name, name+"-0",
+			)
+		}
+	}
+	id := node.GetValidatorId()
+	if id == nil {
+		return 0, fmt.Errorf("node %q is not a validator", name)
+	}
+	return *id, nil
 }
 
 // hasMultipleInstances reports whether state contains more than one
@@ -899,4 +1048,34 @@ func waitForBlockProduction(ctx context.Context, net driver.Network) error {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+}
+
+// delegatorGasBudget is the extra amount (in S) transferred to a delegator
+// account on top of the delegation stake. Delegate and undelegate
+// transactions reserve their fixed 1e6 gas limit times a fee cap derived
+// from the current base fee, a small fraction of 1 S at fakenet base fees,
+// so 1 S leaves headroom for repeated operations.
+const delegatorGasBudget uint64 = 1
+
+// getOrCreateDelegator returns the delegator account for the given name,
+// creating it deterministically on first use. The private key is derived
+// from keccak256("norma-delegator:" + name), which keeps accounts
+// reproducible across runs and avoids colliding with the fakenet validator
+// key range used by evmcore.FakeKey.
+func getOrCreateDelegator(state *runState, name string) (*delegatorAccount, error) {
+	if existing, ok := state.delegators[name]; ok {
+		return existing, nil
+	}
+	seed := crypto.Keccak256([]byte("norma-delegator:" + name))
+	key, err := crypto.ToECDSA(seed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to derive delegator key: %w", err)
+	}
+	account := &delegatorAccount{
+		name:       name,
+		privateKey: key,
+		address:    crypto.PubkeyToAddress(key.PublicKey),
+	}
+	state.delegators[name] = account
+	return account, nil
 }

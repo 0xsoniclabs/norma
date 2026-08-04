@@ -220,6 +220,165 @@ Scenario:
 	require.EqualValues(t, 2_000_000, *step.UndelegateTargets[0].Stake)
 }
 
+func TestParseBytes_Delegate_ParsesAllTargetFields(t *testing.T) {
+	input := `
+Name: Delegate Test
+Description: t
+Scenario:
+  - startNode: heavy
+    type: validator
+
+  - delegate:
+    - node: heavy
+      delegator: alice
+      stake: 2_000_000
+    - node: heavy
+      delegator: bob
+      stake: 1_000_000
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+
+	step := scenario.Steps[1]
+	require.Equal(t, FuncDelegate, step.Function)
+	require.Len(t, step.DelegateTargets, 2)
+
+	require.Equal(t, "heavy", step.DelegateTargets[0].Node)
+	require.Equal(t, "alice", step.DelegateTargets[0].Delegator)
+	require.EqualValues(t, 2_000_000, step.DelegateTargets[0].Stake)
+
+	require.Equal(t, "heavy", step.DelegateTargets[1].Node)
+	require.Equal(t, "bob", step.DelegateTargets[1].Delegator)
+	require.EqualValues(t, 1_000_000, step.DelegateTargets[1].Stake)
+}
+
+func TestParseBytes_Delegate_RejectsScalarShorthand(t *testing.T) {
+	input := `
+Name: Delegate Test
+Description: t
+Scenario:
+  - delegate: heavy
+`
+	_, err := ParseBytes([]byte(input))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "list of targets")
+}
+
+func TestParseBytes_UndelegateWithDelegator_ParsesDelegatorField(t *testing.T) {
+	input := `
+Name: Undelegate With Delegator
+Description: t
+Scenario:
+  - startNode: heavy
+    type: validator
+
+  - undelegate:
+    - node: heavy
+      delegator: alice
+    - node: heavy
+      delegator: bob
+      stake: 500_000
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+
+	step := scenario.Steps[1]
+	require.Equal(t, FuncUndelegate, step.Function)
+	require.Len(t, step.UndelegateTargets, 2)
+
+	require.Equal(t, "heavy", step.UndelegateTargets[0].Node)
+	require.Equal(t, "alice", step.UndelegateTargets[0].Delegator)
+	require.Nil(t, step.UndelegateTargets[0].Stake)
+
+	require.Equal(t, "heavy", step.UndelegateTargets[1].Node)
+	require.Equal(t, "bob", step.UndelegateTargets[1].Delegator)
+	require.NotNil(t, step.UndelegateTargets[1].Stake)
+	require.EqualValues(t, 500_000, *step.UndelegateTargets[1].Stake)
+}
+
+func TestParseBytes_VerifyStakes_ParsesEmptyStep(t *testing.T) {
+	input := `
+Name: Verify Stakes Test
+Description: t
+Scenario:
+  - verifyStakes
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+
+	require.Equal(t, FuncVerifyStakes, scenario.Steps[0].Function)
+}
+
+func TestStepCheck_Delegate_ReportsSemanticErrors(t *testing.T) {
+	cases := map[string]struct {
+		step      Step
+		errSubstr string
+	}{
+		"no targets": {
+			step: Step{
+				Function: FuncDelegate,
+			},
+			errSubstr: "at least one target",
+		},
+		"missing node": {
+			step: Step{
+				Function: FuncDelegate,
+				DelegateTargets: []DelegateTarget{
+					{Delegator: "alice", Stake: 100},
+				},
+			},
+			errSubstr: "'node' field",
+		},
+		"missing delegator": {
+			step: Step{
+				Function: FuncDelegate,
+				DelegateTargets: []DelegateTarget{
+					{Node: "val", Stake: 100},
+				},
+			},
+			errSubstr: "'delegator' field",
+		},
+		"zero stake": {
+			step: Step{
+				Function: FuncDelegate,
+				DelegateTargets: []DelegateTarget{
+					{Node: "val", Delegator: "alice", Stake: 0},
+				},
+			},
+			errSubstr: "stake must be greater than zero",
+		},
+		"invalid delegator name": {
+			step: Step{
+				Function: FuncDelegate,
+				DelegateTargets: []DelegateTarget{
+					{Node: "val", Delegator: "not a name", Stake: 100},
+				},
+			},
+			errSubstr: "delegator name must match",
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			err := tc.step.Check()
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.errSubstr)
+		})
+	}
+}
+
+func TestStepCheck_UndelegateWithDelegator_RejectsInvalidDelegatorName(t *testing.T) {
+	step := Step{
+		Function: FuncUndelegate,
+		UndelegateTargets: []UndelegateTarget{
+			{Node: "val", Delegator: "not a name"},
+		},
+	}
+	err := step.Check()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "delegator name must match")
+}
+
 func TestParseBytes_Checks(t *testing.T) {
 	input := `
 Name: Checks Test
