@@ -38,6 +38,15 @@ type LogListener interface {
 	OnBlock(node Node, block Block)
 }
 
+// NodeRestartListener is an optional interface a LogListener may implement
+// to learn that a node rejoined the network after its client process was
+// restarted. Such a node replays blocks it has already reported, which is
+// indistinguishable from a genuine inconsistency without this signal.
+type NodeRestartListener interface {
+	// OnNodeRestart is triggered when a known node comes back online.
+	OnNodeRestart(node Node)
+}
+
 // NodeLogProvider is an interface for registering listeners that will be notified about incoming blocks.
 type NodeLogProvider interface {
 
@@ -60,6 +69,11 @@ type NodeLogDispatcher struct {
 	network driver.Network
 	logDir  string
 	wg      sync.WaitGroup
+
+	// knownNodes records the nodes seen so far, so that a second
+	// AfterNodeCreation for the same node can be recognised as a restart.
+	knownNodes     map[Node]bool
+	knownNodesLock sync.Mutex
 }
 
 // NewNodeLogDispatcher creates a new instance of this registry, which is filled
@@ -72,9 +86,10 @@ func NewNodeLogDispatcher(network driver.Network, outputDir string) (*NodeLogDis
 	}
 
 	res := &NodeLogDispatcher{
-		network:   network,
-		listeners: make(map[LogListener]bool, 50),
-		logDir:    logDir,
+		network:    network,
+		listeners:  make(map[LogListener]bool, 50),
+		logDir:     logDir,
+		knownNodes: make(map[Node]bool, 50),
 	}
 
 	// listen for new Nodes
@@ -110,6 +125,16 @@ func (n *NodeLogDispatcher) UnregisterLogListener(listener LogListener) {
 func (n *NodeLogDispatcher) AfterNodeCreation(node driver.Node) {
 	nodeId := node.GetLabel()
 
+	// A node we have seen before is rejoining rather than joining, which
+	// listeners need to know to interpret its replayed blocks.
+	n.knownNodesLock.Lock()
+	restarted := n.knownNodes[Node(nodeId)]
+	n.knownNodes[Node(nodeId)] = true
+	n.knownNodesLock.Unlock()
+	if restarted {
+		n.notifyNodeRestart(Node(nodeId))
+	}
+
 	n.wg.Add(1)
 
 	// Start a goroutine collecting the log and writing it into a file.
@@ -128,6 +153,18 @@ func (n *NodeLogDispatcher) AfterNodeCreation(node driver.Node) {
 }
 
 func (n *NodeLogDispatcher) BeforeNodeRemoval(_ driver.Node) {
+}
+
+// notifyNodeRestart informs every listener that opted into restart
+// notifications by implementing NodeRestartListener.
+func (n *NodeLogDispatcher) notifyNodeRestart(node Node) {
+	n.listenersLock.Lock()
+	defer n.listenersLock.Unlock()
+	for listener := range n.listeners {
+		if l, ok := listener.(NodeRestartListener); ok {
+			l.OnNodeRestart(node)
+		}
+	}
 }
 
 func (n *NodeLogDispatcher) AfterApplicationCreation(driver.Application) {
