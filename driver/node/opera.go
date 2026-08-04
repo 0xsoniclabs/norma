@@ -87,11 +87,19 @@ type OperaNode struct {
 	container *docker.Container
 	config    *OperaNodeConfig
 	tempDirs  []string
-	// sonicd is the handle of the currently running client process, or nil
-	// when no client process has been started yet.
-	sonicd     *docker.ExecHandle
-	state      NodeState
+
+	// The fields below are all guarded by stateMutex.
 	stateMutex sync.Mutex
+	state      NodeState
+	// sonicd is the handle of the most recently started client process, or
+	// nil when none has been started yet.
+	sonicd *docker.ExecHandle
+	// clientGen counts client starts. It lets an exit watcher tell whether
+	// the process it was watching is still the current one.
+	clientGen uint64
+	// clientExitWasUnexpected records that the node reached
+	// NodeStateKilled because its client died rather than was killed.
+	clientExitWasUnexpected bool
 }
 
 type OperaNodeConfig struct {
@@ -608,15 +616,16 @@ func (n *OperaNode) StreamLog(ctx context.Context) (io.ReadCloser, error) {
 // the process has exited, i.e. after <-ExecDone; for continuous tailing,
 // use StreamLog instead.
 func (n *OperaNode) StreamExecLog() (io.ReadCloser, error) {
-	if n.sonicd == nil {
+	handle := n.clientHandle()
+	if handle == nil {
 		return nil, fmt.Errorf("node %q has no client process", n.GetLabel())
 	}
-	if n.sonicd.LogPath == "" {
+	if handle.LogPath == "" {
 		return nil, fmt.Errorf(
 			"node %q does not persist client output; no logs directory configured",
 			n.GetLabel())
 	}
-	return os.Open(n.sonicd.LogPath) //#nosec G304 -- path is constructed internally
+	return os.Open(handle.LogPath) //#nosec G304 -- path is constructed internally
 }
 
 // Exec runs a command inside the node's container and returns its output.
@@ -627,12 +636,13 @@ func (n *OperaNode) Exec(ctx context.Context, cmd []string) (string, error) {
 // ExecDone returns a channel that is closed once the client process has
 // exited and its log file has been flushed and closed.
 func (n *OperaNode) ExecDone() <-chan struct{} {
-	if n.sonicd == nil {
+	handle := n.clientHandle()
+	if handle == nil {
 		ch := make(chan struct{})
 		close(ch)
 		return ch
 	}
-	return n.sonicd.Done
+	return handle.Done
 }
 
 // Stop shuts the node down: the client process first, then the container.
@@ -760,15 +770,66 @@ func (n *OperaNode) GetState() NodeState {
 // not match `from`, which prevents concurrent actions from interleaving.
 // This is the only supported way to mutate the node's state.
 func (n *OperaNode) transition(from, to NodeState) error {
+	return n.transitionFromAny(to, from)
+}
+
+// transitionFromAny is transition for actions reachable from more than one
+// state, moving the node to `to` if its current state is any of `from`.
+func (n *OperaNode) transitionFromAny(to NodeState, from ...NodeState) error {
 	n.stateMutex.Lock()
 	defer n.stateMutex.Unlock()
-	if n.state != from {
+	if !slices.Contains(from, n.state) {
 		return fmt.Errorf(
 			"node %q: cannot transition %s\u2192%s (currently %s)",
-			n.GetLabel(), from, to, n.state)
+			n.GetLabel(), formatStates(from), to, n.state)
 	}
 	n.state = to
 	return nil
+}
+
+// formatStates renders the accepted source states of a transition.
+func formatStates(states []NodeState) string {
+	names := make([]string, 0, len(states))
+	for _, state := range states {
+		names = append(names, state.String())
+	}
+	return strings.Join(names, "|")
+}
+
+// clientHandle returns the handle of the most recently started client
+// process, or nil if none was started.
+func (n *OperaNode) clientHandle() *docker.ExecHandle {
+	n.stateMutex.Lock()
+	defer n.stateMutex.Unlock()
+	return n.sonicd
+}
+
+// beginClientStart claims the Ready\u2192Syncing transition for a new client
+// process and returns the generation identifying it. Bumping the
+// generation here, before the process exists, retires the previous
+// process's exit watcher so it cannot be attributed to this start.
+func (n *OperaNode) beginClientStart() (uint64, error) {
+	n.stateMutex.Lock()
+	defer n.stateMutex.Unlock()
+	if n.state != NodeStateReady {
+		return 0, fmt.Errorf(
+			"node %q: cannot transition %s\u2192%s (currently %s)",
+			n.GetLabel(), NodeStateReady, NodeStateSyncing, n.state)
+	}
+	n.state = NodeStateSyncing
+	n.clientGen++
+	n.clientExitWasUnexpected = false
+	return n.clientGen, nil
+}
+
+// attachClient records the handle of a started client process, unless the
+// start it belongs to has already been superseded.
+func (n *OperaNode) attachClient(gen uint64, handle *docker.ExecHandle) {
+	n.stateMutex.Lock()
+	defer n.stateMutex.Unlock()
+	if n.clientGen == gen {
+		n.sonicd = handle
+	}
 }
 
 // forceSetState unconditionally sets the node's state. It is intended

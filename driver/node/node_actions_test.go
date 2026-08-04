@@ -17,11 +17,16 @@
 package node
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/0xsoniclabs/norma/driver/docker"
 )
 
 // newNodeInState builds a node with no container, usable for exercising the
@@ -35,48 +40,50 @@ func newNodeInState(t *testing.T, state NodeState) *OperaNode {
 	}
 }
 
-// Each action must reject every state other than the one it starts from,
-// so that a scenario cannot, say, heal a running node or start a killed one.
+// Each action must reject every state it does not accept as a starting
+// point, so a scenario cannot, say, heal a running node or start a killed one.
 func TestOperaNode_Actions_RejectUnexpectedStates(t *testing.T) {
 	actions := map[string]struct {
-		requires NodeState
-		invoke   func(*OperaNode) error
+		accepts []NodeState
+		invoke  func(*OperaNode) error
 	}{
 		"Initialize": {
-			requires: NodeStateUninitialized,
-			invoke:   func(n *OperaNode) error { return n.Initialize(t.Context()) },
+			accepts: []NodeState{NodeStateUninitialized},
+			invoke:  func(n *OperaNode) error { return n.Initialize(t.Context()) },
 		},
 		"StartSonicd": {
-			requires: NodeStateReady,
-			invoke:   func(n *OperaNode) error { return n.StartSonicd(t.Context()) },
+			accepts: []NodeState{NodeStateReady},
+			invoke:  func(n *OperaNode) error { return n.StartSonicd(t.Context()) },
 		},
 		"StartSonicdAsObserver": {
-			requires: NodeStateReady,
+			accepts: []NodeState{NodeStateReady},
 			invoke: func(n *OperaNode) error {
 				return n.StartSonicdAsObserver(t.Context())
 			},
 		},
 		"WaitForSync": {
-			requires: NodeStateSyncing,
-			invoke:   func(n *OperaNode) error { return n.WaitForSync(t.Context()) },
+			accepts: []NodeState{NodeStateSyncing},
+			invoke:  func(n *OperaNode) error { return n.WaitForSync(t.Context()) },
 		},
 		"StopSonicd": {
-			requires: NodeStateRunning,
-			invoke:   func(n *OperaNode) error { return n.StopSonicd(t.Context()) },
+			accepts: []NodeState{NodeStateRunning},
+			invoke:  func(n *OperaNode) error { return n.StopSonicd(t.Context()) },
 		},
+		// Also accepted from Stopping, to escalate a graceful stop that
+		// did not complete.
 		"ForceStopSonicd": {
-			requires: NodeStateRunning,
-			invoke:   func(n *OperaNode) error { return n.ForceStopSonicd(t.Context()) },
+			accepts: []NodeState{NodeStateRunning, NodeStateStopping},
+			invoke:  func(n *OperaNode) error { return n.ForceStopSonicd(t.Context()) },
 		},
 		"HealSonicd": {
-			requires: NodeStateKilled,
-			invoke:   func(n *OperaNode) error { return n.HealSonicd(t.Context()) },
+			accepts: []NodeState{NodeStateKilled},
+			invoke:  func(n *OperaNode) error { return n.HealSonicd(t.Context()) },
 		},
 	}
 
 	for name, action := range actions {
 		for _, state := range allNodeStates {
-			if state == action.requires {
+			if slices.Contains(action.accepts, state) {
 				continue
 			}
 			t.Run(name+"/from-"+state.String(), func(t *testing.T) {
@@ -93,14 +100,26 @@ func TestOperaNode_Actions_RejectUnexpectedStates(t *testing.T) {
 	}
 }
 
-// A node whose client process is gone must not be reported as startable:
-// signalSonicd is the step that would otherwise silently do nothing.
-func TestOperaNode_SignalSonicd_FailsWithoutClientProcess(t *testing.T) {
+// A graceful stop that never completes must not be a dead end: escalating
+// to a kill is the documented way out of Stopping.
+func TestOperaNode_ForceStopSonicd_EscalatesFromStopping(t *testing.T) {
+	node := newNodeInState(t, NodeStateStopping)
+
+	// Fails for lack of a container, but only after the transition is
+	// accepted, which is what this asserts.
+	_ = node.ForceStopSonicd(t.Context())
+
+	if got := node.GetState(); got != NodeStateKilled {
+		t.Errorf("unexpected state, got %s, want %s", got, NodeStateKilled)
+	}
+}
+
+func TestOperaNode_SignalSonicd_FailsWithoutContainer(t *testing.T) {
 	node := newNodeInState(t, NodeStateRunning)
 
-	err := node.signalSonicd(t.Context(), "INT")
+	_, err := node.signalSonicd(t.Context(), "INT")
 	if err == nil {
-		t.Fatalf("expected an error when no client process exists")
+		t.Fatalf("expected an error when no container exists")
 	}
 	if !strings.Contains(err.Error(), "container") {
 		t.Errorf("unexpected error: %v", err)
@@ -132,6 +151,236 @@ func TestOperaNode_ForceStopSonicd_StaysKilledOnFailure(t *testing.T) {
 	if got := node.GetState(); got != NodeStateKilled {
 		t.Errorf("unexpected state after failed kill, got %s, want %s",
 			got, NodeStateKilled)
+	}
+}
+
+// The point of the exit watcher: a client that dies on its own must move
+// the node out of a state that claims it is up.
+func TestOperaNode_RecordUnexpectedClientExit_MarksNodeKilled(t *testing.T) {
+	for _, state := range []NodeState{NodeStateSyncing, NodeStateRunning} {
+		t.Run("from-"+state.String(), func(t *testing.T) {
+			node := newNodeInState(t, state)
+			node.clientGen = 1
+
+			if !node.recordUnexpectedClientExit(1) {
+				t.Fatalf("exit from state %s must be reported as unexpected", state)
+			}
+			if got := node.GetState(); got != NodeStateKilled {
+				t.Errorf("unexpected state, got %s, want %s", got, NodeStateKilled)
+			}
+			// The database is dirty either way, but a crash and a
+			// deliberate kill must remain distinguishable.
+			if !node.ClientExitWasUnexpected() {
+				t.Errorf("crash must be recorded as an unexpected exit")
+			}
+		})
+	}
+}
+
+// Exits from any other state were asked for, so they must not be reported
+// as crashes or disturb a state machine that is mid-action.
+func TestOperaNode_RecordUnexpectedClientExit_IgnoresRequestedExits(t *testing.T) {
+	for _, state := range allNodeStates {
+		if state == NodeStateSyncing || state == NodeStateRunning {
+			continue
+		}
+		t.Run("from-"+state.String(), func(t *testing.T) {
+			node := newNodeInState(t, state)
+			node.clientGen = 1
+
+			if node.recordUnexpectedClientExit(1) {
+				t.Fatalf("exit from state %s must not be reported", state)
+			}
+			if got := node.GetState(); got != state {
+				t.Errorf("state must not change, got %s, want %s", got, state)
+			}
+			if node.ClientExitWasUnexpected() {
+				t.Errorf("must not be recorded as an unexpected exit")
+			}
+		})
+	}
+}
+
+// The previous process's watcher fires after the node has been restarted;
+// attributing that exit to the new client would kill a healthy node.
+func TestOperaNode_RecordUnexpectedClientExit_IgnoresSupersededGeneration(t *testing.T) {
+	node := newNodeInState(t, NodeStateRunning)
+	node.clientGen = 2
+
+	if node.recordUnexpectedClientExit(1) {
+		t.Fatalf("exit of a superseded client must not be reported")
+	}
+	if got := node.GetState(); got != NodeStateRunning {
+		t.Errorf("state must not change, got %s, want %s", got, NodeStateRunning)
+	}
+}
+
+// beginClientStart has to retire the previous watcher, otherwise the old
+// process's exit lands on the new generation.
+func TestOperaNode_BeginClientStart_AdvancesGenerationAndClearsCrashFlag(t *testing.T) {
+	node := newNodeInState(t, NodeStateReady)
+	node.clientGen = 4
+	node.clientExitWasUnexpected = true
+
+	gen, err := node.beginClientStart()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gen != 5 {
+		t.Errorf("unexpected generation, got %d, want 5", gen)
+	}
+	if got := node.GetState(); got != NodeStateSyncing {
+		t.Errorf("unexpected state, got %s, want %s", got, NodeStateSyncing)
+	}
+	if node.ClientExitWasUnexpected() {
+		t.Errorf("crash flag must be cleared for a new client")
+	}
+	if node.recordUnexpectedClientExit(4) {
+		t.Errorf("the retired generation must no longer be reported")
+	}
+}
+
+func TestOperaNode_AttachClient_IgnoresSupersededGeneration(t *testing.T) {
+	node := newNodeInState(t, NodeStateSyncing)
+	node.clientGen = 3
+	handle := &docker.ExecHandle{ExecID: "stale"}
+
+	node.attachClient(2, handle)
+
+	if got := node.clientHandle(); got != nil {
+		t.Errorf("superseded handle must not be attached, got %v", got)
+	}
+}
+
+func TestOperaNode_WaitForSonicdExit(t *testing.T) {
+	t.Run("returns once the process has exited", func(t *testing.T) {
+		done := make(chan struct{})
+		close(done)
+		node := newNodeInState(t, NodeStateStopping)
+		node.sonicd = &docker.ExecHandle{Done: done}
+
+		if err := node.waitForSonicdExit(t.Context()); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	// Reporting success here would let the caller declare the node stopped
+	// while the client still holds the data directory.
+	t.Run("fails when the context ends first", func(t *testing.T) {
+		node := newNodeInState(t, NodeStateStopping)
+		node.sonicd = &docker.ExecHandle{Done: make(chan struct{})}
+
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		if err := node.waitForSonicdExit(ctx); err == nil {
+			t.Errorf("expected an error when the process has not exited")
+		}
+	})
+
+	t.Run("succeeds when no client was started", func(t *testing.T) {
+		node := newNodeInState(t, NodeStateReady)
+
+		if err := node.waitForSonicdExit(t.Context()); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+}
+
+// End-to-end for the watcher goroutine: while the client is alive the node
+// keeps its state, and the moment the process ends the node is marked as
+// killed without anyone having to ask.
+func TestOperaNode_WatchClientExit_MarksNodeKilledWhenClientDies(t *testing.T) {
+	done := make(chan struct{})
+	handle := &docker.ExecHandle{Done: done}
+
+	node := newNodeInState(t, NodeStateRunning)
+	node.clientGen = 1
+	node.sonicd = handle
+
+	watcherReturned := make(chan struct{})
+	go func() {
+		defer close(watcherReturned)
+		node.watchClientExit(1, handle)
+	}()
+
+	// The watcher is blocked on the handle, so the node stays as it was.
+	if got := node.GetState(); got != NodeStateRunning {
+		t.Fatalf("state changed while the client was alive, got %s", got)
+	}
+
+	close(done) // the client process exits
+
+	select {
+	case <-watcherReturned:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("watcher did not react to the client exiting")
+	}
+
+	if got := node.GetState(); got != NodeStateKilled {
+		t.Errorf("unexpected state, got %s, want %s", got, NodeStateKilled)
+	}
+	if !node.ClientExitWasUnexpected() {
+		t.Errorf("exit must be recorded as unexpected")
+	}
+}
+
+func TestParseClientScanCount(t *testing.T) {
+	tests := map[string]struct {
+		output  string
+		want    int
+		wantErr bool
+	}{
+		"zero matches":         {output: "matched=0\n", want: 0},
+		"several matches":      {output: "matched=3\n", want: 3},
+		"ignores prior output": {output: "noise\nmore noise\nmatched=1\n", want: 1},
+		"tolerates no newline": {output: "matched=2", want: 2},
+		"missing result":       {output: "nothing here\n", wantErr: true},
+		"empty output":         {output: "", wantErr: true},
+		"malformed count":      {output: "matched=abc\n", wantErr: true},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			got, err := parseClientScanCount(test.output)
+			if test.wantErr {
+				if err == nil {
+					t.Fatalf("expected an error for %q", test.output)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != test.want {
+				t.Errorf("unexpected count, got %d, want %d", got, test.want)
+			}
+		})
+	}
+}
+
+// The scan script must be a single valid shell command for both actions,
+// and must always report a count so the caller can tell "none running"
+// from "could not look".
+func TestClientScanScript_IsWellFormedForBothActions(t *testing.T) {
+	actions := map[string]string{
+		"count": clientScanCountAction,
+		"kill":  fmt.Sprintf(clientScanKillAction, "INT"),
+	}
+
+	for name, action := range actions {
+		t.Run(name, func(t *testing.T) {
+			script := fmt.Sprintf(clientScanScript, action)
+			if strings.Contains(script, "%!") {
+				t.Fatalf("script has unconsumed format directives: %s", script)
+			}
+			if !strings.Contains(script, sonicdBinaryPath) {
+				t.Errorf("script does not match on the client binary: %s", script)
+			}
+			if !strings.Contains(script, `echo "`+clientScanMarker+`$n"`) {
+				t.Errorf("script does not report a count: %s", script)
+			}
+		})
 	}
 }
 

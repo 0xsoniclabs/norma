@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/docker"
@@ -45,18 +47,34 @@ const (
 	passwordFilePath = dataDir + "/password.txt"
 )
 
-// killSonicdScript is a POSIX shell script template that sends the
-// given signal to every process in the container whose executable is
-// the sonicd binary. Matching on the exe symlink (rather than a
-// substring of cmdline) prevents accidental hits on sonictool or any
-// other sibling process. The trailing `true` ensures the exec exits 0
-// even when no process matches, which is a valid outcome (e.g., sonicd
-// already exited).
-const killSonicdScript = `for d in /proc/[0-9]*; do` +
+// clientScanScript is a POSIX shell script template that walks /proc and
+// runs the snippet substituted for %s against every process whose
+// executable is the client binary. Matching on the exe symlink (rather
+// than a substring of cmdline) prevents accidental hits on sonictool or
+// any other sibling process.
+//
+// The snippet increments n for each process it accounts for, and the count
+// is reported on the last line as "matched=<n>". The script always exits 0,
+// because finding no process is a legitimate outcome that the caller must
+// be able to distinguish from a failure to look.
+const clientScanScript = `n=0;` +
+	` for d in /proc/[0-9]*; do` +
 	` exe=$(readlink "$d/exe" 2>/dev/null) || continue;` +
 	` [ "$exe" = "` + sonicdBinaryPath + `" ] || continue;` +
-	` kill -%s "${d##*/}" 2>/dev/null;` +
-	` done; true`
+	` %s;` +
+	` done;` +
+	` echo "matched=$n"`
+
+// clientScanCountAction only counts matching processes.
+const clientScanCountAction = `n=$((n+1))`
+
+// clientScanKillAction signals each matching process and counts the ones
+// that were actually signalled, so the caller learns whether a client was
+// there to receive it.
+const clientScanKillAction = `kill -%s "${d##*/}" 2>/dev/null && n=$((n+1))`
+
+// clientScanMarker prefixes the line reporting how many processes matched.
+const clientScanMarker = "matched="
 
 // Initialize prepares the OperaNode for operation performing:
 //   - Create the data directory and initialize the genesis state.
@@ -176,7 +194,15 @@ func (n *OperaNode) StartSonicdAsObserver(ctx context.Context) error {
 }
 
 func (n *OperaNode) startSonicd(ctx context.Context, observer bool) error {
-	if err := n.transition(NodeStateReady, NodeStateSyncing); err != nil {
+	gen, err := n.beginClientStart()
+	if err != nil {
+		return err
+	}
+
+	// Two clients on one data directory corrupt it, so confirm none is
+	// running rather than inferring it from the state we just left.
+	if err := n.requireNoClientRunning(ctx, "start the client"); err != nil {
+		n.forceSetState(NodeStateReady)
 		return err
 	}
 
@@ -198,7 +224,12 @@ func (n *OperaNode) startSonicd(ctx context.Context, observer bool) error {
 		n.forceSetState(NodeStateReady)
 		return fmt.Errorf("failed to start sonicd: %w", err)
 	}
-	n.sonicd = handle
+	n.attachClient(gen, handle)
+
+	// Watch for the process dying on its own, so the recorded state stops
+	// claiming the node is up the moment it is not.
+	go n.watchClientExit(gen, handle)
+
 	slog.Info("Sonicd started", "node", n.config.Label, "log", handle.LogPath)
 	return nil
 }
@@ -241,12 +272,13 @@ func (n *OperaNode) WaitForSync(ctx context.Context) error {
 // clientExitError reports the failure of the client process if it has
 // already terminated, and nil while it is still running.
 func (n *OperaNode) clientExitError() error {
-	if n.sonicd == nil {
+	handle := n.clientHandle()
+	if handle == nil {
 		return fmt.Errorf("client process was not started")
 	}
 	select {
-	case <-n.sonicd.Done:
-		if err := n.sonicd.Err(); err != nil {
+	case <-handle.Done:
+		if err := handle.Err(); err != nil {
 			return fmt.Errorf("client process terminated: %w", err)
 		}
 		return fmt.Errorf("client process exited unexpectedly")
@@ -255,40 +287,114 @@ func (n *OperaNode) clientExitError() error {
 	}
 }
 
-// StopSonicd stops the OperaNode's sonicd process gracefully. It
-// requires NodeStateRunning, passes through NodeStateStopping while
-// the shutdown is in flight, and ends in NodeStateReady. If signalling
-// fails the node is returned to NodeStateRunning so the caller can retry
-// or escalate to ForceStopSonicd.
+// watchClientExit records the death of a client process that was not asked
+// to stop. Without it the recorded state would keep claiming the node is
+// syncing or running long after the client crashed, and the discrepancy
+// would only surface when some later action happened to touch it.
+//
+// gen identifies the start this watcher belongs to, so a process that dies
+// after the node has already been restarted cannot be mistaken for the
+// current one.
+func (n *OperaNode) watchClientExit(gen uint64, handle *docker.ExecHandle) {
+	<-handle.Done
+	if !n.recordUnexpectedClientExit(gen) {
+		return
+	}
+	slog.Error("client process exited unexpectedly; node marked as killed",
+		"node", n.GetLabel(),
+		"exit_code", handle.ExitCode(),
+		"error", handle.Err(),
+		"log", handle.LogPath)
+}
+
+// recordUnexpectedClientExit moves the node to NodeStateKilled if the exit
+// of client generation gen was not requested, reporting whether it did.
+//
+// An unexpected exit is treated exactly like a kill because the outcome is
+// the same: the client went away without flushing, so the data directory
+// must be assumed dirty and heal is the only way back to Ready.
+func (n *OperaNode) recordUnexpectedClientExit(gen uint64) bool {
+	n.stateMutex.Lock()
+	defer n.stateMutex.Unlock()
+
+	if n.clientGen != gen {
+		return false // superseded by a newer client process
+	}
+	// Any other state means the exit was asked for, or already accounted for.
+	if n.state != NodeStateSyncing && n.state != NodeStateRunning {
+		return false
+	}
+	n.state = NodeStateKilled
+	n.clientExitWasUnexpected = true
+	return true
+}
+
+// ClientExitWasUnexpected reports whether the node reached
+// NodeStateKilled because its client died on its own rather than because
+// it was killed deliberately.
+func (n *OperaNode) ClientExitWasUnexpected() bool {
+	n.stateMutex.Lock()
+	defer n.stateMutex.Unlock()
+	return n.clientExitWasUnexpected
+}
+
+// StopSonicd stops the OperaNode's sonicd process gracefully. It requires
+// NodeStateRunning, passes through NodeStateStopping while the shutdown is
+// in flight, and ends in NodeStateReady.
+//
+// It only reports success once the process has actually exited. If
+// signalling fails the node returns to NodeStateRunning so the caller can
+// retry; if the process does not exit in time the node stays in
+// NodeStateStopping, because it may still hold the data directory and
+// starting a second client on it has to be refused. ForceStopSonicd is
+// accepted from there to escalate.
 func (n *OperaNode) StopSonicd(ctx context.Context) error {
 	if err := n.transition(NodeStateRunning, NodeStateStopping); err != nil {
 		return err
 	}
 	slog.Info("Stopping sonicd", "node", n.config.Label)
 
-	if err := n.signalSonicd(ctx, "INT"); err != nil {
+	signalled, err := n.signalSonicd(ctx, "INT")
+	if err != nil {
 		n.forceSetState(NodeStateRunning)
 		return err
 	}
-	n.waitForSonicdExit(ctx)
+	if signalled == 0 {
+		// The node was believed to be running, so a client that is already
+		// gone did not shut down cleanly and the database is suspect.
+		n.forceSetState(NodeStateKilled)
+		return fmt.Errorf(
+			"node %q: no client process was running to stop; "+
+				"it exited on its own and the database must be healed",
+			n.GetLabel())
+	}
+
+	if err := n.waitForSonicdExit(ctx); err != nil {
+		return fmt.Errorf("node %q: %w", n.GetLabel(), err)
+	}
 	return n.transition(NodeStateStopping, NodeStateReady)
 }
 
 // ForceStopSonicd sends SIGKILL to sonicd, giving it no chance to flush
-// the database. Intended for db-heal testing. Requires NodeStateRunning
+// the database. Intended for db-heal testing. Requires NodeStateRunning,
+// or NodeStateStopping to escalate a graceful stop that did not complete,
 // and transitions to NodeStateKilled.
 func (n *OperaNode) ForceStopSonicd(ctx context.Context) error {
-	if err := n.transition(NodeStateRunning, NodeStateKilled); err != nil {
+	if err := n.transitionFromAny(NodeStateKilled,
+		NodeStateRunning, NodeStateStopping); err != nil {
 		return err
 	}
 	slog.Info("Force stopping sonicd", "node", n.config.Label)
 
-	if err := n.signalSonicd(ctx, "KILL"); err != nil {
-		// The state stays Killed: after a failed SIGKILL the process may or
-		// may not be gone, and only heal-then-restart is safe from here.
+	// The state stays Killed on every path below: once a kill has been
+	// attempted the process may or may not be gone, and only
+	// heal-then-restart is safe from here.
+	if _, err := n.signalSonicd(ctx, "KILL"); err != nil {
 		return err
 	}
-	n.waitForSonicdExit(ctx)
+	if err := n.waitForSonicdExit(ctx); err != nil {
+		return fmt.Errorf("node %q: %w", n.GetLabel(), err)
+	}
 	return nil
 }
 
@@ -300,7 +406,16 @@ func (n *OperaNode) HealSonicd(ctx context.Context) error {
 	if err := n.transition(NodeStateKilled, NodeStateHealing); err != nil {
 		return err
 	}
-	slog.Info("Healing database", "node", n.config.Label)
+	slog.Info("Healing database", "node", n.config.Label,
+		"after_unexpected_exit", n.ClientExitWasUnexpected())
+
+	// Healing a database that a live client is still writing to would
+	// corrupt it, so confirm the process is gone rather than trusting that
+	// the kill took effect.
+	if err := n.requireNoClientRunning(ctx, "heal the database"); err != nil {
+		n.forceSetState(NodeStateKilled)
+		return err
+	}
 
 	healCmd := []string{
 		sonicToolBinaryPath,
@@ -318,37 +433,92 @@ func (n *OperaNode) HealSonicd(ctx context.Context) error {
 }
 
 // signalSonicd sends the given POSIX signal (name without the "SIG"
-// prefix, e.g. "INT" or "KILL") to every sonicd process running inside
-// the container. Uses a /proc/<pid>/exe symlink lookup for precise
-// matching that ignores sibling binaries such as sonictool.
-func (n *OperaNode) signalSonicd(ctx context.Context, sig string) error {
+// prefix, e.g. "INT" or "KILL") to every sonicd process running inside the
+// container, and returns how many processes were signalled. A count of
+// zero means no client was running, which the caller has to distinguish
+// from a successful stop.
+func (n *OperaNode) signalSonicd(ctx context.Context, sig string) (int, error) {
 	if n.container == nil {
-		return fmt.Errorf("node %q has no container", n.GetLabel())
+		return 0, fmt.Errorf("node %q has no container", n.GetLabel())
 	}
-	if n.sonicd == nil {
-		return fmt.Errorf("node %q has no client process to signal", n.GetLabel())
-	}
-	script := fmt.Sprintf(killSonicdScript, sig)
-	output, err := n.container.Exec(ctx, []string{"sh", "-c", script})
+	action := fmt.Sprintf(clientScanKillAction, sig)
+	count, err := n.scanClientProcesses(ctx, action)
 	if err != nil {
+		return 0, fmt.Errorf("failed to send SIG%s to sonicd: %w", sig, err)
+	}
+	return count, nil
+}
+
+// countRunningClients reports how many client processes are alive inside
+// the container, as observed from /proc rather than from recorded state.
+func (n *OperaNode) countRunningClients(ctx context.Context) (int, error) {
+	if n.container == nil {
+		return 0, fmt.Errorf("node %q has no container", n.GetLabel())
+	}
+	return n.scanClientProcesses(ctx, clientScanCountAction)
+}
+
+// requireNoClientRunning fails unless no client process is alive in the
+// container. purpose names the operation being guarded, for the message.
+func (n *OperaNode) requireNoClientRunning(ctx context.Context, purpose string) error {
+	running, err := n.countRunningClients(ctx)
+	if err != nil {
+		return fmt.Errorf("cannot %s: %w", purpose, err)
+	}
+	if running > 0 {
 		return fmt.Errorf(
-			"failed to send SIG%s to sonicd: %w - output: %s",
-			sig, err, output,
-		)
+			"cannot %s on node %q: %d client process(es) still running",
+			purpose, n.GetLabel(), running)
 	}
 	return nil
 }
 
-// waitForSonicdExit blocks until the background sonicd exec's
-// streaming goroutine completes (which happens after the process exits
-// and the log file has been flushed) or the context is cancelled.
-func (n *OperaNode) waitForSonicdExit(ctx context.Context) {
-	if n.sonicd == nil {
-		return
+// scanClientProcesses runs the /proc scan with the given per-match action
+// and returns the reported count.
+func (n *OperaNode) scanClientProcesses(ctx context.Context, action string) (int, error) {
+	script := fmt.Sprintf(clientScanScript, action)
+	output, err := n.container.Exec(ctx, []string{"sh", "-c", script})
+	if err != nil {
+		return 0, fmt.Errorf("%w - output: %s", err, output)
+	}
+	count, err := parseClientScanCount(output)
+	if err != nil {
+		return 0, fmt.Errorf("%w - output: %s", err, output)
+	}
+	return count, nil
+}
+
+// parseClientScanCount extracts the count reported by clientScanScript.
+func parseClientScanCount(output string) (int, error) {
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, clientScanMarker) {
+			continue
+		}
+		count, err := strconv.Atoi(strings.TrimPrefix(line, clientScanMarker))
+		if err != nil {
+			return 0, fmt.Errorf("malformed process scan result %q: %w", line, err)
+		}
+		return count, nil
+	}
+	return 0, fmt.Errorf("process scan did not report a result")
+}
+
+// waitForSonicdExit blocks until the background sonicd exec's streaming
+// goroutine completes, which happens after the process exits and the log
+// file has been flushed. It fails if the context expires first, since the
+// process is then still running and the caller must not assume otherwise.
+func (n *OperaNode) waitForSonicdExit(ctx context.Context) error {
+	handle := n.clientHandle()
+	if handle == nil {
+		return nil
 	}
 	select {
-	case <-n.sonicd.Done:
+	case <-handle.Done:
+		return nil
 	case <-ctx.Done():
+		return fmt.Errorf(
+			"client process did not exit before the context ended: %w", ctx.Err())
 	}
 }
 

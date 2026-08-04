@@ -27,11 +27,25 @@ package node
 //	Syncing       --WaitForSync------> Running
 //	Running       --StopSonicd-------> Stopping     --> Ready
 //	Running       --ForceStopSonicd--> Killed
+//	Stopping      --ForceStopSonicd--> Killed
 //	Killed        --HealSonicd-------> Healing      --> Ready
 //
 // Failure returns the node to the state the action started from, except
 // for ForceStopSonicd: once a kill has been attempted the database must be
 // assumed dirty, so the node stays in Killed and heal is the only way out.
+//
+// The state records what norma is allowed to do next; it is not by itself
+// evidence about the client process. Three mechanisms keep the two from
+// drifting apart:
+//
+//   - Syncing→Running is only taken once the client has answered over RPC,
+//     so Running is never asserted without proof.
+//   - A client that exits without being asked to moves the node to Killed
+//     from a background watcher, so a crash is a transition rather than
+//     something a later action stumbles over.
+//   - Before starting a client and before healing, the container is scanned
+//     for live client processes, so those two operations do not rely on the
+//     recorded state being accurate.
 type NodeState int
 
 const (
@@ -50,10 +64,14 @@ const (
 	// NodeStateRunning means sonicd is running and synced.
 	NodeStateRunning
 	// NodeStateStopping is the transitional state entered while sonicd
-	// is being asked to shut down gracefully.
+	// is being asked to shut down gracefully. A node stays here if the
+	// shutdown does not complete, because the client may still hold the
+	// data directory; ForceStopSonicd escalates out of it.
 	NodeStateStopping
-	// NodeStateKilled means sonicd was terminated with SIGKILL and the
-	// on-disk database is likely dirty.
+	// NodeStateKilled means sonicd stopped without shutting down cleanly,
+	// either because it was killed or because it exited on its own, so the
+	// on-disk database must be assumed dirty. See
+	// OperaNode.ClientExitWasUnexpected to tell the two apart.
 	NodeStateKilled
 	// NodeStateHealing is the transitional state entered while
 	// sonictool heal is running against a killed node.
