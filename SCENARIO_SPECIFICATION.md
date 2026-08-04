@@ -19,12 +19,13 @@ Scenario files live under `scenarios/` and are consumed by the parser in
 ## 1. Top-Level Structure
 
 ```yaml
-Name: <string>              # required
-Description: <string>       # required
-InitialNetworkRules:        # optional, applied at genesis
+Name: <string>                        # required
+Description: <string>                 # required
+InitialNetworkRules:                  # optional, applied at genesis
   <NetworkRulesPatch>
-DisableEndChecks: <bool>    # optional, default false
-Scenario:                   # required, ordered list of steps
+DisableEndChecks: <bool>              # optional, default false
+DisableTransactionChecks: <bool>      # optional, default false
+Scenario:                             # required, ordered list of steps
   - <step>
   - <step>
 ```
@@ -39,10 +40,11 @@ Scenario:                   # required, ordered list of steps
 
 ### Optional fields
 
-| Field                 | Type                | Default                                                              |
-| --------------------- | ------------------- | -------------------------------------------------------------------- |
-| `InitialNetworkRules` | `NetworkRulesPatch` | See [§4](#4-network-rules-patch). `MaxEpochDuration` defaults apply. |
-| `DisableEndChecks`    | bool                | `false`                                                              |
+| Field                      | Type                | Default                                                              |
+| -------------------------- | ------------------- | -------------------------------------------------------------------- |
+| `InitialNetworkRules`      | `NetworkRulesPatch` | See [§4](#4-network-rules-patch). `MaxEpochDuration` defaults apply. |
+| `DisableEndChecks`         | bool                | `false`                                                              |
+| `DisableTransactionChecks` | bool                | `false` — see [§3.7](#37-runapp)                                     |
 
 ### End-of-scenario checks
 
@@ -59,6 +61,12 @@ following steps to every scenario:
 
 Set `DisableEndChecks: true` for scenarios that intentionally halt the network
 (e.g. stopping all validators) — otherwise the automatic checks will fail.
+
+### Transaction checks
+
+Every transaction a load generator produces is created for a specific outcome and
+is verified against it — see [§3.7](#37-runapp). The verification is on by default;
+`DisableTransactionChecks: true` turns it off for the whole scenario.
 
 ### Strict YAML parsing
 
@@ -230,17 +238,93 @@ Starts a load-generating application. The value is the application’s
 
 ```yaml
 - runApp: load
-  type: counter            # required; see supported types below
   users: 50                # optional; number of concurrent user accounts
   rate:                    # required
     constant: 20           # Tx/s
 ```
 
-**Supported application types** (case-insensitive): `counter`, `erc20`,
-`store`, `uniswap`, `smartaccount`, `subsidies`, `transient`,
-`selfdestructoldcontract`, `selfdestructnewcontract`, `ecdsa`,
-`largecontract`, `allofbundle`, `oneofbundle`, `subsidizedbundle`,
-`failingbundle`, `duplicatedbundle`, `bls12add`, `mix`.
+#### Load generators
+
+A load generator implements three operations: it **deploys** the contracts it
+needs, **calls** them to produce transactions, and **checks** that each of those
+transactions reached the outcome it was created for.
+
+By default — with no `type` given — **every** load generator is deployed and each
+transaction is drawn from one of them at random, weighted so that the cheap
+payloads dominate. One load therefore covers every kind of transaction the network
+supports rather than one kind at a time.
+
+Generators the network rules do not support are skipped: the bundle generators
+need `Brio` and `TransactionBundles`, the subsidy generators need `Allegro` and
+`GasSubsidies`, `smartaccount` and `bls12add` need `Allegro`, and `ecdsa` and
+`largecontract` need `Brio`. A generator being skipped is logged, not an error, so
+the same scenario runs against any rule set.
+
+Give a `type` to restrict the load to a single generator, which is what the
+scenarios under `scenarios/load_generators/` do to exercise one kind of load on
+its own:
+
+```yaml
+- runApp: load
+  type: counter            # optional; restricts the load to one generator
+  users: 50
+  rate:
+    constant: 20
+```
+
+**Supported types** (case-insensitive): `counter`, `erc20`, `store`, `uniswap`,
+`smartaccount`, `subsidies`, `transient`, `selfdestructoldcontract`,
+`selfdestructnewcontract`, `ecdsa`, `largecontract`, `allofbundle`, `oneofbundle`,
+`subsidizedbundle`, `failingbundle`, `duplicatedbundle`, `bls12add`.
+
+#### Transaction outcomes
+
+Each transaction is created for one of four outcomes, chosen per call from those
+the generator and the network rules allow:
+
+| Outcome         | Meaning                                                                | How it is checked                                             |
+| --------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `success`       | Included in a block and run to completion.                             | Receipt status is successful.                                  |
+| `reverted`      | Included and aborted by a `REVERT`, refunding the unused gas.           | Receipt failed and did not consume the full gas limit; the revert reason is compared where the generator names one. |
+| `failed`        | Included and aborted without revert data, consuming all its gas.       | Receipt failed and consumed the full gas limit.                |
+| `rejected`      | Refused by the network, never included in any block.                   | No receipt, and the transaction is not in the transaction pool.|
+
+Successful transactions make up the large majority of the load. The remaining
+outcomes are produced by the generator itself — a call the contract rejects, a gas
+limit that cannot cover the call, or a gas limit above what the pool accepts — and
+each one is verified, so a network that wrongly accepts, drops or executes a
+transaction fails the scenario.
+
+A generator that cannot produce a given outcome simply does not offer it. `failed`
+in particular is only offered where lowering the gas limit actually makes the call
+run out of gas: a call carrying a lot of call data is paid for by the EIP-7623 floor
+cost of that data and runs to completion however low its limit is set. Each
+generator measures this once when it is deployed rather than assuming it.
+
+The **bundle** generators are checked differently. A bundle envelope is not a
+transaction of the block it lands in — the network unwraps it and executes the
+transactions inside — so the envelope never has a receipt of its own. What is
+verified for a bundle is that the network executed the plan it carries. The one
+exception is `failingbundle`, whose steps are built to fail unpredictably: about one
+in ten of its plans is meant to be dropped, so it only verifies that the envelopes
+it produces are bundles the network can make sense of.
+
+Because the transactions inside an envelope are invisible to the transaction pool,
+a bundle generator reads their nonces from the chain and cannot produce bundles
+faster than the network executes them. The bundle scenarios under
+`scenarios/load_generators/` set their rate accordingly.
+
+The checks follow the chain block by block rather than waiting on each transaction
+individually, which costs one request per block instead of one per transaction. A
+transaction still waiting in the pool is given as much time as it needs; failures
+are reported when the application is stopped, or at the end of the scenario for an
+application that was never stopped.
+
+Set `DisableTransactionChecks: true` at the top level of the scenario to turn the
+verification off. Do that only for scenarios whose load deliberately exceeds the
+capacity of the network, where transactions are meant to be dropped. Note that the
+`auto` rate shape derives its overload signal from these checks and loses it when
+they are off.
 
 **Rate shapes** — exactly one of the following must be set on `rate`:
 
@@ -571,7 +655,10 @@ Use this list when writing or reviewing a scenario:
 - [ ] `Name` and `Description` are set and non-empty.
 - [ ] Every node/app identifier matches `^[A-Za-z0-9-.]+$`.
 - [ ] Every `startNode` step names a `type` (or is intentionally an observer).
-- [ ] Every `runApp` step specifies a valid `type` and a `rate`.
+- [ ] Every `runApp` step specifies a `rate`, and a valid `type` if it means to
+      restrict the load to a single generator.
+- [ ] `DisableTransactionChecks` is only set where the load deliberately exceeds
+      the capacity of the network, with a comment saying why.
 - [ ] `stopNode` / `stopApp` identifiers refer to previously started ones.
 - [ ] `undelegate` targets refer to running validators, and `stake` is only
       set when a partial undelegation is intended.
