@@ -118,15 +118,24 @@ func TestDeduplicateAndSort(t *testing.T) {
 	}
 }
 
+// writeNormaRootMarkers creates the files that identify dir as the Norma
+// build root.
+func writeNormaRootMarkers(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "Dockerfile"),
+		[]byte("FROM scratch\n"), 0o644); err != nil {
+		t.Fatalf("failed to write Dockerfile: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"),
+		[]byte("module github.com/0xsoniclabs/norma\n\ngo 1.26.0\n"), 0o644); err != nil {
+		t.Fatalf("failed to write go.mod: %v", err)
+	}
+}
+
 func TestResolveBuildRoot(t *testing.T) {
 	t.Run("finds root by walking parents", func(t *testing.T) {
 		root := t.TempDir()
-		if err := os.WriteFile(filepath.Join(root, "Dockerfile"), []byte("FROM scratch\n"), 0o644); err != nil {
-			t.Fatalf("failed to write Dockerfile: %v", err)
-		}
-		if err := os.WriteFile(filepath.Join(root, "Makefile"), []byte("all:\n"), 0o644); err != nil {
-			t.Fatalf("failed to write Makefile: %v", err)
-		}
+		writeNormaRootMarkers(t, root)
 
 		deep := filepath.Join(root, "a", "b", "c")
 		if err := os.MkdirAll(deep, 0o755); err != nil {
@@ -147,6 +156,38 @@ func TestResolveBuildRoot(t *testing.T) {
 		_, err := resolveBuildRoot(start)
 		if err == nil {
 			t.Fatalf("expected error, got nil")
+		}
+	})
+
+	// The vendored sonic sub-tree carries both a Dockerfile and a Makefile,
+	// so generic markers would resolve to it and build the wrong project.
+	t.Run("skips nested module with its own Dockerfile", func(t *testing.T) {
+		root := t.TempDir()
+		writeNormaRootMarkers(t, root)
+
+		nested := filepath.Join(root, "sonic")
+		if err := os.MkdirAll(nested, 0o755); err != nil {
+			t.Fatalf("failed to create nested directory: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(nested, "Dockerfile"),
+			[]byte("FROM scratch\n"), 0o644); err != nil {
+			t.Fatalf("failed to write nested Dockerfile: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(nested, "Makefile"),
+			[]byte("all:\n"), 0o644); err != nil {
+			t.Fatalf("failed to write nested Makefile: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(nested, "go.mod"),
+			[]byte("module github.com/0xsoniclabs/sonic\n"), 0o644); err != nil {
+			t.Fatalf("failed to write nested go.mod: %v", err)
+		}
+
+		got, err := resolveBuildRoot(nested)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != root {
+			t.Fatalf("resolved to nested module, got %q, want %q", got, root)
 		}
 	})
 }
