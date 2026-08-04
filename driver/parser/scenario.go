@@ -649,10 +649,9 @@ var checkParamDescriptions = map[string]string{
 	"ceiling":        "Maximum allowed value (float64) for a gas rate check.",
 	"failing":        "When true, the check is expected to fail; a passing result is treated as an error.",
 	"rules":          "Expected network rules patch (NetworkRulesPatch field structure).",
-	"start":          "Duration (e.g. \"30s\") to look back from now; older samples are ignored by the check.",
 	"tolerance":      "For a height check, the allowed deviation (int, in blocks) between nodes. For a production, halt or gas rate check, the length of the observation window expressed in monitoring samples (one per second); duration overrides it.",
 	"throttledNodes": "List of node labels expected to be throttled.",
-	"duration":       "Duration (e.g. \"30s\"), at least 2s. For a production, halt or gas rate check, how long to actively observe the network; only data collected while waiting is judged. For a height or rules check, how long the nodes are given to converge.",
+	"duration":       "Duration (e.g. \"30s\"). For a production, halt or gas rate check, how long to actively observe the network; only data collected while waiting is judged, and the window must be at least 2s. For a height or rules check, how long the nodes are given to converge, with 0 meaning a single attempt.",
 }
 
 // PrintHelp writes a formatted summary of all available scenario step

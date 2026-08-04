@@ -445,7 +445,7 @@ heads are queried, since the heads fix which events get counted.
 | ---------------- | ------------------- | ------------------------------------------------------------------------------- |
 | `ceiling`        | float               | Maximum allowed gas rate.                                                       |
 | `tolerance`      | int                 | Meaning depends on the check — see below.                                       |
-| `duration`       | duration string     | Observation window, or convergence budget — see below. Minimum **2s**.          |
+| `duration`       | duration string     | Observation window (minimum **2s**), or convergence budget — see below.         |
 | `rules`          | `NetworkRulesPatch` | Expected rule set; every field set must equal the value reported by every node. |
 | `throttledNodes` | list of strings     | Node labels expected to be throttled. Required; every label must resolve.       |
 | `failing`        | bool                | When `true` the check is **expected to fail**; a passing result is an error.    |
@@ -473,9 +473,15 @@ Two things to keep in mind:
   convergence budget for `blockHeights` and `networkRules`.
 
 Both floors are enforced when the scenario is loaded, not minutes into the run:
-a `duration` below 2s is rejected, and so is a `tolerance` below 2 on a check
-that reads it as a window. Deciding whether a height changed takes two samples,
-and a shorter window could only ever report that nothing was seen.
+on a check that reads the parameter as a window, a `duration` below 2s is
+rejected, and so is a `tolerance` below 2. Deciding whether a height changed
+takes two samples, and a shorter window could only ever report that nothing was
+seen.
+
+Neither floor applies to a `duration` used as a convergence budget. Nothing has
+to be sampled twice for `blockHeights` or `networkRules` to reach a verdict, so a
+short budget is legitimate, and `0` is meaningful: it asks for a single attempt
+with no retry.
 
 ### 5.3 Values not configurable from a scenario
 
@@ -485,7 +491,7 @@ and the cost of a check.
 | Constant                    | Value | Role                                                               |
 | --------------------------- | ----- | ------------------------------------------------------------------ |
 | Monitor sampling interval   | 1s    | Converts a `tolerance` in samples into a duration.                 |
-| Minimum observation samples | 2     | Floor behind the 2s minimum `duration`.                            |
+| Minimum observation samples | 2     | Floor behind the 2s minimum observation `duration`.                |
 | Convergence poll interval   | 500ms | How often `blockHeights` and `networkRules` re-read.               |
 | Minimum comparable block    | 2     | `blockHashes` refuses to judge a shorter chain.                    |
 | Minimum gap ratio           | 2.0   | `eventThrottled`: unthrottled must emit ≥2× the fastest throttled. |

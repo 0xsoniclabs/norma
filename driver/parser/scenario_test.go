@@ -991,6 +991,46 @@ func TestCheck_ZeroToleranceIsAcceptedForAHeightCheck(t *testing.T) {
 	}).Check())
 }
 
+func TestCheck_ShortDurationIsAcceptedAsAConvergenceBudget(t *testing.T) {
+	// For blockHeights and networkRules, duration bounds how long the nodes are
+	// given to agree, not how long the network is observed. Nothing has to
+	// collect two monitoring samples, so a short budget - or none at all,
+	// meaning a single attempt - is a legitimate choice and must not be
+	// rejected by the observation-window floor.
+	for _, function := range []StepFunction{
+		FuncCheckBlockHeights, FuncCheckNetworkRules,
+	} {
+		t.Run(string(function), func(t *testing.T) {
+			for _, duration := range []time.Duration{
+				0, time.Millisecond, MinObservationDuration - time.Millisecond,
+			} {
+				require.NoError(t, checkScenario(CheckSpec{
+					Function: function,
+					Duration: &duration,
+				}).Check(), "duration %s", duration)
+			}
+		})
+	}
+}
+
+func TestCheck_ShortDurationIsRejectedForAnObservationWindow(t *testing.T) {
+	// The counterpart to the above: where duration really is the window, it
+	// still has to be long enough to hold two samples.
+	tooShort := MinObservationDuration - time.Millisecond
+	for _, function := range []StepFunction{
+		FuncCheckBlocksProduced, FuncCheckBlocksHalted, FuncCheckBlockGasRate,
+	} {
+		t.Run(string(function), func(t *testing.T) {
+			err := checkScenario(CheckSpec{
+				Function: function,
+				Duration: &tooShort,
+			}).Check()
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "duration must be at least")
+		})
+	}
+}
+
 func TestParseBytes_UnknownCheckFunction(t *testing.T) {
 	input := `
 Name: Bad Check

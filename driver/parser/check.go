@@ -209,8 +209,12 @@ func (s *Step) checkSubChecks() error {
 		}
 
 		// Reject observation windows too short to hold two samples, here
-		// rather than minutes into the run.
-		if check.Duration != nil && *check.Duration < MinObservationDuration {
+		// rather than minutes into the run. Only the observing checks have that
+		// floor: for the height and rules checks duration is a convergence
+		// budget, and giving the nodes a short one - or none, meaning a single
+		// attempt - is a legitimate choice.
+		if observationWindowChecks[check.Function] && check.Duration != nil &&
+			*check.Duration < MinObservationDuration {
 			errs = append(errs, fmt.Errorf(
 				"sub-check %d (%s): duration must be at least %s, got %s",
 				i+1, check.Function, MinObservationDuration, *check.Duration,
