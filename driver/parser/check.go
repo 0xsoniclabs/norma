@@ -75,7 +75,34 @@ func (s *Step) Check() error {
 			if !NamePattern.Match([]byte(t.Node)) {
 				return fmt.Errorf("undelegate target %d: node name must match %v, got %v", i+1, namePatternStr, t.Node)
 			}
+			if t.Delegator != "" && !NamePattern.Match([]byte(t.Delegator)) {
+				return fmt.Errorf("undelegate target %d: delegator name must match %v, got %v", i+1, namePatternStr, t.Delegator)
+			}
 		}
+		return nil
+	case FuncDelegate:
+		if len(s.DelegateTargets) == 0 {
+			return fmt.Errorf("delegate requires at least one target")
+		}
+		for i, t := range s.DelegateTargets {
+			if t.Node == "" {
+				return fmt.Errorf("delegate target %d: missing required 'node' field", i+1)
+			}
+			if !NamePattern.Match([]byte(t.Node)) {
+				return fmt.Errorf("delegate target %d: node name must match %v, got %v", i+1, namePatternStr, t.Node)
+			}
+			if t.Delegator == "" {
+				return fmt.Errorf("delegate target %d: missing required 'delegator' field", i+1)
+			}
+			if !NamePattern.Match([]byte(t.Delegator)) {
+				return fmt.Errorf("delegate target %d: delegator name must match %v, got %v", i+1, namePatternStr, t.Delegator)
+			}
+			if t.Stake == 0 {
+				return fmt.Errorf("delegate target %d: stake must be greater than zero", i+1)
+			}
+		}
+		return nil
+	case FuncVerifyStakes:
 		return nil
 	case FuncWaitFor:
 		if s.Duration <= 0 {

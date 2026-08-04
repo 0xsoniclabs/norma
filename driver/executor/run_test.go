@@ -709,3 +709,340 @@ func TestRun_RunAndCaptureEventExecution_CapturesAllSteps(t *testing.T) {
 		}
 	}
 }
+
+func TestRun_Delegate_FundsAndDelegatesForEachTarget(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	node.EXPECT().GetLabel().Return("heavy").AnyTimes()
+	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+
+	validatorId := 2
+	// startNode → registerNewValidator + CreateNode.
+	registry.EXPECT().registerNewValidator(gomock.Any(), uint64(0)).Return(validatorId, nil)
+	net.EXPECT().CreateNode(gomock.Any()).Return(node, nil)
+	registry.EXPECT().ensureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil)
+	// execDelegate calls GetValidatorId per target to resolve the node.
+	node.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
+
+	// Expect one funding + delegate per target, in order.
+	registry.EXPECT().fundDelegator(gomock.Any(), gomock.Any(), uint64(2_000_000)+delegatorGasBudget).Return(nil)
+	registry.EXPECT().delegate(gomock.Any(), validatorId, uint64(2_000_000), gomock.Any()).Return(nil)
+
+	registry.EXPECT().fundDelegator(gomock.Any(), gomock.Any(), uint64(1_000_000)+delegatorGasBudget).Return(nil)
+	registry.EXPECT().delegate(gomock.Any(), validatorId, uint64(1_000_000), gomock.Any()).Return(nil)
+
+	scenario := parser.Scenario{
+		Name:             "Delegate",
+		Description:      "Test scenario.",
+		DisableEndChecks: true,
+		Steps: []parser.Step{
+			{
+				Function:   parser.FuncStartNode,
+				Identifier: "heavy",
+				NodeType:   "validator",
+			},
+			{
+				Function: parser.FuncDelegate,
+				DelegateTargets: []parser.DelegateTarget{
+					{Node: "heavy", Delegator: "alice", Stake: 2_000_000},
+					{Node: "heavy", Delegator: "bob", Stake: 1_000_000},
+				},
+			},
+		},
+	}
+
+	if err := run(
+		t.Context(), net, &scenario, nil, registry,
+	); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRun_UndelegateWithDelegator_UsesDelegatorKey(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	node.EXPECT().GetLabel().Return("heavy").AnyTimes()
+	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+
+	validatorId := 2
+	registry.EXPECT().registerNewValidator(gomock.Any(), uint64(0)).Return(validatorId, nil)
+	net.EXPECT().CreateNode(gomock.Any()).Return(node, nil)
+	registry.EXPECT().ensureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil)
+	node.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
+
+	// First: delegate to create alice's account.
+	registry.EXPECT().fundDelegator(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	registry.EXPECT().delegate(gomock.Any(), validatorId, uint64(1_000_000), gomock.Any()).Return(nil)
+	// Then: undelegate as alice → undelegateAs is called with her key.
+	registry.EXPECT().undelegateAs(gomock.Any(), validatorId, uint64(400_000), gomock.Any()).Return(nil)
+	// The regular self-undelegate path must NOT be called.
+
+	partial := uint64(400_000)
+	scenario := parser.Scenario{
+		Name:             "Undelegate as delegator",
+		Description:      "Test scenario.",
+		DisableEndChecks: true,
+		Steps: []parser.Step{
+			{
+				Function:   parser.FuncStartNode,
+				Identifier: "heavy",
+				NodeType:   "validator",
+			},
+			{
+				Function: parser.FuncDelegate,
+				DelegateTargets: []parser.DelegateTarget{
+					{Node: "heavy", Delegator: "alice", Stake: 1_000_000},
+				},
+			},
+			{
+				Function: parser.FuncUndelegate,
+				UndelegateTargets: []parser.UndelegateTarget{
+					{Node: "heavy", Delegator: "alice", Stake: &partial},
+				},
+			},
+		},
+	}
+
+	if err := run(
+		t.Context(), net, &scenario, nil, registry,
+	); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRun_UndelegateWithUnknownDelegator_ReturnsError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	node.EXPECT().GetLabel().Return("heavy").AnyTimes()
+	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+
+	validatorId := 2
+	registry.EXPECT().registerNewValidator(gomock.Any(), uint64(0)).Return(validatorId, nil)
+	net.EXPECT().CreateNode(gomock.Any()).Return(node, nil)
+	registry.EXPECT().ensureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil)
+	node.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
+	// No undelegate call should occur.
+
+	scenario := parser.Scenario{
+		Name:             "Unknown delegator",
+		Description:      "Test scenario.",
+		DisableEndChecks: true,
+		Steps: []parser.Step{
+			{
+				Function:   parser.FuncStartNode,
+				Identifier: "heavy",
+				NodeType:   "validator",
+			},
+			{
+				Function: parser.FuncUndelegate,
+				UndelegateTargets: []parser.UndelegateTarget{
+					{Node: "heavy", Delegator: "ghost"},
+				},
+			},
+		},
+	}
+
+	err := run(t.Context(), net, &scenario, nil, registry)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "never used") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestRun_VerifyStakes_PassesWhenAllStakesMatch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	node.EXPECT().GetLabel().Return("heavy").AnyTimes()
+	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+
+	validatorId := 2
+	registry.EXPECT().registerNewValidator(gomock.Any(), uint64(0)).Return(validatorId, nil)
+	net.EXPECT().CreateNode(gomock.Any()).Return(node, nil)
+	registry.EXPECT().ensureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil)
+	node.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
+
+	registry.EXPECT().fundDelegator(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	registry.EXPECT().delegate(gomock.Any(), validatorId, uint64(500_000), gomock.Any()).Return(nil)
+
+	// verifyStakes should query alice's stake and see the expected value.
+	registry.EXPECT().
+		getDelegatorStake(gomock.Any(), validatorId).
+		Return(uint64(500_000), nil)
+
+	scenario := parser.Scenario{
+		Name:             "Verify stakes",
+		Description:      "Test scenario.",
+		DisableEndChecks: true,
+		Steps: []parser.Step{
+			{
+				Function:   parser.FuncStartNode,
+				Identifier: "heavy",
+				NodeType:   "validator",
+			},
+			{
+				Function: parser.FuncDelegate,
+				DelegateTargets: []parser.DelegateTarget{
+					{Node: "heavy", Delegator: "alice", Stake: 500_000},
+				},
+			},
+			{Function: parser.FuncVerifyStakes},
+		},
+	}
+
+	if err := run(
+		t.Context(), net, &scenario, nil, registry,
+	); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRun_VerifyStakes_FailsOnMismatch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	node.EXPECT().GetLabel().Return("heavy").AnyTimes()
+	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+
+	validatorId := 2
+	registry.EXPECT().registerNewValidator(gomock.Any(), uint64(0)).Return(validatorId, nil)
+	net.EXPECT().CreateNode(gomock.Any()).Return(node, nil)
+	registry.EXPECT().ensureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil)
+	node.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
+
+	registry.EXPECT().fundDelegator(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	registry.EXPECT().delegate(gomock.Any(), validatorId, uint64(500_000), gomock.Any()).Return(nil)
+
+	// Chain reports a different value than expected.
+	registry.EXPECT().
+		getDelegatorStake(gomock.Any(), validatorId).
+		Return(uint64(499_000), nil)
+
+	scenario := parser.Scenario{
+		Name:             "Verify stakes mismatch",
+		Description:      "Test scenario.",
+		DisableEndChecks: true,
+		Steps: []parser.Step{
+			{
+				Function:   parser.FuncStartNode,
+				Identifier: "heavy",
+				NodeType:   "validator",
+			},
+			{
+				Function: parser.FuncDelegate,
+				DelegateTargets: []parser.DelegateTarget{
+					{Node: "heavy", Delegator: "alice", Stake: 500_000},
+				},
+			},
+			{Function: parser.FuncVerifyStakes},
+		},
+	}
+
+	err := run(t.Context(), net, &scenario, nil, registry)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "mismatch") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestGetOrCreateDelegator_IsDeterministicPerName(t *testing.T) {
+	state := &runState{
+		delegators: map[string]*delegatorAccount{},
+	}
+	a1, err := getOrCreateDelegator(state, "alice")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	a2, err := getOrCreateDelegator(state, "alice")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if a1 != a2 {
+		t.Fatalf("expected same account instance on repeated lookup, got different pointers")
+	}
+
+	bob, err := getOrCreateDelegator(state, "bob")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if a1.address == bob.address {
+		t.Fatalf("expected distinct addresses for distinct names, got same %s", a1.address.Hex())
+	}
+}
+
+func TestRun_VerifyStakes_ChecksFullyUndelegatedPairIsZero(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	node.EXPECT().GetLabel().Return("heavy").AnyTimes()
+	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+
+	validatorId := 2
+	registry.EXPECT().registerNewValidator(gomock.Any(), uint64(0)).Return(validatorId, nil)
+	net.EXPECT().CreateNode(gomock.Any()).Return(node, nil)
+	registry.EXPECT().ensureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil)
+	node.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
+
+	registry.EXPECT().fundDelegator(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	registry.EXPECT().delegate(gomock.Any(), validatorId, uint64(500_000), gomock.Any()).Return(nil)
+	registry.EXPECT().undelegateAs(gomock.Any(), validatorId, uint64(0), gomock.Any()).Return(nil)
+	// The fully undelegated pair must still be verified against the chain.
+	registry.EXPECT().getDelegatorStake(gomock.Any(), validatorId).Return(uint64(0), nil)
+
+	scenario := parser.Scenario{
+		Name:             "Verify zero stake",
+		Description:      "Test scenario.",
+		DisableEndChecks: true,
+		Steps: []parser.Step{
+			{
+				Function:   parser.FuncStartNode,
+				Identifier: "heavy",
+				NodeType:   "validator",
+			},
+			{
+				Function: parser.FuncDelegate,
+				DelegateTargets: []parser.DelegateTarget{
+					{Node: "heavy", Delegator: "alice", Stake: 500_000},
+				},
+			},
+			{
+				Function: parser.FuncUndelegate,
+				UndelegateTargets: []parser.UndelegateTarget{
+					{Node: "heavy", Delegator: "alice"},
+				},
+			},
+			{Function: parser.FuncVerifyStakes},
+		},
+	}
+
+	if err := run(
+		t.Context(), net, &scenario, nil, registry,
+	); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
