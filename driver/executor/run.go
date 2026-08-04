@@ -120,10 +120,11 @@ func runWithObserver(
 	defer cancel()
 
 	state := &runState{
-		nodes:        make(map[string]driver.Node),
-		apps:         make(map[string]driver.Application),
-		nodeHistory:  make(map[string]bool),
-		validatorIds: make(map[string]int),
+		nodes:             make(map[string]driver.Node),
+		apps:              make(map[string]driver.Application),
+		nodeHistory:       make(map[string]bool),
+		validatorIds:      make(map[string]int),
+		checkTransactions: !scenario.DisableTransactionChecks,
 	}
 	for label, id := range genesisValidatorIds {
 		state.validatorIds[label] = id
@@ -182,6 +183,10 @@ func runWithObserver(
 		}
 	}
 
+	if err := stopRemainingApps(state); err != nil {
+		return err
+	}
+
 	slog.Info("scenario completed successfully")
 	return nil
 }
@@ -204,6 +209,9 @@ type runState struct {
 	// validatorIds preserves validator IDs for nodes that were stopped,
 	// so they can be reused on rejoin.
 	validatorIds map[string]int
+	// checkTransactions tells the applications started by this scenario to verify
+	// the outcome of every transaction they produce.
+	checkTransactions bool
 }
 
 // executeStep dispatches a single step to the appropriate handler.
@@ -605,10 +613,11 @@ func execRunApp(
 	}
 
 	app, err := net.CreateApplication(ctx, &driver.ApplicationConfig{
-		Name:  step.Identifier,
-		Type:  step.AppType,
-		Rate:  step.Rate,
-		Users: users,
+		Name:              step.Identifier,
+		Type:              step.AppType,
+		Rate:              step.Rate,
+		Users:             users,
+		CheckTransactions: state.checkTransactions,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create application %s: %w", step.Identifier, err)
@@ -622,19 +631,39 @@ func execRunApp(
 	return nil
 }
 
-// execStopApp stops a running application.
+// execStopApp stops a running application and reports the outcome of the checks
+// covering the transactions it produced.
 func execStopApp(step *parser.Step, state *runState) error {
 	app, ok := state.apps[step.Identifier]
 	if !ok {
 		return fmt.Errorf("application %q not found in active apps", step.Identifier)
 	}
+	delete(state.apps, step.Identifier)
 
 	if err := app.Stop(); err != nil {
 		return fmt.Errorf("failed to stop application %s: %w", step.Identifier, err)
 	}
-
-	delete(state.apps, step.Identifier)
+	if err := app.CheckResult(); err != nil {
+		return fmt.Errorf("transaction checks of application %s failed: %w", step.Identifier, err)
+	}
 	return nil
+}
+
+// stopRemainingApps stops the applications the scenario left running and reports
+// the outcome of their transaction checks.
+func stopRemainingApps(state *runState) error {
+	errs := make([]error, 0, len(state.apps))
+	for name, app := range state.apps {
+		delete(state.apps, name)
+		if err := app.Stop(); err != nil {
+			errs = append(errs, fmt.Errorf("failed to stop application %s: %w", name, err))
+			continue
+		}
+		if err := app.CheckResult(); err != nil {
+			errs = append(errs, fmt.Errorf("transaction checks of application %s failed: %w", name, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // execUpdateRules applies network rule updates.

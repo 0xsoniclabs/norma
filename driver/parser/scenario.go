@@ -260,11 +260,18 @@ func (c *CheckSpec) parseParam(keyNode, valNode *yaml.Node) error {
 // Scenario is the root element of a scenario description.
 // Unlike the time-based Scenario, it defines an ordered list of blocking steps.
 type Scenario struct {
-	Name             string                    `yaml:"Name"`
-	Description      string                    `yaml:"Description"`
-	InitialRules     genesis.NetworkRulesPatch `yaml:"InitialNetworkRules"`
-	DisableEndChecks bool                      `yaml:"DisableEndChecks,omitempty"`
-	Steps            []Step                    `yaml:"Scenario"`
+	Name         string                    `yaml:"Name"`
+	Description  string                    `yaml:"Description"`
+	InitialRules genesis.NetworkRulesPatch `yaml:"InitialNetworkRules"`
+	// DisableEndChecks skips the checks appended after the last step of the
+	// scenario.
+	DisableEndChecks bool `yaml:"DisableEndChecks,omitempty"`
+	// DisableTransactionChecks stops the load generators from verifying that every
+	// transaction they produced reached the outcome it was created for. Checking is
+	// on by default; turn it off only for scenarios whose rate is high enough that
+	// following every transaction would distort the load.
+	DisableTransactionChecks bool   `yaml:"DisableTransactionChecks,omitempty"`
+	Steps                    []Step `yaml:"Scenario"`
 }
 
 // Step is a single blocking operation in a scenario.
@@ -464,7 +471,12 @@ var stepFunctionDescriptions = map[StepFunction]string{
 	FuncUpdateRules:  "Update one or more network rules (key/value pairs).",
 	FuncAdvanceEpoch: "Advance the network to the next epoch by sending transactions.",
 	FuncWaitForEpoch: "Wait until the network reaches the next epoch boundary.",
-	FuncRunApp:       "Start a load-generating application.",
+	FuncRunApp: `Start a load-generating application.
+    Without a type, the load is drawn from every load generator the network
+    rules support, covering successful, reverting, failing and rejected
+    transactions of every kind. Each transaction is checked against the
+    outcome it was created for unless the scenario sets
+    DisableTransactionChecks.`,
 	FuncStopApp:      "Stop a running load-generating application by name.",
 	FuncChecks:       "Run one or more checks (see 'Available checks' below).",
 	FuncWaitFor:      "Pause scenario execution for a fixed duration.",
@@ -472,7 +484,7 @@ var stepFunctionDescriptions = map[StepFunction]string{
 
 // paramDescriptions provides a human-readable description for each parameter key.
 var paramDescriptions = map[string]string{
-	"type":           "Node type (\"validator\", \"observer\", \"rpc\") for startNode; application type for runApp.",
+	"type":           "Node type (\"validator\", \"observer\", \"rpc\") for startNode. For runApp: the single load generator to use; omit it to draw the load from all of them.",
 	"imageName":      "Docker image name to use for the node.",
 	"dataVolume":     "Docker volume name to mount as the node data directory.",
 	"stake":          "Stake in S (uint64). Defaults to 5,000,000 S during node start and the full self-stake when undelegating.",

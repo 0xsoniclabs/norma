@@ -386,6 +386,7 @@ func TestRun_RunAndStopApp(t *testing.T) {
 		net.EXPECT().CreateApplication(gomock.Any(), gomock.Any()).Return(app, nil),
 		app.EXPECT().Start(gomock.Any()).Return(nil),
 		app.EXPECT().Stop().Return(nil),
+		app.EXPECT().CheckResult().Return(nil),
 	)
 
 	scenario := parser.Scenario{
