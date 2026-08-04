@@ -327,8 +327,8 @@ func (n *LocalNetwork) RemoveNode(node driver.Node) error {
 	return nil
 }
 
-func (n *LocalNetwork) SendTransaction(tx *types.Transaction, source string) {
-	n.rpcWorkerPool.SendTransaction(tx, source)
+func (n *LocalNetwork) SendTransaction(tx *types.Transaction, source string, onSent func(error)) {
+	n.rpcWorkerPool.SendTransaction(tx, source, onSent)
 }
 
 func (n *LocalNetwork) DialRandomRpc() (rpcdriver.Client, error) {
@@ -456,6 +456,10 @@ func (a *localApplication) GetReceivedTransactions() (uint64, error) {
 	return a.controller.GetReceivedTransactions()
 }
 
+func (a *localApplication) CheckResult() error {
+	return a.controller.CheckResult()
+}
+
 // ensureAppContext initializes the appContext lazily on first use.
 // It requires at least one node to be running (for RPC connectivity).
 func (n *LocalNetwork) ensureAppContext() error {
@@ -483,18 +487,19 @@ func (n *LocalNetwork) CreateApplication(ctx context.Context, config *driver.App
 	}
 	defer rpcClient.Close()
 
-	appId := n.nextAppId.Add(1)
-	application, err := app.NewApplication(config.Type, n.appContext, 0, appId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize on-chain app; %v", err)
-	}
-
 	sh, err := shaper.ParseRate(config.Rate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse shaper; %v", err)
 	}
 
-	appController, err := controller.NewAppController(application, sh, config.Users, n.appContext, n)
+	appId := n.nextAppId.Add(1)
+	generators, err := app.NewGenerators(config.Type, 0, appId)
+	if err != nil {
+		return nil, err
+	}
+
+	appController, err := controller.NewAppController(
+		generators, sh, config.Users, config.CheckTransactions, n.appContext, n)
 	if err != nil {
 		return nil, err
 	}

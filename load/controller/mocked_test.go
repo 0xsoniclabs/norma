@@ -36,28 +36,28 @@ func TestMockedTrafficGenerating(t *testing.T) {
 	var demoTx types.Transaction
 
 	numUsers := 2
-	mockUser := app.NewMockUser(mockCtrl)
 
 	mockedRpcClient := rpc.NewMockClient(mockCtrl)
-	mockedRpcClient.EXPECT().Close()
 
 	appContext := app.NewMockAppContext(mockCtrl)
 	appContext.EXPECT().GetClient().Return(mockedRpcClient).AnyTimes()
 
 	mockedNetwork := driver.NewMockNetwork(mockCtrl)
 
-	mockedApp := app.NewMockApplication(mockCtrl)
-	mockedApp.EXPECT().CreateUsers(appContext, numUsers).Return([]app.User{mockUser, mockUser}, nil)
+	mockedGenerator := app.NewMockGenerator(mockCtrl)
+	mockedGenerator.EXPECT().Deploy(appContext, numUsers).Return(nil)
 
-	// app should be called 10-times to generate 10 txs
-	mockUser.EXPECT().GenerateTx().Return(&demoTx, nil).MinTimes(5).MaxTimes(11)
+	// the generator should be called 10-times to generate 10 txs
+	mockedGenerator.EXPECT().Call(gomock.Any()).
+		Return(app.Call{Tx: &demoTx, Outcome: app.Success}, nil).MinTimes(5).MaxTimes(11)
 	// network should be called 10-times to send 10 txs
-	mockedNetwork.EXPECT().SendTransaction(&demoTx, gomock.Any()).MinTimes(5).MaxTimes(11)
+	mockedNetwork.EXPECT().SendTransaction(&demoTx, gomock.Any(), gomock.Any()).MinTimes(5).MaxTimes(11)
 
 	// use constant shaper
 	constantShaper := shaper.NewConstantShaper(100) // 100 txs/sec
 
-	appController, err := NewAppController(mockedApp, constantShaper, numUsers, appContext, mockedNetwork)
+	generators := []app.GeneratorInstance{{Name: "mock", Weight: 1, Generator: mockedGenerator}}
+	appController, err := NewAppController(generators, constantShaper, numUsers, false, appContext, mockedNetwork)
 	if err != nil {
 		t.Fatal(err)
 	}

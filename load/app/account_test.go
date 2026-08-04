@@ -10,19 +10,16 @@ import (
 )
 
 func TestAccount_CreateAccount_AccountsUniq(t *testing.T) {
-	chainId := big.NewInt(0xFA)
 	const loops = 100
 
 	ctrl := gomock.NewController(t)
 	rpcClient := rpc.NewMockClient(ctrl)
+	rpcClient.EXPECT().ChainID(gomock.Any()).AnyTimes().Return(big.NewInt(0xFA), nil)
 	rpcClient.EXPECT().PendingNonceAt(gomock.Any(), gomock.Any()).AnyTimes().Return(uint64(0), nil)
 
 	accounts := make(map[common.Address]struct{}, loops)
 	for i := 0; i < loops; i++ {
-		gen, err := NewAccountFactory(chainId, 0, uint32(i))
-		if err != nil {
-			t.Fatalf("cannot create account factory: %v", err)
-		}
+		gen := NewAccountFactory(0, uint32(i))
 
 		for j := 0; j < loops; j++ {
 			account, err := gen.CreateAccount(rpcClient)

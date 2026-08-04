@@ -40,6 +40,20 @@ func (m *MockApplication) EXPECT() *MockApplicationMockRecorder {
 	return m.recorder
 }
 
+// CheckResult mocks base method.
+func (m *MockApplication) CheckResult() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CheckResult")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CheckResult indicates an expected call of CheckResult.
+func (mr *MockApplicationMockRecorder) CheckResult() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckResult", reflect.TypeOf((*MockApplication)(nil).CheckResult))
+}
+
 // Config mocks base method.
 func (m *MockApplication) Config() *ApplicationConfig {
 	m.ctrl.T.Helper()

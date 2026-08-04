@@ -20,10 +20,12 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/norma/genesis"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
+	"github.com/0xsoniclabs/sonic/opera"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -40,6 +42,7 @@ type AppContext interface {
 	GetClient() rpc.Client
 	GetTreasure() *Account
 	GetNetworkRules() genesis.NetworkRulesPatch
+	GetRules() (opera.Rules, error)
 	GetTransactOptions(account *Account) (*bind.TransactOpts, error)
 	GetReceipt(txHash common.Hash) (*types.Receipt, error)
 	Run(operation func(*bind.TransactOpts) (*types.Transaction, error)) (*types.Receipt, error)
@@ -82,6 +85,8 @@ type appContext struct {
 	treasury     *Account         // < the account paying for management tasks
 	helper       *contract.Helper // < a contract used for on-chain operations
 	networkRules genesis.NetworkRulesPatch
+	rules        *opera.Rules // < the rules read from the chain, cached on first use
+	rulesMutex   sync.Mutex
 }
 
 func (c *appContext) Close() {
@@ -99,6 +104,22 @@ func (c *appContext) GetTreasure() *Account {
 // GetNetworkRules returns the network rules patch configured for this test run.
 func (c *appContext) GetNetworkRules() genesis.NetworkRulesPatch {
 	return c.networkRules
+}
+
+// GetRules returns the rules the network is running with, read from the chain on
+// first use and cached afterwards. Generators use them to decide which kinds of
+// transactions the network accepts.
+func (c *appContext) GetRules() (opera.Rules, error) {
+	c.rulesMutex.Lock()
+	defer c.rulesMutex.Unlock()
+	if c.rules == nil {
+		rules, err := c.rpcClient.GetNetworkRules("latest")
+		if err != nil {
+			return opera.Rules{}, fmt.Errorf("failed to read the network rules: %w", err)
+		}
+		c.rules = &rules
+	}
+	return *c.rules, nil
 }
 
 // GetTransactOptions provides transaction options to be used to send a transaction

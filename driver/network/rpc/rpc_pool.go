@@ -47,8 +47,8 @@ func NewRpcWorkerPool(ctx context.Context) *RpcWorkerPool {
 	}
 }
 
-func (p *RpcWorkerPool) SendTransaction(tx *types.Transaction, source string) {
-	p.txs <- transactionWithSource{tx: tx, source: source}
+func (p *RpcWorkerPool) SendTransaction(tx *types.Transaction, source string, onSent func(error)) {
+	p.txs <- transactionWithSource{tx: tx, source: source, onSent: onSent}
 }
 
 func (p *RpcWorkerPool) AfterNodeCreation(newNode driver.Node) {
@@ -179,7 +179,11 @@ func (p *worker) runRpcSenderLoop() error {
 		select {
 		case tx := <-p.txs:
 			err := rpcClient.SendTransaction(context.Background(), tx.tx)
-			if err != nil {
+			if tx.onSent != nil {
+				// The sender judges the refusal - it may be the very thing the
+				// transaction was created to provoke.
+				tx.onSent(err)
+			} else if err != nil {
 				slog.Warn("failed to send tx", "node", p.nodeName, "source", tx.source, "error", err)
 			}
 		case <-p.ctx.Done():
@@ -196,4 +200,7 @@ type transactionWithSource struct {
 	// source is a string describing the origin of the transaction,
 	// e.g. the load generator that created it.
 	source string
+	// onSent, if not nil, receives the result of offering the transaction to a
+	// node. Its presence means the sender reports refusals itself.
+	onSent func(error)
 }

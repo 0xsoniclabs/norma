@@ -18,76 +18,127 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
-	"reflect"
+	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
-	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/norma/load/app"
 	"github.com/0xsoniclabs/norma/load/shaper"
 )
 
-// AppController emits transactions to the testing network into a blockchain app to generate a load.
-// The Shaper passed into the driver controls the frequency of emitting transactions.
-// The Generator passed into the driver constructs the transactions.
-// The RPC Client is used to send the transactions into the network.
+// AppController produces load on a network. The Shaper it is given controls how
+// many transactions per second are emitted; the generators it is given decide what
+// those transactions are.
+//
+// Every user runs its own loop, and each of its transactions is drawn from one of
+// the generators at random, weighted by the share of the load that generator is
+// meant to produce. This way a single load covers every kind of transaction the
+// network supports rather than one kind at a time.
 type AppController struct {
-	shaper      shaper.Shaper
-	application app.Application
-	network     driver.Network
-	trigger     chan struct{}
-	users       []app.User
-	rpcClient   rpc.Client
+	shaper     shaper.Shaper
+	generators []deployedGenerator
+	network    driver.Network
+	trigger    chan struct{}
+	numUsers   int
+	sent       []atomic.Uint64
+	// checks verifies the outcome of every transaction produced. It is nil when the
+	// scenario turned transaction checks off.
+	checks *checker
+	// weights is the cumulative weight of the generators, used to draw one.
+	weights     []int
+	totalWeight int
 }
 
+type deployedGenerator struct {
+	name      string
+	generator app.Generator
+}
+
+// NewAppController installs the given generators on the network and prepares the
+// load they produce. Generators the network rules do not support are skipped.
 func NewAppController(
-	application app.Application,
+	instances []app.GeneratorInstance,
 	shaper shaper.Shaper,
 	numUsers int,
+	checkTransactions bool,
 	context app.AppContext,
 	network driver.Network,
 ) (*AppController, error) {
-	trigger := make(chan struct{}, 100)
-
 	start := time.Now()
+	slog.Info("start load initialization",
+		"generators", len(instances), "numUsers", numUsers)
 
-	// create users for this application
-	slog.Info("start app initialization",
-		"app", reflect.TypeOf(application).Elem().Name(),
-		"numUsers", numUsers)
-	users, err := application.CreateUsers(context, numUsers)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create users for app; %v", err)
+	deployed := make([]deployedGenerator, 0, len(instances))
+	weights := make([]int, 0, len(instances))
+	totalWeight := 0
+	for _, instance := range instances {
+		generatorStart := time.Now()
+		err := instance.Generator.Deploy(context, numUsers)
+		if errors.Is(err, app.ErrUnsupported) {
+			slog.Info("skipping load generator not supported by the network rules",
+				"generator", instance.Name)
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to deploy the %s load generator; %w", instance.Name, err)
+		}
+		slog.Info("deployed load generator",
+			"generator", instance.Name, "duration", time.Since(generatorStart))
+
+		deployed = append(deployed, deployedGenerator{name: instance.Name, generator: instance.Generator})
+		totalWeight += instance.Weight
+		weights = append(weights, totalWeight)
 	}
-	slog.Info("completed app initialization",
-		"app", reflect.TypeOf(application).Elem().Name(),
-		"numUsers", numUsers,
-		"duration", time.Since(start))
+	if len(deployed) == 0 {
+		return nil, fmt.Errorf("none of the load generators is supported by the network rules")
+	}
 
-	return &AppController{
+	slog.Info("completed load initialization",
+		"generators", len(deployed), "numUsers", numUsers, "duration", time.Since(start))
+
+	controller := &AppController{
 		shaper:      shaper,
-		application: application,
+		generators:  deployed,
 		network:     network,
-		trigger:     trigger,
-		users:       users,
-		rpcClient:   context.GetClient(),
-	}, nil
+		trigger:     make(chan struct{}, 100),
+		numUsers:    numUsers,
+		sent:        make([]atomic.Uint64, numUsers),
+		weights:     weights,
+		totalWeight: totalWeight,
+	}
+	if checkTransactions {
+		controller.checks = newChecker(context, network)
+	}
+	return controller, nil
 }
 
 func (ac *AppController) Run(ctx context.Context) error {
-	defer ac.rpcClient.Close()
+	var users, checks sync.WaitGroup
 
-	// start generators for each user
-	var done sync.WaitGroup
-	for _, user := range ac.users {
-		user := user
-		done.Add(1)
+	// The checks outlive the load: once the users stop producing transactions the
+	// checker still has to resolve the ones that were in flight, which is what
+	// stopping it makes it do.
+	stopChecks := func() {}
+	if ac.checks != nil {
+		checksCtx, cancel := context.WithCancel(context.Background())
+		stopChecks = cancel
+		checks.Add(1)
 		go func() {
-			defer done.Done()
-			runGeneratorLoop(user, ac.trigger, ac.network)
+			defer checks.Done()
+			ac.checks.run(checksCtx)
+		}()
+	}
+
+	for user := 0; user < ac.numUsers; user++ {
+		users.Add(1)
+		go func() {
+			defer users.Done()
+			ac.runUserLoop(user)
 		}()
 	}
 
@@ -96,7 +147,7 @@ func (ac *AppController) Run(ctx context.Context) error {
 	ac.shaper.Start(lastUpdate, ac)
 
 	for {
-		// re-plenish the number of pending messages
+		// Re-plenish the number of pending messages.
 		now := time.Now()
 		pending += ac.shaper.GetNumMessagesInInterval(lastUpdate, now.Sub(lastUpdate))
 		lastUpdate = now
@@ -111,7 +162,9 @@ func (ac *AppController) Run(ctx context.Context) error {
 			// just waiting for next time to send messages.
 		case <-ctx.Done():
 			close(ac.trigger)
-			done.Wait()
+			users.Wait()
+			stopChecks()
+			checks.Wait()
 			err := ctx.Err()
 			if err == context.DeadlineExceeded || err == context.Canceled {
 				return nil // terminated gracefully
@@ -121,50 +174,80 @@ func (ac *AppController) Run(ctx context.Context) error {
 	}
 }
 
+// runUserLoop produces one transaction per trigger, drawing the generator that
+// produces it anew every time.
+func (ac *AppController) runUserLoop(user int) {
+	for range ac.trigger {
+		generator := ac.pickGenerator()
+		call, err := generator.generator.Call(user)
+		if err != nil {
+			slog.Error("failed to generate a transaction",
+				"generator", generator.name, "error", err)
+			continue
+		}
+
+		var onSent func(error)
+		if ac.checks != nil {
+			// Registering the transaction before sending it makes sure the report of
+			// a refusal always finds it.
+			ac.checks.submit(generator.name, generator.generator, call)
+			hash := call.Tx.Hash()
+			onSent = func(err error) { ac.checks.reportSent(hash, err) }
+		}
+		ac.network.SendTransaction(call.Tx, generator.name, onSent)
+		ac.sent[user].Add(1)
+	}
+}
+
+func (ac *AppController) pickGenerator() deployedGenerator {
+	if len(ac.generators) == 1 {
+		return ac.generators[0]
+	}
+	draw := rand.Intn(ac.totalWeight)
+	for i, cumulative := range ac.weights {
+		if draw < cumulative {
+			return ac.generators[i]
+		}
+	}
+	return ac.generators[len(ac.generators)-1]
+}
+
+// CheckResult reports the failures the transaction checks found, or nil if every
+// transaction reached the outcome it was created for. It reports nil when the
+// scenario turned transaction checks off.
+func (ac *AppController) CheckResult() error {
+	if ac.checks == nil {
+		return nil
+	}
+	return ac.checks.result()
+}
+
 func (ac *AppController) GetNumberOfUsers() int {
-	return len(ac.users)
+	return ac.numUsers
 }
 
 func (ac *AppController) GetTransactionsSentBy(user int) (uint64, error) {
-	if user < 0 || user >= len(ac.users) {
+	if user < 0 || user >= ac.numUsers {
 		return 0, nil
 	}
-	return ac.users[user].GetSentTransactions(), nil
+	return ac.sent[user].Load(), nil
 }
 
 func (ac *AppController) GetSentTransactions() (uint64, error) {
 	sum := uint64(0)
-	for i := 0; i < ac.GetNumberOfUsers(); i++ {
-		cur, _ := ac.GetTransactionsSentBy(i)
-		sum += cur
+	for i := range ac.sent {
+		sum += ac.sent[i].Load()
 	}
 	return sum, nil
 }
 
+// GetReceivedTransactions reports how many of the produced transactions the network
+// has processed, counted by the transaction checks as they confirm the outcome of
+// each transaction. Without those checks the number is not observable and stays
+// zero, which leaves the auto shaper without its overload signal.
 func (ac *AppController) GetReceivedTransactions() (uint64, error) {
-	for retry := 0; ; retry++ {
-		if ac.rpcClient == nil {
-			var err error
-			ac.rpcClient, err = ac.network.DialRandomRpc()
-			if err != nil {
-				return 0, fmt.Errorf("failed to dial random RPC: %w", err)
-			}
-		}
-		// fetch transaction data from the network
-		res, err := ac.application.GetReceivedTransactions(ac.rpcClient)
-		if err == nil {
-			return res, nil
-		}
-		if retry >= 5 {
-			return 0, err
-		}
-
-		// attempt a re-connect
-		ac.rpcClient.Close()
-		ac.rpcClient, err = ac.network.DialRandomRpc()
-		if err != nil {
-			ac.rpcClient = nil
-			return 0, fmt.Errorf("failed to dial random RPC: %w", err)
-		}
+	if ac.checks == nil {
+		return 0, nil
 	}
+	return ac.checks.getConfirmedTransactions(), nil
 }

@@ -40,4 +40,9 @@ type Application interface {
 	// GetReceivedTransactions returns the number fo transactions received by the appliation
 	// on the network.
 	GetReceivedTransactions() (uint64, error)
+
+	// CheckResult reports the failures the transaction checks of this application
+	// found. It is only conclusive once the application has been stopped, and
+	// reports nil if transaction checks are turned off.
+	CheckResult() error
 }

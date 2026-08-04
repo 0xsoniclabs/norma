@@ -58,7 +58,7 @@ func TestClosePool(t *testing.T) {
 	var tx types.Transaction
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
-		pool.SendTransaction(&tx, "test")
+		pool.SendTransaction(&tx, "test", nil)
 	}
 
 	wg.Wait()

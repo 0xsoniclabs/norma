@@ -46,8 +46,7 @@ func TestLoadGeneration_CanRealizeConstantTrafficShape(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			net := driver.NewMockNetwork(ctrl)
 			rpcClient := rpc.NewMockClient(ctrl)
-			application := app.NewMockApplication(ctrl)
-			user := app.NewMockUser(ctrl)
+			generator := app.NewMockGenerator(ctrl)
 			transaction := types.Transaction{}
 
 			treasure, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
@@ -58,28 +57,19 @@ func TestLoadGeneration_CanRealizeConstantTrafficShape(t *testing.T) {
 			check := NewRateCheck(float64(rate))
 			var count atomic.Int32
 			net.EXPECT().DialRandomRpc().AnyTimes().Return(rpcClient, nil)
-			net.EXPECT().SendTransaction(gomock.Any(), gomock.Any()).AnyTimes().Do(func(any, any) {
+			net.EXPECT().SendTransaction(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Do(func(any, any, any) {
 				check.NewEvent()
 				count.Add(1)
 			})
 
 			rpcClient.EXPECT().ChainID(gomock.Any()).Return(big.NewInt(0xFA), nil).AnyTimes()
 			rpcClient.EXPECT().PendingNonceAt(gomock.Any(), gomock.Any()).AnyTimes().Return(uint64(0), nil)
-			rpcClient.EXPECT().EstimateGas(gomock.Any(), gomock.Any()).AnyTimes().Return(uint64(100), nil)
-			rpcClient.EXPECT().SendTransaction(gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
-			rpcClient.EXPECT().WaitTransactionReceipt(gomock.Any(), gomock.Any()).AnyTimes().Return(&types.Receipt{
-				Status: types.ReceiptStatusSuccessful,
-			}, nil)
+			rpcClient.EXPECT().SuggestGasPrice(gomock.Any()).AnyTimes().Return(big.NewInt(0), nil)
 			rpcClient.EXPECT().Close().AnyTimes().Return()
 
-			users := make([]app.User, 100)
-			for i := range users {
-				users[i] = user
-			}
-			application.EXPECT().CreateUsers(gomock.Any(), 100).AnyTimes().Return(users, nil)
-
-			rpcClient.EXPECT().SuggestGasPrice(gomock.Any()).AnyTimes().Return(big.NewInt(0), nil)
-			user.EXPECT().GenerateTx().AnyTimes().Return(&transaction, nil)
+			generator.EXPECT().Deploy(gomock.Any(), 100).Return(nil)
+			generator.EXPECT().Call(gomock.Any()).AnyTimes().
+				Return(app.Call{Tx: &transaction, Outcome: app.Success}, nil)
 
 			clientFactory := app.NewMockRpcClientFactory(ctrl)
 			clientFactory.EXPECT().DialRandomRpc().AnyTimes().Return(rpcClient, nil)
@@ -89,7 +79,8 @@ func TestLoadGeneration_CanRealizeConstantTrafficShape(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create app context: %v", err)
 			}
-			controller, err := controller.NewAppController(application, shaper, 100, appContext, net)
+			generators := []app.GeneratorInstance{{Name: "mock", Weight: 1, Generator: generator}}
+			controller, err := controller.NewAppController(generators, shaper, 100, false, appContext, net)
 			if err != nil {
 				t.Fatalf("failed to create app controller: %v", err)
 			}

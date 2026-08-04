@@ -137,11 +137,9 @@ func (s *Step) checkRunApp() error {
 		errs = append(errs, fmt.Errorf("app name must match %v, got %v", namePatternStr, s.Identifier))
 	}
 
-	appType := s.AppType
-	if appType == "" {
-		errs = append(errs, fmt.Errorf("run app requires a type"))
-	} else if !app.IsSupportedApplicationType(appType) {
-		errs = append(errs, fmt.Errorf("unknown application type: %v", appType))
+	// An omitted type produces the full mix of every kind of load.
+	if !app.IsSupportedLoadType(s.AppType) {
+		errs = append(errs, fmt.Errorf("unknown application type: %v", s.AppType))
 	}
 
 	if s.Rate == nil {

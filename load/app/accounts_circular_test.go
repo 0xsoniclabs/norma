@@ -12,12 +12,10 @@ import (
 func TestAccountsCircularPool(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	rpcClient := rpc.NewMockClient(ctrl)
+	rpcClient.EXPECT().ChainID(gomock.Any()).Return(big.NewInt(123), nil).AnyTimes()
 	rpcClient.EXPECT().PendingNonceAt(gomock.Any(), gomock.Any()).Return(uint64(0), nil).AnyTimes()
 
-	accountFactory, err := NewAccountFactory(big.NewInt(123), 45, 67)
-	if err != nil {
-		t.Fatal(err)
-	}
+	accountFactory := NewAccountFactory(45, 67)
 	circularPool, err := NewAccountsCircularPool(accountFactory, rpcClient, 5)
 	if err != nil {
 		t.Fatal(err)

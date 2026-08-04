@@ -15,6 +15,7 @@ import (
 
 	rpc "github.com/0xsoniclabs/norma/driver/rpc"
 	genesis "github.com/0xsoniclabs/norma/genesis"
+	opera "github.com/0xsoniclabs/sonic/opera"
 	bind "github.com/ethereum/go-ethereum/accounts/abi/bind"
 	common "github.com/ethereum/go-ethereum/common"
 	types "github.com/ethereum/go-ethereum/core/types"
@@ -112,6 +113,21 @@ func (m *MockAppContext) GetReceipt(txHash common.Hash) (*types.Receipt, error) 
 func (mr *MockAppContextMockRecorder) GetReceipt(txHash any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReceipt", reflect.TypeOf((*MockAppContext)(nil).GetReceipt), txHash)
+}
+
+// GetRules mocks base method.
+func (m *MockAppContext) GetRules() (opera.Rules, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRules")
+	ret0, _ := ret[0].(opera.Rules)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRules indicates an expected call of GetRules.
+func (mr *MockAppContextMockRecorder) GetRules() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRules", reflect.TypeOf((*MockAppContext)(nil).GetRules))
 }
 
 // GetTransactOptions mocks base method.

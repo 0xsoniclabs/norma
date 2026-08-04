@@ -95,7 +95,10 @@ type Network interface {
 
 	// SendTransaction sends a transaction to the network.
 	// The source parameter is used for logging and debugging purposes.
-	SendTransaction(tx *types.Transaction, source string)
+	// onSent, if not nil, is called with the result of offering the transaction to
+	// a node: nil once a node accepted it, or the reason the node refused it. A
+	// caller passing it takes over reporting the refusal.
+	SendTransaction(tx *types.Transaction, source string, onSent func(error))
 
 	// Create a connection to a random node on the network. May fail if there
 	// is no node on the network with a ErrorEmptyNetwork error.
@@ -168,8 +171,9 @@ type ApplicationConfig struct {
 	// Users defines the number of users sending transactions to the app.
 	Users int
 
-	// TODO: add other parameters as needed
-	//  - application type
+	// CheckTransactions requests the app to verify that every transaction it
+	// produced reached the outcome it was created for.
+	CheckTransactions bool
 }
 
 // Validator is a configuration for a group of network start-up validators.
