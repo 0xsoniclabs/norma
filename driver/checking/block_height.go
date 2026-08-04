@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
@@ -33,16 +34,34 @@ import (
 // slack of 5 means that block 95-99 is also accepted when max block height = 100
 const defaultSlack = 5
 
+// defaultHeightConvergenceTimeout bounds how long the check waits for the nodes
+// to agree on a block height. Nodes seal an epoch at slightly different
+// instants, and a node that just rejoined needs a moment to catch up, so a
+// disagreement right after a transition is not yet a failure.
+const defaultHeightConvergenceTimeout = 30 * time.Second
+
+// heightPollInterval is the delay between convergence polls.
+const heightPollInterval = 500 * time.Millisecond
+
 func init() {
 	RegisterNetworkCheck("blockHeight", func(net driver.Network, monitor *monitoring.Monitor) Checker {
-		return &blockHeightChecker{net: net, slack: defaultSlack}
+		return &blockHeightChecker{
+			net:     net,
+			slack:   defaultSlack,
+			timeout: defaultHeightConvergenceTimeout,
+		}
 	})
 }
 
-// blockHeightChecker is a Checker checking if all Opera nodes achieved the same block height.
+// blockHeightChecker is a Checker checking if all Opera nodes achieved the same
+// block height. It polls forward in time until they agree, so that a
+// disagreement observed while the network is still settling after a step does
+// not fail the check; only a disagreement that persists does.
 type blockHeightChecker struct {
 	net   driver.Network
 	slack int
+	// timeout bounds convergence polling. Zero means a single attempt.
+	timeout time.Duration
 }
 
 // Configure returns a deep copy of the original checker.
@@ -59,10 +78,43 @@ func (c *blockHeightChecker) Configure(config CheckerConfig) Checker {
 		slack = val.(int)
 	}
 
-	return &blockHeightChecker{net: c.net, slack: slack}
+	timeout := c.timeout
+	if val, exist := config["duration"]; exist {
+		timeout = time.Duration(val.(int64))
+	}
+
+	return &blockHeightChecker{
+		net:     c.net,
+		slack:   slack,
+		timeout: timeout,
+	}
 }
 
 func (c *blockHeightChecker) Check(ctx context.Context) error {
+	if c.timeout <= 0 {
+		return c.checkOnce(ctx)
+	}
+
+	deadline := time.Now().Add(c.timeout)
+	for {
+		err := c.checkOnce(ctx)
+		if err == nil {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf(
+				"nodes did not agree on a block height within %s: %w",
+				c.timeout, err,
+			)
+		}
+		slog.Info("block heights not settled yet, retrying", "reason", err)
+		if err := sleep(ctx, heightPollInterval); err != nil {
+			return err
+		}
+	}
+}
+
+func (c *blockHeightChecker) checkOnce(ctx context.Context) error {
 	nodes := c.net.GetActiveNodes()
 	slog.Info("checking block heights for nodes", "count", len(nodes))
 

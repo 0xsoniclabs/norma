@@ -20,6 +20,7 @@ import (
 	"context"
 	"math/big"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -265,7 +266,7 @@ func TestEventThrottledChecker_Passes_WhenExplicitThrottledNodeMatches(t *testin
 	checker := newEventThrottledChecker(net)
 	checker.throttledNodes = []string{"throttled"}
 	checker.collectRates = func(
-		context.Context, rpc.Client, time.Duration, time.Duration,
+		context.Context, rpc.Client,
 	) (map[uint64]float64, error) {
 		return map[uint64]float64{1: 10.0, 2: 1.0}, nil
 	}
@@ -297,7 +298,7 @@ func TestEventThrottledChecker_Fails_WhenListedNodeIsUnthrottled(t *testing.T) {
 	checker := newEventThrottledChecker(net)
 	checker.throttledNodes = []string{"also-dominant"}
 	checker.collectRates = func(
-		context.Context, rpc.Client, time.Duration, time.Duration,
+		context.Context, rpc.Client,
 	) (map[uint64]float64, error) {
 		return map[uint64]float64{1: 10.0, 2: 10.0}, nil
 	}
@@ -307,163 +308,167 @@ func TestEventThrottledChecker_Fails_WhenListedNodeIsUnthrottled(t *testing.T) {
 }
 
 func TestCollectEmissionRates_ReturnsDeltaRates_WhenEpochStable(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	rpcClient := rpc.NewMockClient(ctrl)
+	synctest.Test(t, func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		rpcClient := rpc.NewMockClient(ctrl)
 
-	// Two snapshots, both in epoch 1.
-	// Snapshot 1: 6 events (5 by v1, 1 by v2).
-	// Snapshot 2: 18 events (15 by v1, 3 by v2).
-	// Delta: creator 1 => 10 events, creator 2 => 2 events.
-	s1Heads, s1Events := buildIndependentHeads(
-		[]uint64{1, 1, 1, 1, 1, 2},
-	)
-	// Snapshot 2: 18 events (15 by v1, 3 by v2), continuing.
-	s2Creators := make([]uint64, 0, 18)
-	for range 15 {
-		s2Creators = append(s2Creators, 1)
-	}
-	for range 3 {
-		s2Creators = append(s2Creators, 2)
-	}
-	s2Heads, s2Events := buildIndependentHeads(s2Creators)
+		// Two snapshots, both in epoch 1.
+		// Snapshot 1: 6 events (5 by v1, 1 by v2).
+		// Snapshot 2: 18 events (15 by v1, 3 by v2).
+		// Delta: creator 1 => 10 events, creator 2 => 2 events.
+		s1Heads, s1Events := buildIndependentHeads(
+			[]uint64{1, 1, 1, 1, 1, 2},
+		)
+		// Snapshot 2: 18 events (15 by v1, 3 by v2), continuing.
+		s2Creators := make([]uint64, 0, 18)
+		for range 15 {
+			s2Creators = append(s2Creators, 1)
+		}
+		for range 3 {
+			s2Creators = append(s2Creators, 2)
+		}
+		s2Heads, s2Events := buildIndependentHeads(s2Creators)
 
-	// Expect first snapshot RPC sequence.
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "eth_currentEpoch").
-		SetArg(0, hexutil.Uint64(1))
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getHeads", "0x1").
-		SetArg(0, s1Heads)
-	for h, ev := range s1Events {
+		// Expect first snapshot RPC sequence.
 		rpcClient.EXPECT().
-			Call(gomock.Any(), "dag_getEvent", h).
-			SetArg(0, ev)
-	}
-	// Expect second snapshot RPC sequence.
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "eth_currentEpoch").
-		SetArg(0, hexutil.Uint64(1))
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getHeads", "0x1").
-		SetArg(0, s2Heads)
-	for h, ev := range s2Events {
+			Call(gomock.Any(), "eth_currentEpoch").
+			SetArg(0, hexutil.Uint64(1))
 		rpcClient.EXPECT().
-			Call(gomock.Any(), "dag_getEvent", h).
-			SetArg(0, ev)
-	}
+			Call(gomock.Any(), "dag_getHeads", "0x1").
+			SetArg(0, s1Heads)
+		for h, ev := range s1Events {
+			rpcClient.EXPECT().
+				Call(gomock.Any(), "dag_getEvent", h).
+				SetArg(0, ev)
+		}
+		// Expect second snapshot RPC sequence.
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "eth_currentEpoch").
+			SetArg(0, hexutil.Uint64(1))
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "dag_getHeads", "0x1").
+			SetArg(0, s2Heads)
+		for h, ev := range s2Events {
+			rpcClient.EXPECT().
+				Call(gomock.Any(), "dag_getEvent", h).
+				SetArg(0, ev)
+		}
 
-	window := 100 * time.Millisecond
-	rates, err := collectEmissionRates(t.Context(), rpcClient, window, 0)
-	require.NoError(t, err)
-	// Delta creator 1: 15 - 5 = 10 events over 0.1s => 100/s.
-	// Delta creator 2: 3 - 1 = 2 events over 0.1s => 20/s.
-	require.InDelta(t, 100.0, rates[1], 0.01)
-	require.InDelta(t, 20.0, rates[2], 0.01)
+		checker := sampler(100 * time.Millisecond)
+		rates, err := checker.collectEmissionRates(t.Context(), rpcClient)
+		require.NoError(t, err)
+		// Delta creator 1: 15 - 5 = 10 events over 0.1s => 100/s.
+		// Delta creator 2: 3 - 1 = 2 events over 0.1s => 20/s.
+		require.InDelta(t, 100.0, rates[1], 0.01)
+		require.InDelta(t, 20.0, rates[2], 0.01)
+	})
 }
 
 func TestSampleEmissionRates_ReturnsError_WhenEpochChanges(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	rpcClient := rpc.NewMockClient(ctrl)
+	synctest.Test(t, func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		rpcClient := rpc.NewMockClient(ctrl)
 
-	s1Heads, s1Events := buildIndependentHeads([]uint64{1, 2})
-	s2Heads, s2Events := buildIndependentHeads([]uint64{1, 2})
+		s1Heads, s1Events := buildIndependentHeads([]uint64{1, 2})
+		s2Heads, s2Events := buildIndependentHeads([]uint64{1, 2})
 
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "eth_currentEpoch").
-		SetArg(0, hexutil.Uint64(1))
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getHeads", "0x1").
-		SetArg(0, s1Heads)
-	for h, ev := range s1Events {
 		rpcClient.EXPECT().
-			Call(gomock.Any(), "dag_getEvent", h).
-			SetArg(0, ev)
-	}
-	// Second snapshot advertises a different epoch.
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "eth_currentEpoch").
-		SetArg(0, hexutil.Uint64(2))
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getHeads", "0x2").
-		SetArg(0, s2Heads)
-	for h, ev := range s2Events {
+			Call(gomock.Any(), "eth_currentEpoch").
+			SetArg(0, hexutil.Uint64(1))
 		rpcClient.EXPECT().
-			Call(gomock.Any(), "dag_getEvent", h).
-			SetArg(0, ev)
-	}
+			Call(gomock.Any(), "dag_getHeads", "0x1").
+			SetArg(0, s1Heads)
+		for h, ev := range s1Events {
+			rpcClient.EXPECT().
+				Call(gomock.Any(), "dag_getEvent", h).
+				SetArg(0, ev)
+		}
+		// Second snapshot advertises a different epoch.
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "eth_currentEpoch").
+			SetArg(0, hexutil.Uint64(2))
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "dag_getHeads", "0x2").
+			SetArg(0, s2Heads)
+		for h, ev := range s2Events {
+			rpcClient.EXPECT().
+				Call(gomock.Any(), "dag_getEvent", h).
+				SetArg(0, ev)
+		}
 
-	_, err := sampleEmissionRates(
-		t.Context(), rpcClient, 50*time.Millisecond,
-	)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "epoch changed during sampling window")
+		_, err := sampler(50*time.Millisecond).
+			sampleEmissionRates(t.Context(), rpcClient)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "epoch changed during sampling window")
+	})
 }
 
 // TestCollectEmissionRates_Retries_OnEpochChange verifies that the
 // top-level rate collector transparently retries when the first sample
 // straddles an epoch boundary and eventually succeeds.
 func TestCollectEmissionRates_Retries_OnEpochChange(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	rpcClient := rpc.NewMockClient(ctrl)
+	synctest.Test(t, func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		rpcClient := rpc.NewMockClient(ctrl)
 
-	// --- Attempt 1: epoch 1 -> epoch 2, discarded.
-	a1s1Heads, a1s1Events := buildIndependentHeads([]uint64{1})
-	a1s2Heads, a1s2Events := buildIndependentHeads([]uint64{1})
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "eth_currentEpoch").
-		SetArg(0, hexutil.Uint64(1))
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getHeads", "0x1").
-		SetArg(0, a1s1Heads)
-	for h, ev := range a1s1Events {
+		// --- Attempt 1: epoch 1 -> epoch 2, discarded.
+		a1s1Heads, a1s1Events := buildIndependentHeads([]uint64{1})
+		a1s2Heads, a1s2Events := buildIndependentHeads([]uint64{1})
 		rpcClient.EXPECT().
-			Call(gomock.Any(), "dag_getEvent", h).
-			SetArg(0, ev)
-	}
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "eth_currentEpoch").
-		SetArg(0, hexutil.Uint64(2))
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getHeads", "0x2").
-		SetArg(0, a1s2Heads)
-	for h, ev := range a1s2Events {
+			Call(gomock.Any(), "eth_currentEpoch").
+			SetArg(0, hexutil.Uint64(1))
 		rpcClient.EXPECT().
-			Call(gomock.Any(), "dag_getEvent", h).
-			SetArg(0, ev)
-	}
+			Call(gomock.Any(), "dag_getHeads", "0x1").
+			SetArg(0, a1s1Heads)
+		for h, ev := range a1s1Events {
+			rpcClient.EXPECT().
+				Call(gomock.Any(), "dag_getEvent", h).
+				SetArg(0, ev)
+		}
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "eth_currentEpoch").
+			SetArg(0, hexutil.Uint64(2))
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "dag_getHeads", "0x2").
+			SetArg(0, a1s2Heads)
+		for h, ev := range a1s2Events {
+			rpcClient.EXPECT().
+				Call(gomock.Any(), "dag_getEvent", h).
+				SetArg(0, ev)
+		}
 
-	// --- Attempt 2: stable in epoch 2, succeeds.
-	a2s1Heads, a2s1Events := buildIndependentHeads([]uint64{1})
-	a2s2Heads, a2s2Events := buildIndependentHeads([]uint64{1, 1})
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "eth_currentEpoch").
-		SetArg(0, hexutil.Uint64(2))
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getHeads", "0x2").
-		SetArg(0, a2s1Heads)
-	for h, ev := range a2s1Events {
+		// --- Attempt 2: stable in epoch 2, succeeds.
+		a2s1Heads, a2s1Events := buildIndependentHeads([]uint64{1})
+		a2s2Heads, a2s2Events := buildIndependentHeads([]uint64{1, 1})
 		rpcClient.EXPECT().
-			Call(gomock.Any(), "dag_getEvent", h).
-			SetArg(0, ev)
-	}
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "eth_currentEpoch").
-		SetArg(0, hexutil.Uint64(2))
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getHeads", "0x2").
-		SetArg(0, a2s2Heads)
-	for h, ev := range a2s2Events {
+			Call(gomock.Any(), "eth_currentEpoch").
+			SetArg(0, hexutil.Uint64(2))
 		rpcClient.EXPECT().
-			Call(gomock.Any(), "dag_getEvent", h).
-			SetArg(0, ev)
-	}
+			Call(gomock.Any(), "dag_getHeads", "0x2").
+			SetArg(0, a2s1Heads)
+		for h, ev := range a2s1Events {
+			rpcClient.EXPECT().
+				Call(gomock.Any(), "dag_getEvent", h).
+				SetArg(0, ev)
+		}
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "eth_currentEpoch").
+			SetArg(0, hexutil.Uint64(2))
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "dag_getHeads", "0x2").
+			SetArg(0, a2s2Heads)
+		for h, ev := range a2s2Events {
+			rpcClient.EXPECT().
+				Call(gomock.Any(), "dag_getEvent", h).
+				SetArg(0, ev)
+		}
 
-	rates, err := collectEmissionRates(
-		t.Context(), rpcClient, 100*time.Millisecond, 0,
-	)
-	require.NoError(t, err)
-	// Delta for creator 1: 2 - 1 = 1 event over 0.1s => 10/s.
-	require.InDelta(t, 10.0, rates[1], 0.01)
+		rates, err := sampler(100*time.Millisecond).
+			collectEmissionRates(t.Context(), rpcClient)
+		require.NoError(t, err)
+		// Delta for creator 1: 2 - 1 = 1 event over 0.1s => 10/s.
+		require.InDelta(t, 10.0, rates[1], 0.01)
+	})
 }
 
 // TestCollectEmissionRates_Retries_WhenEpochHasNoHeadsYet reproduces the
@@ -472,49 +477,50 @@ func TestCollectEmissionRates_Retries_OnEpochChange(t *testing.T) {
 // does not wait out the sampling window, the retry must not be consumed
 // instantly — the collector retries and succeeds once heads appear.
 func TestCollectEmissionRates_Retries_WhenEpochHasNoHeadsYet(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	rpcClient := rpc.NewMockClient(ctrl)
+	synctest.Test(t, func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		rpcClient := rpc.NewMockClient(ctrl)
 
-	// --- Attempt 1: epoch 1 has rolled over but exposes no heads yet.
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "eth_currentEpoch").
-		SetArg(0, hexutil.Uint64(1))
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getHeads", "0x1").
-		SetArg(0, []string{})
-
-	// --- Attempt 2: same epoch, now populated, succeeds.
-	a2s1Heads, a2s1Events := buildIndependentHeads([]uint64{1})
-	a2s2Heads, a2s2Events := buildIndependentHeads([]uint64{1, 1})
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "eth_currentEpoch").
-		SetArg(0, hexutil.Uint64(1))
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getHeads", "0x1").
-		SetArg(0, a2s1Heads)
-	for h, ev := range a2s1Events {
+		// --- Attempt 1: epoch 1 has rolled over but exposes no heads yet.
 		rpcClient.EXPECT().
-			Call(gomock.Any(), "dag_getEvent", h).
-			SetArg(0, ev)
-	}
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "eth_currentEpoch").
-		SetArg(0, hexutil.Uint64(1))
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getHeads", "0x1").
-		SetArg(0, a2s2Heads)
-	for h, ev := range a2s2Events {
+			Call(gomock.Any(), "eth_currentEpoch").
+			SetArg(0, hexutil.Uint64(1))
 		rpcClient.EXPECT().
-			Call(gomock.Any(), "dag_getEvent", h).
-			SetArg(0, ev)
-	}
+			Call(gomock.Any(), "dag_getHeads", "0x1").
+			SetArg(0, []string{})
 
-	rates, err := collectEmissionRates(
-		t.Context(), rpcClient, 100*time.Millisecond, 0,
-	)
-	require.NoError(t, err)
-	// Delta for creator 1: 2 - 1 = 1 event over 0.1s => 10/s.
-	require.InDelta(t, 10.0, rates[1], 0.01)
+		// --- Attempt 2: same epoch, now populated, succeeds.
+		a2s1Heads, a2s1Events := buildIndependentHeads([]uint64{1})
+		a2s2Heads, a2s2Events := buildIndependentHeads([]uint64{1, 1})
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "eth_currentEpoch").
+			SetArg(0, hexutil.Uint64(1))
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "dag_getHeads", "0x1").
+			SetArg(0, a2s1Heads)
+		for h, ev := range a2s1Events {
+			rpcClient.EXPECT().
+				Call(gomock.Any(), "dag_getEvent", h).
+				SetArg(0, ev)
+		}
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "eth_currentEpoch").
+			SetArg(0, hexutil.Uint64(1))
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "dag_getHeads", "0x1").
+			SetArg(0, a2s2Heads)
+		for h, ev := range a2s2Events {
+			rpcClient.EXPECT().
+				Call(gomock.Any(), "dag_getEvent", h).
+				SetArg(0, ev)
+		}
+
+		rates, err := sampler(100*time.Millisecond).
+			collectEmissionRates(t.Context(), rpcClient)
+		require.NoError(t, err)
+		// Delta for creator 1: 2 - 1 = 1 event over 0.1s => 10/s.
+		require.InDelta(t, 10.0, rates[1], 0.01)
+	})
 }
 
 // TestCollectEmissionRates_StopsRetrying_WhenContextCancelled verifies that
@@ -522,25 +528,92 @@ func TestCollectEmissionRates_Retries_WhenEpochHasNoHeadsYet(t *testing.T) {
 // start another sampling attempt, rather than burning through the remaining
 // attempts. A large backoff makes any missed cancellation observable.
 func TestCollectEmissionRates_StopsRetrying_WhenContextCancelled(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	rpcClient := rpc.NewMockClient(ctrl)
+	synctest.Test(t, func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		rpcClient := rpc.NewMockClient(ctrl)
 
-	ctx, cancel := context.WithCancel(t.Context())
+		ctx, cancel := context.WithCancel(t.Context())
 
-	// First snapshot fails (no heads) and cancels the context. No second
-	// snapshot must be attempted; unexpected extra calls fail the mock.
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "eth_currentEpoch").
-		SetArg(0, hexutil.Uint64(1))
-	rpcClient.EXPECT().
-		Call(gomock.Any(), "dag_getHeads", "0x1").
-		DoAndReturn(func(any, string, ...any) error {
-			cancel()
+		// First snapshot fails (no heads) and cancels the context. No second
+		// snapshot must be attempted; unexpected extra calls fail the mock.
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "eth_currentEpoch").
+			SetArg(0, hexutil.Uint64(1))
+		rpcClient.EXPECT().
+			Call(gomock.Any(), "dag_getHeads", "0x1").
+			DoAndReturn(func(any, string, ...any) error {
+				cancel()
+				return nil
+			})
+
+		// A large backoff makes a missed cancellation observable: the collector
+		// would sit out an hour of the bubble's clock before returning.
+		start := time.Now()
+		checker := &eventThrottledChecker{
+			sampleWindow: time.Second,
+			retryBackoff: time.Hour,
+		}
+		_, err := checker.collectEmissionRates(ctx, rpcClient)
+		require.ErrorIs(t, err, context.Canceled)
+		require.Zero(t, time.Since(start), "waited after cancellation")
+	})
+}
+
+// sampler returns a checker that measures emission rates over the given
+// nominal window. Its callers run in a synctest bubble, whose fake clock makes
+// waiting one out free.
+func sampler(window time.Duration) *eventThrottledChecker {
+	return &eventThrottledChecker{sampleWindow: window}
+}
+
+// TestSampleEmissionRates_UsesTheMeasuredInterval checks that rates are
+// computed from the interval actually spent between the two snapshots. Walking
+// the DAG costs one RPC per event and the DAG grows with the epoch, so the
+// snapshots routinely end up further apart than the requested window. Dividing
+// by the requested window instead overstates every rate, the more so the
+// busier the network.
+func TestSampleEmissionRates_UsesTheMeasuredInterval(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		rpcClient := rpc.NewMockClient(ctrl)
+
+		checker := sampler(100 * time.Millisecond)
+
+		s1Heads, s1Events := buildIndependentHeads([]uint64{1})
+		s2Heads, s2Events := buildIndependentHeads([]uint64{1, 1})
+
+		rpcClient.EXPECT().Call(gomock.Any(), "eth_currentEpoch").
+			SetArg(0, hexutil.Uint64(1)).Times(2)
+		gomock.InOrder(
+			rpcClient.EXPECT().Call(gomock.Any(), "dag_getHeads", "0x1").
+				SetArg(0, s1Heads),
+			rpcClient.EXPECT().Call(gomock.Any(), "dag_getHeads", "0x1").
+				SetArg(0, s2Heads),
+		)
+
+		// Each event fetched costs 100ms, so the first snapshot's walk alone takes
+		// as long as the whole requested window.
+		events := map[string]*rawEvent{}
+		for h, ev := range s1Events {
+			events[h] = ev
+		}
+		for h, ev := range s2Events {
+			events[h] = ev
+		}
+		rpcClient.EXPECT().Call(gomock.Any(), "dag_getEvent", gomock.Any()).
+			AnyTimes().DoAndReturn(func(result any, _ string, args ...any) error {
+			time.Sleep(100 * time.Millisecond)
+			*(result.(**rawEvent)) = events[args[0].(string)]
 			return nil
 		})
 
-	_, err := collectEmissionRates(ctx, rpcClient, time.Second, time.Hour)
-	require.ErrorIs(t, err, context.Canceled)
+		rates, err := checker.sampleEmissionRates(t.Context(), rpcClient)
+		require.NoError(t, err)
+
+		// One new event by creator 1, over the 100ms window plus the 100ms the
+		// first walk took: 5/s, not the 10/s the nominal window would suggest.
+		require.InDelta(t, 5.0, rates[1], 0.01)
+	})
 }
 
 // buildIndependentHeads constructs a set of disconnected head events,

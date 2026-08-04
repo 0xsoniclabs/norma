@@ -19,7 +19,9 @@ package checking
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
+	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
@@ -31,16 +33,27 @@ func init() {
 	RegisterNetworkCheck("blockGasRate",
 		func(net driver.Network, monitor *monitoring.Monitor) Checker {
 			return &blockGasRateChecker{
-				monitor: &monitoringDataAdapter{monitor},
-				ceiling: defaultCeiling,
+				monitor:          &monitoringDataAdapter{monitor},
+				ceiling:          defaultCeiling,
+				toleranceSamples: defaultToleranceSamples,
 			}
 		})
 }
 
-// blockGasRateChecker is a Checker checking if each block has gas below the ceiling
+// blockGasRateChecker is a Checker verifying that blocks stay below a gas rate
+// ceiling. It observes the network forward in time: it notes the current chain
+// head, waits for an observation window, and only inspects the blocks produced
+// while it waited. Blocks from before the check are not re-examined, so a gas
+// rate spike caused by an earlier transition - a rules update, or a restarted
+// node catching up - cannot fail a check placed after a later step, nor every
+// check for the rest of the scenario.
 type blockGasRateChecker struct {
-	monitor MonitoringData
-	ceiling float64
+	monitor          MonitoringData
+	ceiling          float64
+	toleranceSamples int
+	// duration overrides the observation window; when 0 it is derived from
+	// toleranceSamples.
+	duration time.Duration
 }
 
 // Configure returns a deep copy of the original checker.
@@ -57,21 +70,61 @@ func (c *blockGasRateChecker) Configure(config CheckerConfig) Checker {
 		ceiling = float64(val.(int))
 	}
 
-	return &blockGasRateChecker{monitor: c.monitor, ceiling: ceiling}
-}
-
-// Check retrieve current BlockGasRate and see that each block has gas rate below ceiling.
-func (c *blockGasRateChecker) Check(ctx context.Context) error {
-	series := c.monitor.GetBlockGasRate()
-	last := series.GetLatest()
-	if last == nil {
-		return nil // no blocks
+	tolerance := c.toleranceSamples
+	if val, exist := config["tolerance"]; exist {
+		tolerance = val.(int)
 	}
 
-	items := series.GetRange(0, last.Position+1)
-	for _, point := range items {
+	duration := c.duration
+	if val, exist := config["duration"]; exist {
+		duration = time.Duration(val.(int64))
+	}
+
+	return &blockGasRateChecker{
+		monitor:          c.monitor,
+		ceiling:          ceiling,
+		toleranceSamples: tolerance,
+		duration:         duration,
+	}
+}
+
+// Check observes the network for the observation window and verifies that every
+// block produced during it stayed at or below the gas rate ceiling.
+func (c *blockGasRateChecker) Check(ctx context.Context) error {
+	window, err := observationWindow(c.duration, c.toleranceSamples)
+	if err != nil {
+		return err
+	}
+
+	series := c.monitor.GetBlockGasRate()
+
+	// The first block of interest is the one after the current head.
+	firstBlock := monitoring.BlockNumber(0)
+	if head := series.GetLatest(); head != nil {
+		firstBlock = head.Position + 1
+	}
+
+	if err := sleep(ctx, window); err != nil {
+		return err
+	}
+
+	head := series.GetLatest()
+	if head == nil || head.Position < firstBlock {
+		slog.Warn(
+			"blockGasRate: no block was produced during the observation "+
+				"window; there was no gas rate to check",
+			"window", window,
+			"from_block", firstBlock,
+		)
+		return nil
+	}
+
+	for _, point := range series.GetRange(firstBlock, head.Position+1) {
 		if point.Value > c.ceiling {
-			return fmt.Errorf("exceeded gas ceiling; Block %d has gas rate of %f > %f", point.Position, point.Value, c.ceiling)
+			return fmt.Errorf(
+				"exceeded gas ceiling; Block %d has gas rate of %f > %f",
+				point.Position, point.Value, c.ceiling,
+			)
 		}
 	}
 

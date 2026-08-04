@@ -620,10 +620,10 @@ func (s *Scenario) setDefaults() {
 
 // checkFunctionDescriptions provides a human-readable description for each sub-check function.
 var checkFunctionDescriptions = map[StepFunction]string{
-	FuncCheckBlockGasRate:   "Assert that the block gas rate is at or below a ceiling.",
+	FuncCheckBlockGasRate:   "Assert that every block produced during the observation window has a gas rate at or below a ceiling.",
 	FuncCheckBlockHashes:    "Assert that all nodes agree on the same block hashes.",
-	FuncCheckBlockHeights:   "Assert that all nodes are within tolerance of the same block height.",
-	FuncCheckBlocksHalted:   "Assert that block production has halted.",
+	FuncCheckBlockHeights:   "Assert that all nodes are within tolerance of the same block height, waiting up to duration for them to agree.",
+	FuncCheckBlocksHalted:   "Assert that block production has halted, by observing the network for the given duration.",
 	FuncCheckBlocksProduced: "Assert that all nodes have produced blocks within tolerance.",
 	FuncCheckEventThrottled: "Assert that validators listed in throttledNodes emit events at a significantly lower rate than the rest.",
 	FuncCheckNetworkRules:   "Assert that the active network rules on all nodes match the expected rules patch.",
@@ -633,13 +633,13 @@ var checkFunctionDescriptions = map[StepFunction]string{
 
 // checkFunctionParams lists the optional parameters accepted by each sub-check function.
 var checkFunctionParams = map[StepFunction][]string{
-	FuncCheckBlockGasRate:   {"ceiling", "failing"},
+	FuncCheckBlockGasRate:   {"ceiling", "tolerance", "duration", "failing"},
 	FuncCheckBlockHashes:    {"failing"},
-	FuncCheckBlockHeights:   {"tolerance", "failing"},
-	FuncCheckBlocksHalted:   {"failing"},
+	FuncCheckBlockHeights:   {"tolerance", "duration", "failing"},
+	FuncCheckBlocksHalted:   {"tolerance", "duration", "failing"},
 	FuncCheckBlocksProduced: {"tolerance", "duration", "failing"},
 	FuncCheckEventThrottled: {"throttledNodes", "failing"},
-	FuncCheckNetworkRules:   {"rules", "failing"},
+	FuncCheckNetworkRules:   {"rules", "duration", "failing"},
 
 	FuncCheckValidatorsActive: {"failing"},
 }
@@ -649,10 +649,9 @@ var checkParamDescriptions = map[string]string{
 	"ceiling":        "Maximum allowed value (float64) for a gas rate check.",
 	"failing":        "When true, the check is expected to fail; a passing result is treated as an error.",
 	"rules":          "Expected network rules patch (NetworkRulesPatch field structure).",
-	"start":          "Duration (e.g. \"30s\") to look back from now; older samples are ignored by the check.",
-	"tolerance":      "Allowed deviation (int, in blocks) between nodes for a height/production check.",
+	"tolerance":      "For a height check, the allowed deviation (int, in blocks) between nodes. For a production, halt or gas rate check, the length of the observation window expressed in monitoring samples (one per second); duration overrides it.",
 	"throttledNodes": "List of node labels expected to be throttled.",
-	"duration":       "Duration (e.g. \"30s\") to actively observe the network; the check waits this long and then verifies block progress during the observation window.",
+	"duration":       "Duration (e.g. \"30s\"). For a production, halt or gas rate check, how long to actively observe the network; only data collected while waiting is judged, and the window must be at least 2s. For a height or rules check, how long the nodes are given to converge, with 0 meaning a single attempt.",
 }
 
 // PrintHelp writes a formatted summary of all available scenario step

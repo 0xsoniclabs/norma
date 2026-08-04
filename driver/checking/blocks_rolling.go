@@ -11,19 +11,25 @@ import (
 
 const defaultToleranceSamples int = 10
 
-// blockSampleInterval converts a tolerance expressed in samples into an
-// observation duration. Var so tests can shorten it.
-var blockSampleInterval = time.Second
+// blockSampleInterval is the interval at which the monitor samples the block
+// height of each node. It converts an observation window expressed in samples
+// into a duration.
+const blockSampleInterval = time.Second
 
 func init() {
 	RegisterNetworkCheck("blocksRolling", func(net driver.Network, monitor *monitoring.Monitor) Checker {
-		return &blocksRollingChecker{monitor: &monitoringDataAdapter{monitor}, toleranceSamples: defaultToleranceSamples}
+		return &blocksRollingChecker{
+			monitor:          &monitoringDataAdapter{monitor},
+			toleranceSamples: defaultToleranceSamples,
+		}
 	})
 }
 
 // blocksRollingChecker verifies the network is still producing blocks by
-// observing for a window and requiring at least one node to advance its
-// block height during it.
+// observing it forward in time for an observation window and requiring at
+// least one node to advance its block height while it waits. Progress recorded
+// before the check started is ignored, so a network that was alive but halted
+// during a transition cannot pass on its own history.
 type blocksRollingChecker struct {
 	monitor          MonitoringData
 	toleranceSamples int
@@ -59,24 +65,16 @@ func (c *blocksRollingChecker) Configure(config CheckerConfig) Checker {
 }
 
 func (c *blocksRollingChecker) Check(ctx context.Context) error {
-	if c.toleranceSamples <= 0 {
-		return fmt.Errorf("tolerance must be > 0, got %d", c.toleranceSamples)
-	}
-
-	window := c.duration
-	if window <= 0 {
-		window = time.Duration(c.toleranceSamples) * blockSampleInterval
+	window, err := observationWindow(c.duration, c.toleranceSamples)
+	if err != nil {
+		return err
 	}
 
 	// Observing forward in time distinguishes a live network from one halted
 	// at check time and ignores history recorded before the check.
-	observationStart := monitoring.Time(time.Now().UnixNano())
-	timer := time.NewTimer(window)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
+	observationStart := monitoring.NewTime(time.Now())
+	if err := sleep(ctx, window); err != nil {
+		return err
 	}
 
 	for _, node := range c.monitor.GetNodes() {
@@ -89,10 +87,13 @@ func (c *blocksRollingChecker) Check(ctx context.Context) error {
 		if len(items) == 0 {
 			continue
 		}
-		if items[0].Value.BlockHeight < last.Value.BlockHeight {
+		if items[0].Value.BlockHeight < items[len(items)-1].Value.BlockHeight {
 			return nil
 		}
 	}
 
-	return fmt.Errorf("network is down, nodes stopped producing blocks")
+	return fmt.Errorf(
+		"network is down, no node produced a block during the %s "+
+			"observation window", window,
+	)
 }

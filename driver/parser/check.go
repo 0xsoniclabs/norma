@@ -180,6 +180,15 @@ func (s *Step) checkUpdateRules() error {
 	return errors.Join(errs...)
 }
 
+// observationWindowChecks are the checks that observe the network forward in
+// time, and whose tolerance is therefore the length of that window in
+// monitoring samples rather than a deviation in blocks.
+var observationWindowChecks = map[StepFunction]bool{
+	FuncCheckBlockGasRate:   true,
+	FuncCheckBlocksHalted:   true,
+	FuncCheckBlocksProduced: true,
+}
+
 func (s *Step) checkSubChecks() error {
 	if len(s.SubChecks) == 0 {
 		return fmt.Errorf("checks step requires at least one sub-check")
@@ -197,6 +206,30 @@ func (s *Step) checkSubChecks() error {
 			if err := genesis.ValidateNetworkRulesPatch(check.Rules); err != nil {
 				errs = append(errs, fmt.Errorf("sub-check %d (%s): invalid rules: %w", i+1, check.Function, err))
 			}
+		}
+
+		// Reject observation windows too short to hold two samples, here
+		// rather than minutes into the run. Only the observing checks have that
+		// floor: for the height and rules checks duration is a convergence
+		// budget, and giving the nodes a short one - or none, meaning a single
+		// attempt - is a legitimate choice.
+		if observationWindowChecks[check.Function] && check.Duration != nil &&
+			*check.Duration < MinObservationDuration {
+			errs = append(errs, fmt.Errorf(
+				"sub-check %d (%s): duration must be at least %s, got %s",
+				i+1, check.Function, MinObservationDuration, *check.Duration,
+			))
+		}
+
+		// The same window can be expressed in samples via tolerance, which is
+		// what most scenarios use. A duration, when given, overrides it.
+		if observationWindowChecks[check.Function] && check.Duration == nil &&
+			check.Tolerance != nil && *check.Tolerance < MinObservationSamples {
+			errs = append(errs, fmt.Errorf(
+				"sub-check %d (%s): tolerance is an observation window in "+
+					"monitoring samples and must be at least %d, got %d",
+				i+1, check.Function, MinObservationSamples, *check.Tolerance,
+			))
 		}
 	}
 
