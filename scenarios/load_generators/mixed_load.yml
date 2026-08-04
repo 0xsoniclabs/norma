@@ -1,0 +1,33 @@
+Name: Mixed Load Test
+Description: >-
+  Runs the default load against a small validator set. With no type given, every
+  load generator the network rules support is deployed and each transaction is
+  drawn from one of them, so the run covers successful, reverting, failing and
+  rejected transactions of every supported kind. Every transaction is checked
+  against the outcome it was created for.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: true
+    GasSubsidies: true
+    TransactionBundles: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+    instances: 3
+
+  - runApp: load
+    users: 10
+    rate:
+      # The mix contains state-heavy payloads - a store fill costs about 6.5M gas
+      # and a large contract deployment about 12M - so the rate is kept low and the
+      # window long instead, which covers every generator without the state-heavy
+      # ones dominating the blocks.
+      constant: 1
+
+  - waitFor: 120s
+
+  - stopApp: load

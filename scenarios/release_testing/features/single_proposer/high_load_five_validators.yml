@@ -5,6 +5,10 @@ Description: >-
   with multiple validators. Block production remains consistent and
   no hash divergence occurs under stress.
 
+# Transaction checks are off: the load is high enough that following every
+# transaction would compete with the load itself for throughput.
+DisableTransactionChecks: true
+
 InitialNetworkRules:
   Upgrades:
     Sonic: true

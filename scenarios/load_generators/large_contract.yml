@@ -16,7 +16,10 @@ Scenario:
     type: largecontract
     users: 10
     rate:
-      constant: 10
+      # Each transaction deploys ~48 KiB of bytecode for about 12M gas, so a block
+      # holds barely more than one of them. A higher rate would only pile up in the
+      # transaction pool.
+      constant: 1
 
   - waitFor: 30s
 

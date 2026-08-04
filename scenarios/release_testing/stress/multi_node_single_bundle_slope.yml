@@ -5,6 +5,11 @@ Description: >-
   sloping load. The network remains live while throughput pressure
   increases.
 
+# Transaction checks are off: the sloping load deliberately drives the network
+# past its capacity, so transactions are expected to be dropped once the
+# transaction pool saturates.
+DisableTransactionChecks: true
+
 InitialNetworkRules:
   Upgrades:
     Sonic: true

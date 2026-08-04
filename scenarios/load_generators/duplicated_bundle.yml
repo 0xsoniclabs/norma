@@ -18,7 +18,10 @@ Scenario:
     type: duplicatedbundle
     users: 10
     rate:
-      constant: 10
+      # A bundle reads the nonces of its inner transactions from the chain, and a
+      # pool does not report the nonces inside an envelope as taken. Producing
+      # bundles faster than they are executed would make their plans unexecutable.
+      constant: 2
 
   - waitFor: 30s
 

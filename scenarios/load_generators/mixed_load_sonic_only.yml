@@ -1,0 +1,24 @@
+Name: Mixed Load Test On Sonic Rules
+Description: >-
+  Runs the default load on a network with only the Sonic upgrades enabled. The
+  generators requiring a later upgrade - the bundles, the subsidies, the smart
+  accounts and the precompiles introduced after Sonic - report themselves as
+  unsupported and are skipped, so this scenario covers that a mixed load adapts to
+  the rules of the network it runs against instead of failing on them.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+
+  - runApp: load
+    users: 10
+    rate:
+      constant: 1
+
+  - waitFor: 120s
+
+  - stopApp: load
