@@ -79,8 +79,11 @@ const clientScanMarker = "matched="
 // Initialize prepares the OperaNode for operation performing:
 //   - Create the data directory and initialize the genesis state.
 //   - Write the password file for validator keystore decryption.
-//   - Write the config file with emitter intervals.
 //   - Configure network latency simulation via tc netem.
+//
+// The client configuration is not written here but before each client
+// start, because its content depends on the state of the network at that
+// moment.
 //
 // Requires the node to be in NodeStateUninitialized and transitions
 // it to NodeStateReady. On failure the node is returned to
@@ -127,24 +130,13 @@ func (n *OperaNode) Initialize(ctx context.Context) (err error) {
 		return fmt.Errorf("failed to write password file: %w", err)
 	}
 
-	numValidators := n.config.NetworkConfig.Validators.GetNumValidators()
-	dsProtection := "5000000000"
-	if numValidators == 1 && n.config.ValidatorId != nil && *n.config.ValidatorId == 1 {
-		dsProtection = "0"
-	}
-	configToml := fmt.Sprintf(
-		"[Emitter.EmitIntervals]\nDoublesignProtection = %s\n", dsProtection)
-	if err := n.writeContainerFile(ctx, configFilePath, configToml); err != nil {
-		return fmt.Errorf("failed to write %s: %w", configFilePath, err)
-	}
-
 	// Network latency simulation via tc netem.
 	latency := n.config.NetworkConfig.RoundTripTime / 2
 	if latency > 0 {
 		tcCmd := fmt.Sprintf(
-			"tc qdisc add dev eth0 root netem delay %v"+
+			"tc qdisc replace dev eth0 root netem delay %v"+
 				" && (ip link show eth1 2>/dev/null"+
-				" && tc qdisc add dev eth1 root netem delay %v || true)",
+				" && tc qdisc replace dev eth1 root netem delay %v || true)",
 			latency, latency)
 		cmd := []string{"sh", "-c", tcCmd}
 		if _, err := n.container.ExecWithOptions(ctx, cmd,
@@ -178,6 +170,43 @@ func (n *OperaNode) writeContainerFile(
 	return nil
 }
 
+// doublesignProtection is the emitter's doublesign protection window used
+// for every client start that is not bootstrapping a network on its own.
+const doublesignProtection = 5 * time.Second
+
+// clientConfigToml renders the client configuration for a client start, where
+// bootstrap reports whether that start brings up a brand-new network.
+//
+// A lone genesis validator bootstrapping a network must emit without
+// protection: it has no peer to sync with, and the protection heuristic
+// refuses to emit while there are no connections, so no block would ever be
+// produced. Every other start keeps the protection, including that same
+// validator rejoining a network that is already running, where emitting
+// before its own earlier events have been replayed forks the validator
+// against itself and stops it for good.
+func clientConfigToml(config *OperaNodeConfig, bootstrap bool) string {
+	protection := doublesignProtection
+	if bootstrap && isLoneGenesisValidator(config) {
+		protection = 0
+	}
+	return fmt.Sprintf("[Emitter.EmitIntervals]\nDoublesignProtection = %d\n",
+		protection.Nanoseconds())
+}
+
+// isLoneGenesisValidator reports whether the configured node is the only
+// validator its network was created with.
+func isLoneGenesisValidator(config *OperaNodeConfig) bool {
+	return config.NetworkConfig.Validators.GetNumValidators() == 1 &&
+		config.ValidatorId != nil && *config.ValidatorId == 1
+}
+
+// bootstrapsNetwork reports whether the client start being prepared brings up
+// a brand-new network. Only the first client of the bootstrapping node does;
+// every later start of it rejoins a network that has been running since.
+func (n *OperaNode) bootstrapsNetwork() bool {
+	return n.config.NetworkBootstrap && n.clientHandle() == nil
+}
+
 // StartSonicd starts the OperaNode's sonicd process in the background.
 // It requires the node to be in NodeStateReady and transitions it to
 // NodeStateSyncing. Returns an error if sonicd fails to start.
@@ -204,6 +233,12 @@ func (n *OperaNode) startSonicd(ctx context.Context, observer bool) error {
 	if err := n.requireNoClientRunning(ctx, "start the client"); err != nil {
 		n.forceSetState(NodeStateReady)
 		return err
+	}
+
+	configToml := clientConfigToml(n.config, n.bootstrapsNetwork())
+	if err := n.writeContainerFile(ctx, configFilePath, configToml); err != nil {
+		n.forceSetState(NodeStateReady)
+		return fmt.Errorf("failed to write %s: %w", configFilePath, err)
 	}
 
 	validatorId := n.config.ValidatorId

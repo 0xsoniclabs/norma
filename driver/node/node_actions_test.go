@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
 )
 
@@ -399,6 +400,91 @@ func TestOperaNode_ExecDone_IsClosedWithoutClientProcess(t *testing.T) {
 	case <-node.ExecDone():
 	default:
 		t.Fatalf("ExecDone must be closed when no client process exists")
+	}
+}
+
+// Doublesign protection may only be dropped for a lone genesis validator
+// bringing up a brand-new network. Dropping it when rejoining a running
+// network lets the validator emit before it has replayed its own history,
+// which forks it against itself.
+func TestClientConfigToml_DropsDoublesignProtectionOnlyWhenBootstrappingAlone(t *testing.T) {
+	validatorOne, validatorTwo := 1, 2
+	tests := map[string]struct {
+		numValidators int
+		validatorId   *int
+		bootstrap     bool
+		wantDropped   bool
+	}{
+		"lone genesis validator bootstrapping": {
+			numValidators: 1, validatorId: &validatorOne,
+			bootstrap: true, wantDropped: true,
+		},
+		"lone genesis validator rejoining": {
+			numValidators: 1, validatorId: &validatorOne,
+			bootstrap: false, wantDropped: false,
+		},
+		"one of many validators bootstrapping": {
+			numValidators: 4, validatorId: &validatorOne,
+			bootstrap: true, wantDropped: false,
+		},
+		"other validator in a single-validator genesis": {
+			numValidators: 1, validatorId: &validatorTwo,
+			bootstrap: true, wantDropped: false,
+		},
+		"observer bootstrapping": {
+			numValidators: 1, validatorId: nil,
+			bootstrap: true, wantDropped: false,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			config := &OperaNodeConfig{
+				ValidatorId: test.validatorId,
+				NetworkConfig: &driver.NetworkConfig{
+					Validators: driver.NewDefaultValidators(test.numValidators),
+				},
+			}
+
+			got := clientConfigToml(config, test.bootstrap)
+
+			want := fmt.Sprintf("DoublesignProtection = %d\n",
+				doublesignProtection.Nanoseconds())
+			if test.wantDropped {
+				want = "DoublesignProtection = 0\n"
+			}
+			if !strings.HasSuffix(got, want) {
+				t.Errorf("unexpected config %q, want it to end in %q", got, want)
+			}
+			if !strings.HasPrefix(got, "[Emitter.EmitIntervals]\n") {
+				t.Errorf("config %q does not declare the emitter section", got)
+			}
+		})
+	}
+}
+
+// The bootstrap exception applies to the first client of the bootstrapping
+// node only: once it has run, any later start rejoins a running network.
+func TestOperaNode_BootstrapsNetwork_OnlyUntilTheFirstClientRan(t *testing.T) {
+	node := newNodeInState(t, NodeStateReady)
+	node.config.NetworkBootstrap = true
+
+	if !node.bootstrapsNetwork() {
+		t.Errorf("the first client of a bootstrapping node starts the network")
+	}
+
+	node.attachClient(node.clientGen, &docker.ExecHandle{})
+
+	if node.bootstrapsNetwork() {
+		t.Errorf("a restart must not be mistaken for bootstrapping the network")
+	}
+}
+
+func TestOperaNode_BootstrapsNetwork_FalseForNodesJoiningARunningNetwork(t *testing.T) {
+	node := newNodeInState(t, NodeStateReady)
+
+	if node.bootstrapsNetwork() {
+		t.Errorf("a node created after bootstrap must not claim to bootstrap")
 	}
 }
 
