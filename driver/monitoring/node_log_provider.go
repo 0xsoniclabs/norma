@@ -39,11 +39,9 @@ type LogListener interface {
 }
 
 // NodeRestartListener is an optional interface a LogListener may implement
-// to learn that a node rejoined the network after its client process was
-// restarted. Such a node replays blocks it has already reported, which is
-// indistinguishable from a genuine inconsistency without this signal.
+// to be told when a node's client goes offline and when a known node comes
+// back online; a returning client replays blocks it has already reported.
 type NodeRestartListener interface {
-	// OnNodeRestart is triggered when a known node comes back online.
 	OnNodeRestart(node Node)
 }
 
@@ -70,10 +68,14 @@ type NodeLogDispatcher struct {
 	logDir  string
 	wg      sync.WaitGroup
 
-	// knownNodes records the nodes seen so far, so that a second
-	// AfterNodeCreation for the same node can be recognised as a restart.
-	knownNodes     map[Node]bool
-	knownNodesLock sync.Mutex
+	nodes     map[Node]*nodeLogState
+	nodesLock sync.Mutex
+}
+
+// nodeLogState records which node object's log stream is being consumed;
+// source is nil while none is.
+type nodeLogState struct {
+	source driver.Node
 }
 
 // NewNodeLogDispatcher creates a new instance of this registry, which is filled
@@ -86,10 +88,10 @@ func NewNodeLogDispatcher(network driver.Network, outputDir string) (*NodeLogDis
 	}
 
 	res := &NodeLogDispatcher{
-		network:    network,
-		listeners:  make(map[LogListener]bool, 50),
-		logDir:     logDir,
-		knownNodes: make(map[Node]bool, 50),
+		network:   network,
+		listeners: make(map[LogListener]bool, 50),
+		logDir:    logDir,
+		nodes:     make(map[Node]*nodeLogState, 50),
 	}
 
 	// listen for new Nodes
@@ -123,36 +125,50 @@ func (n *NodeLogDispatcher) UnregisterLogListener(listener LogListener) {
 }
 
 func (n *NodeLogDispatcher) AfterNodeCreation(node driver.Node) {
-	nodeId := node.GetLabel()
+	nodeId := Node(node.GetLabel())
 
-	// A node we have seen before is rejoining rather than joining, which
-	// listeners need to know to interpret its replayed blocks.
-	n.knownNodesLock.Lock()
-	restarted := n.knownNodes[Node(nodeId)]
-	n.knownNodes[Node(nodeId)] = true
-	n.knownNodesLock.Unlock()
-	if restarted {
-		n.notifyNodeRestart(Node(nodeId))
+	n.nodesLock.Lock()
+	state, known := n.nodes[nodeId]
+	if !known {
+		state = &nodeLogState{}
+		n.nodes[nodeId] = state
+	}
+	consuming := state.source == node
+	n.nodesLock.Unlock()
+
+	if known {
+		n.notifyNodeRestart(nodeId)
 	}
 
-	n.wg.Add(1)
+	// The stream of a client restarted in place stays open and keeps
+	// delivering the new client's blocks; a second reader would report
+	// every block twice.
+	if consuming {
+		return
+	}
 
-	// Start a goroutine collecting the log and writing it into a file.
-	go n.runLogCollector(node)
-
-	// Start a goroutine parsing the log and dispatching block information.
 	logStream, err := node.StreamLog(context.Background())
 	if err != nil {
 		slog.Error(
 			"failed to obtain logs of node, will not be able to track blocks",
 			"error", err)
-		return // do not start dispatch on error
+		return
 	}
+	n.nodesLock.Lock()
+	state.source = node
+	n.nodesLock.Unlock()
+
 	n.wg.Add(1)
-	n.startDispatcher(Node(nodeId), logStream)
+	go n.runLogCollector(node)
+
+	n.wg.Add(1)
+	n.startDispatcher(nodeId, node, logStream, state)
 }
 
-func (n *NodeLogDispatcher) BeforeNodeRemoval(_ driver.Node) {
+// BeforeNodeRemoval prepares listeners for replayed blocks before the
+// stopped client comes back and starts speaking.
+func (n *NodeLogDispatcher) BeforeNodeRemoval(node driver.Node) {
+	n.notifyNodeRestart(Node(node.GetLabel()))
 }
 
 // notifyNodeRestart informs every listener that opted into restart
@@ -171,9 +187,16 @@ func (n *NodeLogDispatcher) AfterApplicationCreation(driver.Application) {
 	// ignored
 }
 
-func (n *NodeLogDispatcher) startDispatcher(node Node, reader io.ReadCloser) {
+func (n *NodeLogDispatcher) startDispatcher(nodeId Node, source driver.Node, reader io.ReadCloser, state *nodeLogState) {
 	go func() {
 		defer n.wg.Done()
+		defer func() {
+			n.nodesLock.Lock()
+			if state.source == source {
+				state.source = nil
+			}
+			n.nodesLock.Unlock()
+		}()
 		defer func() {
 			_ = reader.Close()
 		}()
@@ -181,7 +204,7 @@ func (n *NodeLogDispatcher) startDispatcher(node Node, reader io.ReadCloser) {
 		for b := range ch {
 			n.listenersLock.Lock()
 			for k := range n.listeners {
-				k.OnBlock(node, b)
+				k.OnBlock(nodeId, b)
 			}
 			n.listenersLock.Unlock()
 		}
