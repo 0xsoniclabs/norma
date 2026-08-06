@@ -99,8 +99,7 @@ type imageBuildPlan struct {
 // scenario execution. It performs the following steps:
 //
 //  1. Normalize and deduplicate image references.
-//  2. Resolve the Norma build root (must contain Dockerfile and
-//     scripts/run_sonic.sh).
+//  2. Resolve the Norma build root (see ResolveBuildRoot).
 //  3. For each image:
 //     - choose build or pull strategy via planImage;
 //     - build (Sonic-specific refs) or pull (all other refs).
@@ -283,24 +282,23 @@ func deduplicateAndSort(in []string) []string {
 }
 
 // resolveBuildRoot finds the Norma repository root to execute docker builds.
-//
-// Starting from startDir, it walks up parent directories until it finds a
-// directory containing both:
-//   - Dockerfile
-//   - scripts/run_sonic.sh
-//
-// This guards against running docker build in unrelated directories while
-// keeping call sites simple.
+// See ResolveBuildRoot.
 func resolveBuildRoot(startDir string) (string, error) {
 	return ResolveBuildRoot(startDir)
 }
+
+// normaModulePath is the Go module path of this repository. It is the only
+// marker that uniquely identifies the Norma root: generic markers such as
+// Dockerfile or Makefile are also present in the vendored `sonic/`
+// sub-tree, so matching on those would happily build the wrong project.
+const normaModulePath = "module github.com/0xsoniclabs/norma"
 
 // ResolveBuildRoot finds the Norma repository root to execute docker builds.
 //
 // Starting from startDir, it walks up parent directories until it finds a
 // directory containing both:
 //   - Dockerfile
-//   - scripts/run_sonic.sh
+//   - go.mod declaring the Norma module
 //
 // This guards against running docker build in unrelated directories while
 // keeping call sites simple.
@@ -311,9 +309,8 @@ func ResolveBuildRoot(startDir string) (string, error) {
 	}
 
 	for {
-		dockerfile := filepath.Join(dir, "Dockerfile")
-		script := filepath.Join(dir, "scripts", "run_sonic.sh")
-		if fileExists(dockerfile) && fileExists(script) {
+		if fileExists(filepath.Join(dir, "Dockerfile")) &&
+			isNormaModuleDir(dir) {
 			return dir, nil
 		}
 
@@ -324,7 +321,23 @@ func ResolveBuildRoot(startDir string) (string, error) {
 		dir = parent
 	}
 
-	return "", errors.New("unable to locate norma build root with Dockerfile and scripts/run_sonic.sh")
+	return "", errors.New(
+		"unable to locate norma build root with Dockerfile and go.mod for " +
+			"module github.com/0xsoniclabs/norma")
+}
+
+// isNormaModuleDir reports whether dir holds the go.mod of the Norma module.
+func isNormaModuleDir(dir string) bool {
+	content, err := os.ReadFile(filepath.Join(dir, "go.mod")) //#nosec G304 -- path is derived from the search root
+	if err != nil {
+		return false
+	}
+	for line := range strings.Lines(string(content)) {
+		if strings.TrimSpace(line) == normaModulePath {
+			return true
+		}
+	}
+	return false
 }
 
 // fileExists reports whether path exists and is a regular file-like entry

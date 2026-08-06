@@ -27,6 +27,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/checking"
+	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/genesis"
 	"golang.org/x/sync/errgroup"
@@ -82,6 +83,12 @@ func RunAndCaptureEventExecution(
 // defaultScenarioTimeout is the maximum time a scenario is
 // allowed to run before being aborted.
 const defaultScenarioTimeout = 10 * time.Minute
+
+// healDbTimeout caps how long a single `sonictool heal` invocation may
+// run before we consider it hung. Healing a small test DB is expected
+// to take seconds; the timeout is generous so that CI on slow hosts
+// still succeeds.
+const healDbTimeout = 15 * time.Minute
 
 // run is the internal implementation, allowing injection of
 // a validatorRegistry for testing.
@@ -220,6 +227,10 @@ func executeStep(
 		return execStartNode(ctx, step, net, registry, state)
 	case parser.FuncStopNode:
 		return execStopNode(ctx, step, net, state)
+	case parser.FuncKillSonic:
+		return execKillSonic(ctx, step, net, state)
+	case parser.FuncHealDb:
+		return execHealDb(ctx, step, state)
 	case parser.FuncUndelegate:
 		return execUndelegate(ctx, step, net, registry, state)
 	case parser.FuncRunApp:
@@ -263,8 +274,78 @@ func executeStep(
 	}
 }
 
+// restartNodeInPlace restarts the client process of a node whose container
+// is still alive, as is the case after killSonic followed by healDb. The
+// data directory is preserved, so the node rejoins with the history it
+// already had rather than syncing from genesis.
+func restartNodeInPlace(
+	ctx context.Context,
+	step *parser.Step,
+	net driver.Network,
+	existing driver.Node,
+) error {
+	name := step.Identifier
+	opera, ok := existing.(*node.OperaNode)
+	if !ok {
+		return fmt.Errorf("node %q is not an OperaNode", name)
+	}
+
+	// Capture the network's height before the node comes back, so we know
+	// how far it has to catch up.
+	targetBlock, err := getNetworkBlockHeight(ctx, net)
+	if err != nil {
+		if !errors.Is(err, driver.ErrEmptyNetwork) {
+			return fmt.Errorf(
+				"failed to determine sync target for restart of %s: %w", name, err)
+		}
+		targetBlock = 0
+	}
+	slog.Info("restarting node in place",
+		"node", name, "type", step.NodeType, "target_block", targetBlock)
+
+	// Restart with the role the step asks for. Silently demoting a
+	// validator to an observer would remove it from consensus for the rest
+	// of the scenario while still reporting success.
+	if step.NodeType == "validator" {
+		if err := opera.StartSonicd(ctx); err != nil {
+			return fmt.Errorf("failed to restart sonicd on %s: %w", name, err)
+		}
+	} else {
+		if err := opera.StartSonicdAsObserver(ctx); err != nil {
+			return fmt.Errorf("failed to restart sonicd on %s: %w", name, err)
+		}
+	}
+
+	if err := opera.WaitForSync(ctx); err != nil {
+		return fmt.Errorf("failed to sync restarted node %s: %w", name, err)
+	}
+
+	// Re-establish peer connections so other nodes discover the restarted
+	// client (the peer table does not survive the restart).
+	if err := net.ReconnectNode(ctx, existing); err != nil {
+		return fmt.Errorf("failed to reconnect node %s: %w", name, err)
+	}
+
+	// Announce availability before waiting for the node to catch up, so
+	// monitoring observes the blocks it processes while doing so.
+	net.ResumeNode(existing)
+
+	if targetBlock > 0 {
+		if err := waitForNodeSync(ctx, existing, targetBlock+1); err != nil {
+			return fmt.Errorf(
+				"restarted node %s did not reach block %d: %w",
+				name, targetBlock+1, err)
+		}
+	}
+
+	slog.Info("node restarted in place", "node", name)
+	return nil
+}
+
 // execStartNode creates a node. If the same name was previously started and
 // stopped, this is treated as a rejoin (no new validator registration).
+// If the node is still in state.nodes (e.g. after killSonic + healDb),
+// the existing container is reused instead of creating a new one.
 func execStartNode(
 	ctx context.Context,
 	step *parser.Step,
@@ -273,6 +354,14 @@ func execStartNode(
 	state *runState,
 ) error {
 	name := step.Identifier
+
+	// In-place restart: if the node is already tracked (e.g. after
+	// killSonic + healDb), restart sonicd inside the existing container
+	// instead of creating a new one.
+	if existing, ok := state.nodes[name]; ok {
+		return restartNodeInPlace(ctx, step, net, existing)
+	}
+
 	isRejoin := state.nodeHistory[name]
 	isValidator := step.NodeType == "validator"
 
@@ -620,6 +709,56 @@ func execRunApp(
 
 	state.apps[step.Identifier] = app
 	return nil
+}
+
+// execKillSonic sends SIGKILL to the sonicd process inside a running
+// node, leaving the database in a dirty state. The container stays
+// alive and the node remains in state.nodes so it can be healed and
+// restarted later.
+func execKillSonic(
+	ctx context.Context,
+	step *parser.Step,
+	net driver.Network,
+	state *runState,
+) error {
+	n, ok := state.nodes[step.Identifier]
+	if !ok {
+		return fmt.Errorf("node %q not found in active nodes", step.Identifier)
+	}
+
+	opera, ok := n.(*node.OperaNode)
+	if !ok {
+		return fmt.Errorf("node %q is not an OperaNode", step.Identifier)
+	}
+
+	// Notify monitoring that this node is going offline.
+	net.SuspendNode(n)
+
+	return opera.ForceStopSonicd(ctx)
+}
+
+// execHealDb runs sonictool heal on a killed node, recovering the
+// database and transitioning the node back to ready. The call is
+// bounded by healDbTimeout so a stuck sonictool cannot hang the entire
+// scenario indefinitely.
+func execHealDb(
+	ctx context.Context,
+	step *parser.Step,
+	state *runState,
+) error {
+	n, ok := state.nodes[step.Identifier]
+	if !ok {
+		return fmt.Errorf("node %q not found in active nodes", step.Identifier)
+	}
+
+	opera, ok := n.(*node.OperaNode)
+	if !ok {
+		return fmt.Errorf("node %q is not an OperaNode", step.Identifier)
+	}
+
+	healCtx, cancel := context.WithTimeout(ctx, healDbTimeout)
+	defer cancel()
+	return opera.HealSonicd(healCtx)
 }
 
 // execStopApp stops a running application.

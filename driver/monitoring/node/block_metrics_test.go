@@ -181,6 +181,34 @@ func TestBlockNodeMetricSource_DoesNotSuppressAfterSyncingDisabled(t *testing.T)
 	}
 }
 
+func TestBlockNodeMetricSource_SuppressesAfterRestartNotification(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().RegisterListener(gomock.Any()).AnyTimes()
+	net.EXPECT().GetActiveNodes().AnyTimes().Return([]driver.Node{})
+
+	monitor, err := monitoring.NewMonitor(net, monitoring.MonitorConfig{OutputDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("failed to initiate monitor: %v", err)
+	}
+	source := NewBlockTimeSource(monitor)
+
+	node := monitoring.Node("A")
+	source.OnBlock(node, monitoring.Block{Height: 10, Time: time.Unix(100, 0)})
+
+	// A restarted node replays blocks it already reported, so once the
+	// restart is announced the resulting conflicts are expected.
+	source.OnNodeRestart(node)
+
+	if !source.isNodeSyncing(node) {
+		t.Fatalf("node should be marked as syncing after a restart")
+	}
+	if !source.shouldSuppressAppendConflict(node, monitoring.ErrOutOfOrderAppend) {
+		t.Fatalf("out-of-order conflict should be suppressed after a restart")
+	}
+}
+
 // testNodeSubjects tests subjects are present in the source
 func testNodeSubjects[T any](t *testing.T, expected []monitoring.Node, source *BlockNodeMetricSource[T]) {
 	for _, want := range expected {

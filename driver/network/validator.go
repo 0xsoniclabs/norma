@@ -70,10 +70,7 @@ func RegisterValidatorNode(ctx context.Context, backend ContractBackend, stake u
 		return 0, fmt.Errorf("failed to deploy helper contract: transaction reverted")
 	}
 
-	slog.Info(
-		"Completed registration of new validator node",
-		"validator_id", newValId,
-	)
+	slog.Info("Completed registration of new validator node", "validator_id", newValId)
 
 	return newValId, nil
 }

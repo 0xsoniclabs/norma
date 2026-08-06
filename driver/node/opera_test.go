@@ -29,30 +29,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
-	"github.com/0xsoniclabs/norma/driver/network"
 )
-
-type cleanupHostStub struct{}
-
-func (cleanupHostStub) Hostname() string { return "" }
-
-func (cleanupHostStub) IsRunning() bool { return false }
-
-func (cleanupHostStub) CheckRunning(ctx context.Context) error { return nil }
-
-func (cleanupHostStub) GetAddressForService(*network.ServiceDescription) (*network.AddressPort, error) {
-	return nil, nil
-}
-
-func (cleanupHostStub) Stop(ctx context.Context) error { return nil }
-
-func (cleanupHostStub) SaveLogTo(ctx context.Context, path string) error { return nil }
-
-func (cleanupHostStub) StreamLog(context.Context) (io.ReadCloser, error) {
-	return io.NopCloser(strings.NewReader("")), nil
-}
-
-func (cleanupHostStub) Cleanup(ctx context.Context) error { return nil }
 
 func TestImplements(t *testing.T) {
 	var inst OperaNode
@@ -91,7 +68,7 @@ func TestOperaNode_StartAndStop(t *testing.T) {
 			t.Errorf("failed to cleanup node: %v", err)
 		}
 	})
-	if err = node.host.Stop(t.Context()); err != nil {
+	if err = node.Stop(t.Context()); err != nil {
 		t.Errorf("failed to stop Opera node: %v", err)
 	}
 }
@@ -103,7 +80,6 @@ func TestOperaNode_Cleanup_RemovesTempDirs(t *testing.T) {
 	}
 
 	node := &OperaNode{
-		host:     cleanupHostStub{},
 		config:   &OperaNodeConfig{Label: t.Name()},
 		tempDirs: []string{tempDir},
 	}
@@ -281,9 +257,21 @@ func TestClient_Stop_Graceful(t *testing.T) {
 		}
 	}()
 
-	reader, err := node.StreamLog(t.Context())
+	if err := node.Stop(t.Context()); err != nil {
+		t.Errorf("cannot stop client node: %v", err)
+	}
+
+	// Wait for the sonicd exec to finish so the log file is fully flushed.
+	select {
+	case <-node.sonicd.Done:
+	case <-time.After(30 * time.Second):
+		t.Fatalf("sonicd exec did not finish in time")
+	}
+
+	// Read the complete exec log and verify graceful shutdown message.
+	reader, err := node.StreamExecLog()
 	if err != nil {
-		t.Errorf("error: %v", err)
+		t.Fatalf("cannot read exec log: %v", err)
 	}
 	defer func() {
 		if err := reader.Close(); err != nil {
@@ -291,25 +279,14 @@ func TestClient_Stop_Graceful(t *testing.T) {
 		}
 	}()
 
-	done := make(chan bool, 1)
-	go func() {
-		scanner := bufio.NewScanner(reader)
-		for scanner.Scan() {
-			line := scanner.Text()
-			if strings.Contains(line, "State DB closed") {
-				done <- true
-			}
-		}
-	}()
-
-	if err := node.Stop(t.Context()); err != nil {
-		t.Errorf("cannot stop client node: %v", err)
+	logBytes, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("failed to read exec log: %v", err)
 	}
 
-	select {
-	case <-done:
-		// container stopped gracefully
-	case <-time.After(180 * time.Second):
-		t.Errorf("container did not stop gracefully")
+	if !strings.Contains(string(logBytes), "State DB closed") {
+		t.Errorf("container did not stop gracefully: "+
+			"\"State DB closed\" not found in exec log (%d bytes)",
+			len(logBytes))
 	}
 }

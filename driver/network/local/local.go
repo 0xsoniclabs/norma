@@ -223,12 +223,40 @@ func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaN
 	return nil
 }
 
+// ReconnectNode re-establishes peer connections between the given node
+// and the rest of the network. It removes the stale enode entry (if
+// any) and re-adds the node under its current enode ID.
+func (n *LocalNetwork) ReconnectNode(
+	ctx context.Context,
+	driverNode driver.Node,
+) error {
+	opera, ok := driverNode.(*node.OperaNode)
+	if !ok {
+		return fmt.Errorf("ReconnectNode: unsupported node type")
+	}
+
+	n.nodesMutex.Lock()
+	// Remove any stale entry for this OperaNode (old enode ID).
+	for id, existing := range n.nodes {
+		if existing == opera {
+			delete(n.nodes, id)
+			break
+		}
+	}
+	n.nodesMutex.Unlock()
+
+	return n.addNodeIntoNetwork(ctx, opera)
+}
+
 // createNode is an internal version of CreateNode enabling the creation
 // of validator and non-validator nodes in the network.
 func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNodeConfig) (*node.OperaNode, error) {
 	n.nodesMutex.Lock()
 	nodeConfig.NetworkBootstrap = !n.bootstrapped
 	n.nodesMutex.Unlock()
+	// Direct the client's output into the run's output directory so it
+	// survives the teardown that follows a failed scenario.
+	nodeConfig.LogsDir = n.config.OutputDir
 	node, err := node.StartOperaDockerNode(ctx, n.docker, n.network, nodeConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start opera docker; %v", err)
@@ -546,6 +574,22 @@ func (n *LocalNetwork) RegisterListener(listener driver.NetworkListener) {
 func (n *LocalNetwork) UnregisterListener(listener driver.NetworkListener) {
 	n.listenerMutex.Lock()
 	delete(n.listeners, listener)
+	n.listenerMutex.Unlock()
+}
+
+func (n *LocalNetwork) SuspendNode(node driver.Node) {
+	n.listenerMutex.Lock()
+	for listener := range n.listeners {
+		listener.BeforeNodeRemoval(node)
+	}
+	n.listenerMutex.Unlock()
+}
+
+func (n *LocalNetwork) ResumeNode(node driver.Node) {
+	n.listenerMutex.Lock()
+	for listener := range n.listeners {
+		listener.AfterNodeCreation(node)
+	}
 	n.listenerMutex.Unlock()
 }
 

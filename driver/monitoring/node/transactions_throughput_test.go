@@ -277,3 +277,31 @@ func TestTransactionsThroughputSource_DoesNotSuppressAfterSyncingDisabled(t *tes
 		t.Fatalf("out-of-order conflict should not be suppressed after syncing is disabled")
 	}
 }
+
+func TestTransactionsThroughputSource_SuppressesAfterRestartNotification(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().RegisterListener(gomock.Any()).AnyTimes()
+	net.EXPECT().GetActiveNodes().AnyTimes().Return([]driver.Node{})
+
+	monitor, err := monitoring.NewMonitor(net, monitoring.MonitorConfig{OutputDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("failed to initiate monitor: %v", err)
+	}
+	source := NewTransactionsThroughputSource(monitor)
+
+	node := monitoring.Node("A")
+	baseTime := time.Unix(100, 0)
+	source.OnBlock(node, monitoring.Block{Height: 10, Time: baseTime, Txs: 1})
+	source.OnBlock(node, monitoring.Block{Height: 11, Time: baseTime.Add(time.Second), Txs: 1})
+
+	source.OnNodeRestart(node)
+
+	if !source.isNodeSyncing(node) {
+		t.Fatalf("node should be marked as syncing after a restart")
+	}
+	if !source.shouldSuppressAppendConflict(node, monitoring.ErrOutOfOrderAppend) {
+		t.Fatalf("out-of-order conflict should be suppressed after a restart")
+	}
+}

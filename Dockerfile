@@ -38,7 +38,11 @@ RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
 
 #
 # Stage 2: Build the final image
-# It consists of the client binaries and startup script.
+#
+# It contains the client binaries only. Norma does not run the client as
+# the container's entrypoint: it keeps the container idle and starts,
+# stops, kills and restarts the client inside it via `docker exec`, so a
+# node survives its client process (see driver/node/node_actions.go).
 #
 FROM debian:trixie
 
@@ -47,21 +51,23 @@ RUN apt-get update && \
 
 COPY --from=client-build /client/build/sonicd /client/build/sonictool ./
 
+# Defaults for the client processes exec'd into this container; they are
+# inherited from the container environment. GOMEMLIMIT keeps a node's heap
+# small enough to run many of them on one host.
 ENV STATE_DB_IMPL="geth"
 ENV VM_IMPL="geth"
 ENV LD_LIBRARY_PATH=./
-ENV TINI_KILL_PROCESS_GROUP=1
+ENV GOMEMLIMIT=1GiB
 
 EXPOSE 5050
 EXPOSE 6060
 EXPOSE 18545
 EXPOSE 18546
 
-COPY scripts/run_sonic.sh ./run_sonic.sh
-
 # Simple check that the binaries are built correctly
 RUN ./sonictool --version
 RUN ./sonicd version
 
-
-CMD ["./run_sonic.sh"]
+# Idle by default so the container can be driven via `docker exec`. Norma
+# sets the same entrypoint explicitly rather than relying on this default.
+CMD ["sleep", "infinity"]

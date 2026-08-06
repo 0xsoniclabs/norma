@@ -49,6 +49,18 @@ func (s *syncingTracker) markNodeAsSynced(node monitoring.Node) {
 	s.syncingNodes[node] = false
 }
 
+// OnNodeRestart puts the node back into the syncing state. A restarted
+// client replays blocks it has already reported, which shows up as
+// out-of-order appends that are expected rather than a defect.
+//
+// This implements monitoring.NodeRestartListener; sources embedding
+// syncingTracker are notified through it by the node log dispatcher.
+func (s *syncingTracker) OnNodeRestart(node monitoring.Node) {
+	s.syncingMutex.Lock()
+	defer s.syncingMutex.Unlock()
+	s.syncingNodes[node] = true
+}
+
 func (s *syncingTracker) isNodeSyncing(node monitoring.Node) bool {
 	s.syncingMutex.Lock()
 	defer s.syncingMutex.Unlock()
@@ -59,6 +71,14 @@ func (s *syncingTracker) isNodeSyncing(node monitoring.Node) bool {
 	return syncing
 }
 
+// shouldSuppressAppendConflict reports whether an append error is an
+// expected consequence of a node catching up rather than a real problem.
+//
+// Only nodes known to be syncing are excused. An out-of-order append from
+// a node believed to be synced is reported: suppressing those too would
+// silence the very inconsistencies this monitoring exists to detect. A
+// node that restarts is moved back to syncing via OnNodeRestart, so its
+// replayed blocks take the branch above rather than being hidden here.
 func (s *syncingTracker) shouldSuppressAppendConflict(node monitoring.Node, err error) bool {
 	if !monitoring.IsOutOfOrderAppendError(err) {
 		return false
