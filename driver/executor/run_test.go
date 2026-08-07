@@ -18,8 +18,10 @@ package executor
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
 	"math/big"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -28,6 +30,8 @@ import (
 	"github.com/0xsoniclabs/norma/driver/checking"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/genesis"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"go.uber.org/mock/gomock"
 )
 
@@ -1391,4 +1395,134 @@ func validatorNode(ctrl *gomock.Controller, id int) driver.Node {
 	node := driver.NewMockNode(ctrl)
 	node.EXPECT().GetValidatorId().Return(&id).AnyTimes()
 	return node
+}
+
+// A single account may stake on the same validator repeatedly: topping up an
+// existing stake, reducing it in several steps, draining it and staking again
+// from zero. All of it must go through one delegator account, and the tracked
+// stake must follow the running total.
+func TestDelegation_SingleAccountRepeatedlyDelegatesAndUndelegates(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	registry := NewMockvalidatorRegistry(ctrl)
+
+	const validatorId = 2
+	var calls []string
+	var funded []common.Address
+	var signers []*ecdsa.PrivateKey
+
+	registry.EXPECT().
+		fundDelegator(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, address common.Address, amount uint64) error {
+			calls = append(calls, fmt.Sprintf("fund %d", amount))
+			funded = append(funded, address)
+			return nil
+		}).AnyTimes()
+	registry.EXPECT().
+		delegate(gomock.Any(), validatorId, gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ int, stake uint64, key *ecdsa.PrivateKey) error {
+			calls = append(calls, fmt.Sprintf("delegate %d", stake))
+			signers = append(signers, key)
+			return nil
+		}).AnyTimes()
+	registry.EXPECT().
+		undelegateAs(gomock.Any(), validatorId, gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ int, stake uint64, key *ecdsa.PrivateKey) error {
+			calls = append(calls, fmt.Sprintf("undelegate %d", stake))
+			signers = append(signers, key)
+			return nil
+		}).AnyTimes()
+
+	state := newDelegationTestState(t, map[string]driver.Node{
+		"heavy": validatorNode(ctrl, validatorId),
+	})
+
+	// The sequence of scenarios/examples/repeated_delegation.yml.
+	partial := func(stake uint64) *uint64 { return &stake }
+	steps := []struct {
+		name      string
+		step      parser.Step
+		wantStake uint64
+	}{
+		{"initial stake", delegateStep("heavy", "cycler", 1_000_000), 1_000_000},
+		{"top up", delegateStep("heavy", "cycler", 500_000), 1_500_000},
+		{"first partial", undelegateStep("heavy", "cycler", partial(400_000)), 1_100_000},
+		{"second partial", undelegateStep("heavy", "cycler", partial(100_000)), 1_000_000},
+		{"drain", undelegateStep("heavy", "cycler", nil), 0},
+		{"stake again from zero", delegateStep("heavy", "cycler", 750_000), 750_000},
+		{"drain again", undelegateStep("heavy", "cycler", nil), 0},
+	}
+
+	for _, test := range steps {
+		var err error
+		if test.step.Function == parser.FuncDelegate {
+			err = execDelegate(t.Context(), &test.step, registry, state)
+		} else {
+			err = execUndelegate(t.Context(), &test.step, registry, state)
+		}
+		if err != nil {
+			t.Fatalf("%s: unexpected error: %v", test.name, err)
+		}
+		got := state.expectedStakes[stakeKey{"cycler", validatorId}]
+		if got != test.wantStake {
+			t.Errorf("%s: expected a tracked stake of %d S, got %d S", test.name, test.wantStake, got)
+		}
+	}
+
+	// A full undelegation passes 0 down, letting the chain report the amount.
+	want := []string{
+		"fund " + fmt.Sprint(1_000_000+delegatorGasBudget), "delegate 1000000",
+		"fund " + fmt.Sprint(500_000+delegatorGasBudget), "delegate 500000",
+		"undelegate 400000",
+		"undelegate 100000",
+		"undelegate 0",
+		"fund " + fmt.Sprint(750_000+delegatorGasBudget), "delegate 750000",
+		"undelegate 0",
+	}
+	if !slices.Equal(calls, want) {
+		t.Errorf("unexpected call sequence:\n got %v\nwant %v", calls, want)
+	}
+
+	// Every operation belongs to the same account: one tracked delegator,
+	// one funded address, one signing key.
+	if len(state.delegators) != 1 {
+		t.Errorf("expected a single delegator account, got %d", len(state.delegators))
+	}
+	address := state.delegators["cycler"].address
+	for _, got := range funded {
+		if got != address {
+			t.Errorf("expected all funding to go to %s, got %s", address.Hex(), got.Hex())
+		}
+	}
+	for _, key := range signers {
+		if crypto.PubkeyToAddress(key.PublicKey) != address {
+			t.Errorf("expected all operations to be signed by %s, got %s",
+				address.Hex(), crypto.PubkeyToAddress(key.PublicKey).Hex())
+		}
+	}
+
+	// After the last drain the chain must agree that nothing is staked.
+	registry.EXPECT().getDelegatorStake(address, validatorId).Return(uint64(0), nil)
+	if err := execVerifyStakes(
+		&parser.Step{Function: parser.FuncVerifyStakes}, registry, state,
+	); err != nil {
+		t.Errorf("unexpected verification error: %v", err)
+	}
+}
+
+func delegateStep(node, delegator string, stake uint64) parser.Step {
+	return parser.Step{
+		Function: parser.FuncDelegate,
+		DelegateTargets: []parser.DelegateTarget{
+			{Node: node, Delegator: delegator, Stake: stake},
+		},
+	}
+}
+
+func undelegateStep(node, delegator string, stake *uint64) parser.Step {
+	return parser.Step{
+		Function: parser.FuncUndelegate,
+		UndelegateTargets: []parser.UndelegateTarget{
+			{Node: node, Delegator: delegator, Stake: stake},
+		},
+	}
 }
