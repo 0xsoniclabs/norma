@@ -187,7 +187,7 @@ func collectBuildableImages(paths []string) ([]string, error) {
 			if step.Function != parser.FuncStartNode {
 				continue
 			}
-			image := driver.ResolveClientImageName(step.ImageName)
+			image := driver.ResolveClientImage(step.ImageName, step.GoVersion)
 			if docker.WillBuildImage(image) {
 				images[image] = struct{}{}
 			}

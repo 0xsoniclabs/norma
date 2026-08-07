@@ -19,7 +19,14 @@
 #
 # It checks out the required version of the client, and builds it.
 #
-FROM golang:1.26.3 AS client-build
+# GO_VERSION selects the Go toolchain (the golang base image tag) the client
+# is built with. GOTOOLCHAIN=local makes that tag authoritative: without it,
+# Go silently downloads a newer toolchain whenever the client's go.mod asks
+# for one, and the base image tag becomes decorative. A test in driver/docker
+# guards that the default here stays at or above the sonic go.mod directive.
+ARG GO_VERSION=1.26.3
+FROM golang:${GO_VERSION} AS client-build
+ENV GOTOOLCHAIN=local
 
 WORKDIR /client
 
@@ -33,8 +40,10 @@ RUN go mod download
 # Copy the rest of the client source code to build it.
 COPY --from=client-src . .
 
-# Build the client
-RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
+# Build the client. The build cache is keyed by toolchain so that builds
+# with different Go versions do not thrash a shared cache.
+ARG GO_VERSION
+RUN --mount=type=cache,id=go-build-${GO_VERSION},target=/root/.cache/go-build make sonicd sonictool
 
 #
 # Stage 2: Build the final image
@@ -45,6 +54,9 @@ RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
 # node survives its client process (see driver/node/node_actions.go).
 #
 FROM debian:trixie
+
+ARG GO_VERSION
+LABEL io.norma.go-version="${GO_VERSION}"
 
 RUN apt-get update && \
     apt-get install iproute2 iputils-ping -y

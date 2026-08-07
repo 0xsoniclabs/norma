@@ -1,0 +1,35 @@
+Name: Mixed Go Toolchains
+
+Description: >-
+  Verifies that validators built from the same Sonic sources by two
+  different Go toolchains agree on block hashes and state roots under
+  sustained mixed load; the implicit end checks compare them. A
+  divergence across the toolchain boundary is a consensus bug. The
+  default-toolchain pair holds more than 2/3 of the stake so that a
+  diverging pair is named by blockHashes instead of stalling the
+  network. Rotate goVersion when the next Go release changes; it must
+  exist as a golang:<version> tag on Docker Hub.
+
+Scenario:
+  - startNode: validator-default-go
+    type: validator
+    stake: 4000000
+    instances: 2
+
+  - startNode: validator-next-go
+    type: validator
+    goVersion: "1.27rc2"
+    stake: 1500000
+    instances: 2
+
+  - runApp: load
+    type: mix
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 60s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10

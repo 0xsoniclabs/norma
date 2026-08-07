@@ -87,10 +87,34 @@ const (
 // reference.
 //
 // clientSrc is passed to docker build as the value of the "client-src" build
-// context expected by the repository Dockerfile.
+// context expected by the repository Dockerfile. goVersion, when non-empty,
+// is passed as the GO_VERSION build arg selecting the Go toolchain; when
+// empty, the Dockerfile default applies.
 type imageBuildPlan struct {
 	kind      imageBuildKind
 	clientSrc string
+	goVersion string
+}
+
+// GoVersionDelimiter separates the source part of a sonic image tag from the
+// Go toolchain version the sources are built with, as in
+// "sonic:v2.2.0_go1.27.0". It cannot collide with a sonic git tag (vX.Y.Z)
+// or a commit hash (hex), so the split is unambiguous.
+const GoVersionDelimiter = "_go"
+
+// SplitGoVersion splits a sonic image ref into its source ref and the Go
+// toolchain version it pins, e.g. "sonic:local_go1.27.0" into "sonic:local"
+// and "1.27.0". Refs that pin no toolchain, and refs of other images, are
+// returned unchanged with an empty version.
+func SplitGoVersion(imageRef string) (ref, goVersion string) {
+	if !strings.HasPrefix(imageRef, "sonic:") {
+		return imageRef, ""
+	}
+	idx := strings.LastIndex(imageRef, GoVersionDelimiter)
+	if idx < 0 || idx+len(GoVersionDelimiter) == len(imageRef) {
+		return imageRef, ""
+	}
+	return imageRef[:idx], imageRef[idx+len(GoVersionDelimiter):]
 }
 
 // EnsureImages makes sure the given image refs are locally available.
@@ -110,6 +134,9 @@ type imageBuildPlan struct {
 //     SetSonicLocalPath / SonicLocalPath, default DefaultSonicLocalPath)
 //   - sonic:<tag>: from sonicRepositoryURL#<tag>
 //   - sonic:<commit hash>: from sonicRepositoryURL#<commit hash>
+//
+// A "_go<version>" suffix on any of the sonic tags selects the Go toolchain
+// used for the build (e.g. sonic:local_go1.27.0); see SplitGoVersion.
 //
 // Other images are pulled if missing.
 //
@@ -149,8 +176,9 @@ func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) err
 		start := time.Now()
 		switch plan.kind {
 		case imageBuildSonicRemote, imageBuildSonicLocal:
-			slog.Info("building image", "ref", ref, "clientSrc", plan.clientSrc)
-			if err := buildImage(ctx, buildRoot, ref, plan.clientSrc); err != nil {
+			slog.Info("building image", "ref", ref,
+				"clientSrc", plan.clientSrc, "goVersion", plan.goVersion)
+			if err := buildImage(ctx, buildRoot, ref, plan.clientSrc, plan.goVersion); err != nil {
 				return err
 			}
 		case imageBuildNone:
@@ -209,14 +237,19 @@ func pullImage(ctx context.Context, cli *Client, imageRef string) error {
 // buildRoot.
 //
 // The build passes "client-src=<clientSrc>" as an additional build context,
-// matching the Dockerfile convention used by Norma. BuildKit is enabled
-// explicitly via environment variable to keep behavior aligned with existing
-// developer workflows.
+// matching the Dockerfile convention used by Norma. A non-empty goVersion is
+// passed as the GO_VERSION build arg; when empty, the Dockerfile default
+// toolchain applies. BuildKit is enabled explicitly via environment variable
+// to keep behavior aligned with existing developer workflows.
 //
 // On failure, the function returns the docker command error along with captured
 // combined stdout/stderr output to aid diagnostics.
-func buildImage(ctx context.Context, buildRoot, imageRef, clientSrc string) error {
-	args := []string{"build", "--build-context", fmt.Sprintf("client-src=%s", clientSrc), ".", "-t", imageRef}
+func buildImage(ctx context.Context, buildRoot, imageRef, clientSrc, goVersion string) error {
+	args := []string{"build", "--build-context", fmt.Sprintf("client-src=%s", clientSrc)}
+	if goVersion != "" {
+		args = append(args, "--build-arg", "GO_VERSION="+goVersion)
+	}
+	args = append(args, ".", "-t", imageRef)
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Dir = buildRoot
 	cmd.Env = append(os.Environ(), "DOCKER_BUILDKIT=1")
@@ -229,7 +262,10 @@ func buildImage(ctx context.Context, buildRoot, imageRef, clientSrc string) erro
 
 // planImage resolves imageRef into an internal build plan.
 //
-// Current mapping rules:
+// A "_go<version>" suffix on a sonic tag selects the Go toolchain and is
+// split off before the source dispatch, so "sonic:local_go1.27.0" builds the
+// same sources as "sonic:local" (see SplitGoVersion). The remaining ref maps
+// as:
 //   - "sonic"       => remote build from sonicRepositoryURL
 //   - "sonic:local" => local build from the currently configured sonic local
 //     path (see SetSonicLocalPath / SonicLocalPath, default
@@ -240,22 +276,24 @@ func buildImage(ctx context.Context, buildRoot, imageRef, clientSrc string) erro
 //
 // The returned plan is consumed by EnsureImages.
 func planImage(imageRef string) imageBuildPlan {
-	if imageRef == "sonic" {
-		return imageBuildPlan{kind: imageBuildSonicRemote, clientSrc: sonicRepositoryURL}
+	ref, goVersion := SplitGoVersion(imageRef)
+	if ref == "sonic" {
+		return imageBuildPlan{kind: imageBuildSonicRemote, clientSrc: sonicRepositoryURL, goVersion: goVersion}
 	}
-	if imageRef == "sonic:local" {
-		return imageBuildPlan{kind: imageBuildSonicLocal, clientSrc: sonicLocalPath}
+	if ref == "sonic:local" {
+		return imageBuildPlan{kind: imageBuildSonicLocal, clientSrc: sonicLocalPath, goVersion: goVersion}
 	}
-	if imageRef == "sonic:latest" {
+	if ref == "sonic:latest" {
 		// "latest" is a Docker tag convention, not a git ref; build from repo HEAD.
-		return imageBuildPlan{kind: imageBuildSonicRemote, clientSrc: sonicRepositoryURL}
+		return imageBuildPlan{kind: imageBuildSonicRemote, clientSrc: sonicRepositoryURL, goVersion: goVersion}
 	}
-	if strings.HasPrefix(imageRef, "sonic:") {
-		tag := strings.TrimPrefix(imageRef, "sonic:")
+	if strings.HasPrefix(ref, "sonic:") {
+		tag := strings.TrimPrefix(ref, "sonic:")
 		if tag != "" {
 			return imageBuildPlan{
 				kind:      imageBuildSonicRemote,
 				clientSrc: fmt.Sprintf("%s#%s", sonicRepositoryURL, tag),
+				goVersion: goVersion,
 			}
 		}
 	}

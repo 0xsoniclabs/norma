@@ -1,0 +1,55 @@
+Name: Datadir Across Go Toolchains
+
+Description: >-
+  Verifies that a validator's on-disk state written by a client built
+  with one Go toolchain is read back correctly by a client built with
+  another, in both directions: the crossing validator starts on the
+  default toolchain, restarts on the same data volume with the next
+  one, and then downgrades back. This catches on-disk encodings
+  sensitive to toolchain behaviour, which mixed-network scenarios
+  cannot see. Rotate goVersion when the next Go release changes; it
+  must exist as a golang:<version> tag on Docker Hub.
+
+Scenario:
+  - startNode: validator-stable
+    type: validator
+    stake: 4500000
+    instances: 2
+
+  - startNode: validator-crossing
+    type: validator
+    dataVolume: validator-crossing-data
+    stake: 1000000
+
+  - runApp: load
+    type: counter
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 20s
+
+  - stopNode: validator-crossing
+
+  - startNode: validator-crossing
+    type: validator
+    dataVolume: validator-crossing-data
+    goVersion: "1.27rc2"
+
+  - waitFor: 20s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+
+  - stopNode: validator-crossing
+
+  - startNode: validator-crossing
+    type: validator
+    dataVolume: validator-crossing-data
+
+  - waitFor: 20s
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10

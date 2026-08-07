@@ -17,6 +17,7 @@
 package parser
 
 import (
+	"fmt"
 	"math/big"
 	"os"
 	"strings"
@@ -183,6 +184,50 @@ Scenario:
 	require.Equal(t, 3, *step.Instances)
 	require.Equal(t, "vol-A", step.DataVolume)
 	require.True(t, step.Failing)
+}
+
+func TestParseBytes_StartNodeGoVersion(t *testing.T) {
+	input := `
+Name: Go Version Test
+Scenario:
+  - startNode: my-node
+    type: validator
+    imageName: "sonic:v2.2.0"
+    goVersion: "1.27rc2"
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+	require.Equal(t, "1.27rc2", scenario.Steps[0].GoVersion)
+}
+
+func TestParseBytes_StartNodeGoVersion_RejectsInvalidFormat(t *testing.T) {
+	for _, version := range []string{"go1.27.0", "1", "latest", "1.27.0-rc2"} {
+		input := fmt.Sprintf(`
+Name: Go Version Test
+Scenario:
+  - startNode: my-node
+    type: validator
+    goVersion: %q
+`, version)
+		_, err := ParseBytes([]byte(input))
+		require.ErrorContains(t, err, "goVersion",
+			"version %q should be rejected", version)
+	}
+}
+
+func TestCheck_GoVersionOnToolchainPinnedImage(t *testing.T) {
+	input := `
+Name: Go Version Test
+Description: contradictory toolchain pins
+Scenario:
+  - startNode: my-node
+    type: validator
+    imageName: "sonic:v2.2.0_go1.26.3"
+    goVersion: "1.27.0"
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+	require.ErrorContains(t, scenario.Check(), "already pins a Go toolchain")
 }
 
 func TestParseBytes_Undelegate(t *testing.T) {

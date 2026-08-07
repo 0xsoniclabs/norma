@@ -19,9 +19,11 @@ package driver
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/0xsoniclabs/carmen/go/common"
+	"github.com/0xsoniclabs/norma/driver/docker"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/norma/genesis"
@@ -44,13 +46,42 @@ func DefaultValidators(name string) Validators {
 	return NewDefaultTestValidators(name, 1)
 }
 
-// ResolveClientImageName returns imageName if set, otherwise the default client
-// image name.
-func ResolveClientImageName(imageName string) string {
-	if imageName != "" {
+// defaultClientGoVersion is the Go toolchain applied to nodes that pin no
+// imageName, set from the --go-version flag via SetDefaultClientGoVersion.
+// It sweeps the candidate only: nodes pinned to a released image stand in
+// for shipped clients, and rebuilding them with another compiler would
+// change what they represent.
+var defaultClientGoVersion string
+
+// SetDefaultClientGoVersion configures the Go toolchain version applied to
+// client images of nodes that pin no imageName. An empty version restores
+// the Dockerfile default toolchain.
+func SetDefaultClientGoVersion(version string) {
+	defaultClientGoVersion = version
+}
+
+// ResolveClientImage resolves a node's docker image ref from its imageName
+// and goVersion settings.
+//
+// An empty imageName means the candidate (DefaultClientDockerImageName). The
+// Go toolchain is chosen with precedence scenario goVersion > --go-version
+// (candidate only, see SetDefaultClientGoVersion) > Dockerfile default, and
+// becomes part of the returned ref, e.g. "sonic:local_go1.27.0", so images
+// built by different toolchains coexist under self-describing tags.
+func ResolveClientImage(imageName, goVersion string) string {
+	if imageName == "" {
+		imageName = DefaultClientDockerImageName
+		if goVersion == "" {
+			goVersion = defaultClientGoVersion
+		}
+	}
+	if goVersion == "" {
 		return imageName
 	}
-	return DefaultClientDockerImageName
+	if !strings.Contains(imageName, ":") {
+		imageName += ":latest"
+	}
+	return imageName + docker.GoVersionDelimiter + goVersion
 }
 
 const (
@@ -193,6 +224,7 @@ type Validator struct {
 	Failing        bool
 	Instances      int
 	ImageName      string
+	GoVersion      string // Go toolchain the client image is built with
 	Stake          uint64 // < Stake in FTM
 	ExtraArguments string // Extra command line arguments for sonicd
 }
@@ -202,11 +234,11 @@ type Validators []Validator
 // NewDefaultValidators creates a new Validators with a single validator defining only the number of instances,
 // using the default client docker image.
 func NewDefaultValidators(instances int) Validators {
-	return []Validator{{Name: "validator", Instances: instances, ImageName: DefaultClientDockerImageName}}
+	return []Validator{{Name: "validator", Instances: instances, ImageName: ResolveClientImage("", "")}}
 }
 
 func NewDefaultTestValidators(name string, instances int) Validators {
-	return []Validator{{Name: fmt.Sprintf("validator-%s", name), Instances: instances, ImageName: DefaultClientDockerImageName}}
+	return []Validator{{Name: fmt.Sprintf("validator-%s", name), Instances: instances, ImageName: ResolveClientImage("", "")}}
 }
 
 func (v Validators) GetNumValidators() int {

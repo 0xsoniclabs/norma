@@ -17,7 +17,11 @@
 package globalflags
 
 import (
+	"fmt"
+
+	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
+	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/urfave/cli/v2"
 )
 
@@ -32,14 +36,38 @@ var SonicPathFlag = cli.StringFlag{
 	Value: docker.DefaultSonicLocalPath,
 }
 
+// GoVersionFlag lets the user sweep the candidate with a specific Go
+// toolchain: it applies to nodes that do not pin an imageName. Nodes pinned
+// to a released image stand in for shipped clients and keep the Dockerfile
+// default toolchain. A scenario-level goVersion takes precedence.
+var GoVersionFlag = cli.StringFlag{
+	Name: "go-version",
+	Usage: "Go toolchain version (e.g. 1.27.0) used to build the client " +
+		"images of nodes that do not pin an imageName",
+}
+
 // AllSonicFlags aggregates all Sonic-related global flags.
 var AllSonicFlags = []cli.Flag{
 	&SonicPathFlag,
+	&GoVersionFlag,
 }
 
 // SetupSonicPath applies the --sonic-path flag value (if any) to the docker
 // package configuration used when building the sonic:local image.
 func SetupSonicPath(ctx *cli.Context) error {
 	docker.SetSonicLocalPath(ctx.String(SonicPathFlag.Name))
+	return nil
+}
+
+// SetupGoVersion applies the --go-version flag value (if any) to the driver
+// configuration used when resolving client images.
+func SetupGoVersion(ctx *cli.Context) error {
+	version := ctx.String(GoVersionFlag.Name)
+	if version != "" && !parser.GoVersionPattern.MatchString(version) {
+		return fmt.Errorf(
+			"invalid --go-version %q; expected a Go toolchain version like 1.27.0",
+			version)
+	}
+	driver.SetDefaultClientGoVersion(version)
 	return nil
 }

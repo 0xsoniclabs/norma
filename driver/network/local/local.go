@@ -173,7 +173,7 @@ func (n *LocalNetwork) startGenesisValidators(
 			cfg := node.OperaNodeConfig{
 				ValidatorId:     &validatorId,
 				Failing:         validator.Failing,
-				Image:           validator.ImageName,
+				Image:           driver.ResolveClientImage(validator.ImageName, validator.GoVersion),
 				NetworkConfig:   &n.config,
 				Label:           label,
 				GenesisJsonPath: &n.genesisJsonPath,
@@ -182,7 +182,7 @@ func (n *LocalNetwork) startGenesisValidators(
 			if _, err := n.createNode(ctx, &cfg); err != nil {
 				return fmt.Errorf(
 					"validator %q (idx=%d, image=%s): %w",
-					label, idx, validator.ImageName, err,
+					label, idx, cfg.Image, err,
 				)
 			}
 			idx++

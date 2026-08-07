@@ -238,6 +238,10 @@ func StartOperaDockerNode(
 
 	// --- Exec-based startup sequence ---
 
+	if err = node.verifyClientGoVersion(ctx); err != nil {
+		return nil, err
+	}
+
 	// Initialize datadir with sonictool.
 	if err = node.Initialize(ctx); err != nil {
 		return nil, fmt.Errorf("failed to initialize datadir: %w", err)
@@ -258,6 +262,48 @@ func StartOperaDockerNode(
 
 	started = true
 	return node, nil
+}
+
+// goVersionLinePattern extracts the toolchain version from the output of
+// `sonicd version`, which reports runtime.Version() of the built binary.
+var goVersionLinePattern = regexp.MustCompile(`(?m)^Go Version: (\S+)`)
+
+// verifyClientGoVersion logs the Go toolchain the node's client binary was
+// built with, and fails when the node's image ref pins a version the binary
+// does not report. The image tag states an intention, runtime.Version()
+// states the fact; a plumbing bug that silently delivered the default
+// compiler would otherwise turn a mixed-toolchain scenario into a green
+// no-op.
+func (n *OperaNode) verifyClientGoVersion(ctx context.Context) error {
+	output, err := n.container.Exec(ctx, []string{sonicdBinaryPath, "version"})
+	if err != nil {
+		return fmt.Errorf("failed to read client version on node %q: %w",
+			n.GetLabel(), err)
+	}
+	_, want := docker.SplitGoVersion(n.config.Image)
+
+	match := goVersionLinePattern.FindStringSubmatch(output)
+	if match == nil {
+		if want == "" {
+			slog.Warn("client does not report its Go version",
+				"node", n.GetLabel(), "image", n.config.Image)
+			return nil
+		}
+		return fmt.Errorf(
+			"node %q requested Go %s, but its client does not report a Go version",
+			n.GetLabel(), want)
+	}
+	actual := match[1]
+	slog.Info("client go version",
+		"node", n.GetLabel(), "image", n.config.Image, "goVersion", actual)
+
+	// A partial pin like "1.27" is satisfied by any of its patch releases.
+	if want != "" && actual != "go"+want && !strings.HasPrefix(actual, "go"+want+".") {
+		return fmt.Errorf(
+			"node %q requested Go %s, but its client was built with %s",
+			n.GetLabel(), want, actual)
+	}
+	return nil
 }
 
 // connectivityCheck attempts to connect to the Opera RPC service of the given host.
@@ -327,7 +373,7 @@ func NewOperaNode(
 	dn *docker.Network,
 	config *OperaNodeConfig,
 ) (*OperaNode, error) {
-	image := driver.ResolveClientImageName(config.Image)
+	image := driver.ResolveClientImage(config.Image, "")
 	if err := ensureImageAvailable(ctx, image); err != nil {
 		return nil, fmt.Errorf("failed to ensure image %q: %w", image, err)
 	}

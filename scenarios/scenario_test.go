@@ -65,7 +65,7 @@ func TestReleaseTestingScenarios_UseLocalClient(t *testing.T) {
 				if step.Function != parser.FuncStartNode {
 					continue
 				}
-				if driver.ResolveClientImageName(step.ImageName) == driver.DefaultClientDockerImageName {
+				if driver.ResolveClientImage(step.ImageName, "") == driver.DefaultClientDockerImageName {
 					return
 				}
 			}

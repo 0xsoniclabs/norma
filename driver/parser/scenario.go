@@ -282,6 +282,7 @@ type Step struct {
 	// Node parameters
 	NodeType       string // "validator", "observer", "rpc"
 	ImageName      string
+	GoVersion      string
 	DataVolume     string
 	Stake          *uint64
 	Instances      *int
@@ -486,6 +487,7 @@ var stepFunctionDescriptions = map[StepFunction]string{
 var paramDescriptions = map[string]string{
 	"type":           "Node type (\"validator\", \"observer\", \"rpc\") for startNode; application type for runApp.",
 	"imageName":      "Docker image name to use for the node.",
+	"goVersion":      "Go toolchain version to build the node's client image with (e.g. \"1.27.0\"); appended to the image tag as _go<version>.",
 	"dataVolume":     "Docker volume name to mount as the node data directory.",
 	"stake":          "Stake in S (uint64). Defaults to 5,000,000 S during node start and the full self-stake when undelegating.",
 	"instances":      "Number of node instances to start.",
@@ -497,7 +499,7 @@ var paramDescriptions = map[string]string{
 
 // allowedParams defines which parameter keys are valid for each step function.
 var allowedParams = map[StepFunction][]string{
-	FuncStartNode:    {"type", "imageName", "dataVolume", "stake", "instances", "failing", "extraArguments"},
+	FuncStartNode:    {"type", "imageName", "goVersion", "dataVolume", "stake", "instances", "failing", "extraArguments"},
 	FuncStopNode:     {},
 	FuncRunApp:       {"type", "users", "rate"},
 	FuncStopApp:      {},
@@ -537,6 +539,15 @@ func (s *Step) parseParam(key string, val *yaml.Node) error {
 			return fmt.Errorf("invalid imageName value: %w", err)
 		}
 		s.ImageName = v
+	case "goVersion":
+		var v string
+		if err := val.Decode(&v); err != nil {
+			return fmt.Errorf("invalid goVersion value: %w", err)
+		}
+		if !GoVersionPattern.MatchString(v) {
+			return fmt.Errorf("goVersion must match %v, got %q", goVersionPatternStr, v)
+		}
+		s.GoVersion = v
 	case "dataVolume":
 		var v string
 		if err := val.Decode(&v); err != nil {

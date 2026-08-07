@@ -24,5 +24,8 @@ func ProcessGlobalFlags(c *cli.Context) error {
 	if err := SetupLogger(c); err != nil {
 		return err
 	}
-	return SetupSonicPath(c)
+	if err := SetupSonicPath(c); err != nil {
+		return err
+	}
+	return SetupGoVersion(c)
 }

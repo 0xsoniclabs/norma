@@ -19,6 +19,7 @@ old version forking. What follows is a role-based procedure instead.
 | omitted / `sonic:local`     | docker build from the [sonic](sonic) submodule               |
 | `sonic:vX.Y.Z`              | docker build from `github.com/0xsoniclabs/sonic.git#vX.Y.Z`  |
 | `sonic`                     | docker build from the remote repository's **default branch** |
+| `sonic:<ref>_go<version>`   | same sources as `sonic:<ref>`, built with the `golang:<version>` toolchain instead of the Dockerfile default |
 
 Consequences:
 
@@ -43,6 +44,33 @@ Norma's Go dependency on `github.com/0xsoniclabs/sonic` comes from the module
 proxy and has no `replace` directive pointing at `./sonic`. The submodule
 revision therefore affects only the `sonic:local` docker build — never the
 Norma binary.
+
+### The Go toolchain is an orthogonal axis
+
+Which Sonic sources a node runs and which compiler built them are independent
+choices. Scenarios never hand-assemble a `_go` tag; they set the `goVersion`
+parameter on `startNode` and Norma derives the ref:
+
+- `goVersion` composes with any `imageName` (or its absence), so a released
+  client can be rebuilt with a newer toolchain when a scenario asks for it.
+- The `--go-version` flag sweeps the **candidate only**: it applies to nodes
+  that do not pin an `imageName`. Nodes pinned to released images stand in for
+  shipped clients; rebuilding them with a different compiler would change what
+  they represent. This lets the whole suite be swept under a new Go release
+  with zero scenario edits, e.g. `norma --go-version 1.27.0 run
+  scenarios/release_testing`.
+- Precedence: scenario `goVersion` > `--go-version` > Dockerfile default.
+
+The dedicated toolchain scenarios live in [scenarios/toolchain/](scenarios/toolchain)
+and run nightly via [TOOLCHAIN.jenkinsfile](TOOLCHAIN.jenkinsfile). They are
+*agnostic* on the Sonic-version axis — they leave `imageName` unpinned, always
+contrasting toolchains against the candidate — so they never rotate at release
+time. What does rotate is the *next Go* version they pin, together with the
+pipeline's `NextGoVersion` default, whenever a new Go release (or rc) becomes
+the interesting one; the version must exist as a `golang:<version>` tag on
+Docker Hub. Requested toolchains are verified at node startup against what
+`sonicd version` reports, so a plumbing failure cannot silently run the
+default compiler everywhere.
 
 ---
 

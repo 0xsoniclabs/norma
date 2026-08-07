@@ -27,6 +27,14 @@ const namePatternStr = `^[A-Za-z0-9-.]+$`
 // application identifiers must match.
 var NamePattern = regexp.MustCompile(namePatternStr)
 
+const goVersionPatternStr = `^\d+\.\d+(?:(?:rc|beta)\d+|\.\d+)?$`
+
+// GoVersionPattern is the regular expression that Go toolchain versions must
+// match, e.g. "1.27", "1.27.0" or "1.27rc2". Validating the format up front
+// matters because a typo'd version would otherwise surface as an opaque
+// "manifest unknown" from Docker Hub several minutes into a run.
+var GoVersionPattern = regexp.MustCompile(goVersionPatternStr)
+
 // isTypeValid reports whether the given node type is one of the supported
 // values (observer, rpc, validator).
 func isTypeValid(t string) error {

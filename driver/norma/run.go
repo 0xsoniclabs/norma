@@ -302,7 +302,6 @@ func extractBootstrapValidators(scenario *parser.Scenario) (driver.Validators, m
 	if step.Instances != nil {
 		instances = *step.Instances
 	}
-	image := driver.ResolveClientImageName(step.ImageName)
 
 	var stake uint64
 	if step.Stake != nil {
@@ -312,7 +311,8 @@ func extractBootstrapValidators(scenario *parser.Scenario) (driver.Validators, m
 	validators := driver.Validators{{
 		Name:      step.Identifier,
 		Instances: instances,
-		ImageName: image,
+		ImageName: step.ImageName,
+		GoVersion: step.GoVersion,
 		Stake:     stake,
 	}}
 

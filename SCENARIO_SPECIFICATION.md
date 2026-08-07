@@ -125,6 +125,7 @@ Creates a node. The value is the node’s **identifier** (its label).
 - startNode: validator-1
   type: validator          # one of: validator, observer, rpc
   imageName: sonic:local   # optional; default: DefaultClientDockerImageName
+  goVersion: "1.27.0"      # optional; Go toolchain the client image is built with
   dataVolume: my-volume    # optional; Docker volume mounted as data dir
   stake: 5_000_000         # optional; validator stake in S, default 5_000_000
   instances: 3             # optional; create N nodes named <id>-0..<id>-N-1
@@ -136,6 +137,13 @@ Parameter details:
 
 - **`type`** — Default is `observer` when omitted; validators register on-chain
   before the node is created.
+- **`goVersion`** — Go toolchain version used to build the node's client
+  image (e.g. `"1.27.0"`, `"1.27rc2"`); it must exist as a `golang:<version>`
+  tag on Docker Hub. Norma appends it to the image tag as `_go<version>`, so
+  it composes with any `imageName` and images built by different toolchains
+  coexist. When omitted, the Dockerfile default toolchain applies, unless the
+  node pins no `imageName` and the `--go-version` flag is set. At startup the
+  node's binary is verified to report the requested version.
 - **`instances`** — When `> 1`, node names become `<id>-0`, `<id>-1`, ….
   When `1` (or omitted), the name is used as-is.
 - **`stake`** — Only meaningful for validators. Underscores may be used in the

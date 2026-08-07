@@ -365,10 +365,7 @@ func execStartNode(
 	isRejoin := state.nodeHistory[name]
 	isValidator := step.NodeType == "validator"
 
-	image := driver.DefaultClientDockerImageName
-	if step.ImageName != "" {
-		image = step.ImageName
-	}
+	image := driver.ResolveClientImage(step.ImageName, step.GoVersion)
 
 	instances := 1
 	if step.Instances != nil {

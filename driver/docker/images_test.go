@@ -54,6 +54,24 @@ func TestPlanImage(t *testing.T) {
 			},
 		},
 		{
+			name:     "local image with go version",
+			imageRef: "sonic:local_go1.27.0",
+			want: imageBuildPlan{
+				kind:      imageBuildSonicLocal,
+				clientSrc: "sonic",
+				goVersion: "1.27.0",
+			},
+		},
+		{
+			name:     "tagged remote image with go version",
+			imageRef: "sonic:v2.2.0_go1.27rc2",
+			want: imageBuildPlan{
+				kind:      imageBuildSonicRemote,
+				clientSrc: sonicRepositoryURL + "#v2.2.0",
+				goVersion: "1.27rc2",
+			},
+		},
+		{
 			name:     "non sonic image is pull-only plan",
 			imageRef: "alpine",
 			want: imageBuildPlan{
@@ -105,6 +123,29 @@ func TestSetSonicLocalPath_OverridesLocalBuildContext(t *testing.T) {
 	if got := SonicLocalPath(); got != DefaultSonicLocalPath {
 		t.Fatalf("SonicLocalPath after reset: got %q, want %q",
 			got, DefaultSonicLocalPath)
+	}
+}
+
+func TestSplitGoVersion(t *testing.T) {
+	tests := []struct {
+		imageRef string
+		wantRef  string
+		wantGo   string
+	}{
+		{"sonic:local", "sonic:local", ""},
+		{"sonic:local_go1.27.0", "sonic:local", "1.27.0"},
+		{"sonic:v2.2.0_go1.27rc2", "sonic:v2.2.0", "1.27rc2"},
+		{"sonic:latest_go1.27.0", "sonic:latest", "1.27.0"},
+		{"sonic", "sonic", ""},
+		{"sonic:local_go", "sonic:local_go", ""},
+		{"alpine:some_go1.27.0", "alpine:some_go1.27.0", ""},
+	}
+	for _, tt := range tests {
+		ref, goVersion := SplitGoVersion(tt.imageRef)
+		if ref != tt.wantRef || goVersion != tt.wantGo {
+			t.Errorf("SplitGoVersion(%q) = (%q, %q), want (%q, %q)",
+				tt.imageRef, ref, goVersion, tt.wantRef, tt.wantGo)
+		}
 	}
 }
 
@@ -260,7 +301,7 @@ func TestBuildImage_Builds_SonicLocal(t *testing.T) {
 		t.Skipf("local sonic sources not available at %s: %v", filepath.Join(buildRoot, "sonic"), err)
 	}
 
-	if err := buildImage(t.Context(), buildRoot, "sonic:testlocal", "sonic"); err != nil {
+	if err := buildImage(t.Context(), buildRoot, "sonic:testlocal", "sonic", ""); err != nil {
 		t.Fatalf("failed to build sonic:testlocal image: %v", err)
 	}
 

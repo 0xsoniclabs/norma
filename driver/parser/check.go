@@ -118,6 +118,16 @@ func (s *Step) checkStartNode() error {
 		errs = append(errs, fmt.Errorf("number of instances must be >= 1, got %d", *s.Instances))
 	}
 
+	if s.GoVersion != "" {
+		if idx := strings.LastIndex(s.ImageName, "_go"); idx >= 0 {
+			pinned := s.ImageName[idx+len("_go"):]
+			if pinned != "" && GoVersionPattern.MatchString(pinned) {
+				errs = append(errs, fmt.Errorf(
+					"goVersion cannot be combined with imageName %q, which already pins a Go toolchain",
+					s.ImageName))
+			}
+		}
+	}
 	return errors.Join(errs...)
 }
 
