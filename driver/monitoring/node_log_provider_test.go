@@ -142,3 +142,143 @@ func (l *testBlockNodeListener) getBlocks(node Node) []Block {
 
 	return l.data[node]
 }
+
+func TestNodeLogDispatcher_InPlaceRestartAttachesNoSecondReader(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().RegisterListener(gomock.Any())
+	net.EXPECT().GetActiveNodes().AnyTimes().Return([]driver.Node{})
+
+	dispatchReader, dispatchWriter := io.Pipe()
+	collectReader, collectWriter := io.Pipe()
+
+	node := driver.NewMockNode(ctrl)
+	node.EXPECT().GetLabel().AnyTimes().Return(string(Node1TestId))
+	gomock.InOrder(
+		node.EXPECT().StreamLog(gomock.Any()).Return(dispatchReader, nil),
+		node.EXPECT().StreamLog(gomock.Any()).Return(collectReader, nil),
+	)
+
+	reg, err := NewNodeLogDispatcher(net, t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create log dispatcher: %v", err)
+	}
+	listener := newRestartRecordingListener()
+	reg.RegisterLogListener(listener)
+
+	reg.AfterNodeCreation(node)
+
+	// In-place restart: the stream is still open, so no new readers may
+	// attach (the mock rejects further StreamLog calls).
+	reg.AfterNodeCreation(node)
+
+	if _, err := dispatchWriter.Write([]byte(Node1TestLog)); err != nil {
+		t.Fatalf("failed to write log: %v", err)
+	}
+	_ = dispatchWriter.Close()
+	_ = collectWriter.Close()
+	reg.WaitForLogsToBeConsumed()
+
+	if got := listener.getRestarts(); len(got) != 1 || got[0] != Node1TestId {
+		t.Errorf("expected one restart notification for %v, got %v", Node1TestId, got)
+	}
+	blockEqual(t, Node1TestId, listener.getBlocks(Node1TestId), NodeBlockTestData[Node1TestId])
+}
+
+func TestNodeLogDispatcher_ReattachesWhenRejoiningAfterStreamEnd(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().RegisterListener(gomock.Any())
+	net.EXPECT().GetActiveNodes().AnyTimes().Return([]driver.Node{})
+
+	first := driver.NewMockNode(ctrl)
+	first.EXPECT().GetLabel().AnyTimes().Return(string(Node1TestId))
+	first.EXPECT().StreamLog(gomock.Any()).Times(2).DoAndReturn(func(context.Context) (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader(Node1TestLog)), nil
+	})
+
+	reg, err := NewNodeLogDispatcher(net, t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create log dispatcher: %v", err)
+	}
+	listener := newRestartRecordingListener()
+	reg.RegisterLogListener(listener)
+
+	reg.AfterNodeCreation(first)
+	reg.WaitForLogsToBeConsumed()
+
+	// Rejoin after the container was recreated: fresh readers must attach.
+	second := driver.NewMockNode(ctrl)
+	second.EXPECT().GetLabel().AnyTimes().Return(string(Node1TestId))
+	second.EXPECT().StreamLog(gomock.Any()).Times(2).DoAndReturn(func(context.Context) (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader(Node2TestLog)), nil
+	})
+
+	reg.AfterNodeCreation(second)
+	reg.WaitForLogsToBeConsumed()
+
+	if got := listener.getRestarts(); len(got) != 1 || got[0] != Node1TestId {
+		t.Errorf("expected one restart notification for %v, got %v", Node1TestId, got)
+	}
+	want := append(append([]Block{}, NodeBlockTestData[Node1TestId]...), NodeBlockTestData[Node2TestId]...)
+	blockEqual(t, Node1TestId, listener.getBlocks(Node1TestId), want)
+}
+
+func TestNodeLogDispatcher_NodeSuspensionNotifiesRestartListeners(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().RegisterListener(gomock.Any())
+	net.EXPECT().GetActiveNodes().AnyTimes().Return([]driver.Node{})
+
+	node := driver.NewMockNode(ctrl)
+	node.EXPECT().GetLabel().AnyTimes().Return(string(Node1TestId))
+
+	reg, err := NewNodeLogDispatcher(net, t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create log dispatcher: %v", err)
+	}
+	listener := newRestartRecordingListener()
+	reg.RegisterLogListener(listener)
+
+	reg.BeforeNodeRemoval(node)
+
+	if got := listener.getRestarts(); len(got) != 1 || got[0] != Node1TestId {
+		t.Errorf("expected restart notification on suspension, got %v", got)
+	}
+}
+
+type restartRecordingListener struct {
+	mu       sync.Mutex
+	blocks   map[Node][]Block
+	restarts []Node
+}
+
+func newRestartRecordingListener() *restartRecordingListener {
+	return &restartRecordingListener{blocks: map[Node][]Block{}}
+}
+
+func (l *restartRecordingListener) OnBlock(node Node, b Block) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if b.Height > 0 {
+		l.blocks[node] = append(l.blocks[node], b)
+	}
+}
+
+func (l *restartRecordingListener) OnNodeRestart(node Node) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.restarts = append(l.restarts, node)
+}
+
+func (l *restartRecordingListener) getBlocks(node Node) []Block {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]Block{}, l.blocks[node]...)
+}
+
+func (l *restartRecordingListener) getRestarts() []Node {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]Node{}, l.restarts...)
+}
