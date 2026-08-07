@@ -1046,3 +1046,349 @@ func TestRun_VerifyStakes_ChecksFullyUndelegatedPairIsZero(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+// The tests below cover scenarios that are set up wrongly: they target nodes
+// that do not exist, are not validators, or hold no stake for the delegator
+// performing the operation. Each of them must fail with a message that names
+// the offending step, and must not leave the executor's stake bookkeeping in
+// a state that a later verifyStakes would silently accept.
+
+func TestDelegate_UnknownNodeIsReported(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	registry := NewMockvalidatorRegistry(ctrl)
+	// No delegation call is expected for a node that does not exist.
+
+	state := newDelegationTestState(t, nil)
+	step := &parser.Step{
+		Function: parser.FuncDelegate,
+		DelegateTargets: []parser.DelegateTarget{
+			{Node: "ghost", Delegator: "alice", Stake: 1_000},
+		},
+	}
+
+	err := execDelegate(t.Context(), step, registry, state)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "not found in active nodes") {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if len(state.expectedStakes) != 0 {
+		t.Errorf("expected no tracked stake, got %v", state.expectedStakes)
+	}
+}
+
+func TestUndelegate_UnknownNodeIsReported(t *testing.T) {
+	tests := map[string]parser.UndelegateTarget{
+		"self undelegation":      {Node: "ghost"},
+		"delegator undelegation": {Node: "ghost", Delegator: "alice"},
+	}
+	for name, target := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			registry := NewMockvalidatorRegistry(ctrl)
+			// Neither undelegation path may be entered.
+
+			state := newDelegationTestState(t, nil)
+			step := &parser.Step{
+				Function:          parser.FuncUndelegate,
+				UndelegateTargets: []parser.UndelegateTarget{target},
+			}
+
+			err := execUndelegate(t.Context(), step, registry, state)
+			if err == nil {
+				t.Fatal("expected an error, got nil")
+			}
+			if !strings.Contains(err.Error(), "not found in active nodes") {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestDelegation_NonValidatorNodeIsReported(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	registry := NewMockvalidatorRegistry(ctrl)
+	observer := driver.NewMockNode(ctrl)
+	observer.EXPECT().GetValidatorId().Return(nil).AnyTimes()
+
+	state := newDelegationTestState(t, map[string]driver.Node{"watcher": observer})
+
+	err := execDelegate(t.Context(), &parser.Step{
+		Function: parser.FuncDelegate,
+		DelegateTargets: []parser.DelegateTarget{
+			{Node: "watcher", Delegator: "alice", Stake: 1_000},
+		},
+	}, registry, state)
+	if err == nil || !strings.Contains(err.Error(), "is not a validator") {
+		t.Errorf("expected a non-validator error for delegate, got: %v", err)
+	}
+
+	err = execUndelegate(t.Context(), &parser.Step{
+		Function: parser.FuncUndelegate,
+		UndelegateTargets: []parser.UndelegateTarget{
+			{Node: "watcher"},
+		},
+	}, registry, state)
+	if err == nil || !strings.Contains(err.Error(), "is not a validator") {
+		t.Errorf("expected a non-validator error for undelegate, got: %v", err)
+	}
+}
+
+// A base name matching several numbered instances is ambiguous: picking the
+// first one would stake on an arbitrary validator.
+func TestDelegation_AmbiguousNodeNameIsReported(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	registry := NewMockvalidatorRegistry(ctrl)
+
+	first, second := 2, 3
+	nodeA := driver.NewMockNode(ctrl)
+	nodeA.EXPECT().GetValidatorId().Return(&first).AnyTimes()
+	nodeB := driver.NewMockNode(ctrl)
+	nodeB.EXPECT().GetValidatorId().Return(&second).AnyTimes()
+
+	state := newDelegationTestState(t, map[string]driver.Node{
+		"heavy-0": nodeA,
+		"heavy-1": nodeB,
+	})
+
+	err := execDelegate(t.Context(), &parser.Step{
+		Function: parser.FuncDelegate,
+		DelegateTargets: []parser.DelegateTarget{
+			{Node: "heavy", Delegator: "alice", Stake: 1_000},
+		},
+	}, registry, state)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "multiple instances") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// Funding precedes delegation; when the treasury transfer fails the delegation
+// must not be attempted, because the account cannot pay for it.
+func TestDelegate_FundingFailureSkipsTheDelegation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	registry := NewMockvalidatorRegistry(ctrl)
+
+	registry.EXPECT().
+		fundDelegator(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(fmt.Errorf("insufficient funds for gas * price + value"))
+	// delegate must not be called.
+
+	state := newDelegationTestState(t, map[string]driver.Node{
+		"heavy": validatorNode(ctrl, 2),
+	})
+	step := &parser.Step{
+		Function: parser.FuncDelegate,
+		DelegateTargets: []parser.DelegateTarget{
+			{Node: "heavy", Delegator: "alice", Stake: 1_000},
+		},
+	}
+
+	err := execDelegate(t.Context(), step, registry, state)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to fund delegator") {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if len(state.expectedStakes) != 0 {
+		t.Errorf("expected no tracked stake, got %v", state.expectedStakes)
+	}
+}
+
+// A rejected delegation must not be recorded as expected stake, otherwise the
+// next verifyStakes would report a mismatch instead of the real failure.
+func TestDelegate_FailedDelegationIsNotTracked(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	registry := NewMockvalidatorRegistry(ctrl)
+
+	registry.EXPECT().fundDelegator(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	registry.EXPECT().
+		delegate(gomock.Any(), 2, uint64(1_000), gomock.Any()).
+		Return(fmt.Errorf("delegate transaction reverted"))
+
+	state := newDelegationTestState(t, map[string]driver.Node{
+		"heavy": validatorNode(ctrl, 2),
+	})
+	step := &parser.Step{
+		Function: parser.FuncDelegate,
+		DelegateTargets: []parser.DelegateTarget{
+			{Node: "heavy", Delegator: "alice", Stake: 1_000},
+		},
+	}
+
+	if err := execDelegate(t.Context(), step, registry, state); err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	if len(state.expectedStakes) != 0 {
+		t.Errorf("expected no tracked stake, got %v", state.expectedStakes)
+	}
+}
+
+// Undelegating a known delegator from a validator it never staked on reaches
+// the chain, where the SFC query finds no stake. The executor must surface
+// that rejection rather than treat the step as a no-op.
+func TestUndelegate_DelegatorWithoutStakeOnValidatorIsReported(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	registry := NewMockvalidatorRegistry(ctrl)
+
+	registry.EXPECT().fundDelegator(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	registry.EXPECT().delegate(gomock.Any(), 2, uint64(1_000), gomock.Any()).Return(nil)
+	// The undelegation targets the other validator, where alice has nothing.
+	registry.EXPECT().
+		undelegateAs(gomock.Any(), 3, uint64(0), gomock.Any()).
+		Return(fmt.Errorf("delegator has no stake on validator 3"))
+
+	state := newDelegationTestState(t, map[string]driver.Node{
+		"heavy": validatorNode(ctrl, 2),
+		"light": validatorNode(ctrl, 3),
+	})
+
+	if err := execDelegate(t.Context(), &parser.Step{
+		Function: parser.FuncDelegate,
+		DelegateTargets: []parser.DelegateTarget{
+			{Node: "heavy", Delegator: "alice", Stake: 1_000},
+		},
+	}, registry, state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	err := execUndelegate(t.Context(), &parser.Step{
+		Function: parser.FuncUndelegate,
+		UndelegateTargets: []parser.UndelegateTarget{
+			{Node: "light", Delegator: "alice"},
+		},
+	}, registry, state)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "no stake on validator 3") {
+		t.Errorf("unexpected error: %v", err)
+	}
+	// The stake on the validator alice did delegate to stays untouched.
+	if got := state.expectedStakes[stakeKey{"alice", 2}]; got != 1_000 {
+		t.Errorf("expected the unrelated stake to remain 1000 S, got %d S", got)
+	}
+}
+
+// Self-undelegation from a validator without stake is rejected by the registry;
+// the error must name the node so the scenario step can be identified.
+func TestUndelegate_SelfUndelegationFailureIsReported(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	registry := NewMockvalidatorRegistry(ctrl)
+
+	registry.EXPECT().
+		unregisterValidator(gomock.Any(), 2, uint64(0)).
+		Return(fmt.Errorf("validator has no self-stake"))
+
+	state := newDelegationTestState(t, map[string]driver.Node{
+		"heavy": validatorNode(ctrl, 2),
+	})
+	step := &parser.Step{
+		Function: parser.FuncUndelegate,
+		UndelegateTargets: []parser.UndelegateTarget{
+			{Node: "heavy"},
+		},
+	}
+
+	err := execUndelegate(t.Context(), step, registry, state)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "heavy") {
+		t.Errorf("expected the node name in the error, got: %v", err)
+	}
+}
+
+// Undelegating more than was delegated is rejected on-chain. The local
+// bookkeeping must not underflow into a huge expected stake when it happens.
+func TestUndelegate_MoreThanDelegatedDoesNotUnderflowTheBookkeeping(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	registry := NewMockvalidatorRegistry(ctrl)
+
+	registry.EXPECT().fundDelegator(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	registry.EXPECT().delegate(gomock.Any(), 2, uint64(1_000), gomock.Any()).Return(nil)
+	registry.EXPECT().undelegateAs(gomock.Any(), 2, uint64(5_000), gomock.Any()).Return(nil)
+
+	state := newDelegationTestState(t, map[string]driver.Node{
+		"heavy": validatorNode(ctrl, 2),
+	})
+
+	if err := execDelegate(t.Context(), &parser.Step{
+		Function: parser.FuncDelegate,
+		DelegateTargets: []parser.DelegateTarget{
+			{Node: "heavy", Delegator: "alice", Stake: 1_000},
+		},
+	}, registry, state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	tooMuch := uint64(5_000)
+	if err := execUndelegate(t.Context(), &parser.Step{
+		Function: parser.FuncUndelegate,
+		UndelegateTargets: []parser.UndelegateTarget{
+			{Node: "heavy", Delegator: "alice", Stake: &tooMuch},
+		},
+	}, registry, state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := state.expectedStakes[stakeKey{"alice", 2}]; got != 0 {
+		t.Errorf("expected the tracked stake to be clamped to 0, got %d S", got)
+	}
+}
+
+func TestVerifyStakes_StakeQueryFailureIsReported(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	registry := NewMockvalidatorRegistry(ctrl)
+
+	registry.EXPECT().fundDelegator(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	registry.EXPECT().delegate(gomock.Any(), 2, uint64(1_000), gomock.Any()).Return(nil)
+	registry.EXPECT().
+		getDelegatorStake(gomock.Any(), 2).
+		Return(uint64(0), fmt.Errorf("connection reset"))
+
+	state := newDelegationTestState(t, map[string]driver.Node{
+		"heavy": validatorNode(ctrl, 2),
+	})
+	if err := execDelegate(t.Context(), &parser.Step{
+		Function: parser.FuncDelegate,
+		DelegateTargets: []parser.DelegateTarget{
+			{Node: "heavy", Delegator: "alice", Stake: 1_000},
+		},
+	}, registry, state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	err := execVerifyStakes(&parser.Step{Function: parser.FuncVerifyStakes}, registry, state)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "query failed") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// newDelegationTestState builds the minimal executor state the delegation steps
+// operate on.
+func newDelegationTestState(t *testing.T, nodes map[string]driver.Node) *runState {
+	t.Helper()
+	if nodes == nil {
+		nodes = map[string]driver.Node{}
+	}
+	return &runState{
+		nodes:          nodes,
+		delegators:     map[string]*delegatorAccount{},
+		expectedStakes: map[stakeKey]uint64{},
+	}
+}
+
+// validatorNode returns a node mock reporting the given validator id.
+func validatorNode(ctrl *gomock.Controller, id int) driver.Node {
+	node := driver.NewMockNode(ctrl)
+	node.EXPECT().GetValidatorId().Return(&id).AnyTimes()
+	return node
+}
