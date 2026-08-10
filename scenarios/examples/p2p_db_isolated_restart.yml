@@ -1,0 +1,51 @@
+Name: p2p-db-isolated-restart
+Description: >
+  Restarts a validator in full isolation to probe the validity of its
+  persisted p2p database: the client is stopped and removed from all
+  other nodes' static peer tables (detachPeers: true), and the restart
+  skips norma's admin_addPeer wiring (connectPeers: false), so the node
+  can only reconnect from its own <datadir>/p2p state.
+
+  With current sonic this is expected to fail: norma networks run the
+  fake net without bootnodes, discovery never populates the node
+  database, and admin_addPeer connections are memory-only — so the
+  restarted node has nobody to dial and stays isolated. The restart
+  step is marked failing and the check asserts zero peers, documenting
+  that the p2p database alone is not sufficient to rejoin today. Once
+  sonic populates or persists the peer set across restarts, this
+  scenario flips into the acceptance test for that feature.
+
+Scenario:
+  - startNode: validator-1
+    type: validator
+  - startNode: validator-2
+    type: validator
+  - startNode: validator-3
+    type: validator
+  - startNode: validator-4
+    type: validator
+  - waitFor: 10s
+
+  # Stop the client and drop it from the other nodes' static peer
+  # tables; trusted-peer entries remain, so the others would accept the
+  # node if it dialed back on its own
+  - stopSonic: validator-4
+    detachPeers: true
+
+  # Restart detached: the node must reconnect from its own p2p db,
+  # which is empty with current sonic — hence failing
+  - startNode: validator-4
+    type: validator
+    connectPeers: false
+    failing: true
+
+  - waitFor: 20s
+
+  # Nobody redials the node and it has nobody to dial: fully isolated
+  - checks:
+    - peerCount:
+        node: validator-4
+        max: 0
+
+  # Remove the stale node so the end checks judge the surviving network
+  - stopNode: validator-4

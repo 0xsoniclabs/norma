@@ -179,7 +179,7 @@ func (n *LocalNetwork) startGenesisValidators(
 				GenesisJsonPath: &n.genesisJsonPath,
 				ExtraArguments:  validator.ExtraArguments,
 			}
-			if _, err := n.createNode(ctx, &cfg); err != nil {
+			if _, err := n.createNode(ctx, &cfg, true); err != nil {
 				return fmt.Errorf(
 					"validator %q (idx=%d, image=%s): %w",
 					label, idx, validator.ImageName, err,
@@ -191,20 +191,54 @@ func (n *LocalNetwork) startGenesisValidators(
 	return nil
 }
 
-// addNodeIntoNetwork connects the node with other nodes in the network, adds it into the list of nodes.
-// It is best-effort: if some existing nodes are unreachable, the new node will
-// still join the network as long as at least one peer connection succeeds.
-func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaNode) error {
+// registerNode records the node in the network's registry under its current
+// enode ID, replacing any stale registration of the same node, and marks the
+// network as bootstrapped.
+func (n *LocalNetwork) registerNode(node *node.OperaNode) (driver.NodeID, error) {
+	id, err := node.GetNodeID()
+	if err != nil {
+		return "", fmt.Errorf("failed to get node id; %v", err)
+	}
+	n.nodesMutex.Lock()
+	defer n.nodesMutex.Unlock()
+	for oldId, existing := range n.nodes {
+		if existing == node {
+			delete(n.nodes, oldId)
+			break
+		}
+	}
+	n.nodes[id] = node
+	n.bootstrapped = true
+	return id, nil
+}
+
+// findRegisteredNode returns the enode ID under which the given node is
+// registered. It matches by identity rather than querying the node, so it
+// also works while the node's client is not running.
+// Requires nodesMutex to be held.
+func (n *LocalNetwork) findRegisteredNode(node driver.Node) (driver.NodeID, error) {
+	for id, candidate := range n.nodes {
+		if driver.Node(candidate) == node {
+			return id, nil
+		}
+	}
+	return "", fmt.Errorf("node %q is not registered in the network", node.GetLabel())
+}
+
+// wirePeers makes every other node in the network accept and dial the node
+// registered under the given enode ID. It is best-effort: the node counts as
+// wired as long as at least one existing peer connection succeeds.
+func (n *LocalNetwork) wirePeers(ctx context.Context, id driver.NodeID) error {
 	n.nodesMutex.Lock()
 	defer n.nodesMutex.Unlock()
 
-	id, err := node.GetNodeID()
-	if err != nil {
-		return fmt.Errorf("failed to get node id; %v", err)
-	}
-	var succeeded int
-	for _, other := range n.nodes {
-		if err = other.AddPeer(ctx, id); err != nil {
+	var others, succeeded int
+	for otherId, other := range n.nodes {
+		if otherId == id {
+			continue
+		}
+		others++
+		if err := other.AddPeer(ctx, id); err != nil {
 			label := other.GetLabel()
 			if checkErr := other.CheckRunning(ctx); checkErr != nil {
 				slog.Error("node has crashed", "node", label, "status", checkErr)
@@ -215,17 +249,30 @@ func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaN
 			succeeded++
 		}
 	}
-	if len(n.nodes) > 0 && succeeded == 0 {
+	if others > 0 && succeeded == 0 {
 		return fmt.Errorf("failed to add peer; no existing node was reachable")
 	}
-	n.nodes[id] = node
-	n.bootstrapped = true
+	return nil
+}
+
+// removePeerOnOthers asks every registered node except the one given to drop
+// it from their static peer tables.
+// Requires nodesMutex to be held.
+func (n *LocalNetwork) removePeerOnOthers(ctx context.Context, id driver.NodeID) error {
+	for otherId, other := range n.nodes {
+		if otherId == id {
+			continue
+		}
+		if err := other.RemovePeer(ctx, id); err != nil {
+			return fmt.Errorf("failed to remove peer on node %s; %v", other.GetLabel(), err)
+		}
+	}
 	return nil
 }
 
 // ReconnectNode re-establishes peer connections between the given node
-// and the rest of the network. It removes the stale enode entry (if
-// any) and re-adds the node under its current enode ID.
+// and the rest of the network. It re-registers the node under its current
+// enode ID and wires it to the other nodes.
 func (n *LocalNetwork) ReconnectNode(
 	ctx context.Context,
 	driverNode driver.Node,
@@ -235,22 +282,35 @@ func (n *LocalNetwork) ReconnectNode(
 		return fmt.Errorf("ReconnectNode: unsupported node type")
 	}
 
-	n.nodesMutex.Lock()
-	// Remove any stale entry for this OperaNode (old enode ID).
-	for id, existing := range n.nodes {
-		if existing == opera {
-			delete(n.nodes, id)
-			break
-		}
+	id, err := n.registerNode(opera)
+	if err != nil {
+		return err
 	}
-	n.nodesMutex.Unlock()
+	return n.wirePeers(ctx, id)
+}
 
-	return n.addNodeIntoNetwork(ctx, opera)
+// DetachNode removes the given node from the static peer tables of all other
+// nodes while keeping it registered in the network. Trusted-peer entries are
+// left in place: they only make the others accept the node should it dial
+// back on its own.
+func (n *LocalNetwork) DetachNode(
+	ctx context.Context,
+	driverNode driver.Node,
+) error {
+	n.nodesMutex.Lock()
+	defer n.nodesMutex.Unlock()
+
+	id, err := n.findRegisteredNode(driverNode)
+	if err != nil {
+		return err
+	}
+	return n.removePeerOnOthers(ctx, id)
 }
 
 // createNode is an internal version of CreateNode enabling the creation
-// of validator and non-validator nodes in the network.
-func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNodeConfig) (*node.OperaNode, error) {
+// of validator and non-validator nodes in the network. Unless wirePeers is
+// false, the new node is announced to all existing nodes via admin_addPeer.
+func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNodeConfig, wirePeers bool) (*node.OperaNode, error) {
 	n.nodesMutex.Lock()
 	nodeConfig.NetworkBootstrap = !n.bootstrapped
 	n.nodesMutex.Unlock()
@@ -261,8 +321,14 @@ func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNod
 	if err != nil {
 		return nil, fmt.Errorf("failed to start opera docker; %v", err)
 	}
-	if err := n.addNodeIntoNetwork(ctx, node); err != nil {
-		return nil, fmt.Errorf("failed to connect node; %w", err)
+	id, err := n.registerNode(node)
+	if err != nil {
+		return nil, fmt.Errorf("failed to register node; %w", err)
+	}
+	if wirePeers {
+		if err := n.wirePeers(ctx, id); err != nil {
+			return nil, fmt.Errorf("failed to connect node; %w", err)
+		}
 	}
 	n.listenerMutex.Lock()
 	for listener := range n.listeners {
@@ -282,7 +348,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 			NetworkConfig:  &n.config,
 			ValidatorId:    config.ValidatorId,
 			ExtraArguments: config.ExtraArguments,
-		})
+		}, !config.SkipPeerWiring)
 		if err != nil {
 			return nil, err
 		}
@@ -303,7 +369,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 		GenesisJsonPath: &n.genesisJsonPath,
 		MountDataDir:    datadir,
 		ExtraArguments:  config.ExtraArguments,
-	})
+	}, !config.SkipPeerWiring)
 }
 
 // prepareGenesis generates the genesis.json file for the network based on the
@@ -339,20 +405,13 @@ func (n *LocalNetwork) RemoveNode(node driver.Node) error {
 
 	n.nodesMutex.Lock()
 	defer n.nodesMutex.Unlock()
-	id, err := node.GetNodeID()
+	id, err := n.findRegisteredNode(node)
 	if err != nil {
-		return fmt.Errorf("failed to get node id; %v", err)
+		return err
 	}
 
 	delete(n.nodes, id)
-	for _, other := range n.nodes {
-		if err = other.RemovePeer(n.ctx, id); err != nil {
-			n.nodesMutex.Unlock()
-			return fmt.Errorf("failed to remove peer; %v", err)
-		}
-	}
-
-	return nil
+	return n.removePeerOnOthers(n.ctx, id)
 }
 
 func (n *LocalNetwork) SendTransaction(tx *types.Transaction, source string) {

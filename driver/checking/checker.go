@@ -108,6 +108,7 @@ func (config *CheckerConfig) Check() error {
 	errs := []error{}
 
 	isBool := func(v any) bool { _, ok := v.(bool); return ok }
+	isString := func(v any) bool { s, ok := v.(string); return ok && s != "" }
 	isPositiveInt := func(v any) bool { i, ok := v.(int); return ok && i >= 0 }
 	isNonNegativeInt64 := func(v any) bool { i, ok := v.(int64); return ok && i >= 0 }
 	isRulesPatch := func(v any) bool {
@@ -125,6 +126,9 @@ func (config *CheckerConfig) Check() error {
 		"ceiling":   isPositiveInt,
 		"slack":     isPositiveInt,
 		"rules":     isRulesPatch,
+		"node":      isString,
+		"min":       isPositiveInt,
+		"max":       isPositiveInt,
 	}
 
 	for key, check := range checks {

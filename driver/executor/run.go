@@ -27,7 +27,6 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/checking"
-	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/genesis"
 	"golang.org/x/sync/errgroup"
@@ -229,6 +228,8 @@ func executeStep(
 		return execStopNode(ctx, step, net, state)
 	case parser.FuncKillSonic:
 		return execKillSonic(ctx, step, net, state)
+	case parser.FuncStopSonic:
+		return execStopSonic(ctx, step, net, state)
 	case parser.FuncHealDb:
 		return execHealDb(ctx, step, state)
 	case parser.FuncUndelegate:
@@ -274,20 +275,46 @@ func executeStep(
 	}
 }
 
+// clientController captures the client process operations the executor
+// needs for steps that manage a node's client in place, keeping the
+// container alive. Implemented by node.OperaNode.
+type clientController interface {
+	StartSonicd(context.Context) error
+	StartSonicdAsObserver(context.Context) error
+	StopSonicd(context.Context) error
+	ForceStopSonicd(context.Context) error
+	HealSonicd(context.Context) error
+	WaitForSync(context.Context) error
+}
+
+// getClientController looks up the named node and returns its client
+// process controls.
+func getClientController(state *runState, name string) (driver.Node, clientController, error) {
+	n, ok := state.nodes[name]
+	if !ok {
+		return nil, nil, fmt.Errorf("node %q not found in active nodes", name)
+	}
+	controller, ok := n.(clientController)
+	if !ok {
+		return nil, nil, fmt.Errorf("node %q does not support client process control", name)
+	}
+	return n, controller, nil
+}
+
 // restartNodeInPlace restarts the client process of a node whose container
-// is still alive, as is the case after killSonic followed by healDb. The
-// data directory is preserved, so the node rejoins with the history it
-// already had rather than syncing from genesis.
+// is still alive, as is the case after killSonic followed by healDb, or
+// after stopSonic. The data directory is preserved, so the node rejoins
+// with the history it already had rather than syncing from genesis.
 func restartNodeInPlace(
 	ctx context.Context,
 	step *parser.Step,
 	net driver.Network,
-	existing driver.Node,
+	state *runState,
 ) error {
 	name := step.Identifier
-	opera, ok := existing.(*node.OperaNode)
-	if !ok {
-		return fmt.Errorf("node %q is not an OperaNode", name)
+	existing, controller, err := getClientController(state, name)
+	if err != nil {
+		return err
 	}
 
 	// Capture the network's height before the node comes back, so we know
@@ -307,30 +334,36 @@ func restartNodeInPlace(
 	// validator to an observer would remove it from consensus for the rest
 	// of the scenario while still reporting success.
 	if step.NodeType == "validator" {
-		if err := opera.StartSonicd(ctx); err != nil {
+		if err := controller.StartSonicd(ctx); err != nil {
 			return fmt.Errorf("failed to restart sonicd on %s: %w", name, err)
 		}
 	} else {
-		if err := opera.StartSonicdAsObserver(ctx); err != nil {
+		if err := controller.StartSonicdAsObserver(ctx); err != nil {
 			return fmt.Errorf("failed to restart sonicd on %s: %w", name, err)
 		}
 	}
 
-	if err := opera.WaitForSync(ctx); err != nil {
+	if err := controller.WaitForSync(ctx); err != nil {
 		return fmt.Errorf("failed to sync restarted node %s: %w", name, err)
 	}
 
 	// Re-establish peer connections so other nodes discover the restarted
-	// client (the peer table does not survive the restart).
-	if err := net.ReconnectNode(ctx, existing); err != nil {
-		return fmt.Errorf("failed to reconnect node %s: %w", name, err)
+	// client (the peer table does not survive the restart) — unless the
+	// step asks the node to rejoin on its own, e.g. to probe the validity
+	// of its persisted p2p database.
+	if step.PeerWiringEnabled() {
+		if err := net.ReconnectNode(ctx, existing); err != nil {
+			return fmt.Errorf("failed to reconnect node %s: %w", name, err)
+		}
 	}
 
 	// Announce availability before waiting for the node to catch up, so
 	// monitoring observes the blocks it processes while doing so.
 	net.ResumeNode(existing)
 
-	if targetBlock > 0 {
+	// Skip the catch-up assertion for steps expected to fail, e.g. a node
+	// restarted in isolation that cannot sync by design.
+	if targetBlock > 0 && !step.Failing {
 		if err := waitForNodeSync(ctx, existing, targetBlock+1); err != nil {
 			return fmt.Errorf(
 				"restarted node %s did not reach block %d: %w",
@@ -356,10 +389,10 @@ func execStartNode(
 	name := step.Identifier
 
 	// In-place restart: if the node is already tracked (e.g. after
-	// killSonic + healDb), restart sonicd inside the existing container
-	// instead of creating a new one.
-	if existing, ok := state.nodes[name]; ok {
-		return restartNodeInPlace(ctx, step, net, existing)
+	// killSonic + healDb, or stopSonic), restart sonicd inside the
+	// existing container instead of creating a new one.
+	if _, ok := state.nodes[name]; ok {
+		return restartNodeInPlace(ctx, step, net, state)
 	}
 
 	isRejoin := state.nodeHistory[name]
@@ -452,6 +485,7 @@ func execStartNode(
 				ValidatorId:    validatorIds[instance],
 				DataVolume:     dataVolumePtr(step.DataVolume),
 				ExtraArguments: step.ExtraArguments,
+				SkipPeerWiring: !step.PeerWiringEnabled(),
 			})
 			if err != nil {
 				return fmt.Errorf(
@@ -721,20 +755,52 @@ func execKillSonic(
 	net driver.Network,
 	state *runState,
 ) error {
-	n, ok := state.nodes[step.Identifier]
-	if !ok {
-		return fmt.Errorf("node %q not found in active nodes", step.Identifier)
-	}
+	return execStopClient(ctx, step, net, state, clientController.ForceStopSonicd)
+}
 
-	opera, ok := n.(*node.OperaNode)
-	if !ok {
-		return fmt.Errorf("node %q is not an OperaNode", step.Identifier)
+// execStopSonic stops the sonicd process inside a running node
+// gracefully. The container stays alive and the node remains in
+// state.nodes so it can be restarted in place later.
+func execStopSonic(
+	ctx context.Context,
+	step *parser.Step,
+	net driver.Network,
+	state *runState,
+) error {
+	return execStopClient(ctx, step, net, state, clientController.StopSonicd)
+}
+
+// execStopClient ends a node's client process with the given stop function,
+// keeping the container alive. With detachPeers, the node is afterwards
+// removed from the other nodes' static peer tables, so nothing redials it
+// and a later restart has to reconnect on the node's own initiative.
+func execStopClient(
+	ctx context.Context,
+	step *parser.Step,
+	net driver.Network,
+	state *runState,
+	stop func(clientController, context.Context) error,
+) error {
+	n, controller, err := getClientController(state, step.Identifier)
+	if err != nil {
+		return err
 	}
 
 	// Notify monitoring that this node is going offline.
 	net.SuspendNode(n)
 
-	return opera.ForceStopSonicd(ctx)
+	if err := stop(controller, ctx); err != nil {
+		return err
+	}
+
+	if step.DetachPeers {
+		if err := net.DetachNode(ctx, n); err != nil {
+			return fmt.Errorf(
+				"failed to detach node %s from its peers: %w",
+				step.Identifier, err)
+		}
+	}
+	return nil
 }
 
 // execHealDb runs sonictool heal on a killed node, recovering the
@@ -746,19 +812,14 @@ func execHealDb(
 	step *parser.Step,
 	state *runState,
 ) error {
-	n, ok := state.nodes[step.Identifier]
-	if !ok {
-		return fmt.Errorf("node %q not found in active nodes", step.Identifier)
-	}
-
-	opera, ok := n.(*node.OperaNode)
-	if !ok {
-		return fmt.Errorf("node %q is not an OperaNode", step.Identifier)
+	_, controller, err := getClientController(state, step.Identifier)
+	if err != nil {
+		return err
 	}
 
 	healCtx, cancel := context.WithTimeout(ctx, healDbTimeout)
 	defer cancel()
-	return opera.HealSonicd(healCtx)
+	return controller.HealSonicd(healCtx)
 }
 
 // execStopApp stops a running application.
@@ -795,6 +856,7 @@ var checkFunctionToCheckerName = map[parser.StepFunction]string{
 	parser.FuncCheckBlocksProduced:   "blocksRolling",
 	parser.FuncCheckEventThrottled:   "eventThrottled",
 	parser.FuncCheckNetworkRules:     "networkRules",
+	parser.FuncCheckPeerCount:        "peerCount",
 	parser.FuncCheckValidatorsActive: "validatorsActive",
 }
 
@@ -836,6 +898,15 @@ func execCheck(ctx context.Context, checkerName string, spec *parser.CheckSpec, 
 	}
 	if len(spec.ThrottledNodes) > 0 {
 		config["throttledNodes"] = spec.ThrottledNodes
+	}
+	if spec.Node != "" {
+		config["node"] = spec.Node
+	}
+	if spec.Min != nil {
+		config["min"] = *spec.Min
+	}
+	if spec.Max != nil {
+		config["max"] = *spec.Max
 	}
 
 	if len(config) > 0 {

@@ -115,6 +115,12 @@ type Network interface {
 	// restart where the node's peer table was lost.
 	ReconnectNode(ctx context.Context, node Node) error
 
+	// DetachNode removes the given node from the static peer tables of all
+	// other nodes, without removing it from the network. Use after stopping
+	// a node's client to prevent the others from redialing it, so that a
+	// later restart has to reconnect on the node's own initiative.
+	DetachNode(ctx context.Context, node Node) error
+
 	// SuspendNode notifies listeners that the given node is temporarily
 	// unavailable (e.g. sonicd was killed). Monitoring sensors will stop
 	// polling this node until ResumeNode is called.
@@ -169,6 +175,9 @@ type NodeConfig struct {
 	Image          string
 	DataVolume     *string
 	ExtraArguments string
+	// SkipPeerWiring leaves the new node out of the admin_addPeer wiring:
+	// it is registered in the network but no existing node is told about it.
+	SkipPeerWiring bool
 }
 
 type ApplicationConfig struct {

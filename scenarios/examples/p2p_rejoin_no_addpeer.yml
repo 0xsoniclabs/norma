@@ -1,0 +1,41 @@
+Name: p2p-rejoin-no-addpeer
+Description: >
+  Restarts a validator without norma's admin_addPeer re-wiring
+  (connectPeers: false). The node's p2p identity (nodekey in
+  <datadir>/p2p) survives the in-place restart, and the other nodes
+  still hold its enode as a static peer, so they redial it and the node
+  rejoins and resyncs without any help from the harness.
+
+  Peer wiring is one-directional: when a node joins, only the already
+  running nodes are told to dial it. The victim must therefore be the
+  last started validator — it is in every other node's static peer
+  table, while the first validator would be in none.
+
+Scenario:
+  - startNode: validator-1
+    type: validator
+  - startNode: validator-2
+    type: validator
+  - startNode: validator-3
+    type: validator
+  - startNode: validator-4
+    type: validator
+  - waitFor: 10s
+
+  # Stop the client gracefully — container and datadir (incl. p2p db) survive
+  - stopSonic: validator-4
+
+  # Restart without re-wiring: no admin_addPeer is issued for this node
+  - startNode: validator-4
+    type: validator
+    connectPeers: false
+
+  - waitFor: 10s
+
+  # The others' surviving static peer entries brought the node back
+  - checks:
+    - peerCount:
+        node: validator-4
+        min: 1
+    - blockHeights:
+        tolerance: 5

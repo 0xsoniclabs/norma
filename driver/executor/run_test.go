@@ -709,3 +709,164 @@ func TestRun_RunAndCaptureEventExecution_CapturesAllSteps(t *testing.T) {
 		}
 	}
 }
+
+// fakeClientNode is a driver.Node with client process controls, standing in
+// for an OperaNode in scenarios that stop and restart clients in place.
+type fakeClientNode struct {
+	driver.Node
+	starts, observerStarts, stops, kills, heals int
+}
+
+func (n *fakeClientNode) StartSonicd(context.Context) error {
+	n.starts++
+	return nil
+}
+
+func (n *fakeClientNode) StartSonicdAsObserver(context.Context) error {
+	n.observerStarts++
+	return nil
+}
+
+func (n *fakeClientNode) StopSonicd(context.Context) error {
+	n.stops++
+	return nil
+}
+
+func (n *fakeClientNode) ForceStopSonicd(context.Context) error {
+	n.kills++
+	return nil
+}
+
+func (n *fakeClientNode) HealSonicd(context.Context) error {
+	n.heals++
+	return nil
+}
+
+func (n *fakeClientNode) WaitForSync(context.Context) error {
+	return nil
+}
+
+// newFakeClientNode wires a fakeClientNode around a mock providing the
+// plain driver.Node behavior.
+func newFakeClientNode(ctrl *gomock.Controller, label string) *fakeClientNode {
+	mock := driver.NewMockNode(ctrl)
+	mock.EXPECT().GetLabel().Return(label).AnyTimes()
+	mock.EXPECT().DialRpc(gomock.Any()).
+		Return(nil, fmt.Errorf("not ready")).AnyTimes()
+	return &fakeClientNode{Node: mock}
+}
+
+func TestRun_RestartInPlace_ReconnectsPeersByDefault(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node := newFakeClientNode(ctrl, "observer-1")
+
+	net.EXPECT().DialRandomRpc().
+		Return(nil, driver.ErrEmptyNetwork).AnyTimes()
+	net.EXPECT().CreateNode(gomock.Any()).Return(node, nil)
+	net.EXPECT().SuspendNode(node)
+	// The default restart re-wires the node; detachPeers is not set, so
+	// DetachNode must not be called (no expectation).
+	net.EXPECT().ReconnectNode(gomock.Any(), node).Return(nil)
+	net.EXPECT().ResumeNode(node)
+
+	scenario := parser.Scenario{
+		Name:             "Kill Heal Restart",
+		Description:      "Test scenario.",
+		DisableEndChecks: true,
+		Steps: []parser.Step{
+			{Function: parser.FuncStartNode, Identifier: "observer-1"},
+			{Function: parser.FuncKillSonic, Identifier: "observer-1"},
+			{Function: parser.FuncHealDb, Identifier: "observer-1"},
+			{Function: parser.FuncStartNode, Identifier: "observer-1"},
+		},
+	}
+
+	if err := run(t.Context(), net, &scenario, nil, registry); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if node.kills != 1 || node.heals != 1 || node.observerStarts != 1 {
+		t.Errorf("unexpected client actions: %+v", node)
+	}
+}
+
+func TestRun_RestartInPlace_SkipsPeerWiringWhenConnectPeersIsFalse(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node := newFakeClientNode(ctrl, "observer-1")
+
+	net.EXPECT().DialRandomRpc().
+		Return(nil, driver.ErrEmptyNetwork).AnyTimes()
+	net.EXPECT().CreateNode(gomock.Any()).Return(node, nil)
+	net.EXPECT().SuspendNode(node)
+	// The stop detaches the node from all peer tables, and the restart
+	// must leave it detached: ReconnectNode must not be called (no
+	// expectation).
+	net.EXPECT().DetachNode(gomock.Any(), node).Return(nil)
+	net.EXPECT().ResumeNode(node)
+
+	connect := false
+	scenario := parser.Scenario{
+		Name:             "Isolated Restart",
+		Description:      "Test scenario.",
+		DisableEndChecks: true,
+		Steps: []parser.Step{
+			{Function: parser.FuncStartNode, Identifier: "observer-1"},
+			{
+				Function:    parser.FuncStopSonic,
+				Identifier:  "observer-1",
+				DetachPeers: true,
+			},
+			{
+				Function:     parser.FuncStartNode,
+				Identifier:   "observer-1",
+				ConnectPeers: &connect,
+				Failing:      true,
+			},
+		},
+	}
+
+	if err := run(t.Context(), net, &scenario, nil, registry); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if node.stops != 1 || node.observerStarts != 1 {
+		t.Errorf("unexpected client actions: %+v", node)
+	}
+}
+
+func TestRun_StartNode_ForwardsSkipPeerWiring(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	net.EXPECT().DialRandomRpc().
+		Return(nil, driver.ErrEmptyNetwork).AnyTimes()
+	node.EXPECT().GetLabel().Return("observer-1").AnyTimes()
+	node.EXPECT().DialRpc(gomock.Any()).
+		Return(nil, fmt.Errorf("not ready")).AnyTimes()
+	net.EXPECT().CreateNode(gomock.Cond(func(cfg *driver.NodeConfig) bool {
+		return cfg.SkipPeerWiring
+	})).Return(node, nil)
+
+	connect := false
+	scenario := parser.Scenario{
+		Name:             "Unwired Node",
+		Description:      "Test scenario.",
+		DisableEndChecks: true,
+		Steps: []parser.Step{
+			{
+				Function:     parser.FuncStartNode,
+				Identifier:   "observer-1",
+				ConnectPeers: &connect,
+				Failing:      true,
+			},
+		},
+	}
+
+	if err := run(t.Context(), net, &scenario, nil, registry); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

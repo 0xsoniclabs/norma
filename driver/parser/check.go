@@ -82,7 +82,7 @@ func (s *Step) Check() error {
 			return fmt.Errorf("waitFor requires a positive duration, got %v", s.Duration)
 		}
 		return nil
-	case FuncKillSonic, FuncHealDb:
+	case FuncKillSonic, FuncStopSonic, FuncHealDb:
 		if s.Identifier == "" {
 			return fmt.Errorf("%s requires a node identifier", s.Function)
 		}
@@ -185,6 +185,36 @@ func (s *Step) checkUpdateRules() error {
 	return errors.Join(errs...)
 }
 
+// checkPeerCountSpec validates a peerCount sub-check: it targets a single
+// node and asserts a non-empty, non-negative peer count interval.
+func checkPeerCountSpec(check *CheckSpec) error {
+	errs := []error{}
+
+	if check.Node == "" {
+		errs = append(errs, fmt.Errorf("missing required 'node' parameter"))
+	} else if !NamePattern.Match([]byte(check.Node)) {
+		errs = append(errs, fmt.Errorf(
+			"node name must match %v, got %v", namePatternStr, check.Node,
+		))
+	}
+	if check.Min == nil && check.Max == nil {
+		errs = append(errs, fmt.Errorf("requires at least one of 'min' and 'max'"))
+	}
+	if check.Min != nil && *check.Min < 0 {
+		errs = append(errs, fmt.Errorf("min must be non-negative, got %d", *check.Min))
+	}
+	if check.Max != nil && *check.Max < 0 {
+		errs = append(errs, fmt.Errorf("max must be non-negative, got %d", *check.Max))
+	}
+	if check.Min != nil && check.Max != nil && *check.Min > *check.Max {
+		errs = append(errs, fmt.Errorf(
+			"min must not exceed max, got min %d, max %d", *check.Min, *check.Max,
+		))
+	}
+
+	return errors.Join(errs...)
+}
+
 // observationWindowChecks are the checks that observe the network forward in
 // time, and whose tolerance is therefore the length of that window in
 // monitoring samples rather than a deviation in blocks.
@@ -235,6 +265,14 @@ func (s *Step) checkSubChecks() error {
 					"monitoring samples and must be at least %d, got %d",
 				i+1, check.Function, MinObservationSamples, *check.Tolerance,
 			))
+		}
+
+		if check.Function == FuncCheckPeerCount {
+			if err := checkPeerCountSpec(&check); err != nil {
+				errs = append(errs, fmt.Errorf(
+					"sub-check %d (%s): %w", i+1, check.Function, err,
+				))
+			}
 		}
 	}
 

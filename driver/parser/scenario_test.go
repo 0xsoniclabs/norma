@@ -1042,3 +1042,177 @@ Scenario:
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unknown check function")
 }
+
+func TestParseBytes_StartNodeConnectPeers(t *testing.T) {
+	input := `
+Name: Connect Peers Test
+Scenario:
+  - startNode: validator-1
+    type: validator
+  - startNode: validator-2
+    type: validator
+    connectPeers: false
+  - startNode: validator-3
+    type: validator
+    connectPeers: true
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+
+	require.Nil(t, scenario.Steps[0].ConnectPeers)
+	require.True(t, scenario.Steps[0].PeerWiringEnabled())
+
+	require.NotNil(t, scenario.Steps[1].ConnectPeers)
+	require.False(t, scenario.Steps[1].PeerWiringEnabled())
+
+	require.NotNil(t, scenario.Steps[2].ConnectPeers)
+	require.True(t, scenario.Steps[2].PeerWiringEnabled())
+}
+
+func TestParseBytes_ConnectPeersRejectedOutsideStartNode(t *testing.T) {
+	input := `
+Name: Connect Peers Test
+Scenario:
+  - stopNode: validator-1
+    connectPeers: false
+`
+	_, err := ParseBytes([]byte(input))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `parameter "connectPeers" is not valid`)
+}
+
+func TestParseBytes_StopAndKillSonicDetachPeers(t *testing.T) {
+	input := `
+Name: Detach Peers Test
+Scenario:
+  - killSonic: validator-1
+    detachPeers: true
+  - stopSonic: validator-2
+    detachPeers: true
+  - stopSonic: validator-3
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+
+	step := scenario.Steps[0]
+	require.Equal(t, FuncKillSonic, step.Function)
+	require.Equal(t, "validator-1", step.Identifier)
+	require.True(t, step.DetachPeers)
+
+	step = scenario.Steps[1]
+	require.Equal(t, FuncStopSonic, step.Function)
+	require.Equal(t, "validator-2", step.Identifier)
+	require.True(t, step.DetachPeers)
+
+	step = scenario.Steps[2]
+	require.Equal(t, FuncStopSonic, step.Function)
+	require.False(t, step.DetachPeers)
+}
+
+func TestParseBytes_DetachPeersRejectedOnStartNode(t *testing.T) {
+	input := `
+Name: Detach Peers Test
+Scenario:
+  - startNode: validator-1
+    detachPeers: true
+`
+	_, err := ParseBytes([]byte(input))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `parameter "detachPeers" is not valid`)
+}
+
+func TestCheck_StopSonicRequiresIdentifier(t *testing.T) {
+	scenario := Scenario{
+		Name:        "Test",
+		Description: "A test scenario.",
+		Steps:       []Step{{Function: FuncStopSonic}},
+	}
+	err := scenario.Check()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "stopSonic requires a node identifier")
+}
+
+func TestParseBytes_PeerCountCheck(t *testing.T) {
+	input := `
+Name: Peer Count Test
+Scenario:
+  - checks:
+      - peerCount:
+          node: validator-1
+          min: 1
+      - peerCount:
+          node: validator-2
+          max: 0
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+	step := scenario.Steps[0]
+	require.Len(t, step.SubChecks, 2)
+
+	check := step.SubChecks[0]
+	require.Equal(t, FuncCheckPeerCount, check.Function)
+	require.Equal(t, "validator-1", check.Node)
+	require.NotNil(t, check.Min)
+	require.Equal(t, 1, *check.Min)
+	require.Nil(t, check.Max)
+
+	check = step.SubChecks[1]
+	require.Equal(t, FuncCheckPeerCount, check.Function)
+	require.Equal(t, "validator-2", check.Node)
+	require.Nil(t, check.Min)
+	require.NotNil(t, check.Max)
+	require.Equal(t, 0, *check.Max)
+}
+
+func TestCheck_PeerCountSpec(t *testing.T) {
+	zero, one, negative := 0, 1, -1
+	tests := map[string]struct {
+		spec CheckSpec
+		want string // substring of the expected error, empty for success
+	}{
+		"valid min only": {
+			spec: CheckSpec{Function: FuncCheckPeerCount, Node: "validator-1", Min: &one},
+		},
+		"valid max only": {
+			spec: CheckSpec{Function: FuncCheckPeerCount, Node: "validator-1", Max: &zero},
+		},
+		"valid interval": {
+			spec: CheckSpec{Function: FuncCheckPeerCount, Node: "validator-1", Min: &zero, Max: &one},
+		},
+		"missing node": {
+			spec: CheckSpec{Function: FuncCheckPeerCount, Min: &one},
+			want: "missing required 'node' parameter",
+		},
+		"missing bounds": {
+			spec: CheckSpec{Function: FuncCheckPeerCount, Node: "validator-1"},
+			want: "requires at least one of 'min' and 'max'",
+		},
+		"negative min": {
+			spec: CheckSpec{Function: FuncCheckPeerCount, Node: "validator-1", Min: &negative},
+			want: "min must be non-negative",
+		},
+		"negative max": {
+			spec: CheckSpec{Function: FuncCheckPeerCount, Node: "validator-1", Max: &negative},
+			want: "max must be non-negative",
+		},
+		"min above max": {
+			spec: CheckSpec{Function: FuncCheckPeerCount, Node: "validator-1", Min: &one, Max: &zero},
+			want: "min must not exceed max",
+		},
+		"invalid node name": {
+			spec: CheckSpec{Function: FuncCheckPeerCount, Node: "no spaces", Min: &one},
+			want: "node name must match",
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := checkScenario(test.spec).Check()
+			if test.want == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), test.want)
+			}
+		})
+	}
+}

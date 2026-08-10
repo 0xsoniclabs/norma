@@ -45,6 +45,7 @@ const (
 	FuncChecks       StepFunction = "checks"
 	FuncWaitFor      StepFunction = "waitFor"
 	FuncKillSonic    StepFunction = "killSonic"
+	FuncStopSonic    StepFunction = "stopSonic"
 	FuncHealDb       StepFunction = "healDb"
 
 	// Check functions used as items inside a checks: step.
@@ -55,6 +56,7 @@ const (
 	FuncCheckBlocksProduced   StepFunction = "blocksProduced"
 	FuncCheckEventThrottled   StepFunction = "eventThrottled"
 	FuncCheckNetworkRules     StepFunction = "networkRules"
+	FuncCheckPeerCount        StepFunction = "peerCount"
 	FuncCheckValidatorsActive StepFunction = "validatorsActive"
 )
 
@@ -71,6 +73,7 @@ var allStepFunctions = [...]StepFunction{
 	FuncChecks,
 	FuncWaitFor,
 	FuncKillSonic,
+	FuncStopSonic,
 	FuncHealDb,
 }
 
@@ -83,6 +86,7 @@ var allCheckFunctions = [...]StepFunction{
 	FuncCheckBlocksProduced,
 	FuncCheckEventThrottled,
 	FuncCheckNetworkRules,
+	FuncCheckPeerCount,
 	FuncCheckValidatorsActive,
 }
 
@@ -115,6 +119,9 @@ type CheckSpec struct {
 	Failing        bool
 	Rules          genesis.NetworkRulesPatch
 	ThrottledNodes []string
+	Node           string
+	Min            *int
+	Max            *int
 }
 
 // UnmarshalYAML implements custom YAML unmarshalling for CheckSpec.
@@ -252,6 +259,30 @@ func (c *CheckSpec) parseParam(keyNode, valNode *yaml.Node) error {
 			)
 		}
 		c.ThrottledNodes = v
+	case "node":
+		var v string
+		if err := valNode.Decode(&v); err != nil {
+			return fmt.Errorf(
+				"line %d: invalid node: %w", keyNode.Line, err,
+			)
+		}
+		c.Node = v
+	case "min":
+		var v int
+		if err := valNode.Decode(&v); err != nil {
+			return fmt.Errorf(
+				"line %d: invalid min: %w", keyNode.Line, err,
+			)
+		}
+		c.Min = &v
+	case "max":
+		var v int
+		if err := valNode.Decode(&v); err != nil {
+			return fmt.Errorf(
+				"line %d: invalid max: %w", keyNode.Line, err,
+			)
+		}
+		c.Max = &v
 	default:
 		return fmt.Errorf(
 			"line %d: unknown check parameter %q",
@@ -287,6 +318,12 @@ type Step struct {
 	Instances      *int
 	Failing        bool
 	ExtraArguments string
+	// ConnectPeers controls whether a (re)started node is wired to the rest
+	// of the network via admin_addPeer. Nil means the default, true.
+	ConnectPeers *bool
+	// DetachPeers makes killSonic/stopSonic remove the stopped node from all
+	// other nodes' static peer tables, so nobody redials it after a restart.
+	DetachPeers bool
 
 	// App parameters
 	AppType string
@@ -304,6 +341,12 @@ type Step struct {
 
 	// WaitFor parameters
 	Duration time.Duration
+}
+
+// PeerWiringEnabled reports whether a startNode step should have the
+// (re)started node wired to the rest of the network via admin_addPeer.
+func (s *Step) PeerWiringEnabled() bool {
+	return s.ConnectPeers == nil || *s.ConnectPeers
 }
 
 // UndelegateTarget specifies a single validator node to undelegate from.
@@ -411,7 +454,7 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 		default:
 			return fmt.Errorf("undelegate value must be a node name or a list of targets")
 		}
-	case FuncKillSonic, FuncHealDb:
+	case FuncKillSonic, FuncStopSonic, FuncHealDb:
 		// Value is a node name (same as stopNode).
 		if val.Kind == yaml.ScalarNode && val.Tag != "!!null" &&
 			val.Value != "" {
@@ -479,6 +522,7 @@ var stepFunctionDescriptions = map[StepFunction]string{
 	FuncChecks:       "Run one or more checks (see 'Available checks' below).",
 	FuncWaitFor:      "Pause scenario execution for a fixed duration.",
 	FuncKillSonic:    "Kill the sonicd process with SIGKILL, leaving the database dirty.",
+	FuncStopSonic:    "Stop the sonicd process gracefully, keeping the container for an in-place restart.",
 	FuncHealDb:       "Run sonictool heal on a killed node to recover its database.",
 }
 
@@ -493,11 +537,13 @@ var paramDescriptions = map[string]string{
 	"extraArguments": "Extra command line arguments for sonicd.",
 	"users":          "Number of concurrent user accounts the application should simulate.",
 	"rate":           "Transaction rate configuration for the application.",
+	"connectPeers":   "When false, the (re)started node is not wired to the other nodes via admin_addPeer; it must be found by them or reconnect on its own. Defaults to true.",
+	"detachPeers":    "When true, the stopped node is also removed from all other nodes' static peer tables, so nobody redials it after a restart.",
 }
 
 // allowedParams defines which parameter keys are valid for each step function.
 var allowedParams = map[StepFunction][]string{
-	FuncStartNode:    {"type", "imageName", "dataVolume", "stake", "instances", "failing", "extraArguments"},
+	FuncStartNode:    {"type", "imageName", "dataVolume", "stake", "instances", "failing", "extraArguments", "connectPeers"},
 	FuncStopNode:     {},
 	FuncRunApp:       {"type", "users", "rate"},
 	FuncStopApp:      {},
@@ -507,7 +553,8 @@ var allowedParams = map[StepFunction][]string{
 	FuncWaitForEpoch: {},
 	FuncWaitFor:      {},
 	FuncChecks:       {},
-	FuncKillSonic:    {},
+	FuncKillSonic:    {"detachPeers"},
+	FuncStopSonic:    {"detachPeers"},
 	FuncHealDb:       {},
 }
 
@@ -579,6 +626,18 @@ func (s *Step) parseParam(key string, val *yaml.Node) error {
 			return fmt.Errorf("invalid rate value: %w", err)
 		}
 		s.Rate = &r
+	case "connectPeers":
+		var v bool
+		if err := val.Decode(&v); err != nil {
+			return fmt.Errorf("invalid connectPeers value: %w", err)
+		}
+		s.ConnectPeers = &v
+	case "detachPeers":
+		var v bool
+		if err := val.Decode(&v); err != nil {
+			return fmt.Errorf("invalid detachPeers value: %w", err)
+		}
+		s.DetachPeers = v
 	}
 	return nil
 }
@@ -641,6 +700,7 @@ var checkFunctionDescriptions = map[StepFunction]string{
 	FuncCheckBlocksProduced: "Assert that all nodes have produced blocks within tolerance.",
 	FuncCheckEventThrottled: "Assert that validators listed in throttledNodes emit events at a significantly lower rate than the rest.",
 	FuncCheckNetworkRules:   "Assert that the active network rules on all nodes match the expected rules patch.",
+	FuncCheckPeerCount:      "Assert that the p2p peer count of a single node is within the given min/max bounds.",
 
 	FuncCheckValidatorsActive: "Assert that every running validator node is in the current epoch's validator set.",
 }
@@ -654,6 +714,7 @@ var checkFunctionParams = map[StepFunction][]string{
 	FuncCheckBlocksProduced: {"tolerance", "duration", "failing"},
 	FuncCheckEventThrottled: {"throttledNodes", "failing"},
 	FuncCheckNetworkRules:   {"rules", "duration", "failing"},
+	FuncCheckPeerCount:      {"node", "min", "max", "failing"},
 
 	FuncCheckValidatorsActive: {"failing"},
 }
@@ -666,6 +727,9 @@ var checkParamDescriptions = map[string]string{
 	"tolerance":      "For a height check, the allowed deviation (int, in blocks) between nodes. For a production, halt or gas rate check, the length of the observation window expressed in monitoring samples (one per second); duration overrides it.",
 	"throttledNodes": "List of node labels expected to be throttled.",
 	"duration":       "Duration (e.g. \"30s\"). For a production, halt or gas rate check, how long to actively observe the network; only data collected while waiting is judged, and the window must be at least 2s. For a height or rules check, how long the nodes are given to converge, with 0 meaning a single attempt.",
+	"node":           "Label of the node the check targets.",
+	"min":            "Minimum accepted value (inclusive).",
+	"max":            "Maximum accepted value (inclusive).",
 }
 
 // PrintHelp writes a formatted summary of all available scenario step

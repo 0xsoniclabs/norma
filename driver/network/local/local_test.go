@@ -823,3 +823,92 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 			temp, currVisitedDirs)
 	}
 }
+
+func TestLocalNetwork_P2pDatabaseSurvivesInPlaceRestart(t *testing.T) {
+	t.Parallel()
+	config := driver.NetworkConfig{
+		Validators: driver.NewDefaultTestValidators(t.Name(), 3),
+	}
+	// Healing requires a checkpoint, which does not exist right after
+	// genesis; have one written for every block.
+	config.Validators[0].ExtraArguments = "--statedb.checkpointinterval 1"
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
+	defer cancel()
+	net, err := NewLocalLegacyNetwork(ctx, &config)
+	if err != nil {
+		t.Fatalf("failed to create new local network: %v", err)
+	}
+	t.Cleanup(func() { _ = net.Shutdown() })
+
+	nodes := net.GetActiveNodes()
+	if got, want := len(nodes), 3; got != want {
+		t.Fatalf("invalid number of active nodes, got %d, want %d", got, want)
+	}
+	victim := nodes[0].(*node.OperaNode)
+
+	// Wait for a couple of blocks so the victim has checkpoints to heal from.
+	client, err := victim.DialRpc(ctx)
+	if err != nil {
+		t.Fatalf("failed to dial node: %v", err)
+	}
+	for {
+		height, err := client.BlockNumber(ctx)
+		if err != nil {
+			client.Close()
+			t.Fatalf("failed to get block height: %v", err)
+		}
+		if height >= 3 {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	client.Close()
+
+	enodeBefore, err := victim.GetNodeID()
+	if err != nil {
+		t.Fatalf("failed to get enode of node: %v", err)
+	}
+
+	// The inodes pin the identity of the p2p database: a heal or restart
+	// that recreated it would produce the same paths with new inodes.
+	p2pState := func() string {
+		out, err := victim.Exec(ctx, []string{"sh", "-c",
+			"ls -di /datadir/p2p /datadir/p2p/nodes && ls -i /datadir/p2p/nodekey"})
+		if err != nil {
+			t.Fatalf("failed to inspect p2p directory: %v - output: %s", err, out)
+		}
+		return out
+	}
+	stateBefore := p2pState()
+
+	// Restart in place through the dirty path: kill, heal, start. The heal
+	// must recover the state database without touching <datadir>/p2p.
+	if err := victim.ForceStopSonicd(ctx); err != nil {
+		t.Fatalf("failed to kill client: %v", err)
+	}
+	if err := victim.HealSonicd(ctx); err != nil {
+		t.Fatalf("failed to heal database: %v", err)
+	}
+	if err := victim.StartSonicd(ctx); err != nil {
+		t.Fatalf("failed to restart client: %v", err)
+	}
+	if err := victim.WaitForSync(ctx); err != nil {
+		t.Fatalf("failed to wait for restarted client: %v", err)
+	}
+	if err := net.ReconnectNode(ctx, victim); err != nil {
+		t.Fatalf("failed to reconnect node: %v", err)
+	}
+
+	enodeAfter, err := victim.GetNodeID()
+	if err != nil {
+		t.Fatalf("failed to get enode of restarted node: %v", err)
+	}
+	if enodeAfter != enodeBefore {
+		t.Errorf("enode changed across in-place restart: %s -> %s",
+			enodeBefore, enodeAfter)
+	}
+	if stateAfter := p2pState(); stateAfter != stateBefore {
+		t.Errorf("p2p database was recreated across in-place restart:\nbefore: %s\nafter: %s",
+			stateBefore, stateAfter)
+	}
+}

@@ -100,6 +100,20 @@ func (mr *MockNetworkMockRecorder) CreateNode(config any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateNode", reflect.TypeOf((*MockNetwork)(nil).CreateNode), config)
 }
 
+// DetachNode mocks base method.
+func (m *MockNetwork) DetachNode(ctx context.Context, node Node) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DetachNode", ctx, node)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DetachNode indicates an expected call of DetachNode.
+func (mr *MockNetworkMockRecorder) DetachNode(ctx, node any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DetachNode", reflect.TypeOf((*MockNetwork)(nil).DetachNode), ctx, node)
+}
+
 // DialRandomRpc mocks base method.
 func (m *MockNetwork) DialRandomRpc() (rpc.Client, error) {
 	m.ctrl.T.Helper()

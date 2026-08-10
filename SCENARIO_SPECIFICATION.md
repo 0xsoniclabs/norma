@@ -116,6 +116,9 @@ detailed parameter semantics for the non-trivial ones.
 | `stopApp`      | Stop a running load-generating application.              |
 | `checks`       | Run one or more health checks.                           |
 | `waitFor`      | Pause scenario execution for a fixed duration.           |
+| `killSonic`    | SIGKILL the client process, leaving the database dirty.  |
+| `stopSonic`    | Stop the client process gracefully, keeping the container. |
+| `healDb`       | Run `sonictool heal` on a killed node.                   |
 
 ### 3.1 `startNode`
 
@@ -130,6 +133,7 @@ Creates a node. The value is the node’s **identifier** (its label).
   instances: 3             # optional; create N nodes named <id>-0..<id>-N-1
   failing: false           # optional; when true, the node is expected to fail
   extraArguments: "--..."  # optional; passed to sonicd command line
+  connectPeers: true       # optional; when false, skip admin_addPeer wiring
 ```
 
 Parameter details:
@@ -145,11 +149,26 @@ Parameter details:
   is treated as an error by later checks.
 - **`dataVolume`** — Named Docker volume that persists across `stopNode` /
   `startNode` of the same identifier (used for rejoin-with-state scenarios).
+- **`connectPeers`** — Default `true`: every existing node is told about the
+  new node via `admin_addPeer`. When `false`, no node is told and the node
+  must be found by the others (surviving static peer entries redialing it) or
+  reconnect on its own — used to probe the validity of a node's persisted
+  p2p database. Note that peer wiring is one-directional: a node holds static
+  entries only for nodes that joined **after** it did.
 
 **Rejoin semantics:** Calling `startNode` with an identifier that was
 previously started and stopped is treated as a rejoin. No new validator is
 registered on-chain; the preserved validator ID is reused. A rejoining
 validator that has no preserved ID is an error.
+
+**In-place restart semantics:** Calling `startNode` with an identifier whose
+container is still alive (after [`killSonic`](#311-killsonic) + `healDb`, or
+[`stopSonic`](#312-stopsonic)) restarts the client inside the existing
+container instead of creating a new one. The data directory — including the
+p2p database under `<datadir>/p2p` — is preserved, so the node keeps its
+enode identity and its history. With `failing: true` the runner skips the
+assertion that the restarted node catches up with the network, for restarts
+that are expected to leave the node behind (e.g. an isolated restart).
 
 ### 3.2 `stopNode`
 
@@ -299,6 +318,49 @@ string (`10s`, `1m`, `1h30m`, …) and must be positive.
 - waitFor: 15s
 ```
 
+### 3.11 `killSonic`
+
+Sends SIGKILL to the sonicd process inside a running node, leaving the
+database dirty. The container stays alive and the node keeps its identity, so
+it can be [`healDb`](#313-healdb)-ed and restarted in place with `startNode`.
+
+```yaml
+- killSonic: validator-1
+  detachPeers: false   # optional; also drop the node from all peer tables
+```
+
+- **`detachPeers`** — Default `false`. When `true`, after the client is
+  stopped every other node is told to `admin_removePeer` the victim, so
+  nothing redials it after a restart. Trusted-peer entries are left in place:
+  the others still accept the victim should it dial back on its own. Combine
+  with `connectPeers: false` on the restarting `startNode` to assert that a
+  node can (or cannot) rejoin purely from its own p2p database.
+
+### 3.12 `stopSonic`
+
+Stops the sonicd process gracefully (SIGINT), keeping the container alive for
+an in-place restart via `startNode`. Unlike `killSonic` the database is left
+clean, so no `healDb` is needed. Takes the same `detachPeers` parameter as
+`killSonic`.
+
+```yaml
+- stopSonic: validator-1
+  detachPeers: true    # optional
+```
+
+### 3.13 `healDb`
+
+Runs `sonictool heal` on a node whose client was killed, recovering the
+database so the node can be restarted. Takes no parameters.
+
+```yaml
+- healDb: validator-1
+```
+
+Healing requires a state checkpoint; nodes that are meant to be killed and
+healed are typically started with `extraArguments: "--statedb.checkpointinterval 1"`.
+The heal does not touch the p2p database under `<datadir>/p2p`.
+
 ---
 
 ## 4. Network Rules Patch
@@ -389,6 +451,7 @@ function name or a mapping.
 | `blocksProduced`   | Assert the network produces blocks over an observation window.   | `tolerance`, `duration`, `failing`            |
 | `eventThrottled`   | Assert the listed validators emit events far slower than others. | `throttledNodes`, `failing`                   |
 | `networkRules`     | Assert the active rules on all nodes match the given patch.      | `rules`, `duration`, `failing`                |
+| `peerCount`        | Assert one node's p2p peer count is within min/max bounds.       | `node`, `min`, `max`, `failing`               |
 | `validatorsActive` | Assert every running validator is in the epoch's validator set.  | `failing`                                     |
 
 ### 5.1 Windows of time
@@ -403,6 +466,7 @@ recorded before that instant. There are four shapes.
 | `blockGasRate`   | Forward observation    | chain head, at entry         | Blocks produced while waiting          |
 | `blockHeights`   | Convergence budget     | now + budget, at entry       | Live heights, re-read until they agree |
 | `networkRules`   | Convergence budget     | now + budget, at entry       | Live rules, re-read until they agree   |
+| `peerCount`      | Convergence budget     | now + budget, at entry       | Live peer count, re-read until in bounds |
 | `blockHashes`    | Fixed block range      | lowest head of healthy nodes | Blocks 0…that head, settled everywhere |
 | `eventThrottled` | Two measured snapshots | each DAG head query          | Event delta ÷ the interval measured    |
 
@@ -448,6 +512,8 @@ heads are queried, since the heads fix which events get counted.
 | `duration`       | duration string     | Observation window (minimum **2s**), or convergence budget — see below.         |
 | `rules`          | `NetworkRulesPatch` | Expected rule set; every field set must equal the value reported by every node. |
 | `throttledNodes` | list of strings     | Node labels expected to be throttled. Required; every label must resolve.       |
+| `node`           | string              | Label of the node a `peerCount` check targets. Required.                        |
+| `min`, `max`     | int                 | Inclusive peer count bounds; at least one is required, both must be ≥ 0.        |
 | `failing`        | bool                | When `true` the check is **expected to fail**; a passing result is an error.    |
 
 `tolerance` and `duration` are deliberately overloaded; this is what they mean
@@ -462,6 +528,7 @@ per check, with the value used when the parameter is omitted:
 | `networkRules`   | —                                 | convergence budget — **30s** | `rules` — required          |
 | `blockHashes`    | —                                 | —                            | —                           |
 | `eventThrottled` | —                                 | —                            | `throttledNodes` — required |
+| `peerCount`      | —                                 | —                            | `node` — required; `min`/`max` — at least one |
 
 Two things to keep in mind:
 
@@ -492,7 +559,7 @@ and the cost of a check.
 | --------------------------- | ----- | ------------------------------------------------------------------ |
 | Monitor sampling interval   | 1s    | Converts a `tolerance` in samples into a duration.                 |
 | Minimum observation samples | 2     | Floor behind the 2s minimum observation `duration`.                |
-| Convergence poll interval   | 500ms | How often `blockHeights` and `networkRules` re-read.               |
+| Convergence poll interval   | 500ms | How often `blockHeights`, `networkRules` and `peerCount` re-read.  |
 | Minimum comparable block    | 2     | `blockHashes` refuses to judge a shorter chain.                    |
 | Minimum gap ratio           | 2.0   | `eventThrottled`: unthrottled must emit ≥2× the fastest throttled. |
 | DAG sample window           | 5s    | `eventThrottled` interval between snapshots.                       |
@@ -504,7 +571,7 @@ and the cost of a check.
 | Check                                            | Wall-clock cost                                                                                                              |
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
 | `blocksProduced`, `blocksHalted`, `blockGasRate` | Always the full window (10s by default).                                                                                     |
-| `blockHeights`, `networkRules`                   | Nothing when the network is already in the expected state; up to the budget (30s) otherwise, including when `failing: true`. |
+| `blockHeights`, `networkRules`, `peerCount`      | Nothing when the network is already in the expected state; up to the budget (30s) otherwise, including when `failing: true`. |
 | `blockHashes`                                    | No waiting; RPC-bound, roughly one call per block per node.                                                                  |
 | `eventThrottled`                                 | 5s plus DAG walking time per attempt, up to 5 attempts with 2s pauses.                                                       |
 
@@ -538,6 +605,9 @@ block is compared on its own.
             MaxEpochDuration: 10s
           Blocks:
             MaxBlockGas: 10_000_000_000
+    - peerCount:
+        node: validator-4
+        min: 1                              # or max: 0 to assert isolation
     - validatorsActive
 ```
 
