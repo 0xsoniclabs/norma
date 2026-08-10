@@ -48,6 +48,8 @@ func getFactory(appType string) appFactoryFunc {
 		return NewSmartAccountApplication
 	case "subsidies":
 		return NewSubsidiesApplication
+	case "priority":
+		return NewPriorityApplication
 	case "transient":
 		return NewTransientApplication
 	case "selfdestructoldcontract":

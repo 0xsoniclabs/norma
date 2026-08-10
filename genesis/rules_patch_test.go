@@ -53,12 +53,7 @@ func TestNetworkRulesPatch_HasSameFieldsAsOperaRules(t *testing.T) {
 func assertFieldParity(t *testing.T, srcType, patchType reflect.Type, excludedFromSrc ...string) {
 	t.Helper()
 
-	excluded := make(map[string]bool, len(excludedFromSrc))
-	for _, name := range excludedFromSrc {
-		excluded[name] = true
-	}
-
-	srcFields := collectFieldNames(srcType, excluded)
+	srcFields := collectFieldNames(srcType, asSet(excludedFromSrc))
 	patchFields := collectFieldNames(patchType, nil)
 
 	if !reflect.DeepEqual(srcFields, patchFields) {
@@ -70,6 +65,14 @@ func assertFieldParity(t *testing.T, srcType, patchType reflect.Type, excludedFr
 			patchFields,
 		)
 	}
+}
+
+func asSet(names []string) map[string]bool {
+	set := make(map[string]bool, len(names))
+	for _, name := range names {
+		set[name] = true
+	}
+	return set
 }
 
 func collectFieldNames(typ reflect.Type, excluded map[string]bool) []string {

@@ -40,7 +40,6 @@ func (s *Scenario) Check() error {
 	if err := genesis.ValidateNetworkRulesPatch(s.InitialRules); err != nil {
 		errs = append(errs, fmt.Errorf("invalid initial network rules: %w", err))
 	}
-
 	// Validate each step.
 	for i, step := range s.Steps {
 		if err := step.Check(); err != nil {

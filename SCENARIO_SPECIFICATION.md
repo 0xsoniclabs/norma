@@ -237,10 +237,17 @@ Starts a load-generating application. The value is the application’s
 ```
 
 **Supported application types** (case-insensitive): `counter`, `erc20`,
-`store`, `uniswap`, `smartaccount`, `subsidies`, `transient`,
+`store`, `uniswap`, `smartaccount`, `subsidies`, `priority`, `transient`,
 `selfdestructoldcontract`, `selfdestructnewcontract`, `ecdsa`,
 `largecontract`, `allofbundle`, `oneofbundle`, `subsidizedbundle`,
 `failingbundle`, `duplicatedbundle`, `bls12add`, `mix`.
+
+`priority` generates the same transactions as `counter`, but registers its
+users in the on-chain priority registry, so its load travels in a priority
+lane. It requires the `TransactionPriorities` upgrade to be active and fails to
+start otherwise; see
+[scenarios/examples/priority_lanes.yml](scenarios/examples/priority_lanes.yml)
+for a scenario making the effect of the lanes visible.
 
 **Rate shapes** — exactly one of the following must be set on `rate`:
 
@@ -359,6 +366,7 @@ Upgrades:
   SingleProposerBlockFormation: <bool>
   GasSubsidies: <bool>
   TransactionBundles: <bool>
+  TransactionPriorities: <bool>
 ```
 
 Type notes:

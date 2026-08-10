@@ -1,0 +1,90 @@
+Name: Priority Lanes Pilot
+
+Description: >-
+  Shows the effect of prioritized transactions. The loads `ordinary` and `fast`
+  submit the very same transactions at the very same rate and differ in nothing
+  but the registration of their senders in the priority registry. They start
+  alone and are then joined by `congestion`, which offers far more than the
+  network commits and thereby builds the queue the lanes are about. The report's
+  "sent vs received transactions per application" plot is where the difference
+  shows: the distance between what an application submitted and what the chain
+  committed keeps growing for `ordinary` from the moment the queue exists, while
+  `fast` is served at the rate it submits throughout and its backlog stays the
+  couple of blocks it takes to commit a transaction. Once the loads stop, that
+  backlog is gone within seconds, whereas the one of `ordinary` outlives the
+  scenario. Expect `fast` to commit around twice the transactions of `ordinary`.
+  Prioritized transactions are also emitted by validators before their own turn
+  to originate them, which is why `fast` keeps up even before the congestion
+  starts.
+
+# Congestion is what makes the lanes distinguishable at all: while every
+# transaction reaches the next block anyway, being scheduled first buys nothing.
+# The network is throttled to commit a fraction of its usual throughput - by
+# capping the gas an event carries and by slowing the rate events are emitted at
+# - so that the queue this scenario needs is built by a load a single machine
+# comfortably generates. The cap still leaves ample room for the largest
+# transactions Norma itself sends: funding a batch of accounts and the system
+# transactions behind steps such as advanceEpoch.
+InitialNetworkRules:
+  Emitter:
+    Interval: 2s
+  Economy:
+    Gas:
+      MaxEventGas: 2500000
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: true
+    TransactionPriorities: true
+
+Scenario:
+  # Two validators, so that transactions also arrive at a validator that is not
+  # the current proposer. That is the path where a prioritized transaction is
+  # emitted eagerly instead of waiting for its sender's turn.
+  - startNode: validator
+    type: validator
+    instances: 2
+
+  # The two loads to compare. They are started while the network is still idle,
+  # both to establish how they look without a queue and to keep the setup of
+  # their accounts out of the congested phase.
+  - runApp: ordinary
+    type: counter
+    users: 30
+    rate:
+      constant: 15
+
+  - runApp: fast
+    type: priority
+    users: 30
+    rate:
+      constant: 15
+
+  - waitFor: 30s
+
+  # Background load, well beyond what the throttled network commits, so its
+  # queue keeps growing for as long as it runs.
+  - runApp: congestion
+    type: counter
+    users: 45
+    rate:
+      constant: 200
+
+  - waitFor: 90s
+
+  - checks:
+      - blocksProduced
+      # A run with the feature inactive would compare two identical loads and
+      # conclude nothing, so make that impossible to overlook.
+      - networkRules:
+          rules:
+            Upgrades:
+              TransactionPriorities: true
+
+  - stopApp: congestion
+  - stopApp: fast
+  - stopApp: ordinary
+
+  # Time for the backlog of the prioritized load to drain, which is where the
+  # two lanes differ most visibly.
+  - waitFor: 30s

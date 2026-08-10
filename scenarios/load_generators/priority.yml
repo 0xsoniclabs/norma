@@ -1,0 +1,24 @@
+Name: Priority Load Test
+Description: >-
+  Runs the priority load generator against a single validator to verify that transactions of registered senders are processed correctly.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: true
+    TransactionPriorities: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+
+  - runApp: priority
+    type: priority
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 30s
+
+  - stopApp: priority

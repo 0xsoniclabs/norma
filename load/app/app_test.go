@@ -241,3 +241,44 @@ func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
 		})
 	require.NoError(t, err, "transactions were not processed in time")
 }
+
+func TestGenerators_Priorities(t *testing.T) {
+	rules := driver.NetworkRules{
+		Upgrades: &genesis.UpgradesPatch{
+			Sonic:   new(true),
+			Allegro: new(true),
+			Brio:    new(true),
+		},
+	}
+	net, err := local.NewLocalLegacyNetwork(t.Context(), &driver.NetworkConfig{
+		Validators:   driver.DefaultValidators(t.Name()),
+		NetworkRules: rules,
+	})
+	require.NoError(t, err, "failed to create new local network")
+	t.Cleanup(func() {
+		require.NoError(t, net.Shutdown(), "failed to shutdown network")
+	})
+
+	primaryAccount, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
+	require.NoError(t, err, "failed to create primary account")
+
+	appCtx, err := app.NewContext(context.Background(), net, primaryAccount, rules)
+	require.NoError(t, err, "failed to create application context")
+
+	// While the network does not apply priorities, the application would
+	// generate traffic indistinguishable from the counter application, which it
+	// is expected to report instead of doing.
+	_, err = app.NewPriorityApplication(appCtx, 0, 0)
+	require.ErrorContains(t, err, "transaction priorities are disabled")
+
+	// Enabling the feature at runtime covers a scenario switching it on while
+	// the network is up; the rule takes effect with the next epoch seal.
+	require.NoError(t, net.ApplyNetworkRules(t.Context(), driver.NetworkRules{
+		Upgrades: &genesis.UpgradesPatch{TransactionPriorities: new(true)},
+	}), "failed to enable transaction priorities")
+	require.NoError(t, net.AdvanceEpoch(t.Context(), 2), "failed to advance epoch")
+
+	priorityApp, err := app.NewPriorityApplication(appCtx, 0, 0)
+	require.NoError(t, err, "failed to create priority application")
+	testGenerator(t, priorityApp, appCtx)
+}

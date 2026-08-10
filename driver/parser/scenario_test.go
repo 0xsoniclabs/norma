@@ -1042,3 +1042,25 @@ Scenario:
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unknown check function")
 }
+
+func TestCheck_TransactionPrioritiesAreAcceptedInARulesUpdate(t *testing.T) {
+	input := `
+Name: Priority Lanes
+Description: Enables priority lanes while the network is running.
+Scenario:
+  - startNode: validator
+    type: validator
+  - updateRules:
+      Upgrades:
+        TransactionPriorities: true
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+	require.NoError(t, scenario.Check())
+
+	step := scenario.Steps[1]
+	require.Equal(t, FuncUpdateRules, step.Function)
+	require.NotNil(t, step.Rules.Upgrades)
+	require.NotNil(t, step.Rules.Upgrades.TransactionPriorities)
+	require.True(t, *step.Rules.Upgrades.TransactionPriorities)
+}
