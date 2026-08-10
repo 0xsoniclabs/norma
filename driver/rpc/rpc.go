@@ -189,11 +189,14 @@ func (r Impl) GetNetworkRules(block string) (opera.Rules, error) {
 		block = "latest"
 	}
 
-	var rules opera.Rules
+	var rules *opera.Rules
 	if err := r.Call(&rules, "eth_getRules", block); err != nil {
 		return opera.Rules{}, fmt.Errorf("failed to get network rules: %w", err)
 	}
-	return rules, nil
+	if rules == nil {
+		return opera.Rules{}, fmt.Errorf("no network rules available for block %q", block)
+	}
+	return *rules, nil
 }
 
 func (r Impl) transactionReceipt(txHash common.Hash) (*types.Receipt, error) {
