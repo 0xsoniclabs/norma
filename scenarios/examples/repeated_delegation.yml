@@ -1,0 +1,75 @@
+# This scenario exercises repeated staking operations from a single account.
+# One delegator tops up its stake, reduces it in several partial steps, drains
+# it completely and stakes again from zero, always on the same validator.
+# Every change is followed by a verifyStakes step, so a stake that is
+# accumulated, reduced or reset wrongly is caught at the point it happens.
+
+Name: Repeated Delegation Test
+Description: >-
+  Delegate and undelegate repeatedly from a single external account on the
+  same validator, verifying the aggregated stake after every change.
+
+Scenario:
+  - startNode: heavy
+    type: validator
+
+  - waitFor: 5s
+
+  # Initial stake: 1_000_000.
+  - delegate:
+    - node: heavy
+      delegator: cycler
+      stake: 1_000_000
+
+  - advanceEpoch
+  - verifyStakes
+
+  # Top up the same (delegator, validator) pair: 1_000_000 + 500_000.
+  - delegate:
+    - node: heavy
+      delegator: cycler
+      stake: 500_000
+
+  - advanceEpoch
+  - verifyStakes
+
+  # Two partial undelegations in a row: 1_500_000 - 400_000 - 100_000.
+  - undelegate:
+    - node: heavy
+      delegator: cycler
+      stake: 400_000
+
+  - advanceEpoch
+  - verifyStakes
+
+  - undelegate:
+    - node: heavy
+      delegator: cycler
+      stake: 100_000
+
+  - advanceEpoch
+  - verifyStakes
+
+  # Drain the remaining 1_000_000 by omitting the amount.
+  - undelegate:
+    - node: heavy
+      delegator: cycler
+
+  - advanceEpoch
+  - verifyStakes
+
+  # Stake again from zero with the same account.
+  - delegate:
+    - node: heavy
+      delegator: cycler
+      stake: 750_000
+
+  - advanceEpoch
+  - verifyStakes
+
+  - undelegate:
+    - node: heavy
+      delegator: cycler
+
+  - advanceEpoch
+  - verifyStakes

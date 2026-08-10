@@ -11,8 +11,10 @@ package executor
 
 import (
 	context "context"
+	ecdsa "crypto/ecdsa"
 	reflect "reflect"
 
+	common "github.com/ethereum/go-ethereum/common"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -40,6 +42,20 @@ func (m *MockvalidatorRegistry) EXPECT() *MockvalidatorRegistryMockRecorder {
 	return m.recorder
 }
 
+// delegate mocks base method.
+func (m *MockvalidatorRegistry) delegate(ctx context.Context, validatorId int, stake uint64, delegator *ecdsa.PrivateKey) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "delegate", ctx, validatorId, stake, delegator)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// delegate indicates an expected call of delegate.
+func (mr *MockvalidatorRegistryMockRecorder) delegate(ctx, validatorId, stake, delegator any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "delegate", reflect.TypeOf((*MockvalidatorRegistry)(nil).delegate), ctx, validatorId, stake, delegator)
+}
+
 // ensureValidatorsActive mocks base method.
 func (m *MockvalidatorRegistry) ensureValidatorsActive(ctx context.Context, validatorIds []int) error {
 	m.ctrl.T.Helper()
@@ -52,6 +68,35 @@ func (m *MockvalidatorRegistry) ensureValidatorsActive(ctx context.Context, vali
 func (mr *MockvalidatorRegistryMockRecorder) ensureValidatorsActive(ctx, validatorIds any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ensureValidatorsActive", reflect.TypeOf((*MockvalidatorRegistry)(nil).ensureValidatorsActive), ctx, validatorIds)
+}
+
+// fundDelegator mocks base method.
+func (m *MockvalidatorRegistry) fundDelegator(ctx context.Context, delegator common.Address, amount uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "fundDelegator", ctx, delegator, amount)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// fundDelegator indicates an expected call of fundDelegator.
+func (mr *MockvalidatorRegistryMockRecorder) fundDelegator(ctx, delegator, amount any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "fundDelegator", reflect.TypeOf((*MockvalidatorRegistry)(nil).fundDelegator), ctx, delegator, amount)
+}
+
+// getDelegatorStake mocks base method.
+func (m *MockvalidatorRegistry) getDelegatorStake(delegator common.Address, validatorId int) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "getDelegatorStake", delegator, validatorId)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// getDelegatorStake indicates an expected call of getDelegatorStake.
+func (mr *MockvalidatorRegistryMockRecorder) getDelegatorStake(delegator, validatorId any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getDelegatorStake", reflect.TypeOf((*MockvalidatorRegistry)(nil).getDelegatorStake), delegator, validatorId)
 }
 
 // registerNewValidator mocks base method.
@@ -67,6 +112,20 @@ func (m *MockvalidatorRegistry) registerNewValidator(ctx context.Context, stake 
 func (mr *MockvalidatorRegistryMockRecorder) registerNewValidator(ctx, stake any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "registerNewValidator", reflect.TypeOf((*MockvalidatorRegistry)(nil).registerNewValidator), ctx, stake)
+}
+
+// undelegateAs mocks base method.
+func (m *MockvalidatorRegistry) undelegateAs(ctx context.Context, validatorId int, stake uint64, delegator *ecdsa.PrivateKey) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "undelegateAs", ctx, validatorId, stake, delegator)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// undelegateAs indicates an expected call of undelegateAs.
+func (mr *MockvalidatorRegistryMockRecorder) undelegateAs(ctx, validatorId, stake, delegator any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "undelegateAs", reflect.TypeOf((*MockvalidatorRegistry)(nil).undelegateAs), ctx, validatorId, stake, delegator)
 }
 
 // unregisterValidator mocks base method.

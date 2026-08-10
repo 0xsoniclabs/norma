@@ -1,0 +1,92 @@
+Name: Release Validators Cross-Version Stake Rotation v2.1.6, v2.2.0 and Local
+
+Description: >-
+  Verifies a single external account can rotate 75% of the stake over
+  validators of different client versions by unstaking and staking
+  again, with on-chain stake matching expectation after every change.
+  Three validators self-stake 1M each and the account delegates 5M, so
+  the receiving validator holds 6M of 8M; the delegation walks over
+  v2.1.6, v2.2.0 and the candidate, ending on the candidate. The
+  released pins are feature peers, both implementing SFC delegation.
+
+  Deliberate deviation from RELEASE_TESTING.md §5a: a released peer
+  holds the quorum mid-scenario, so a fork by it stalls consensus
+  instead of being named by the hash check. Restoring the candidate's
+  two thirds would delete the test.
+
+Scenario:
+  - startNode: validator-local
+    type: validator
+    stake: 1000000
+
+  - startNode: validator-v216
+    type: validator
+    imageName: "sonic:v2.1.6"
+    stake: 1000000
+
+  - startNode: validator-v220
+    type: validator
+    imageName: "sonic:v2.2.0"
+    stake: 1000000
+
+  - runApp: normal
+    type: counter
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 20s
+
+  # The 75% starts on the candidate.
+  - delegate:
+      - node: validator-local
+        delegator: rotating-staker
+        stake: 5000000
+
+  - advanceEpoch
+  - verifyStakes
+
+  # Rotate it to v2.1.6. Both changes land at the same epoch seal, so
+  # the handoff is a single weight change rather than an interim state.
+  - undelegate:
+      - node: validator-local
+        delegator: rotating-staker
+
+  - delegate:
+      - node: validator-v216
+        delegator: rotating-staker
+        stake: 5000000
+
+  - advanceEpoch
+  - verifyStakes
+
+  # Rotate it on to v2.2.0.
+  - undelegate:
+      - node: validator-v216
+        delegator: rotating-staker
+
+  - delegate:
+      - node: validator-v220
+        delegator: rotating-staker
+        stake: 5000000
+
+  - advanceEpoch
+  - verifyStakes
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
+
+  # Close the cycle: back onto the candidate, which held and lost the
+  # 75% earlier, so it is staked again from zero.
+  - undelegate:
+      - node: validator-v220
+        delegator: rotating-staker
+
+  - delegate:
+      - node: validator-local
+        delegator: rotating-staker
+        stake: 5000000
+
+  - advanceEpoch
+  - verifyStakes

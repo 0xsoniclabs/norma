@@ -18,6 +18,7 @@ package executor
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -25,6 +26,8 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/network"
+	"github.com/0xsoniclabs/sonic/evmcore"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 //go:generate mockgen -source validator_registry.go -destination validator_registry_mock.go -package executor
@@ -34,11 +37,25 @@ import (
 var validatorActivationTimeout = 30 * time.Second
 
 // validatorRegistry abstracts how an executor registers, activates and
-// unregisters validator nodes with the network.
+// unregisters validator nodes with the network, and how it moves stake
+// between external delegator accounts and those validators.
 type validatorRegistry interface {
 	registerNewValidator(ctx context.Context, stake uint64) (int, error)
 	ensureValidatorsActive(ctx context.Context, validatorIds []int) error
 	unregisterValidator(ctx context.Context, validatorId int, stake uint64) error
+	// delegate delegates `stake` from the given external delegator key to
+	// the validator identified by validatorId.
+	delegate(ctx context.Context, validatorId int, stake uint64, delegator *ecdsa.PrivateKey) error
+	// undelegateAs undelegates `stake` from the validator, signing the
+	// transaction with the given delegator key. If stake is 0, the full
+	// on-chain stake for the delegator on that validator is undelegated.
+	undelegateAs(ctx context.Context, validatorId int, stake uint64, delegator *ecdsa.PrivateKey) error
+	// fundDelegator transfers `amount` (in S) from the treasury account to
+	// the given delegator address so it can pay for delegation + gas.
+	fundDelegator(ctx context.Context, delegator common.Address, amount uint64) error
+	// getDelegatorStake returns the current on-chain stake (in S) held by
+	// the given delegator on the given validator.
+	getDelegatorStake(delegator common.Address, validatorId int) (uint64, error)
 }
 
 // netBasedValidatorRegistry is the production implementation of
@@ -178,4 +195,64 @@ func (a netBasedValidatorRegistry) unregisterValidator(ctx context.Context, vali
 		return fmt.Errorf("failed to unregister validator node; %v", err)
 	}
 	return nil
+}
+
+// treasuryKey is the key holding the initial fakenet balance. This is the
+// same key used by fakenet validator 1 and by load/app treasury operations.
+// Delegator accounts created for scenarios are funded from this account.
+func treasuryKey() *ecdsa.PrivateKey {
+	return evmcore.FakeKey(1)
+}
+
+func (a netBasedValidatorRegistry) delegate(
+	ctx context.Context, validatorId int, stake uint64, delegator *ecdsa.PrivateKey,
+) error {
+	rpcClient, err := a.net.DialRandomRpc()
+	if err != nil {
+		return fmt.Errorf("failed to connect to RPC; %v", err)
+	}
+	defer rpcClient.Close()
+	if err := network.DelegateToValidator(ctx, rpcClient, validatorId, stake, delegator); err != nil {
+		return fmt.Errorf("failed to delegate to validator %d; %v", validatorId, err)
+	}
+	return nil
+}
+
+func (a netBasedValidatorRegistry) undelegateAs(
+	ctx context.Context, validatorId int, stake uint64, delegator *ecdsa.PrivateKey,
+) error {
+	rpcClient, err := a.net.DialRandomRpc()
+	if err != nil {
+		return fmt.Errorf("failed to connect to RPC; %v", err)
+	}
+	defer rpcClient.Close()
+	if err := network.UndelegateFromValidator(ctx, rpcClient, validatorId, stake, delegator); err != nil {
+		return fmt.Errorf("failed to undelegate from validator %d; %v", validatorId, err)
+	}
+	return nil
+}
+
+func (a netBasedValidatorRegistry) fundDelegator(
+	ctx context.Context, delegator common.Address, amount uint64,
+) error {
+	rpcClient, err := a.net.DialRandomRpc()
+	if err != nil {
+		return fmt.Errorf("failed to connect to RPC; %v", err)
+	}
+	defer rpcClient.Close()
+	if err := network.FundAccount(ctx, rpcClient, treasuryKey(), delegator, amount); err != nil {
+		return fmt.Errorf("failed to fund delegator %s; %v", delegator.Hex(), err)
+	}
+	return nil
+}
+
+func (a netBasedValidatorRegistry) getDelegatorStake(
+	delegator common.Address, validatorId int,
+) (uint64, error) {
+	rpcClient, err := a.net.DialRandomRpc()
+	if err != nil {
+		return 0, fmt.Errorf("failed to connect to RPC; %v", err)
+	}
+	defer rpcClient.Close()
+	return network.GetDelegatorStake(rpcClient, delegator, validatorId)
 }

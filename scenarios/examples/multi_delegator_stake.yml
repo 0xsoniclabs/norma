@@ -1,0 +1,69 @@
+# This scenario exercises the multi-delegator staking flow.
+# Multiple named external delegator accounts stake on the same validator,
+# the executor tracks expected aggregated stakes internally, and the
+# verifyStakes step asserts that on-chain state matches expectation
+# after each delegation change.
+
+Name: Multi-Delegator Stake Test
+Description: >-
+  Delegate from multiple distinct external accounts to the same validator,
+  verify aggregated stake, and undelegate independently per delegator.
+
+Scenario:
+  - startNode: heavy
+    type: validator
+
+  - startNode: light
+    type: validator
+
+  - waitFor: 5s
+
+  # Three distinct delegator accounts stake on the same validator.
+  - delegate:
+    - node: heavy
+      delegator: staker-0
+      stake: 2_000_000
+    - node: heavy
+      delegator: staker-1
+      stake: 1_000_000
+    - node: heavy
+      delegator: staker-2
+      stake: 500_000
+
+  # staker-0 also delegates to a second validator.
+  - delegate:
+    - node: light
+      delegator: staker-0
+      stake: 750_000
+
+  - advanceEpoch
+
+  # Verify all four (delegator, validator) stakes match on-chain state.
+  - verifyStakes
+
+  # staker-1 partially undelegates from heavy.
+  - undelegate:
+    - node: heavy
+      delegator: staker-1
+      stake: 400_000
+
+  # staker-2 fully undelegates from heavy (no explicit amount).
+  - undelegate:
+    - node: heavy
+      delegator: staker-2
+
+  - advanceEpoch
+
+  # Verify stakes after partial + full undelegations.
+  - verifyStakes
+
+  # staker-0 fully undelegates from both validators.
+  - undelegate:
+    - node: heavy
+      delegator: staker-0
+    - node: light
+      delegator: staker-0
+
+  - advanceEpoch
+
+  - verifyStakes
