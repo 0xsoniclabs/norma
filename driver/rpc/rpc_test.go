@@ -114,7 +114,7 @@ func TestRpcClientImpl_WaitTransactionReceipt_Error(t *testing.T) {
 	}
 }
 
-func TestRpcClientImpl_GetNetworkRules_Success(t *testing.T) {
+func TestGetNetworkRules_ReturnsRules_WhenRulesAreAvailable(t *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(t)
@@ -144,7 +144,7 @@ func TestRpcClientImpl_GetNetworkRules_Success(t *testing.T) {
 	}
 }
 
-func TestRpcClientImpl_GetNetworkRules_NullResult(t *testing.T) {
+func TestGetNetworkRules_ReturnsError_WhenResultIsNull(t *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(t)
