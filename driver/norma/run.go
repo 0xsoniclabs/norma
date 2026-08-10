@@ -36,6 +36,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver/executor"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	_ "github.com/0xsoniclabs/norma/driver/monitoring/app"
+	_ "github.com/0xsoniclabs/norma/driver/monitoring/transactions"
 	_ "github.com/0xsoniclabs/norma/driver/monitoring/user"
 	"github.com/0xsoniclabs/norma/driver/network/local"
 	"github.com/0xsoniclabs/norma/driver/parser"
