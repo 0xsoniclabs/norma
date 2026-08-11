@@ -1,0 +1,67 @@
+Name: Release Features Priority Lanes Under Transaction Count Load
+
+Description: >-
+  A lane under load measured in transactions, the counterpart of the heavy gas
+  scenario next to it: 600 prioritized against 400 ordinary counter transactions per
+  second, both beyond what the network commits, with no gas limit near binding.
+  Measured: the lane takes 1179 transactions of the average block against 589, at a
+  median 43.7s against 86.3s - the same two-to-one split the heavy gas scenario
+  produces. MaxPiggybackTxsPerEntityPerEvent, 1000 per entity per event, is out of
+  reach: one event would have to carry more than a thousand of this entity's
+  transactions, and the whole network commits some 420 per second here.
+
+InitialNetworkRules:
+  Emitter:
+    Interval: 2s
+  Economy:
+    Gas:
+      MaxEventGas: 100000000
+    ShortGasPower:
+      AllocPerSec: 60000000
+    LongGasPower:
+      AllocPerSec: 60000000
+  Epochs:
+    MaxEpochGas: 1000000000000
+    MaxEpochDuration: 1h
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: true
+    TransactionPriorities: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+    instances: 3
+
+  # Started before the ordinary load: registering its users costs one ordinary
+  # transaction each, which a pool already full would not carry in time.
+  - runApp: fast
+    type: priority
+    load: counter
+    users: 200
+    rate:
+      constant: 600
+
+  # The rates together stay near what the network commits. Several times beyond it
+  # leaves a six-figure pool that every validator re-sorts per event, which costs
+  # more than the lane gains - measured, it puts the lane behind ordinary traffic.
+  - runApp: ordinary
+    type: counter
+    users: 200
+    rate:
+      constant: 400
+
+  - waitFor: 120s
+
+  - checks:
+      - blocksProduced
+      - networkRules:
+          rules:
+            Upgrades:
+              TransactionPriorities: true
+
+  - stopApp: fast
+  - stopApp: ordinary
+
+  - waitFor: 30s

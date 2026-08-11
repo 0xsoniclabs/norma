@@ -1,0 +1,63 @@
+Name: Release Features Priority Lanes Under Heavy Gas Load
+
+Description: >-
+  A lane under load measured in gas: storage writes of 6.5 MGas each, prioritized
+  against the same load unprioritized, both offering more than the network commits.
+  A handful of them exhausts the two limits stated in gas - half an event's budget
+  for eager admission, 50 MGas here, and MaxGasPerEntityPerBlock, 100 MGas - while
+  the count of transactions stays far below the one stated in transactions.
+  Measured: the lane is pinned at 99.6 MGas of the average block against its 100
+  MGas quota, the ordinary load keeps 44 MGas, and the median time to inclusion is
+  the same for both, 24.7s against 23.5s, with only the tail differing, 105.9s
+  against 140.3s. A priority decides who goes first within the quota; it does not
+  raise it. The quota also counts gas reserved rather than used, so the 10 percent
+  these transactions over-reserve is quota paid for and not spent.
+
+InitialNetworkRules:
+  Economy:
+    Gas:
+      MaxEventGas: 100000000
+    ShortGasPower:
+      AllocPerSec: 150000000
+    LongGasPower:
+      AllocPerSec: 150000000
+  Epochs:
+    MaxEpochGas: 1000000000000
+    MaxEpochDuration: 1h
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: true
+    TransactionPriorities: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+    instances: 3
+
+  - runApp: fast
+    type: priority
+    load: store
+    users: 50
+    rate:
+      constant: 20
+
+  - runApp: ordinary
+    type: store
+    users: 50
+    rate:
+      constant: 20
+
+  - waitFor: 120s
+
+  - checks:
+      - blocksProduced
+      - networkRules:
+          rules:
+            Upgrades:
+              TransactionPriorities: true
+
+  - stopApp: fast
+  - stopApp: ordinary
+
+  - waitFor: 30s
