@@ -290,6 +290,7 @@ type Step struct {
 
 	// App parameters
 	AppType string
+	AppLoad string // the traffic an app type carries when it does not define its own
 	Users   *int
 	Rate    *Rate
 
@@ -491,6 +492,7 @@ var paramDescriptions = map[string]string{
 	"instances":      "Number of node instances to start.",
 	"failing":        "When true, the step is expected to fail; a passing result is treated as an error.",
 	"extraArguments": "Extra command line arguments for sonicd.",
+	"load":           "Traffic an application type carries when it does not define its own, such as the load of a priority lane.",
 	"users":          "Number of concurrent user accounts the application should simulate.",
 	"rate":           "Transaction rate configuration for the application.",
 }
@@ -499,7 +501,7 @@ var paramDescriptions = map[string]string{
 var allowedParams = map[StepFunction][]string{
 	FuncStartNode:    {"type", "imageName", "dataVolume", "stake", "instances", "failing", "extraArguments"},
 	FuncStopNode:     {},
-	FuncRunApp:       {"type", "users", "rate"},
+	FuncRunApp:       {"type", "load", "users", "rate"},
 	FuncStopApp:      {},
 	FuncUpdateRules:  {},
 	FuncUndelegate:   {},
@@ -531,6 +533,12 @@ func (s *Step) parseParam(key string, val *yaml.Node) error {
 		default:
 			s.NodeType = v
 		}
+	case "load":
+		var v string
+		if err := val.Decode(&v); err != nil {
+			return fmt.Errorf("invalid load value: %w", err)
+		}
+		s.AppLoad = v
 	case "imageName":
 		var v string
 		if err := val.Decode(&v); err != nil {

@@ -135,7 +135,7 @@ func TestGenerators(t *testing.T) {
 					continue
 				}
 				t.Run(name, func(t *testing.T) {
-					application, err := app.NewApplication(name, appCtx, 0, 0)
+					application, err := app.NewApplication(name, "", appCtx, 0, 0)
 					require.NoError(t, err, "failed to create application")
 					testGenerator(t, application, appCtx)
 				})
@@ -281,4 +281,18 @@ func TestGenerators_Priorities(t *testing.T) {
 	priorityApp, err := app.NewPriorityApplication(appCtx, 0, 0)
 	require.NoError(t, err, "failed to create priority application")
 	testGenerator(t, priorityApp, appCtx)
+
+	// A lane is a property of a load, not a load of its own: any generator whose
+	// users disclose the accounts they sign with can travel in one. The erc20
+	// load stands in for the ones that are not the counter load.
+	prioritizedErc20, err := app.NewApplication("priority", "erc20", appCtx, 0, 1)
+	require.NoError(t, err, "failed to create a prioritized erc20 application")
+	testGenerator(t, prioritizedErc20, appCtx)
+
+	// A load that creates the accounts it signs with while it runs cannot be
+	// registered up front, and says so instead of prioritizing a part of itself.
+	bundles, err := app.NewApplication("priority", "allofbundle", appCtx, 0, 2)
+	require.NoError(t, err, "failed to create a prioritized bundle application")
+	_, err = bundles.CreateUsers(appCtx, 1)
+	require.ErrorContains(t, err, "cannot be prioritized")
 }

@@ -242,12 +242,33 @@ Starts a load-generating application. The value is the application’s
 `largecontract`, `allofbundle`, `oneofbundle`, `subsidizedbundle`,
 `failingbundle`, `duplicatedbundle`, `bls12add`, `mix`.
 
-`priority` generates the same transactions as `counter`, but registers its
-users in the on-chain priority registry, so its load travels in a priority
-lane. It requires the `TransactionPriorities` upgrade to be active and fails to
-start otherwise; see
+A priority lane is a property of a load rather than a load of its own, so
+`priority` does not generate traffic itself: the optional `load` parameter names
+the type that does, and the accounts signing it are registered in the on-chain
+priority registry.
+
+```yaml
+- runApp: fast
+  type: priority
+  load: uniswap            # optional; any type above, defaults to counter
+  rate:
+    constant: 20
+```
+
+Running that next to a plain `uniswap` application isolates the effect of the
+feature, since the two loads differ in nothing else. `load` applies to `priority`
+only; on any other type it is an error, as is nesting one lane in another.
+
+`priority` requires the `TransactionPriorities` upgrade to be active and fails
+to start otherwise; see
 [scenarios/examples/priority_lanes.yml](scenarios/examples/priority_lanes.yml)
 for a scenario making the effect of the lanes visible.
+
+The loads whose users create the accounts they sign with while they run - the
+bundle types and `mix` - cannot be prioritized: their accounts are not known when
+the registry is written, and registering the ones that happen to exist would
+prioritize a part of their traffic and quietly leave the rest behind. Asking for
+them reports that rather than doing it.
 
 **Rate shapes** — exactly one of the following must be set on `rate`:
 

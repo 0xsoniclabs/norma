@@ -205,6 +205,11 @@ type ApplicationConfig struct {
 	// Type defines the on-chain app which should generate the traffic.
 	Type string
 
+	// Load names the traffic of application types that carry another type's
+	// instead of defining their own, such as the priority lanes. It is empty for
+	// every other type.
+	Load string
+
 	// Rate defines the Tx/s config the source should produce while active.
 	Rate *parser.Rate
 

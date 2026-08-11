@@ -23,18 +23,44 @@ import (
 
 type appFactoryFunc func(context AppContext, feederId, appId uint32) (Application, error)
 
-func NewApplication(appType string, context AppContext, feederId, appId uint32) (Application, error) {
-	if factory := getFactory(appType); factory != nil {
+// NewApplication creates an application of the given type.
+//
+// The load parameter names the traffic of application types that do not define
+// their own but carry another type's - the priority lanes, which are a property
+// of a load rather than a load themselves. It must be empty for every other
+// type; see AcceptsLoadParameter.
+func NewApplication(appType, load string, context AppContext, feederId, appId uint32) (Application, error) {
+	if load != "" {
+		if !AcceptsLoadParameter(appType) {
+			return nil, fmt.Errorf(
+				"application type '%s' generates its own load, so it takes no load parameter", appType)
+		}
+		if !IsSupportedApplicationType(load) {
+			return nil, fmt.Errorf("unknown load '%s' for application type '%s'", load, appType)
+		}
+		// A lane inside a lane would register the same accounts twice and mean
+		// nothing beyond the single lane it already is.
+		if AcceptsLoadParameter(load) {
+			return nil, fmt.Errorf("load '%s' carries a load of its own, which cannot be nested", load)
+		}
+	}
+	if factory := getFactory(appType, load); factory != nil {
 		return factory(context, feederId, appId)
 	}
 	return nil, fmt.Errorf("unknown application type '%s'", appType)
 }
 
 func IsSupportedApplicationType(appType string) bool {
-	return getFactory(appType) != nil
+	return getFactory(appType, "") != nil
 }
 
-func getFactory(appType string) appFactoryFunc {
+// AcceptsLoadParameter reports whether the given application type carries the
+// load of another one, which the load parameter of NewApplication selects.
+func AcceptsLoadParameter(appType string) bool {
+	return strings.ToLower(appType) == "priority"
+}
+
+func getFactory(appType, load string) appFactoryFunc {
 	switch strings.ToLower(appType) {
 	case "erc20":
 		return NewERC20Application
@@ -49,7 +75,12 @@ func getFactory(appType string) appFactoryFunc {
 	case "subsidies":
 		return NewSubsidiesApplication
 	case "priority":
-		return NewPriorityApplication
+		// An empty load is the counter one, which is the cheapest traffic to
+		// compare a lane against.
+		if load == "" {
+			load = "counter"
+		}
+		return NewPrioritizedApplication(load)
 	case "transient":
 		return NewTransientApplication
 	case "selfdestructoldcontract":

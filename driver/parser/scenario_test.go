@@ -1064,3 +1064,59 @@ Scenario:
 	require.NotNil(t, step.Rules.Upgrades.TransactionPriorities)
 	require.True(t, *step.Rules.Upgrades.TransactionPriorities)
 }
+
+func TestParseBytes_ApplicationLoadIsParsed(t *testing.T) {
+	// A priority lane is a property of a load rather than a load of its own, so
+	// the load it carries is a parameter of the application.
+	scenario, err := ParseBytes([]byte(`
+Name: Test
+Description: A test scenario.
+Scenario:
+  - runApp: fast
+    type: priority
+    load: uniswap
+    rate:
+      constant: 5
+`))
+	require.NoError(t, err)
+	require.NoError(t, scenario.Check())
+
+	step := scenario.Steps[0]
+	require.Equal(t, "priority", step.AppType)
+	require.Equal(t, "uniswap", step.AppLoad)
+}
+
+func TestScenario_ApplicationLoadIsValidated(t *testing.T) {
+	tests := map[string]struct {
+		appType string
+		load    string
+		issue   string
+	}{
+		"a load the type cannot carry": {
+			appType: "counter", load: "uniswap", issue: "generates its own load",
+		},
+		"a load that does not exist": {
+			appType: "priority", load: "nonesuch", issue: "unknown load",
+		},
+		"a lane inside a lane": {
+			appType: "priority", load: "priority", issue: "cannot be nested",
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			rate := float32(5)
+			scenario := &Scenario{
+				Name:        "Test",
+				Description: "A test scenario.",
+				Steps: []Step{{
+					Function:   FuncRunApp,
+					Identifier: "load",
+					AppType:    test.appType,
+					AppLoad:    test.load,
+					Rate:       &Rate{Constant: &rate},
+				}},
+			}
+			require.ErrorContains(t, scenario.Check(), test.issue)
+		})
+	}
+}

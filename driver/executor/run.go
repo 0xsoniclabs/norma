@@ -696,6 +696,7 @@ func execRunApp(
 	app, err := net.CreateApplication(ctx, &driver.ApplicationConfig{
 		Name:  step.Identifier,
 		Type:  step.AppType,
+		Load:  step.AppLoad,
 		Rate:  step.Rate,
 		Users: users,
 	})

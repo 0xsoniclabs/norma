@@ -148,6 +148,19 @@ func (s *Step) checkRunApp() error {
 		errs = append(errs, fmt.Errorf("unknown application type: %v", appType))
 	}
 
+	if s.AppLoad != "" {
+		switch {
+		case !app.AcceptsLoadParameter(appType):
+			errs = append(errs, fmt.Errorf(
+				"application type %v generates its own load, so it takes no load", appType))
+		case !app.IsSupportedApplicationType(s.AppLoad):
+			errs = append(errs, fmt.Errorf("unknown load: %v", s.AppLoad))
+		case app.AcceptsLoadParameter(s.AppLoad):
+			errs = append(errs, fmt.Errorf(
+				"load %v carries a load of its own, which cannot be nested", s.AppLoad))
+		}
+	}
+
 	if s.Rate == nil {
 		errs = append(errs, fmt.Errorf("run app requires a rate"))
 	} else if err := s.Rate.Check(); err != nil {

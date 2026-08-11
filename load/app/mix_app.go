@@ -75,7 +75,7 @@ func NewMixApplication(appContext AppContext, feederId, appId uint32) (Applicati
 		mixSubAppsCount := uint32(len(mixAppTypes))
 		subAppId := mixAppIdOffset + appId*mixSubAppsCount + uint32(i)
 
-		application, err := NewApplication(entry.appType, appContext, feederId, subAppId)
+		application, err := NewApplication(entry.appType, "", appContext, feederId, subAppId)
 		if err != nil {
 			return nil, fmt.Errorf("mix: failed to initialise sub-app %q: %w", entry.appType, err)
 		}

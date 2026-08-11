@@ -50,12 +50,17 @@ var (
 	priorityMaxPiggybackTxsPerEntityPerEvent = big.NewInt(1_000)
 )
 
-// PriorityApplication generates traffic in a priority lane: the load itself is
-// the one of the counter application - the same contract call, gas limit and
-// gas price - and the only difference is that its users are registered in the
-// on-chain priority registry. Running it next to a `counter` application in a
-// congested network therefore isolates the effect of the priority lanes
-// feature: the two applications differ in nothing else.
+// PriorityApplication generates the traffic of another application in a priority
+// lane: the load is that application's - the same transactions, gas limits and
+// gas prices - and the only difference is that the accounts signing it are
+// registered in the on-chain priority registry. Running it next to the very same
+// application without the registration therefore isolates the effect of the
+// priority lanes feature: the two differ in nothing else.
+//
+// Any load whose users disclose the accounts they sign with can be prioritized,
+// see PrioritizableUser. Which one it carries is chosen by the `load` parameter
+// of the scenario's application, e.g. `type: priority` with `load: uniswap` for
+// uniswap traffic in a lane.
 //
 // All users of one application share one entity id, which is what the client
 // rate-limits per block, so an application maps to what a production registry
@@ -63,80 +68,99 @@ var (
 //
 // Traffic is only prioritized while the network runs with the
 // TransactionPriorities upgrade enabled; without it the registry is never
-// queried and this application would be an ordinary counter application in
-// disguise. It therefore refuses to start on a network that has the upgrade
-// disabled rather than generating load that proves nothing.
+// queried and this application would be the load it wraps in disguise. It
+// therefore refuses to start on a network that has the upgrade disabled rather
+// than generating load that proves nothing.
 type PriorityApplication struct {
-	*CounterApplication
+	Application
+	load     string
 	registry *priority_registry.Registry
 	entity   *big.Int
 }
 
-// NewPriorityApplication deploys the counter contract used to generate the
-// traffic and configures the priority registry for it. It fails if the network
-// does not currently apply transaction priorities.
+// NewPriorityApplication creates a priority lane carrying the counter load,
+// which is the load whose transactions are the cheapest to distinguish from one
+// another. See NewPrioritizedApplication for any other load.
 func NewPriorityApplication(ctxt AppContext, feederId, appId uint32) (Application, error) {
-	enabled, err := transactionPrioritiesEnabled(ctxt.GetClient())
-	if err != nil {
-		return nil, fmt.Errorf("failed to read the network's transaction priority state; %w", err)
-	}
-	if !enabled {
-		return nil, fmt.Errorf(
-			"transaction priorities are disabled on this network, so this " +
-				"application's traffic would not be prioritized; enable the " +
-				"TransactionPriorities upgrade in the scenario's network rules")
-	}
-
-	traffic, err := NewCounterApplication(ctxt, feederId, appId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create counter application for priority load; %w", err)
-	}
-	counter, ok := traffic.(*CounterApplication)
-	if !ok {
-		return nil, fmt.Errorf("unexpected application type %T for priority load", traffic)
-	}
-
-	registry, err := priority_registry.NewRegistry(priority_registry.GetAddress(), ctxt.GetClient())
-	if err != nil {
-		return nil, fmt.Errorf("failed to bind to priority registry contract; %w", err)
-	}
-
-	// The limits are global, so applications sharing a network overwrite each
-	// other here - with the same values, since they are constants.
-	if _, err := ctxt.Run(func(opts *bind.TransactOpts) (*types.Transaction, error) {
-		return registry.SetConfig(opts, priorityMaxGasPerEntityPerBlock, priorityMaxPiggybackTxsPerEntityPerEvent)
-	}); err != nil {
-		return nil, fmt.Errorf("failed to configure priority registry limits; %w", err)
-	}
-
-	return &PriorityApplication{
-		CounterApplication: counter,
-		registry:           registry,
-		entity:             new(big.Int).SetUint64(uint64(appId)),
-	}, nil
+	return NewPrioritizedApplication("counter")(ctxt, feederId, appId)
 }
 
-// CreateUsers creates the users generating the load and registers them as
-// members of this application's priority lane.
+// NewPrioritizedApplication returns a factory creating the load of the given
+// application type in a priority lane. The load is set up as it would be on its
+// own; only its users are additionally registered in the priority registry.
+func NewPrioritizedApplication(load string) appFactoryFunc {
+	return func(ctxt AppContext, feederId, appId uint32) (Application, error) {
+		enabled, err := transactionPrioritiesEnabled(ctxt.GetClient())
+		if err != nil {
+			return nil, fmt.Errorf("failed to read the network's transaction priority state; %w", err)
+		}
+		if !enabled {
+			return nil, fmt.Errorf(
+				"transaction priorities are disabled on this network, so this " +
+					"application's traffic would not be prioritized; enable the " +
+					"TransactionPriorities upgrade in the scenario's network rules")
+		}
+
+		traffic, err := NewApplication(load, "", ctxt, feederId, appId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create the %s load to prioritize; %w", load, err)
+		}
+
+		registry, err := priority_registry.NewRegistry(priority_registry.GetAddress(), ctxt.GetClient())
+		if err != nil {
+			return nil, fmt.Errorf("failed to bind to priority registry contract; %w", err)
+		}
+
+		// The limits are global, so applications sharing a network overwrite each
+		// other here - with the same values, since they are constants.
+		if _, err := ctxt.Run(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+			return registry.SetConfig(opts, priorityMaxGasPerEntityPerBlock, priorityMaxPiggybackTxsPerEntityPerEvent)
+		}); err != nil {
+			return nil, fmt.Errorf("failed to configure priority registry limits; %w", err)
+		}
+
+		return &PriorityApplication{
+			Application: traffic,
+			load:        load,
+			registry:    registry,
+			entity:      new(big.Int).SetUint64(uint64(appId)),
+		}, nil
+	}
+}
+
+// CreateUsers creates the users generating the load and registers the accounts
+// they sign with as members of this application's priority lane.
 func (a *PriorityApplication) CreateUsers(ctxt AppContext, numUsers int) ([]User, error) {
-	users, err := a.CounterApplication.CreateUsers(ctxt, numUsers)
+	users, err := a.Application.CreateUsers(ctxt, numUsers)
 	if err != nil {
 		return nil, err
 	}
 
-	accounts := make([]*Account, 0, len(users))
-	for _, user := range users {
-		counterUser, ok := user.(*CounterUser)
-		if !ok {
-			return nil, fmt.Errorf("unexpected user type %T for priority load", user)
-		}
-		accounts = append(accounts, counterUser.sender)
+	accounts, err := a.signingAccounts(users)
+	if err != nil {
+		return nil, err
 	}
-
 	if err := a.prioritize(ctxt, accounts); err != nil {
 		return nil, fmt.Errorf("failed to register users in priority registry; %w", err)
 	}
 	return users, nil
+}
+
+// signingAccounts collects the accounts of the given users that are to be
+// registered in the lane, and reports a load that cannot disclose them.
+func (a *PriorityApplication) signingAccounts(users []User) ([]*Account, error) {
+	accounts := make([]*Account, 0, len(users))
+	for _, user := range users {
+		prioritizable, ok := user.(PrioritizableUser)
+		if !ok {
+			return nil, fmt.Errorf(
+				"the %s load cannot be prioritized: its users (%T) do not disclose "+
+					"the accounts they sign with, so they cannot be registered in the "+
+					"priority registry", a.load, user)
+		}
+		accounts = append(accounts, prioritizable.SigningAccounts()...)
+	}
+	return accounts, nil
 }
 
 // transactionPrioritiesEnabled reports whether the network currently applies

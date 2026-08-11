@@ -54,8 +54,11 @@ Scenario:
     rate:
       constant: 15
 
+  # The lane carries the same load as `ordinary` above. Any other load generator
+  # can be put in a lane the same way, by naming it here.
   - runApp: fast
     type: priority
+    load: counter
     users: 100
     rate:
       constant: 15
