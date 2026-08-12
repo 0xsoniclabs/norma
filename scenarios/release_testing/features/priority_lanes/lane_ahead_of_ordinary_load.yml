@@ -1,11 +1,10 @@
 Name: Release Features Priority Lanes Ahead Of Ordinary Load
 
 Description: >-
-  Two identical counter loads on a network throttled far below what they offer, one
-  with its senders registered in the priority registry, sized so that none of the
-  lane's limits binds. Measured: the lane commits everything it submits at a median
-  0.5s to emission and 7.4s to inclusion, while the ordinary load reaches 129.1s and
-  keeps growing.
+  Two identical counter loads on a network throttled far below what they offer,
+  one with its senders registered in the priority registry, sized so that none of
+  the lane's limits binds. Expect the lane to commit everything it submits within
+  seconds while the ordinary load falls ever further behind.
 
 InitialNetworkRules:
   Economy:
