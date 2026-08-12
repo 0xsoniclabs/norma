@@ -57,6 +57,7 @@ const (
 	FuncCheckBlocksProduced   StepFunction = "blocksProduced"
 	FuncCheckEventThrottled   StepFunction = "eventThrottled"
 	FuncCheckNetworkRules     StepFunction = "networkRules"
+	FuncCheckPrioritized      StepFunction = "prioritizedTransactionsFirst"
 	FuncCheckValidatorsActive StepFunction = "validatorsActive"
 )
 
@@ -87,7 +88,13 @@ var allCheckFunctions = [...]StepFunction{
 	FuncCheckBlocksProduced,
 	FuncCheckEventThrottled,
 	FuncCheckNetworkRules,
+	FuncCheckPrioritized,
 	FuncCheckValidatorsActive,
+}
+
+// AllCheckFunctions returns every check function valid inside a checks: step.
+func AllCheckFunctions() []StepFunction {
+	return allCheckFunctions[:]
 }
 
 // toStepFunction returns the StepFunction for a given string, or an error if not recognized.
@@ -119,6 +126,8 @@ type CheckSpec struct {
 	Failing        bool
 	Rules          genesis.NetworkRulesPatch
 	ThrottledNodes []string
+	MinMixedBlocks *int
+	MinRunCoverage *float64
 }
 
 // UnmarshalYAML implements custom YAML unmarshalling for CheckSpec.
@@ -247,6 +256,32 @@ func (c *CheckSpec) parseParam(keyNode, valNode *yaml.Node) error {
 			)
 		}
 		c.Rules = patch
+	case "minMixedBlocks":
+		var v int
+		if err := valNode.Decode(&v); err != nil {
+			return fmt.Errorf(
+				"line %d: invalid minMixedBlocks: %w", keyNode.Line, err,
+			)
+		}
+		if v < 1 {
+			return fmt.Errorf(
+				"line %d: minMixedBlocks must be >= 1, got %d", keyNode.Line, v,
+			)
+		}
+		c.MinMixedBlocks = &v
+	case "minRunCoverage":
+		var v float64
+		if err := valNode.Decode(&v); err != nil {
+			return fmt.Errorf(
+				"line %d: invalid minRunCoverage: %w", keyNode.Line, err,
+			)
+		}
+		if v <= 0 || v > 1 {
+			return fmt.Errorf(
+				"line %d: minRunCoverage must be in (0,1], got %v", keyNode.Line, v,
+			)
+		}
+		c.MinRunCoverage = &v
 	case "throttledNodes":
 		var v []string
 		if err := valNode.Decode(&v); err != nil {
@@ -714,6 +749,7 @@ var checkFunctionDescriptions = map[StepFunction]string{
 	FuncCheckBlocksProduced: "Assert that all nodes have produced blocks within tolerance.",
 	FuncCheckEventThrottled: "Assert that validators listed in throttledNodes emit events at a significantly lower rate than the rest.",
 	FuncCheckNetworkRules:   "Assert that the active network rules on all nodes match the expected rules patch.",
+	FuncCheckPrioritized:    "Assert that blocks carrying transactions of both registered and unregistered senders open with the registered ones, within the gas the priority registry grants one entity per block.",
 
 	FuncCheckValidatorsActive: "Assert that every running validator node is in the current epoch's validator set.",
 }
@@ -727,6 +763,7 @@ var checkFunctionParams = map[StepFunction][]string{
 	FuncCheckBlocksProduced: {"tolerance", "duration", "failing"},
 	FuncCheckEventThrottled: {"throttledNodes", "failing"},
 	FuncCheckNetworkRules:   {"rules", "duration", "failing"},
+	FuncCheckPrioritized:    {"minMixedBlocks", "minRunCoverage", "duration", "failing"},
 
 	FuncCheckValidatorsActive: {"failing"},
 }
@@ -737,8 +774,10 @@ var checkParamDescriptions = map[string]string{
 	"failing":        "When true, the check is expected to fail; a passing result is treated as an error.",
 	"rules":          "Expected network rules patch (NetworkRulesPatch field structure).",
 	"tolerance":      "For a height check, the allowed deviation (int, in blocks) between nodes. For a production, halt or gas rate check, the length of the observation window expressed in monitoring samples (one per second); duration overrides it.",
+	"minMixedBlocks": "Number of blocks that must carry transactions of both registered and unregistered senders for the priority ordering check to be conclusive.",
+	"minRunCoverage": "Share (0,1] of the prioritized transactions the gas quota admits that must open a block, as a median. Lower it for a congested lane, where transactions demoted for reasons a block does not show are common.",
 	"throttledNodes": "List of node labels expected to be throttled.",
-	"duration":       "Duration (e.g. \"30s\"). For a production, halt or gas rate check, how long to actively observe the network; only data collected while waiting is judged, and the window must be at least 2s. For a height or rules check, how long the nodes are given to converge, with 0 meaning a single attempt.",
+	"duration":       "Duration (e.g. \"30s\"). For a production, halt or gas rate check, how long to actively observe the network; only data collected while waiting is judged, and the window must be at least 2s. For a height or rules check, how long the nodes are given to converge, with 0 meaning a single attempt. For the priority ordering check, how long to wait for the blocks it needs.",
 }
 
 // PrintHelp writes a formatted summary of all available scenario step
