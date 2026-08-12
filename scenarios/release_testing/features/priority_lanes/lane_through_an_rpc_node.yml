@@ -1,0 +1,64 @@
+Name: Release Features Priority Lanes Through An Rpc Node
+
+Description: >-
+  Two identical counter loads on a throttled network, one prioritized and
+  submitting every transaction through a node that is not a validator while the
+  other uses any node there is. It is the longest way into a block a prioritized
+  transaction can take - the node it enters through emits no events at all, so it
+  has to reach a validator by gossip first - and the lane is expected to keep its
+  advantage over the ordinary load anyway. Note that the node the lane submits to
+  has to run for as long as the lane does: were it stopped, those transactions
+  would be dropped and reported as failed submissions rather than sent elsewhere.
+
+InitialNetworkRules:
+  Economy:
+    Gas:
+      MaxEventGas: 1500000
+  Epochs:
+    MaxEpochGas: 1000000000000
+    MaxEpochDuration: 1h
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: true
+    TransactionPriorities: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+    instances: 3
+
+  # The load of the lane enters the network here, through a node that holds no
+  # stake and proposes nothing.
+  - startNode: rpc
+    type: rpc
+
+  - runApp: ordinary
+    type: counter
+    users: 100
+    rate:
+      constant: 300
+
+  - runApp: fast
+    type: priority
+    load: counter
+    rpcNode: rpc
+    users: 100
+    rate:
+      constant: 10
+
+  - waitFor: 120s
+
+  - checks:
+      - blocksProduced
+      - networkRules:
+          rules:
+            Upgrades:
+              TransactionPriorities: true
+      - prioritizedTransactionsFirst:
+          minMixedBlocks: 10
+
+  - stopApp: fast
+  - stopApp: ordinary
+
+  - waitFor: 30s

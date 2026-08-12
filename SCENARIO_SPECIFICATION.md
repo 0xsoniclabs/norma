@@ -286,6 +286,9 @@ that application enters the network there and nowhere else.
 
 The label is the one the node runs under: the identifier of its `startNode` step
 for a single instance, and `<identifier>-<index>` when that step started several.
+A node started as `type: rpc` is the usual target, so that the load enters the
+network through a node that proposes nothing of its own.
+
 An application asking for a label no running node carries fails to start. If the
 node is stopped later, that application's transactions are dropped and reported
 as failed submissions rather than sent elsewhere, which is visible in the
