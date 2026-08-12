@@ -135,7 +135,7 @@ func TestGenerators(t *testing.T) {
 					continue
 				}
 				t.Run(name, func(t *testing.T) {
-					application, err := app.NewApplication(name, appCtx, 0, 0)
+					application, err := app.NewApplication(name, "", appCtx, 0, 0)
 					require.NoError(t, err, "failed to create application")
 					testGenerator(t, application, appCtx)
 				})
@@ -240,4 +240,59 @@ func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
 			return nil
 		})
 	require.NoError(t, err, "transactions were not processed in time")
+}
+
+func TestGenerators_Priorities(t *testing.T) {
+	rules := driver.NetworkRules{
+		Upgrades: &genesis.UpgradesPatch{
+			Sonic:   new(true),
+			Allegro: new(true),
+			Brio:    new(true),
+		},
+	}
+	net, err := local.NewLocalLegacyNetwork(t.Context(), &driver.NetworkConfig{
+		Validators:   driver.DefaultValidators(t.Name()),
+		NetworkRules: rules,
+	})
+	require.NoError(t, err, "failed to create new local network")
+	t.Cleanup(func() {
+		require.NoError(t, net.Shutdown(), "failed to shutdown network")
+	})
+
+	primaryAccount, err := app.NewAccount(0, PrivateKey, FakeNetworkID)
+	require.NoError(t, err, "failed to create primary account")
+
+	appCtx, err := app.NewContext(context.Background(), net, primaryAccount, rules)
+	require.NoError(t, err, "failed to create application context")
+
+	// While the network does not apply priorities, the application would
+	// generate traffic indistinguishable from the counter application, which it
+	// is expected to report instead of doing.
+	_, err = app.NewPriorityApplication(appCtx, 0, 0)
+	require.ErrorContains(t, err, "transaction priorities are disabled")
+
+	// Enabling the feature at runtime covers a scenario switching it on while
+	// the network is up; the rule takes effect with the next epoch seal.
+	require.NoError(t, net.ApplyNetworkRules(t.Context(), driver.NetworkRules{
+		Upgrades: &genesis.UpgradesPatch{TransactionPriorities: new(true)},
+	}), "failed to enable transaction priorities")
+	require.NoError(t, net.AdvanceEpoch(t.Context(), 2), "failed to advance epoch")
+
+	priorityApp, err := app.NewPriorityApplication(appCtx, 0, 0)
+	require.NoError(t, err, "failed to create priority application")
+	testGenerator(t, priorityApp, appCtx)
+
+	// A lane is a property of a load, not a load of its own: any generator whose
+	// users disclose the accounts they sign with can travel in one. The erc20
+	// load stands in for the ones that are not the counter load.
+	prioritizedErc20, err := app.NewApplication("priority", "erc20", appCtx, 0, 1)
+	require.NoError(t, err, "failed to create a prioritized erc20 application")
+	testGenerator(t, prioritizedErc20, appCtx)
+
+	// A load that creates the accounts it signs with while it runs cannot be
+	// registered up front, and says so instead of prioritizing a part of itself.
+	bundles, err := app.NewApplication("priority", "allofbundle", appCtx, 0, 2)
+	require.NoError(t, err, "failed to create a prioritized bundle application")
+	_, err = bundles.CreateUsers(appCtx, 1)
+	require.ErrorContains(t, err, "cannot be prioritized")
 }

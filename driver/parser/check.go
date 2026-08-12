@@ -40,7 +40,6 @@ func (s *Scenario) Check() error {
 	if err := genesis.ValidateNetworkRulesPatch(s.InitialRules); err != nil {
 		errs = append(errs, fmt.Errorf("invalid initial network rules: %w", err))
 	}
-
 	// Validate each step.
 	for i, step := range s.Steps {
 		if err := step.Check(); err != nil {
@@ -174,6 +173,19 @@ func (s *Step) checkRunApp() error {
 		errs = append(errs, fmt.Errorf("run app requires a type"))
 	} else if !app.IsSupportedApplicationType(appType) {
 		errs = append(errs, fmt.Errorf("unknown application type: %v", appType))
+	}
+
+	if s.AppLoad != "" {
+		switch {
+		case !app.AcceptsLoadParameter(appType):
+			errs = append(errs, fmt.Errorf(
+				"application type %v generates its own load, so it takes no load", appType))
+		case !app.IsSupportedApplicationType(s.AppLoad):
+			errs = append(errs, fmt.Errorf("unknown load: %v", s.AppLoad))
+		case app.AcceptsLoadParameter(s.AppLoad):
+			errs = append(errs, fmt.Errorf(
+				"load %v carries a load of its own, which cannot be nested", s.AppLoad))
+		}
 	}
 
 	if s.Rate == nil {

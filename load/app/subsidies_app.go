@@ -163,6 +163,12 @@ func (u *SubsidiesUser) GenerateTx() (*types.Transaction, error) {
 	return tx, nil
 }
 
+// SigningAccounts implements PrioritizableUser: every transaction of this
+// user is signed by the single account it was created for.
+func (u *SubsidiesUser) SigningAccounts() []*Account {
+	return []*Account{u.Sender}
+}
+
 func (u *SubsidiesUser) GetSentTransactions() uint64 {
 	return u.sentTxs.Load()
 }
