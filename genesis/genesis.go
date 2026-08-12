@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"regexp"
 	"time"
 
 	gas_subsidies_registry "github.com/0xsoniclabs/sonic/gossip/blockproc/subsidies/registry"
@@ -16,10 +17,9 @@ import (
 	"github.com/0xsoniclabs/sonic/opera/contracts/evmwriter"
 	"github.com/0xsoniclabs/sonic/opera/contracts/netinit"
 	"github.com/0xsoniclabs/sonic/opera/contracts/sfc"
-	"github.com/0xsoniclabs/sonic/scc"
-	"github.com/0xsoniclabs/sonic/scc/bls"
 	"github.com/0xsoniclabs/sonic/utils"
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
+	"github.com/holiman/uint256"
 )
 
 // GenerateJsonGenesis generates a genesis json file with the given number of validators
@@ -81,7 +81,7 @@ func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera
 		jsonGenesis.Accounts = append(jsonGenesis.Accounts, makefakegenesis.Account{
 			Name:    fmt.Sprintf("validator_%d", validator.ID),
 			Address: validator.Address,
-			Balance: supplyEach,
+			Balance: uint256.MustFromBig(supplyEach),
 		})
 	}
 
@@ -113,23 +113,29 @@ func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera
 		})
 	}
 
-	// Create the genesis SCC committee.
-	key := bls.NewPrivateKeyForTests(0)
-	committee := scc.NewCommittee(scc.Member{
-		PublicKey:         key.PublicKey(),
-		ProofOfPossession: key.GetProofOfPossession(),
-		VotingPower:       1,
-	})
-	jsonGenesis.GenesisCommittee = &committee
-
 	encoded, err := json.MarshalIndent(jsonGenesis, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to encode genesis json: %w", err)
 	}
 
-	if err = os.WriteFile(jsonFile, encoded, 0644); err != nil {
+	if err = os.WriteFile(jsonFile, encodeBalancesAsNumbers(encoded), 0644); err != nil {
 		return fmt.Errorf("failed to write genesis.json file: %w", err)
 	}
 
 	return nil
+}
+
+// quotedBalance matches the encoded account balances of a genesis file.
+var quotedBalance = regexp.MustCompile(`("Balance": )"(\d+)"`)
+
+// encodeBalancesAsNumbers rewrites quoted account balances into JSON numbers.
+//
+// Every node of a network imports the same genesis file with the sonictool of
+// its own image, so the file has to be readable by every client version a
+// scenario starts. Balances are encoded as strings by the Sonic version this
+// module builds genesis files with, while clients up to v2.1.6 decode them into
+// a big.Int, which rejects a string. A JSON number of arbitrary length is
+// accepted by both.
+func encodeBalancesAsNumbers(genesis []byte) []byte {
+	return quotedBalance.ReplaceAll(genesis, []byte("${1}${2}"))
 }
