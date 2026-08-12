@@ -123,3 +123,70 @@ func (mr *MockUserMockRecorder) GetSentTransactions() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSentTransactions", reflect.TypeOf((*MockUser)(nil).GetSentTransactions))
 }
+
+// MockPrioritizableUser is a mock of PrioritizableUser interface.
+type MockPrioritizableUser struct {
+	ctrl     *gomock.Controller
+	recorder *MockPrioritizableUserMockRecorder
+	isgomock struct{}
+}
+
+// MockPrioritizableUserMockRecorder is the mock recorder for MockPrioritizableUser.
+type MockPrioritizableUserMockRecorder struct {
+	mock *MockPrioritizableUser
+}
+
+// NewMockPrioritizableUser creates a new mock instance.
+func NewMockPrioritizableUser(ctrl *gomock.Controller) *MockPrioritizableUser {
+	mock := &MockPrioritizableUser{ctrl: ctrl}
+	mock.recorder = &MockPrioritizableUserMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPrioritizableUser) EXPECT() *MockPrioritizableUserMockRecorder {
+	return m.recorder
+}
+
+// GenerateTx mocks base method.
+func (m *MockPrioritizableUser) GenerateTx() (*types.Transaction, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GenerateTx")
+	ret0, _ := ret[0].(*types.Transaction)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GenerateTx indicates an expected call of GenerateTx.
+func (mr *MockPrioritizableUserMockRecorder) GenerateTx() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateTx", reflect.TypeOf((*MockPrioritizableUser)(nil).GenerateTx))
+}
+
+// GetSentTransactions mocks base method.
+func (m *MockPrioritizableUser) GetSentTransactions() uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSentTransactions")
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// GetSentTransactions indicates an expected call of GetSentTransactions.
+func (mr *MockPrioritizableUserMockRecorder) GetSentTransactions() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSentTransactions", reflect.TypeOf((*MockPrioritizableUser)(nil).GetSentTransactions))
+}
+
+// SigningAccounts mocks base method.
+func (m *MockPrioritizableUser) SigningAccounts() []*Account {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SigningAccounts")
+	ret0, _ := ret[0].([]*Account)
+	return ret0
+}
+
+// SigningAccounts indicates an expected call of SigningAccounts.
+func (mr *MockPrioritizableUserMockRecorder) SigningAccounts() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SigningAccounts", reflect.TypeOf((*MockPrioritizableUser)(nil).SigningAccounts))
+}

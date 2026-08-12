@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"time"
 
+	priority_registry "github.com/0xsoniclabs/sonic/gossip/blockproc/priorities/registry"
 	gas_subsidies_registry "github.com/0xsoniclabs/sonic/gossip/blockproc/subsidies/registry"
 	"github.com/0xsoniclabs/sonic/integration/makefakegenesis"
 	"github.com/0xsoniclabs/sonic/opera"
@@ -68,6 +69,12 @@ func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera
 			Name:    "SubsidiesRegistry",
 			Address: gas_subsidies_registry.GetAddress(),
 			Code:    gas_subsidies_registry.GetCode(),
+			Nonce:   1,
+		},
+		{
+			Name:    "PriorityRegistry",
+			Address: priority_registry.GetAddress(),
+			Code:    priority_registry.GetCode(),
 			Nonce:   1,
 		},
 	}

@@ -39,3 +39,20 @@ type User interface {
 	GenerateTx() (*types.Transaction, error)
 	GetSentTransactions() uint64
 }
+
+// PrioritizableUser is a User that discloses the accounts it signs its
+// transactions with.
+//
+// Sonic keys the priority of a transaction on its sender, so a load can only be
+// placed in a priority lane if the accounts signing it are known before it
+// starts - see PriorityApplication. Users that create senders while they run, or
+// that delegate to other users, deliberately do not implement this: registering
+// the accounts they happen to hold at setup time would prioritize a part of
+// their traffic and silently leave the rest behind.
+type PrioritizableUser interface {
+	User
+
+	// SigningAccounts returns the accounts this user signs its transactions
+	// with, all of which it will use for the whole run.
+	SigningAccounts() []*Account
+}

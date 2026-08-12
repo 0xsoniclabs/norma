@@ -516,7 +516,7 @@ func (n *LocalNetwork) CreateApplication(ctx context.Context, config *driver.App
 	defer rpcClient.Close()
 
 	appId := n.nextAppId.Add(1)
-	application, err := app.NewApplication(config.Type, n.appContext, 0, appId)
+	application, err := app.NewApplication(config.Type, config.Load, n.appContext, 0, appId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize on-chain app; %v", err)
 	}

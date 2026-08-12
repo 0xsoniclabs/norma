@@ -50,7 +50,7 @@ func TestGenerators_Bundles(t *testing.T) {
 		"DuplicatedBundle",
 	} {
 		t.Run(name, func(t *testing.T) {
-			application, err := app.NewApplication(name, appCtx, 0, uint32(appId))
+			application, err := app.NewApplication(name, "", appCtx, 0, uint32(appId))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -62,7 +62,7 @@ func TestGenerators_Bundles(t *testing.T) {
 		"FailingBundle",
 	} {
 		t.Run(name, func(t *testing.T) {
-			application, err := app.NewApplication(name, appCtx, 0, uint32(appId))
+			application, err := app.NewApplication(name, "", appCtx, 0, uint32(appId))
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -185,6 +185,12 @@ func (g *ERC20User) GenerateTx() (*types.Transaction, error) {
 	return tx, err
 }
 
+// SigningAccounts implements PrioritizableUser: every transaction of this
+// user is signed by the single account it was created for.
+func (g *ERC20User) SigningAccounts() []*Account {
+	return []*Account{g.sender}
+}
+
 func (g *ERC20User) GetSentTransactions() uint64 {
 	return atomic.LoadUint64(&g.sentTxs)
 }

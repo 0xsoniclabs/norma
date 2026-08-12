@@ -130,6 +130,12 @@ func (g *Bls12AddUser) GenerateTx() (*types.Transaction, error) {
 	return tx, err
 }
 
+// SigningAccounts implements PrioritizableUser: every transaction of this
+// user is signed by the single account it was created for.
+func (g *Bls12AddUser) SigningAccounts() []*Account {
+	return []*Account{g.sender}
+}
+
 // GetSentTransactions returns the number of transactions this user has sent.
 func (g *Bls12AddUser) GetSentTransactions() uint64 {
 	return g.sentTxs.Load()
