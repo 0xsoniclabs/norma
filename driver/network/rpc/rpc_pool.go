@@ -30,25 +30,61 @@ import (
 )
 
 type RpcWorkerPool struct {
-	txs     chan transactionWithSource
-	workers map[driver.Node]*workerGroup
-	ctx     context.Context
-	cancel  context.CancelFunc
+	txs       chan transactionWithSource
+	workers   map[driver.Node]*workerGroup
+	ctx       context.Context
+	cancel    context.CancelFunc
+	observers *observers
 }
 
 func NewRpcWorkerPool(ctx context.Context) *RpcWorkerPool {
 	ctx, cancel := context.WithCancel(ctx)
 
 	return &RpcWorkerPool{
-		txs:     make(chan transactionWithSource, 100),
-		workers: make(map[driver.Node]*workerGroup, 10),
-		ctx:     ctx,
-		cancel:  cancel,
+		txs:       make(chan transactionWithSource, 100),
+		workers:   make(map[driver.Node]*workerGroup, 10),
+		ctx:       ctx,
+		cancel:    cancel,
+		observers: &observers{},
 	}
 }
 
-func (p *RpcWorkerPool) SendTransaction(tx *types.Transaction, source string) {
+func (p *RpcWorkerPool) SendTransaction(tx *types.Transaction, source driver.TransactionSource) {
 	p.txs <- transactionWithSource{tx: tx, source: source}
+}
+
+// RegisterObserver adds an observer to be notified about every transaction this
+// pool submits. Observers may be registered at any time; a transaction already
+// submitted is not reported retroactively.
+func (p *RpcWorkerPool) RegisterObserver(observer driver.TransactionObserver) {
+	p.observers.add(observer)
+}
+
+// observers is the set of transaction observers of a pool, shared by all its
+// workers and therefore safe for concurrent use.
+type observers struct {
+	mu   sync.Mutex
+	list []driver.TransactionObserver
+}
+
+func (o *observers) add(observer driver.TransactionObserver) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.list = append(o.list, observer)
+}
+
+func (o *observers) notify(
+	source driver.TransactionSource,
+	tx *types.Transaction,
+	at time.Time,
+	err error,
+) {
+	o.mu.Lock()
+	list := o.list
+	o.mu.Unlock()
+	for _, observer := range list {
+		observer.OnTransactionSubmitted(source, tx, at, err)
+	}
 }
 
 func (p *RpcWorkerPool) AfterNodeCreation(newNode driver.Node) {
@@ -65,7 +101,7 @@ func (p *RpcWorkerPool) AfterNodeCreation(newNode driver.Node) {
 	wg := workerGroup{}
 	p.workers[newNode] = &wg
 	for i := 0; i < 150; i++ {
-		wg.add(newNode.GetLabel(), *rpcUrl, p.txs)
+		wg.add(newNode.GetLabel(), *rpcUrl, p.txs, p.observers)
 	}
 }
 
@@ -97,8 +133,8 @@ func (p *RpcWorkerPool) Close() error {
 // When the group is closed, it should not be re-used and should be forgotten.
 type workerGroup []*worker
 
-func (wg *workerGroup) add(nodeName string, rpcUrl driver.URL, txs chan transactionWithSource) {
-	w := newWorker(nodeName, rpcUrl, txs)
+func (wg *workerGroup) add(nodeName string, rpcUrl driver.URL, txs chan transactionWithSource, observers *observers) {
+	w := newWorker(nodeName, rpcUrl, txs, observers)
 	*wg = append(*wg, w)
 }
 
@@ -122,24 +158,26 @@ func (wg *workerGroup) close() {
 // it starts dispatching asynchronously. This process can be interrupted by
 // closing the worker before it starts dispatching.
 type worker struct {
-	nodeName string
-	rpcUrl   driver.URL
-	done     chan bool
-	txs      chan transactionWithSource
-	ctx      context.Context
-	cancel   context.CancelFunc
+	nodeName  string
+	rpcUrl    driver.URL
+	done      chan bool
+	txs       chan transactionWithSource
+	ctx       context.Context
+	cancel    context.CancelFunc
+	observers *observers
 }
 
-func newWorker(nodeName string, rpcUrl driver.URL, txs chan transactionWithSource) *worker {
+func newWorker(nodeName string, rpcUrl driver.URL, txs chan transactionWithSource, observers *observers) *worker {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	w := &worker{
-		nodeName: nodeName,
-		rpcUrl:   rpcUrl,
-		done:     make(chan bool),
-		txs:      txs,
-		ctx:      ctx,
-		cancel:   cancel,
+		nodeName:  nodeName,
+		rpcUrl:    rpcUrl,
+		done:      make(chan bool),
+		txs:       txs,
+		ctx:       ctx,
+		cancel:    cancel,
+		observers: observers,
 	}
 
 	go func() {
@@ -179,6 +217,9 @@ func (p *worker) runRpcSenderLoop() error {
 		select {
 		case tx := <-p.txs:
 			err := rpcClient.SendTransaction(context.Background(), tx.tx)
+			// The submission is reported before any logging, keeping the
+			// measured moment as close to the actual submission as possible.
+			p.observers.notify(tx.source, tx.tx, time.Now(), err)
 			if err != nil {
 				slog.Warn("failed to send tx", "node", p.nodeName, "source", tx.source, "error", err)
 			}
@@ -190,10 +231,9 @@ func (p *worker) runRpcSenderLoop() error {
 
 // transactionWithSource is a struct that holds a transaction and its source.
 // It is used to provide feedback about the origin of the transaction in case
-// of an error when sending it to the RPC client.
+// of an error when sending it to the RPC client, and to attribute it to its
+// load generator when reporting the submission to observers.
 type transactionWithSource struct {
-	tx *types.Transaction
-	// source is a string describing the origin of the transaction,
-	// e.g. the load generator that created it.
-	source string
+	tx     *types.Transaction
+	source driver.TransactionSource
 }

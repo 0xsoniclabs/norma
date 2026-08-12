@@ -355,8 +355,12 @@ func (n *LocalNetwork) RemoveNode(node driver.Node) error {
 	return nil
 }
 
-func (n *LocalNetwork) SendTransaction(tx *types.Transaction, source string) {
+func (n *LocalNetwork) SendTransaction(tx *types.Transaction, source driver.TransactionSource) {
 	n.rpcWorkerPool.SendTransaction(tx, source)
+}
+
+func (n *LocalNetwork) RegisterTransactionObserver(observer driver.TransactionObserver) {
+	n.rpcWorkerPool.RegisterObserver(observer)
 }
 
 func (n *LocalNetwork) DialRandomRpc() (rpcdriver.Client, error) {
@@ -522,7 +526,7 @@ func (n *LocalNetwork) CreateApplication(ctx context.Context, config *driver.App
 		return nil, fmt.Errorf("failed to parse shaper; %v", err)
 	}
 
-	appController, err := controller.NewAppController(application, sh, config.Users, n.appContext, n)
+	appController, err := controller.NewAppController(config.Name, application, sh, config.Users, n.appContext, n)
 	if err != nil {
 		return nil, err
 	}
