@@ -123,9 +123,8 @@ func TestSimulation_UnreachableNodeStopsBeingSampled(t *testing.T) {
 
 		latest := net.GetBlockStatus("A").GetLatest()
 		if latest == nil {
-			t.Fatalf("expected samples from before the node was stopped")
-		}
-		if at := latest.Position.Time(); !at.Before(stoppedAt) {
+			t.Fatal("expected samples from before the node was stopped")
+		} else if at := latest.Position.Time(); !at.Before(stoppedAt) {
 			t.Errorf("last sample taken at %v, want before %v", at, stoppedAt)
 		}
 	})

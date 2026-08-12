@@ -755,18 +755,21 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 		t.Fatalf("failed to create node: %v", err)
 	}
 
-	getModificationTime := func() (*time.Time, []string, error) {
-		var carmenModTime *time.Time
+	getModificationTime := func() (time.Time, []string, error) {
+		var carmenModTime time.Time
+		var found bool
 		var visitedDirs []string
 		localDirBinding := fmt.Sprintf("%s/%s", temp, dataVolume)
 		err := filepath.Walk(localDirBinding, func(path string, info os.FileInfo, err error) error {
 			visitedDirs = append(visitedDirs, path)
 			if strings.HasSuffix(path, "transactions.rlp") {
-				carmenModTime = new(time.Time)
-				*carmenModTime = info.ModTime()
+				carmenModTime, found = info.ModTime(), true
 			}
 			return nil
 		})
+		if err == nil && !found {
+			err = fmt.Errorf("directory contains no database files, visited %v", visitedDirs)
+		}
 		return carmenModTime, visitedDirs, err
 	}
 
@@ -774,9 +777,6 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	prevModTime, prevVisitedDirs, err := getModificationTime()
 	if err != nil {
 		t.Fatalf("failed to get modification time: %v", err)
-	}
-	if prevModTime == nil {
-		t.Fatalf("directory does not contain database files: %v", prevVisitedDirs)
 	}
 
 	if !slices.ContainsFunc(
@@ -812,7 +812,7 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get modification time: %v", err)
 	}
-	if got, want := *currModTime, *prevModTime; got.Equal(want) {
+	if got, want := currModTime, prevModTime; got.Equal(want) {
 		t.Errorf("got modification time %v, wanted modification time %v", got, want)
 	}
 	if !slices.ContainsFunc(
