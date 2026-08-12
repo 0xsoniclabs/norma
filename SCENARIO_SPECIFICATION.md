@@ -237,10 +237,38 @@ Starts a load-generating application. The value is the application’s
 ```
 
 **Supported application types** (case-insensitive): `counter`, `erc20`,
-`store`, `uniswap`, `smartaccount`, `subsidies`, `transient`,
+`store`, `uniswap`, `smartaccount`, `subsidies`, `priority`, `transient`,
 `selfdestructoldcontract`, `selfdestructnewcontract`, `ecdsa`,
 `largecontract`, `allofbundle`, `oneofbundle`, `subsidizedbundle`,
 `failingbundle`, `duplicatedbundle`, `bls12add`, `mix`.
+
+A priority lane is a property of a load rather than a load of its own, so
+`priority` does not generate traffic itself: the optional `load` parameter names
+the type that does, and the accounts signing it are registered in the on-chain
+priority registry.
+
+```yaml
+- runApp: fast
+  type: priority
+  load: uniswap            # optional; any type above, defaults to counter
+  rate:
+    constant: 20
+```
+
+Running that next to a plain `uniswap` application isolates the effect of the
+feature, since the two loads differ in nothing else. `load` applies to `priority`
+only; on any other type it is an error, as is nesting one lane in another.
+
+`priority` requires the `TransactionPriorities` upgrade to be active and fails
+to start otherwise; see
+[scenarios/examples/priority_lanes.yml](scenarios/examples/priority_lanes.yml)
+for a scenario making the effect of the lanes visible.
+
+The loads whose users create the accounts they sign with while they run - the
+bundle types and `mix` - cannot be prioritized: their accounts are not known when
+the registry is written, and registering the ones that happen to exist would
+prioritize a part of their traffic and quietly leave the rest behind. Asking for
+them reports that rather than doing it.
 
 **Rate shapes** — exactly one of the following must be set on `rate`:
 
@@ -359,6 +387,7 @@ Upgrades:
   SingleProposerBlockFormation: <bool>
   GasSubsidies: <bool>
   TransactionBundles: <bool>
+  TransactionPriorities: <bool>
 ```
 
 Type notes:
@@ -380,31 +409,33 @@ The canonical Go type is
 Checks appear as items inside a `checks:` step. Each entry is either a bare
 function name or a mapping.
 
-| Function           | Purpose                                                          | Parameters                                    |
-| ------------------ | ---------------------------------------------------------------- | --------------------------------------------- |
-| `blockGasRate`     | Assert block gas rate ≤ ceiling over an observation window.      | `ceiling`, `tolerance`, `duration`, `failing` |
-| `blockHashes`      | Assert all nodes agree on block hashes.                          | `failing`                                     |
-| `blockHeights`     | Assert all nodes are within tolerance of the same height.        | `tolerance`, `duration`, `failing`            |
-| `blocksHalted`     | Assert block production has halted over an observation window.   | `tolerance`, `duration`, `failing`            |
-| `blocksProduced`   | Assert the network produces blocks over an observation window.   | `tolerance`, `duration`, `failing`            |
-| `eventThrottled`   | Assert the listed validators emit events far slower than others. | `throttledNodes`, `failing`                   |
-| `networkRules`     | Assert the active rules on all nodes match the given patch.      | `rules`, `duration`, `failing`                |
-| `validatorsActive` | Assert every running validator is in the epoch's validator set.  | `failing`                                     |
+| Function                       | Purpose                                                          | Parameters                                    |
+| ------------------------------ | ---------------------------------------------------------------- | --------------------------------------------- |
+| `blockGasRate`                 | Assert block gas rate ≤ ceiling over an observation window.      | `ceiling`, `tolerance`, `duration`, `failing` |
+| `blockHashes`                  | Assert all nodes agree on block hashes.                          | `failing`                                     |
+| `blockHeights`                 | Assert all nodes are within tolerance of the same height.        | `tolerance`, `duration`, `failing`            |
+| `blocksHalted`                 | Assert block production has halted over an observation window.   | `tolerance`, `duration`, `failing`            |
+| `blocksProduced`               | Assert the network produces blocks over an observation window.   | `tolerance`, `duration`, `failing`            |
+| `eventThrottled`               | Assert the listed validators emit events far slower than others. | `throttledNodes`, `failing`                   |
+| `networkRules`                 | Assert the active rules on all nodes match the given patch.      | `rules`, `duration`, `failing`                |
+| `prioritizedTransactionsFirst` | Assert blocks open with registered senders' transactions.        | `minMixedBlocks`, `minRunCoverage`, `failing` |
+| `validatorsActive`             | Assert every running validator is in the epoch's validator set.  | `failing`                                     |
 
 ### 5.1 Windows of time
 
 Every check fixes the span it judges **when it starts**, and never reads data
 recorded before that instant. There are four shapes.
 
-| Check            | Window kind            | Anchored at                  | Judges                                 |
-| ---------------- | ---------------------- | ---------------------------- | -------------------------------------- |
-| `blocksProduced` | Forward observation    | now, at entry                | Height samples taken while waiting     |
-| `blocksHalted`   | Forward observation    | now, at entry                | Height samples taken while waiting     |
-| `blockGasRate`   | Forward observation    | chain head, at entry         | Blocks produced while waiting          |
-| `blockHeights`   | Convergence budget     | now + budget, at entry       | Live heights, re-read until they agree |
-| `networkRules`   | Convergence budget     | now + budget, at entry       | Live rules, re-read until they agree   |
-| `blockHashes`    | Fixed block range      | lowest head of healthy nodes | Blocks 0…that head, settled everywhere |
-| `eventThrottled` | Two measured snapshots | each DAG head query          | Event delta ÷ the interval measured    |
+| Check                          | Window kind            | Anchored at                  | Judges                                 |
+| ------------------------------ | ---------------------- | ---------------------------- | -------------------------------------- |
+| `blocksProduced`               | Forward observation    | now, at entry                | Height samples taken while waiting     |
+| `blocksHalted`                 | Forward observation    | now, at entry                | Height samples taken while waiting     |
+| `blockGasRate`                 | Forward observation    | chain head, at entry         | Blocks produced while waiting          |
+| `prioritizedTransactionsFirst` | Forward observation    | chain head, at entry         | Blocks produced while waiting          |
+| `blockHeights`                 | Convergence budget     | now + budget, at entry       | Live heights, re-read until they agree |
+| `networkRules`                 | Convergence budget     | now + budget, at entry       | Live rules, re-read until they agree   |
+| `blockHashes`                  | Fixed block range      | lowest head of healthy nodes | Blocks 0…that head, settled everywhere |
+| `eventThrottled`               | Two measured snapshots | each DAG head query          | Event delta ÷ the interval measured    |
 
 **Forward observation.** The check notes the current instant, waits for its
 window, and then looks only at what the monitor collected while it waited.
@@ -471,6 +502,16 @@ Two things to keep in mind:
   in blocks**. `duration`, when given, always wins over `tolerance`.
 - `duration` is an observation window for the three observing checks, but a
   convergence budget for `blockHeights` and `networkRules`.
+
+`prioritizedTransactionsFirst` notes the head when it starts and then waits for
+blocks, judging only those the network produces from that point on. It stops once
+`minMixedBlocks` of them (**10**) carried transactions of both classes, and
+requires their opening run of prioritized transactions to cover a median
+`minRunCoverage` (**0.5**) of the transactions the per-entity gas quota admits.
+Its `duration` (**2m**) is how long it waits for those blocks; too few, and the
+check fails for lack of evidence rather than passing. Lower the coverage for a
+lane congested enough that transactions are regularly demoted for reasons a block
+does not show, such as a nonce gap.
 
 Both floors are enforced when the scenario is loaded, not minutes into the run:
 on a check that reads the parameter as a window, a `duration` below 2s is
