@@ -2,13 +2,13 @@ Name: Release Features Priority Lanes Under Transaction Count Load
 
 Description: >-
   A lane under load measured in transactions, the counterpart of the heavy gas
-  scenario next to it: 600 prioritized against 400 ordinary counter transactions per
-  second, both beyond what the network commits, with no gas limit near binding.
-  Measured: the lane takes 1179 transactions of the average block against 589, at a
-  median 43.7s against 86.3s - the same two-to-one split the heavy gas scenario
-  produces. MaxPiggybackTxsPerEntityPerEvent, 1000 per entity per event, is out of
-  reach: one event would have to carry more than a thousand of this entity's
-  transactions, and the whole network commits some 420 per second here.
+  scenario next to it: prioritized against ordinary counter load, both beyond
+  what the network commits, with no gas limit near binding. Expect the lane to
+  take clearly more of every block than the ordinary load and to be included
+  markedly faster, about the same split the heavy gas scenario produces. Note
+  that the limit on prioritized transactions per entity per event stays out of
+  reach: one event would have to carry more than a thousand of them, far beyond
+  what the whole network commits in a second.
 
 InitialNetworkRules:
   Economy:
