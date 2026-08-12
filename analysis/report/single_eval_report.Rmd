@@ -741,6 +741,30 @@ if (nrow(in_system) > 0) {
 }
 ```
 
+### Rejected Transactions
+
+The transactions a node refused to accept, which therefore never reached a pool.
+A pool at its limit is the usual reason; the chart says whose transactions were
+refused, while `txpool_overflowed` and `txpool_underpriced` per node say why. The
+chart is left out of a run in which nothing was refused.
+
+```{r transactions_rejected, echo=FALSE, message=FALSE, warning=FALSE, fig.dim = figure_dimensions}
+rejected <- filter_metric(all_data, "TransactionsRejected")
+
+if (nrow(rejected) > 0 && max(rejected$value) > 0) {
+    ggplot(rejected, aes(x = elapsed_sec, y = value, colour = app)) +
+        geom_line() +
+        ggtitle("Refused Transactions per Application") +
+        xlab("Time") +
+        ylab("Total Number of Transactions") +
+        labs(colour = "Apps") +
+        norma_theme() +
+        add_scenario_step_overlay()
+} else {
+    cat("Every submitted transaction was accepted.")
+}
+```
+
 ### Composition of Blocks
 
 Which application the transactions of each block came from. The bands add up to
