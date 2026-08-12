@@ -93,9 +93,14 @@ type Network interface {
 	// any potential other resources.
 	Shutdown() error
 
-	// SendTransaction sends a transaction to the network.
-	// The source parameter is used for logging and debugging purposes.
-	SendTransaction(tx *types.Transaction, source string)
+	// SendTransaction sends a transaction to the network. The source identifies
+	// which load generator produced it, for diagnostics and for attributing it
+	// to an application in the monitoring data.
+	SendTransaction(tx *types.Transaction, source TransactionSource)
+
+	// RegisterTransactionObserver registers an observer to be notified about
+	// every transaction submitted through SendTransaction.
+	RegisterTransactionObserver(TransactionObserver)
 
 	// Create a connection to a random node on the network. May fail if there
 	// is no node on the network with a ErrorEmptyNetwork error.
@@ -158,6 +163,29 @@ type NetworkListener interface {
 	BeforeNodeRemoval(Node)
 	// AfterApplicationCreation is called after a new application has started.
 	AfterApplicationCreation(Application)
+}
+
+// TransactionSource identifies the load generator a transaction originates
+// from: the application it belongs to and which of the application's users
+// created it.
+type TransactionSource struct {
+	App  string
+	User int
+}
+
+func (s TransactionSource) String() string {
+	return fmt.Sprintf("%s/user-%d", s.App, s.User)
+}
+
+// TransactionObserver can be registered to networks to be notified about
+// transactions submitted to them.
+type TransactionObserver interface {
+	// OnTransactionSubmitted is called once a transaction has been handed to a
+	// node's RPC interface, reporting the moment of the submission and the error
+	// the node responded with, if any. Note that this is not the moment the
+	// transaction was created, which may be earlier if submissions are queuing
+	// up, and that a transaction rejected here never reaches a transaction pool.
+	OnTransactionSubmitted(source TransactionSource, tx *types.Transaction, at time.Time, err error)
 }
 
 type NodeConfig struct {

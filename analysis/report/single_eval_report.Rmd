@@ -231,6 +231,28 @@ compute_incremental_rate <- function(data, group_cols) {
             rate = value - lag(value, default = 0)
         )
 }
+
+# Compute a 5-second sliding window rate per application from accumulated counts.
+# compute_sliding_rate sums the increments of everything it is given, so it is
+# applied to one application at a time.
+# data:             rows for a single metric with numeric `time` and `value`
+#                   columns and an `app` column
+# extra_group_cols: further columns the counts accumulate per, such as the
+#                   individual users of an application
+# Returns a data frame with columns: rate, time, elapsed_sec, app
+compute_sliding_rate_per_app <- function(data, extra_group_cols, start_time) {
+    apps <- sort(unique(data$app[!is.na(data$app)]))
+    if (length(apps) == 0) {
+        return(tibble(rate = numeric(0), elapsed_sec = numeric(0), app = character(0)))
+    }
+
+    purrr::map_dfr(apps, function(current) {
+        data %>%
+            dplyr::filter(app == current) %>%
+            compute_sliding_rate(extra_group_cols, start_time) %>%
+            mutate(app = current)
+    })
+}
 ```
 
 This report summarizes the monitoring results of an execution of a Norma scenario.
@@ -568,11 +590,309 @@ filter_metric(all_data, "system_memory_used") %>%
     add_scenario_step_overlay()
 ```
 
+## Transaction Lifecycle
+
+Transactions are followed individually from the moment they are submitted to a
+node until they are part of a block. They pass three phases:
+
+- **submitted**: handed to the RPC interface of a node, which either accepted it
+  into its transaction pool or refused it (*rejected*).
+- **emitted**: put into an event of the DAG by a validator. Until then a
+  transaction waits in a pool, either as the next nonce of its sender and
+  therefore ready to be emitted (*pending*), or behind an earlier nonce of the
+  same sender that is not committed yet (*stalled*).
+- **included**: part of a block, and therefore executed.
+
+### Time per Phase
+
+One measurement per transaction is far too much to draw, so the phases are
+summarised as numbers.
+
+```{r transaction_phase_table, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
+phase_levels <- c(
+    "submitted to emitted",
+    "emitted to included",
+    "submitted to included"
+)
+
+phase_durations <- bind_rows(
+    filter_metric(all_data, "TransactionTimeToEmit") %>%
+        mutate(phase = phase_levels[1]),
+    filter_metric(all_data, "TransactionTimeEmitToInclude") %>%
+        mutate(phase = phase_levels[2]),
+    filter_metric(all_data, "TransactionTimeToInclude") %>%
+        mutate(phase = phase_levels[3])
+) %>%
+    mutate(seconds = value / 1e9, phase = factor(phase, levels = phase_levels)) %>%
+    dplyr::filter(seconds > 0)
+
+if (nrow(phase_durations) > 0) {
+    phase_summary <- phase_durations %>%
+        group_by(app, phase) %>%
+        summarise(
+            transactions = n(),
+            median = median(seconds),
+            p90 = quantile(seconds, 0.9),
+            p99 = quantile(seconds, 0.99),
+            max = max(seconds),
+            .groups = "drop"
+        ) %>%
+        arrange(app, phase)
+
+    # The application whose transactions reached a block fastest; its row is the
+    # one to compare the others against, so it is marked.
+    total_phase <- phase_levels[3]
+    best_app <- phase_summary %>%
+        dplyr::filter(phase == total_phase) %>%
+        slice_min(median, n = 1, with_ties = FALSE) %>%
+        pull(app)
+
+    # The table is written out directly rather than through knitr::kable, which
+    # cannot rule a line between the applications nor fill a single row.
+    seconds <- function(x) formatC(x, format = "f", digits = 3, big.mark = ",")
+    columns <- c(
+        "Application", "Phase", "Transactions",
+        "Median [s]", "p90 [s]", "p99 [s]", "Max [s]"
+    )
+    alignments <- c("left", "left", rep("right", 5))
+
+    header <- paste0(
+        "<th style=\"padding: 3px 10px; text-align: ", alignments,
+        "; border-bottom: 1px solid #333;\">", columns, "</th>",
+        collapse = ""
+    )
+
+    body <- ""
+    for (i in seq_len(nrow(phase_summary))) {
+        row <- phase_summary[i, ]
+        separator <- if (i > 1 && row$app != phase_summary$app[i - 1]) {
+            "border-top: 2px solid #333;"
+        } else {
+            ""
+        }
+        highlight <- if (row$phase == total_phase && row$app == best_app) {
+            "background-color: #e8f5e9;"
+        } else {
+            ""
+        }
+        values <- c(
+            row$app, as.character(row$phase), format(row$transactions, big.mark = ","),
+            seconds(row$median), seconds(row$p90), seconds(row$p99), seconds(row$max)
+        )
+        body <- paste0(
+            body, "<tr>",
+            paste0(
+                "<td style=\"padding: 3px 10px; text-align: ", alignments, ";",
+                separator, highlight, "\">", values, "</td>",
+                collapse = ""
+            ),
+            "</tr>"
+        )
+    }
+
+    cat(paste0(
+        "<table style=\"border-collapse: collapse; margin-bottom: 1em;\">",
+        "<caption style=\"caption-side: bottom; text-align: left; padding-top: 6px;\">",
+        "Measured durations in seconds, the fastest application from submission",
+        " to inclusion highlighted. The number of transactions is the number of",
+        " retained measurements, which is thinned out for long runs and is",
+        " therefore not the number of transactions sent.",
+        "</caption>",
+        "<tr>", header, "</tr>", body, "</table>"
+    ))
+}
+```
+
+
+### Transactions in the System
+
+How many transactions of each application are on their way at any moment, split
+by what they are waiting for. Stalled transactions are held up by their own
+sender's earlier nonces, so unlike pending ones they cannot be emitted no matter
+how much capacity the network has.
+
+```{r transactions_in_system, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
+state_levels <- c(
+    "pending (ready to be emitted)",
+    "stalled (behind an own earlier nonce)",
+    "emitted (waiting for a block)"
+)
+
+in_system <- bind_rows(
+    filter_metric(all_data, "TransactionsPending") %>% mutate(state = state_levels[1]),
+    filter_metric(all_data, "TransactionsStalled") %>% mutate(state = state_levels[2]),
+    filter_metric(all_data, "TransactionsEmitted") %>% mutate(state = state_levels[3])
+) %>%
+    mutate(state = factor(state, levels = state_levels))
+
+if (nrow(in_system) > 0) {
+    ggplot(in_system, aes(x = elapsed_sec, y = value, colour = state)) +
+        geom_line() +
+        facet_wrap(~app, ncol = 1, scales = "free_y") +
+        ggtitle("Transactions in the System per Application") +
+        xlab("Time") +
+        ylab("Number of Transactions") +
+        labs(colour = "Waiting for") +
+        # No scenario-step overlay: its bands carry one colour per step, which
+        # does not survive being replicated into every facet.
+        norma_theme()
+} else {
+    cat("No transactions were tracked.")
+}
+```
+
+### Composition of Blocks
+
+Which application the transactions of each block came from. The bands add up to
+the number of transactions of a block, so the first chart shows how much of the
+network's capacity each load actually got, and the second how they shared it.
+`(other)` are the transactions of no load generator - the ones Norma sends
+itself to fund accounts, deploy contracts or change the rules of the network.
+
+```{r block_composition, echo=FALSE, message=FALSE, warning=FALSE, fig.dim = figure_dimensions}
+# The composition is keyed by block, while a block-to-time mapping comes from
+# the completion times the nodes reported; the earliest one wins, as elsewhere.
+block_times <- filter_metric(all_data, "BlockCompletionTime") %>%
+    group_by(block) %>%
+    summarise(
+        block_sec = (min(value) - as.numeric(start_time)) / 1e9,
+        .groups = "drop"
+    )
+
+composition <- filter_metric(all_data, "BlockTransactionsPerApp") %>%
+    select(block, app, value) %>%
+    # A block that carried nothing of an application is a zero, not a gap, or
+    # the bands would be interpolated across it.
+    tidyr::complete(block, app, fill = list(value = 0)) %>%
+    left_join(block_times, by = "block") %>%
+    drop_na(block_sec) %>%
+    arrange(block)
+
+if (nrow(composition) > 0) {
+    ggplot(composition, aes(x = block_sec, y = value, fill = app)) +
+        geom_area(position = "stack") +
+        ggtitle("Transactions per Block by Application") +
+        xlab("Time") +
+        ylab("Transactions in Block") +
+        labs(fill = "Application") +
+        norma_theme()
+} else {
+    cat("No block compositions were recorded.")
+}
+```
+
+
+The same blocks by gas, against the ceilings that gas competed for. The bands are
+the applications, stacked, and read on a logarithmic axis because the limits sit
+orders of magnitude apart: `MaxBlockGas` is a technical cap the client refuses to
+set below 5,000M, while what a block really carries is governed by the gas one
+event may hold and by the gas per second the validators may spend. The gas power
+line is that rate multiplied by the time the block covers, which is the gas the
+network was allowed to commit while the block was forming.
+
+```{r block_gas_composition_limit, echo=FALSE, message=FALSE, warning=FALSE, fig.dim = figure_dimensions}
+gas_composition <- filter_metric(all_data, "BlockGasPerApp") %>%
+    select(block, app, value) %>%
+    tidyr::complete(block, app, fill = list(value = 0)) %>%
+    left_join(block_times, by = "block") %>%
+    drop_na(block_sec) %>%
+    arrange(block)
+
+# One row per block per limit, so a rule change during the run is visible as a
+# step rather than averaged away.
+per_block_limit <- function(metric, name) {
+    filter_metric(all_data, metric) %>%
+        select(block, value) %>%
+        group_by(block) %>%
+        summarise(gas = max(value), .groups = "drop") %>%
+        # A limit of zero is a limit that could not be read; drawing it would put
+        # a line at the bottom of a logarithmic axis and pull the stated value
+        # with it.
+        dplyr::filter(gas > 0) %>%
+        mutate(limit = name) %>%
+        left_join(block_times, by = "block") %>%
+        drop_na(block_sec) %>%
+        arrange(block)
+}
+
+# The gas power is a rate, so it becomes a per-block ceiling by multiplying it
+# with the span the block covers.
+gas_power <- per_block_limit("GasPowerAllocPerSec", "Gas power for the block's span") %>%
+    mutate(span = block_sec - dplyr::lag(block_sec), gas = gas * span) %>%
+    drop_na(span)
+
+gas_limits <- bind_rows(
+    per_block_limit("BlockGasLimit", "Block gas limit"),
+    per_block_limit("EventGasLimit", "Gas one event may carry"),
+    gas_power
+)
+
+# The values themselves, so the chart does not have to be read off the axis.
+limit_labels <- gas_limits %>%
+    group_by(limit) %>%
+    summarise(gas = stats::median(gas), .groups = "drop") %>%
+    mutate(text = paste0(limit, " ", format(round(gas / 1e6, 1), big.mark = ",", trim = TRUE), "M")) %>%
+    arrange(desc(gas))
+
+# A log axis has no zero, so the bands are floored below the gas of the smallest
+# possible transaction; an application that contributed nothing to a block ends
+# up with a band of no height, which is what it should be.
+gas_floor <- 1e4
+gas_stack <- gas_composition %>%
+    # The transactions of no application appear in a few blocks only. Stacking
+    # them last keeps them from moving the base of the stack in and out of those
+    # blocks, which the log axis would exaggerate into the largest feature of the
+    # chart.
+    mutate(stack_last = as.integer(app == "(other)")) %>%
+    arrange(block, stack_last, app) %>%
+    group_by(block) %>%
+    mutate(upper = cumsum(value), lower = upper - value) %>%
+    ungroup()
+
+if (nrow(gas_stack) > 0 && nrow(gas_limits) > 0) {
+    ggplot(gas_stack, aes(x = block_sec)) +
+        geom_ribbon(aes(
+            ymin = pmax(lower, gas_floor) / 1e6,
+            ymax = pmax(upper, gas_floor) / 1e6,
+            fill = app
+        )) +
+        geom_line(
+            data = gas_limits,
+            aes(y = gas / 1e6, linetype = limit),
+            colour = "black",
+            linewidth = 0.4
+        ) +
+        scale_y_log10(labels = scales::label_comma()) +
+        scale_linetype_manual(values = c(
+            "Block gas limit" = "dashed",
+            "Gas one event may carry" = "dotted",
+            "Gas power for the block's span" = "longdash"
+        )) +
+        ggtitle("Gas per Block by Application against the Gas Limits") +
+        labs(
+            subtitle = paste(limit_labels$text, collapse = "   \u00b7   "),
+            fill = "Application",
+            linetype = NULL
+        ) +
+        xlab("Time") +
+        ylab("Gas [M, log scale]") +
+        norma_theme()
+} else {
+    cat("No block gas limits were recorded.")
+}
+```
+
 ## Application Metrics
 
 ### Transactions Send vs. Received
 
-The following chart shows the total number of sent and received transactions.
+The following chart shows the total number of transactions the load generators
+handed to the network, and the effect they had on the applications' contracts.
+Note that *received* is read from the state of those contracts rather than from
+the transactions themselves - an application counting its own calls - so it
+lags a submission by the time the call needs to be committed, and it counts
+neither transactions that reverted nor those still on their way. The transaction
+lifecycle section above measures the transactions themselves.
 
 ```{r send_and_received_transactions_per_app, echo=FALSE, message=FALSE, fig.dim = figure_dimensions}
 # Per-account incremental send counts, reused by send_rate_per_account below
@@ -590,25 +910,59 @@ sent <- sent_rate %>%
 # Received (committed) transactions per application
 received <- filter_metric(all_data, "ReceivedTransactions")
 
-ggplot() +
-    geom_line(
-        data = sent,
-        aes(x = elapsed_sec, y = total, group = app,
-            colour = factor(paste(app, " sent")))
-    ) +
-    geom_line(
-        data = received,
-        aes(x = elapsed_sec, y = value, group = app,
-            colour = factor(paste(app, " received")))
-    ) +
-    ggtitle("Sent and Received Transactions per App") +
+# One colour per application, the two series told apart by the line style.
+app_totals <- bind_rows(
+    sent %>% transmute(elapsed_sec, app, total, series = "submitted"),
+    received %>% transmute(elapsed_sec, app, total = value, series = "committed")
+)
+
+ggplot(app_totals, aes(x = elapsed_sec, y = total, colour = app,
+                       linetype = series, group = paste(app, series))) +
+    geom_line() +
+    scale_linetype_manual(values = c(submitted = "solid", committed = "dotted")) +
+    ggtitle("Submitted and Committed Transactions per App") +
     xlab("Time") +
     ylab("Total Number of Transactions") +
-    labs(colour = "Apps") +
+    labs(colour = "Apps", linetype = "Series") +
     norma_theme() +
     add_scenario_step_overlay()
 ```
 
+The same as rates: how fast an application is handing transactions over against
+how fast its contract is committing them. The two run at the same rate while the
+network keeps up, and the committed rate falls behind once it does not.
+
+```{r send_and_received_rates_per_app, echo=FALSE, message=FALSE, warning=FALSE, fig.dim = figure_dimensions}
+submitted_rate_per_app <- all_data %>%
+    dplyr::filter(metric == "SentTransactions") %>%
+    select(time, app, workers, value) %>%
+    # The counts accumulate per user, and the users of one application add up to it.
+    compute_sliding_rate_per_app("workers", start_time) %>%
+    mutate(series = "submitted")
+
+committed_rate_per_app <- all_data %>%
+    dplyr::filter(metric == "ReceivedTransactions") %>%
+    select(time, app, value) %>%
+    compute_sliding_rate_per_app(character(0), start_time) %>%
+    mutate(series = "committed")
+
+app_rates <- bind_rows(submitted_rate_per_app, committed_rate_per_app)
+
+if (nrow(app_rates) > 0) {
+    ggplot(app_rates, aes(x = elapsed_sec, y = rate, colour = app,
+                          linetype = series, group = paste(app, series))) +
+        geom_line() +
+        scale_linetype_manual(values = c(submitted = "solid", committed = "dotted")) +
+        ggtitle("Submitted and Committed Transaction Rates per App [5s window]") +
+        xlab("Time") +
+        ylab("Tx/s") +
+        labs(colour = "Apps", linetype = "Series") +
+        norma_theme() +
+        add_scenario_step_overlay()
+} else {
+    cat("No transactions were submitted.")
+}
+```
 
 The following chart shows the cummulative number of transactions send per account  (legend omitted for clarity).
 

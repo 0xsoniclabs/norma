@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xsoniclabs/norma/driver"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -30,7 +31,7 @@ func TestRetryRpcReturnGracefully(t *testing.T) {
 
 	start := time.Now()
 	txs := make(chan transactionWithSource)
-	w := newWorker("test", "wrong", txs)
+	w := newWorker("test", "wrong", txs, &observers{})
 
 	time.Sleep(6 * time.Second)
 	w.close()
@@ -58,7 +59,7 @@ func TestClosePool(t *testing.T) {
 	var tx types.Transaction
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
-		pool.SendTransaction(&tx, "test")
+		pool.SendTransaction(&tx, driver.TransactionSource{App: "test"})
 	}
 
 	wg.Wait()
@@ -81,7 +82,7 @@ func TestClosePool(t *testing.T) {
 
 func TestCloseWorkerStartStop(t *testing.T) {
 	txs := make(chan transactionWithSource)
-	w := newWorker("test", "wrong", txs)
+	w := newWorker("test", "wrong", txs, &observers{})
 	w.close()
 }
 
@@ -89,7 +90,7 @@ func TestCloseWorkerGroupStartStop(t *testing.T) {
 	txs := make(chan transactionWithSource)
 	wg := workerGroup{}
 	for i := 0; i < 150; i++ {
-		wg.add("test", "wrong", txs)
+		wg.add("test", "wrong", txs, &observers{})
 	}
 	wg.close()
 }

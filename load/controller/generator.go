@@ -18,20 +18,23 @@ package controller
 
 import (
 	"log/slog"
-	"reflect"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/load/app"
 )
 
-func runGeneratorLoop(user app.User, trigger <-chan struct{}, network driver.Network) {
+func runGeneratorLoop(
+	user app.User,
+	source driver.TransactionSource,
+	trigger <-chan struct{},
+	network driver.Network,
+) {
 	for range trigger {
 		tx, err := user.GenerateTx()
 		if err != nil {
-			slog.Error("failed to generate tx", "error", err)
+			slog.Error("failed to generate tx", "error", err, "source", source)
 		} else {
-			sourceApp := reflect.TypeOf(user).Elem().Name()
-			network.SendTransaction(tx, sourceApp)
+			network.SendTransaction(tx, source)
 		}
 	}
 }

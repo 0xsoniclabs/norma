@@ -35,6 +35,7 @@ import (
 // The Generator passed into the driver constructs the transactions.
 // The RPC Client is used to send the transactions into the network.
 type AppController struct {
+	name        string
 	shaper      shaper.Shaper
 	application app.Application
 	network     driver.Network
@@ -43,7 +44,13 @@ type AppController struct {
 	rpcClient   rpc.Client
 }
 
+// NewAppController creates the controller of an application. The name is the
+// one the scenario gave the application; it travels with every transaction so
+// that monitoring can attribute it to this application rather than to the type
+// of load it generates - two applications of different types can generate the
+// same transactions.
 func NewAppController(
+	name string,
 	application app.Application,
 	shaper shaper.Shaper,
 	numUsers int,
@@ -68,6 +75,7 @@ func NewAppController(
 		"duration", time.Since(start))
 
 	return &AppController{
+		name:        name,
 		shaper:      shaper,
 		application: application,
 		network:     network,
@@ -82,12 +90,12 @@ func (ac *AppController) Run(ctx context.Context) error {
 
 	// start generators for each user
 	var done sync.WaitGroup
-	for _, user := range ac.users {
-		user := user
+	for i, user := range ac.users {
+		source := driver.TransactionSource{App: ac.name, User: i}
 		done.Add(1)
 		go func() {
 			defer done.Done()
-			runGeneratorLoop(user, ac.trigger, ac.network)
+			runGeneratorLoop(user, source, ac.trigger, ac.network)
 		}()
 	}
 
