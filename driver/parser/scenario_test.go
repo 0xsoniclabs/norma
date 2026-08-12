@@ -1245,6 +1245,34 @@ Scenario:
 	require.Equal(t, "uniswap", step.AppLoad)
 }
 
+func TestParseBytes_ApplicationRpcNodeIsParsed(t *testing.T) {
+	scenario, err := ParseBytes([]byte(`
+Name: Test
+Description: A test scenario.
+Scenario:
+  - runApp: fast
+    type: counter
+    rpcNode: validator-0
+    rate:
+      constant: 5
+`))
+	require.NoError(t, err)
+	require.NoError(t, scenario.Check())
+	require.Equal(t, "validator-0", scenario.Steps[0].AppRpcNode)
+}
+
+func TestParseBytes_OnlyAnApplicationCanNameAnRpcNode(t *testing.T) {
+	_, err := ParseBytes([]byte(`
+Name: Test
+Description: A test scenario.
+Scenario:
+  - startNode: validator
+    type: validator
+    rpcNode: validator-0
+`))
+	require.ErrorContains(t, err, `parameter "rpcNode" is not valid`)
+}
+
 func TestScenario_ApplicationLoadIsValidated(t *testing.T) {
 	tests := map[string]struct {
 		appType string

@@ -843,11 +843,12 @@ func execRunApp(
 	}
 
 	app, err := net.CreateApplication(ctx, &driver.ApplicationConfig{
-		Name:  step.Identifier,
-		Type:  step.AppType,
-		Load:  step.AppLoad,
-		Rate:  step.Rate,
-		Users: users,
+		Name:    step.Identifier,
+		Type:    step.AppType,
+		Load:    step.AppLoad,
+		RpcNode: step.AppRpcNode,
+		Rate:    step.Rate,
+		Users:   users,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create application %s: %w", step.Identifier, err)

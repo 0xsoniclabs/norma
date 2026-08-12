@@ -23,9 +23,13 @@ import (
 	"github.com/0xsoniclabs/norma/load/app"
 )
 
+// runGeneratorLoop generates and submits the transactions of one user. An empty
+// rpcNode submits through any node of the network; a label submits through that
+// node alone.
 func runGeneratorLoop(
 	user app.User,
 	source driver.TransactionSource,
+	rpcNode string,
 	trigger <-chan struct{},
 	network driver.Network,
 ) {
@@ -33,8 +37,12 @@ func runGeneratorLoop(
 		tx, err := user.GenerateTx()
 		if err != nil {
 			slog.Error("failed to generate tx", "error", err, "source", source)
-		} else {
+			continue
+		}
+		if rpcNode == "" {
 			network.SendTransaction(tx, source)
+		} else {
+			network.SendTransactionTo(rpcNode, tx, source)
 		}
 	}
 }

@@ -93,10 +93,16 @@ type Network interface {
 	// any potential other resources.
 	Shutdown() error
 
-	// SendTransaction sends a transaction to the network. The source identifies
-	// which load generator produced it, for diagnostics and for attributing it
-	// to an application in the monitoring data.
+	// SendTransaction sends a transaction to the network, through the RPC
+	// interface of whichever node takes it first. The source identifies which
+	// load generator produced it, for diagnostics and for attributing it to an
+	// application in the monitoring data.
 	SendTransaction(tx *types.Transaction, source TransactionSource)
+
+	// SendTransactionTo sends a transaction to the network through the RPC
+	// interface of the node with the given label, and nowhere else. It is what an
+	// application pinned to a node needs; see ApplicationConfig.RpcNode.
+	SendTransactionTo(label string, tx *types.Transaction, source TransactionSource)
 
 	// RegisterTransactionObserver registers an observer to be notified about
 	// every transaction submitted through SendTransaction.
@@ -209,6 +215,13 @@ type ApplicationConfig struct {
 	// instead of defining their own, such as the priority lanes. It is empty for
 	// every other type.
 	Load string
+
+	// RpcNode is the label of the node whose RPC interface receives every
+	// transaction of this application. Empty, the default, submits through any
+	// node of the network, which is what a load that measures the network as a
+	// whole wants; naming one node is for asking what the network does with
+	// traffic that enters it in a single place.
+	RpcNode string
 
 	// Rate defines the Tx/s config the source should produce while active.
 	Rate *parser.Rate

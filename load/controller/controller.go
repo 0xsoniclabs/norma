@@ -36,6 +36,7 @@ import (
 // The RPC Client is used to send the transactions into the network.
 type AppController struct {
 	name        string
+	rpcNode     string
 	shaper      shaper.Shaper
 	application app.Application
 	network     driver.Network
@@ -48,9 +49,11 @@ type AppController struct {
 // one the scenario gave the application; it travels with every transaction so
 // that monitoring can attribute it to this application rather than to the type
 // of load it generates - two applications of different types can generate the
-// same transactions.
+// same transactions. The rpcNode, when not empty, is the label of the only node
+// this application's transactions are submitted through.
 func NewAppController(
 	name string,
+	rpcNode string,
 	application app.Application,
 	shaper shaper.Shaper,
 	numUsers int,
@@ -76,6 +79,7 @@ func NewAppController(
 
 	return &AppController{
 		name:        name,
+		rpcNode:     rpcNode,
 		shaper:      shaper,
 		application: application,
 		network:     network,
@@ -95,7 +99,7 @@ func (ac *AppController) Run(ctx context.Context) error {
 		done.Add(1)
 		go func() {
 			defer done.Done()
-			runGeneratorLoop(user, source, ac.trigger, ac.network)
+			runGeneratorLoop(user, source, ac.rpcNode, ac.trigger, ac.network)
 		}()
 	}
 
