@@ -945,6 +945,7 @@ var checkFunctionToCheckerName = map[parser.StepFunction]string{
 	parser.FuncCheckBlocksProduced:   "blocksRolling",
 	parser.FuncCheckEventThrottled:   "eventThrottled",
 	parser.FuncCheckNetworkRules:     "networkRules",
+	parser.FuncCheckPrioritized:      "prioritizedTransactionsFirst",
 	parser.FuncCheckValidatorsActive: "validatorsActive",
 }
 
@@ -986,6 +987,12 @@ func execCheck(ctx context.Context, checkerName string, spec *parser.CheckSpec, 
 	}
 	if len(spec.ThrottledNodes) > 0 {
 		config["throttledNodes"] = spec.ThrottledNodes
+	}
+	if spec.MinMixedBlocks != nil {
+		config["minMixedBlocks"] = *spec.MinMixedBlocks
+	}
+	if spec.MinRunCoverage != nil {
+		config["minRunCoverage"] = *spec.MinRunCoverage
 	}
 
 	if len(config) > 0 {

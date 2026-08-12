@@ -32,6 +32,7 @@ import (
 	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -1524,5 +1525,18 @@ func undelegateStep(node, delegator string, stake *uint64) parser.Step {
 		UndelegateTargets: []parser.UndelegateTarget{
 			{Node: node, Delegator: delegator, Stake: stake},
 		},
+	}
+}
+
+func TestCheckFunctionToCheckerName_CoversEveryCheckAndNamesARegisteredChecker(t *testing.T) {
+	// A check the parser accepts but this table does not know fails at the end of
+	// a scenario that has already run, which is the most expensive moment to find
+	// out about a missing entry.
+	checkers := checking.InitNetworkChecks(nil, nil)
+	for _, function := range parser.AllCheckFunctions() {
+		name, mapped := checkFunctionToCheckerName[function]
+		require.Truef(t, mapped, "check %q has no entry in checkFunctionToCheckerName", function)
+		require.Containsf(t, checkers, name,
+			"check %q maps to %q, which no checker registered", function, name)
 	}
 }
