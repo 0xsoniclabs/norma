@@ -857,16 +857,23 @@ func buildSonicdCmd(
 		"--datadir=" + dataDir,
 		"--http", "--http.addr", "0.0.0.0",
 		"--http.port", "18545",
-		"--http.api", "admin,eth,sonic,txpool",
+		"--http.api", "admin,dag,eth,sonic,txpool",
 		"--ws", "--ws.addr", "0.0.0.0",
 		"--ws.port", "18546",
-		"--ws.api", "admin,eth,sonic,txpool",
+		"--ws.api", "admin,dag,eth,sonic,txpool",
 		"--pprof", "--pprof.addr", "0.0.0.0",
 		"--nat", "extip:" + externalIP,
 		"--metrics", "--metrics.expensive",
 		"--config", configFilePath,
 		"--datadir.minfreedisk", "0",
-		"--statedb.livecache", "1",
+		// The size of the state database's node cache, in bytes. Sonic divides it
+		// by the size of one node of the state trie, so a value below that size
+		// yields a cache of a single node: every access to the state then evicts
+		// the previous one, which makes every measurement a measurement of the
+		// disk and has been observed to crash the client. The budget below is
+		// per node of the network, so a scenario with many of them needs the
+		// memory of all of them.
+		"--statedb.livecache", "256000000",
 	}
 
 	if validatorId != nil && *validatorId > 0 {

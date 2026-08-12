@@ -177,8 +177,13 @@ func (c *appContext) FundAccounts(accounts []common.Address, value *big.Int) err
 	}
 
 	// Group funding requests in batches to avoid making individual transactions
-	// too big for a single block.
-	const batchSize = 128
+	// too big. A transfer to an account that does not exist yet costs about 34k
+	// gas, so a batch of this size stays near one million - well below the
+	// per-transaction limit of a network whose event gas was reduced to slow it
+	// down, which scenarios do to create congestion. A larger batch would be
+	// rejected there while estimating its gas, with an error that says little
+	// about the cause.
+	const batchSize = 32
 	batches := make([][]common.Address, 0)
 	for i := 0; i < len(accounts); i += batchSize {
 		batches = append(batches, accounts[i:min(i+batchSize, len(accounts))])
