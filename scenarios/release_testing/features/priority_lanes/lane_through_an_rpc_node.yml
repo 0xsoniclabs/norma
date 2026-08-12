@@ -1,0 +1,71 @@
+Name: Release Features Priority Lanes Through An Rpc Node
+
+Description: >-
+  A prioritized load submitting every transaction through a node that is not a
+  validator, against an ordinary load large enough to keep the transaction pools
+  of the validators full. It is the longest way into a block a prioritized
+  transaction can take - the node it enters through emits no events at all, so it
+  has to reach a validator by gossip and then compete for a place in a pool that
+  is already at its limit - and the lane is expected to keep its advantage over
+  the ordinary load anyway. Note that a full pool refuses what it cannot hold, so
+  this scenario reports rejected transactions by design; the node the lane submits
+  to also has to run for as long as the lane does, or its transactions are dropped
+  rather than sent elsewhere.
+
+# The network is throttled to a fraction of its throughput by capping the gas an
+# event carries, so that a load a single machine generates comfortably is several
+# times what the validators commit. Their pools hold 1280 executable transactions
+# and 256 queued ones each, which such an oversupply fills within seconds and
+# keeps full for the rest of the run.
+InitialNetworkRules:
+  Economy:
+    Gas:
+      MaxEventGas: 1500000
+  Epochs:
+    MaxEpochGas: 1000000000000
+    MaxEpochDuration: 1h
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    Brio: true
+    TransactionPriorities: true
+
+Scenario:
+  - startNode: validator
+    type: validator
+    instances: 3
+
+  # The load of the lane enters the network here, through a node that holds no
+  # stake and proposes nothing.
+  - startNode: rpc
+    type: rpc
+
+  - runApp: ordinary
+    type: counter
+    users: 200
+    rate:
+      constant: 1200
+
+  - runApp: fast
+    type: priority
+    load: counter
+    rpcNode: rpc
+    users: 100
+    rate:
+      constant: 50
+
+  - waitFor: 120s
+
+  - checks:
+      - blocksProduced
+      - networkRules:
+          rules:
+            Upgrades:
+              TransactionPriorities: true
+      - prioritizedTransactionsFirst:
+          minMixedBlocks: 10
+
+  - stopApp: fast
+  - stopApp: ordinary
+
+  - waitFor: 30s
