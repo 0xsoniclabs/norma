@@ -210,6 +210,12 @@ func (g *SmartAccountUser) GenerateTx() (*types.Transaction, error) {
 	return tx, err
 }
 
+// SigningAccounts implements PrioritizableUser: every transaction of this
+// user is signed by the single account it was created for.
+func (g *SmartAccountUser) SigningAccounts() []*Account {
+	return []*Account{g.sender}
+}
+
 func (g *SmartAccountUser) GetSentTransactions() uint64 {
 	return atomic.LoadUint64(&g.sentTxs)
 }
