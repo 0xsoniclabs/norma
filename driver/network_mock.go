@@ -220,6 +220,18 @@ func (mr *MockNetworkMockRecorder) SendTransaction(tx, source any) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTransaction", reflect.TypeOf((*MockNetwork)(nil).SendTransaction), tx, source)
 }
 
+// SendTransactionTo mocks base method.
+func (m *MockNetwork) SendTransactionTo(label string, tx *types.Transaction, source TransactionSource) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SendTransactionTo", label, tx, source)
+}
+
+// SendTransactionTo indicates an expected call of SendTransactionTo.
+func (mr *MockNetworkMockRecorder) SendTransactionTo(label, tx, source any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTransactionTo", reflect.TypeOf((*MockNetwork)(nil).SendTransactionTo), label, tx, source)
+}
+
 // Shutdown mocks base method.
 func (m *MockNetwork) Shutdown() error {
 	m.ctrl.T.Helper()

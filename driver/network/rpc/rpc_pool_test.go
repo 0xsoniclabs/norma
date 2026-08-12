@@ -31,7 +31,7 @@ func TestRetryRpcReturnGracefully(t *testing.T) {
 
 	start := time.Now()
 	txs := make(chan transactionWithSource)
-	w := newWorker("test", "wrong", txs, &observers{})
+	w := newWorker("test", "wrong", txs, make(chan transactionWithSource), &observers{})
 
 	time.Sleep(6 * time.Second)
 	w.close()
@@ -80,9 +80,66 @@ func TestClosePool(t *testing.T) {
 	}
 }
 
+func TestPool_PinnedTransactionsGoToTheirNodeAlone(t *testing.T) {
+	pool := NewRpcWorkerPool(t.Context())
+	pool.queues.startServing("A")
+
+	var tx types.Transaction
+	pool.SendTransactionTo("A", &tx, driver.TransactionSource{App: "pinned"})
+
+	select {
+	case got := <-pool.queues.queue("A"):
+		if got.source.App != "pinned" {
+			t.Errorf("queue of A holds the transactions of %q", got.source.App)
+		}
+	default:
+		t.Error("the transaction did not reach the queue of node A")
+	}
+	select {
+	case got := <-pool.txs:
+		t.Errorf("a pinned transaction reached the shared queue: %v", got.source)
+	default:
+	}
+}
+
+func TestPool_ReportsPinnedTransactionsNoNodeServes(t *testing.T) {
+	pool := NewRpcWorkerPool(t.Context())
+	observer := &recordingObserver{}
+	pool.RegisterObserver(observer)
+
+	var tx types.Transaction
+	pool.SendTransactionTo("gone", &tx, driver.TransactionSource{App: "pinned"})
+
+	if got := len(observer.errs); got != 1 {
+		t.Fatalf("got %d submissions reported, wanted the dropped one", got)
+	}
+	if observer.errs[0] == nil {
+		t.Error("the dropped transaction was reported as submitted")
+	}
+	select {
+	case got := <-pool.queues.queue("gone"):
+		t.Errorf("the transaction was queued for a node that does not exist: %v", got.source)
+	default:
+	}
+}
+
+// recordingObserver keeps the error of every submission reported to it.
+type recordingObserver struct {
+	mu   sync.Mutex
+	errs []error
+}
+
+func (o *recordingObserver) OnTransactionSubmitted(
+	_ driver.TransactionSource, _ *types.Transaction, _ time.Time, err error,
+) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.errs = append(o.errs, err)
+}
+
 func TestCloseWorkerStartStop(t *testing.T) {
 	txs := make(chan transactionWithSource)
-	w := newWorker("test", "wrong", txs, &observers{})
+	w := newWorker("test", "wrong", txs, make(chan transactionWithSource), &observers{})
 	w.close()
 }
 
@@ -90,7 +147,7 @@ func TestCloseWorkerGroupStartStop(t *testing.T) {
 	txs := make(chan transactionWithSource)
 	wg := workerGroup{}
 	for i := 0; i < 150; i++ {
-		wg.add("test", "wrong", txs, &observers{})
+		wg.add("test", "wrong", txs, make(chan transactionWithSource), &observers{})
 	}
 	wg.close()
 }

@@ -270,6 +270,27 @@ the registry is written, and registering the ones that happen to exist would
 prioritize a part of their traffic and quietly leave the rest behind. Asking for
 them reports that rather than doing it.
 
+**Where the transactions enter the network.** By default an application's
+transactions are submitted through whichever node's RPC interface takes them
+first, which is what a load measuring the network as a whole wants. The optional
+`rpcNode` parameter names one node label instead, and then every transaction of
+that application enters the network there and nowhere else.
+
+```yaml
+- runApp: fast
+  type: priority
+  rpcNode: validator-0     # optional; any node label, default is any node
+  rate:
+    constant: 20
+```
+
+The label is the one the node runs under: the identifier of its `startNode` step
+for a single instance, and `<identifier>-<index>` when that step started several.
+An application asking for a label no running node carries fails to start. If the
+node is stopped later, that application's transactions are dropped and reported
+as failed submissions rather than sent elsewhere, which is visible in the
+monitoring data as rejected transactions.
+
 **Rate shapes** — exactly one of the following must be set on `rate`:
 
 ```yaml

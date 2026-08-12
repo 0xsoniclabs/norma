@@ -359,6 +359,10 @@ func (n *LocalNetwork) SendTransaction(tx *types.Transaction, source driver.Tran
 	n.rpcWorkerPool.SendTransaction(tx, source)
 }
 
+func (n *LocalNetwork) SendTransactionTo(label string, tx *types.Transaction, source driver.TransactionSource) {
+	n.rpcWorkerPool.SendTransactionTo(label, tx, source)
+}
+
 func (n *LocalNetwork) RegisterTransactionObserver(observer driver.TransactionObserver) {
 	n.rpcWorkerPool.RegisterObserver(observer)
 }
@@ -504,6 +508,26 @@ func (n *LocalNetwork) ensureAppContext() error {
 	return nil
 }
 
+// checkRpcNode reports whether an application may be pinned to the given node
+// label. An empty label pins nothing. A label no node of the network carries is
+// refused here rather than at the first transaction, where it would be a warning
+// per transaction of a load that produces nothing.
+func (n *LocalNetwork) checkRpcNode(label string) error {
+	if label == "" {
+		return nil
+	}
+	labels := make([]string, 0, len(n.nodes))
+	for _, node := range n.GetActiveNodes() {
+		if node.GetLabel() == label {
+			return nil
+		}
+		labels = append(labels, node.GetLabel())
+	}
+	return fmt.Errorf(
+		"no node labelled %q to send the transactions of the application to, running are %v",
+		label, labels)
+}
+
 func (n *LocalNetwork) CreateApplication(ctx context.Context, config *driver.ApplicationConfig) (driver.Application, error) {
 	if err := n.ensureAppContext(); err != nil {
 		return nil, fmt.Errorf("failed to initialize app context: %w", err)
@@ -514,6 +538,10 @@ func (n *LocalNetwork) CreateApplication(ctx context.Context, config *driver.App
 		return nil, fmt.Errorf("failed to connect to RPC to initialize the application; %v", err)
 	}
 	defer rpcClient.Close()
+
+	if err := n.checkRpcNode(config.RpcNode); err != nil {
+		return nil, err
+	}
 
 	appId := n.nextAppId.Add(1)
 	application, err := app.NewApplication(config.Type, config.Load, n.appContext, 0, appId)
@@ -526,7 +554,8 @@ func (n *LocalNetwork) CreateApplication(ctx context.Context, config *driver.App
 		return nil, fmt.Errorf("failed to parse shaper; %v", err)
 	}
 
-	appController, err := controller.NewAppController(config.Name, application, sh, config.Users, n.appContext, n)
+	appController, err := controller.NewAppController(
+		config.Name, config.RpcNode, application, sh, config.Users, n.appContext, n)
 	if err != nil {
 		return nil, err
 	}
