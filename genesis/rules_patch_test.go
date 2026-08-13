@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/sonic/opera"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestNetworkRulesPatch_HasSameFieldsAsOperaRules(t *testing.T) {
@@ -148,4 +150,78 @@ func TestBigIntValueMarshalJSON_DecodesAsBigInt(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNetworkRulesPatch_UnmarshalYAML_RejectsUnknownKeys(t *testing.T) {
+	tests := map[string]struct {
+		yaml string
+		want []string
+	}{
+		"unknown top level key": {
+			yaml: "Blocks: {}\nBloks:\n  MaxBlockGas: 1\n",
+			want: []string{`line 2`, `unknown network rule "Bloks"`},
+		},
+		"unknown nested key": {
+			yaml: "Blocks:\n  MaxBlockGass: 1\n",
+			want: []string{`line 2`, `unknown network rule "Blocks.MaxBlockGass"`},
+		},
+		"unknown deeply nested key": {
+			yaml: "Economy:\n  ShortGasPower:\n    AlocPerSec: 1\n",
+			want: []string{`unknown network rule "Economy.ShortGasPower.AlocPerSec"`},
+		},
+		"dotted key": {
+			// A dotted key is one key to yaml, naming no field of the schema.
+			yaml: "Economy.Gas.MaxEventGas: 1\n",
+			want: []string{`unknown network rule "Economy.Gas.MaxEventGas"`},
+		},
+		"dotted key with an unknown leaf": {
+			yaml: "Blocks.ThisKeyDoesNotExist: 123\n",
+			want: []string{`unknown network rule "Blocks.ThisKeyDoesNotExist"`},
+		},
+		"every unknown key is reported": {
+			yaml: "Blocks:\n  Foo: 1\nUpgrades:\n  Bar: true\n",
+			want: []string{
+				`unknown network rule "Blocks.Foo"`,
+				`unknown network rule "Upgrades.Bar"`,
+			},
+		},
+		"unknown key inside a merged mapping": {
+			yaml: "Blocks: &base\n  Nonsense: 1\nEconomy:\n  <<: *base\n",
+			want: []string{`unknown network rule "Blocks.Nonsense"`},
+		},
+		"unknown key below a self decoding leaf": {
+			yaml: "Economy:\n  MinGasPrice:\n    Nonsense: 1\n",
+			// The value is not a mapping the schema describes, so the
+			// error comes from the leaf's own unmarshalling.
+			want: []string{`big integer must be a scalar value`},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			var patch NetworkRulesPatch
+			err := yaml.Unmarshal([]byte(test.yaml), &patch)
+			require.Error(t, err, "unknown rule keys must be rejected")
+			for _, want := range test.want {
+				require.Contains(t, err.Error(), want)
+			}
+		})
+	}
+}
+
+func TestNetworkRulesPatch_UnmarshalYAML_AcceptsEveryFieldOfTheSchema(t *testing.T) {
+	// A patch naming every field of the schema, so that the key check cannot
+	// reject a key any scenario may legitimately use.
+	rules := opera.FakeNetRules(opera.GetSonicUpgrades())
+	full, err := NewRulesPatchFromOperaRules(rules)
+	require.NoError(t, err)
+
+	data, err := yaml.Marshal(full)
+	require.NoError(t, err)
+
+	var patch NetworkRulesPatch
+	require.NoError(t, yaml.Unmarshal(data, &patch),
+		"a patch of the full rule set must be accepted, got the patch:\n%s",
+		string(data))
+	require.NoError(t, ValidateNetworkRulesPatch(patch))
 }

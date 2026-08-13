@@ -2,8 +2,11 @@ package genesis
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
+	"strings"
 	"time"
 
 	"github.com/0xsoniclabs/sonic/inter"
@@ -115,6 +118,13 @@ func NewRulesPatchFromOperaRules(rules opera.Rules) (NetworkRulesPatch, error) {
 }
 
 func (p *NetworkRulesPatch) UnmarshalYAML(node *yaml.Node) error {
+	// A misspelled rule key would be dropped without a word and the scenario
+	// would silently run on stock rules while claiming to patch them. Check
+	// the keys against the schema before decoding.
+	if err := checkKnownRuleKeys(node, reflect.TypeOf(NetworkRulesPatch{}), ""); err != nil {
+		return err
+	}
+
 	type alias NetworkRulesPatch
 	var decoded alias
 	if err := node.Decode(&decoded); err != nil {
@@ -122,6 +132,97 @@ func (p *NetworkRulesPatch) UnmarshalYAML(node *yaml.Node) error {
 	}
 	*p = NetworkRulesPatch(decoded)
 	return nil
+}
+
+// checkKnownRuleKeys reports every key in a rules patch mapping that does not
+// name a field of the patch schema, walking nested mappings. The offending key
+// is named with its full path. Note that a dotted key is one key to yaml and
+// names no field, so it is reported like any other unknown key.
+func checkKnownRuleKeys(node *yaml.Node, structType reflect.Type, path string) error {
+	if node != nil && node.Kind == yaml.AliasNode {
+		node = node.Alias
+	}
+	// Anything but a mapping is a type error, which the decoder reports.
+	if node == nil || node.Kind != yaml.MappingNode {
+		return nil
+	}
+
+	errs := []error{}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		keyNode, valueNode := node.Content[i], node.Content[i+1]
+
+		// Merge keys (<<) carry a mapping of the same shape.
+		if keyNode.Tag == "!!merge" {
+			errs = append(errs, checkKnownRuleKeys(valueNode, structType, path))
+			continue
+		}
+
+		fieldType, ok := ruleFieldType(structType, keyNode.Value)
+		if !ok {
+			errs = append(errs, fmt.Errorf(
+				"line %d: unknown network rule %q, no such field in the rules"+
+					" patch schema",
+				keyNode.Line, joinRulePath(path, keyNode.Value),
+			))
+			continue
+		}
+
+		if fieldType != nil {
+			errs = append(errs, checkKnownRuleKeys(
+				valueNode, fieldType, joinRulePath(path, keyNode.Value),
+			))
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+// yamlUnmarshaler is the interface of the leaf types that decode themselves,
+// such as durations and big integers.
+var yamlUnmarshaler = reflect.TypeOf((*yaml.Unmarshaler)(nil)).Elem()
+
+// ruleFieldType returns the type a key names in the given patch struct. Nested
+// patch structs are returned with their pointers stripped, so that the walk can
+// descend into them; every other field, including the leaf types that decode
+// themselves, yields a nil type, ending the walk there.
+func ruleFieldType(structType reflect.Type, key string) (reflect.Type, bool) {
+	if structType == nil || structType.Kind() != reflect.Struct {
+		return nil, false
+	}
+	for i := 0; i < structType.NumField(); i++ {
+		field := structType.Field(i)
+		if ruleKeyOf(field) != key {
+			continue
+		}
+		fieldType := field.Type
+		for fieldType.Kind() == reflect.Pointer {
+			fieldType = fieldType.Elem()
+		}
+		// A type with its own unmarshaller defines what is valid inside it.
+		if fieldType.Kind() != reflect.Struct ||
+			reflect.PointerTo(fieldType).Implements(yamlUnmarshaler) {
+			return nil, true
+		}
+		return fieldType, true
+	}
+	return nil, false
+}
+
+// ruleKeyOf returns the key a field is written as in YAML, matching what
+// yaml.v3 accepts: the name in the yaml tag, or the lower-cased field name.
+func ruleKeyOf(field reflect.StructField) string {
+	tag := field.Tag.Get("yaml")
+	if name, _, _ := strings.Cut(tag, ","); name != "" {
+		return name
+	}
+	return strings.ToLower(field.Name)
+}
+
+func joinRulePath(path, key string) string {
+	if path == "" {
+		return key
+	}
+	return path + "." + key
 }
 
 func (p *NetworkRulesPatch) PrettyPrint() string {

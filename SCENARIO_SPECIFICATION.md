@@ -306,6 +306,11 @@ string (`10s`, `1m`, `1h30m`, …) and must be positive.
 `InitialNetworkRules` and the value of `updateRules` share the same schema:
 `NetworkRulesPatch`. All fields are optional; only set fields are applied.
 
+Every key must name a field of the schema, written as nested mappings - a
+dotted key such as `Blocks.MaxBlockGas` is one key to YAML and names no field.
+A key that matches nothing is rejected when the scenario is parsed, rather than
+patching nothing and letting the run report stock rules as if they were raised.
+
 ```yaml
 Dag:
   MaxParents: <uint64>

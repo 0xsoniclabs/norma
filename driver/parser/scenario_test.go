@@ -1201,3 +1201,77 @@ Scenario:
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unknown check function")
 }
+
+// TestParseBytes_RejectsUnknownRuleKeys covers every place a scenario may carry
+// a rules patch. A key that names no field of the schema patches nothing, so a
+// scenario would run on stock rules while reading as if it had raised them.
+func TestParseBytes_RejectsUnknownRuleKeys(t *testing.T) {
+	tests := map[string]struct {
+		scenario string
+		want     string
+	}{
+		"initial network rules": {
+			scenario: `
+Name: Test
+Description: A test scenario.
+InitialNetworkRules:
+  Economy:
+    ShortGasPower:
+      AlocPerSec: 1000
+Scenario:
+  - startNode: validator
+    type: validator
+`,
+			want: `unknown network rule "Economy.ShortGasPower.AlocPerSec"`,
+		},
+		"initial network rules with a dotted key": {
+			scenario: `
+Name: Test
+Description: A test scenario.
+InitialNetworkRules:
+  Blocks.ThisKeyDoesNotExist: 123
+Scenario:
+  - startNode: validator
+    type: validator
+`,
+			want: `unknown network rule "Blocks.ThisKeyDoesNotExist"`,
+		},
+		"update rules step": {
+			scenario: `
+Name: Test
+Description: A test scenario.
+Scenario:
+  - startNode: validator
+    type: validator
+  - updateRules:
+      Economy:
+        Gas:
+          MaxEvenGas: 1000
+`,
+			want: `unknown network rule "Economy.Gas.MaxEvenGas"`,
+		},
+		"network rules check": {
+			scenario: `
+Name: Test
+Description: A test scenario.
+Scenario:
+  - startNode: validator
+    type: validator
+  - checks:
+      - networkRules:
+          rules:
+            Blocks:
+              MaxBlokGas: 1000
+`,
+			want: `unknown network rule "Blocks.MaxBlokGas"`,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := ParseBytes([]byte(test.scenario))
+			require.Error(t, err, "unknown rule keys must be rejected")
+			require.Contains(t, err.Error(), test.want)
+		})
+	}
+}
