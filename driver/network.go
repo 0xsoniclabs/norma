@@ -142,6 +142,11 @@ type NetworkConfig struct {
 	NetworkRules NetworkRules
 	// OutputDir is the directory where temp data are written.
 	OutputDir string
+	// ClientImages lists the images of the clients the scenario starts once the
+	// network is up, complementing the images of the genesis Validators. All of
+	// them read the same genesis file, whose subsidies registry depends on the
+	// oldest client among them; see GetClientImages.
+	ClientImages []string
 }
 
 // NetworkRules defines a set of network rules that can be applied to the network.

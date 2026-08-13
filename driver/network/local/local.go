@@ -322,7 +322,12 @@ func (n *LocalNetwork) prepareGenesis() error {
 	}
 
 	genesisPath := filepath.Join(tmpDir, "genesis.json")
-	if err := genesis.GenerateJsonGenesis(genesisPath, driver.GetValidatorStakes(n.config.Validators), &rules); err != nil {
+	if err := genesis.GenerateJsonGenesis(
+		genesisPath,
+		driver.GetValidatorStakes(n.config.Validators),
+		&rules,
+		n.config.GetClientImages(),
+	); err != nil {
 		return errors.Join(fmt.Errorf("failed to generate genesis file: %w", err), os.RemoveAll(tmpDir))
 	}
 

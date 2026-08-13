@@ -26,7 +26,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/urfave/cli/v2"
@@ -183,11 +182,7 @@ func collectBuildableImages(paths []string) ([]string, error) {
 			return nil, err
 		}
 
-		for _, step := range scenario.Steps {
-			if step.Function != parser.FuncStartNode {
-				continue
-			}
-			image := driver.ResolveClientImageName(step.ImageName)
+		for _, image := range collectClientImages(&scenario) {
 			if docker.WillBuildImage(image) {
 				images[image] = struct{}{}
 			}

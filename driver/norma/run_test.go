@@ -23,8 +23,30 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/parser"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
+
+// TestCollectClientImages_CoversEveryNodeOfTheScenario guards the input of the
+// version-dependent parts of the genesis: nodes joining later in the scenario
+// have to be listed as well, since they read the same genesis file.
+func TestCollectClientImages_CoversEveryNodeOfTheScenario(t *testing.T) {
+	scenario := &parser.Scenario{
+		Steps: []parser.Step{
+			{Function: parser.FuncStartNode, Identifier: "validator-local"},
+			{Function: parser.FuncStartNode, Identifier: "validator-v216", ImageName: "sonic:v2.1.6"},
+			{Function: parser.FuncWaitFor},
+			{Function: parser.FuncStartNode, Identifier: "rpc-v220", ImageName: "sonic:v2.2.0"},
+		},
+	}
+
+	require.Equal(t, []string{
+		driver.DefaultClientDockerImageName,
+		"sonic:v2.1.6",
+		"sonic:v2.2.0",
+	}, collectClientImages(scenario))
+}
 
 // TestDumpNodeLogs_BoundedForRunningNode is a regression test: dumpNodeLogs must
 // return even when a node's log stream never reaches EOF.

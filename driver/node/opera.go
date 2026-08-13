@@ -461,7 +461,8 @@ func resolveGenesisFile(config *OperaNodeConfig) (path, tempDir string, err erro
 	path = filepath.Join(tempDir, "genesis.json")
 	if err := genesis.GenerateJsonGenesis(path,
 		driver.GetValidatorStakes(config.NetworkConfig.Validators),
-		&rules); err != nil {
+		&rules,
+		config.NetworkConfig.GetClientImages()); err != nil {
 		return "", tempDir, fmt.Errorf(
 			"failed to generate temporary genesis: %w", err)
 	}

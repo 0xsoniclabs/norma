@@ -25,7 +25,21 @@ import (
 // GenerateJsonGenesis generates a genesis json file with the given number of validators
 // and network rules configurations.
 // The file is written to the given path.
-func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera.Rules) error {
+//
+// Every node of a network imports the same file, so the parts of it that depend
+// on the client version - currently the subsidies registry - are chosen to suit
+// the oldest of the given client images.
+func GenerateJsonGenesis(
+	jsonFile string,
+	validatorStakes []uint64,
+	rules *opera.Rules,
+	clientImages []string,
+) error {
+	registryCode, err := subsidiesRegistryCode(clientImages)
+	if err != nil {
+		return err
+	}
+
 	validatorsCount := len(validatorStakes)
 	jsonGenesis := makefakegenesis.GenesisJson{
 		Rules:         *rules,
@@ -67,7 +81,7 @@ func GenerateJsonGenesis(jsonFile string, validatorStakes []uint64, rules *opera
 		{
 			Name:    "SubsidiesRegistry",
 			Address: gas_subsidies_registry.GetAddress(),
-			Code:    gas_subsidies_registry.GetCode(),
+			Code:    registryCode,
 			Nonce:   1,
 		},
 	}
