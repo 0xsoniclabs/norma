@@ -21,8 +21,6 @@ import (
 func TestGenerateJsonGenesis_BalancesAreReadableByOlderClients(t *testing.T) {
 	require := require.New(t)
 
-	serveLegacyRegistryCode(t, "6001600101")
-
 	path := filepath.Join(t.TempDir(), "genesis.json")
 	rules := opera.FakeNetRules(opera.GetSonicUpgrades())
 	require.NoError(GenerateJsonGenesis(
@@ -59,7 +57,6 @@ func TestGenerateJsonGenesis_InstallsTheRegistryOfTheOldestClient(t *testing.T) 
 	for name, clientVersions := range tests {
 		t.Run(name, func(t *testing.T) {
 			require := require.New(t)
-			serveLegacyRegistryCode(t, "6001600101")
 
 			path := filepath.Join(t.TempDir(), "genesis.json")
 			rules := opera.FakeNetRules(opera.GetSonicUpgrades())

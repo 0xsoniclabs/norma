@@ -2,10 +2,6 @@ package genesis
 
 import (
 	"encoding/binary"
-	"encoding/hex"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 
 	gas_subsidies_registry "github.com/0xsoniclabs/sonic/gossip/blockproc/subsidies/registry"
@@ -76,8 +72,10 @@ func TestClientVersion_IsBeforeOrdersVersions(t *testing.T) {
 // Sonic sources ship, so any network containing one has to get the legacy
 // registry, which the newer clients read as well.
 func TestSubsidiesRegistryCode_SuitsTheOldestClientOfTheNetwork(t *testing.T) {
-	legacy := serveLegacyRegistryCode(t, "6001600101")
+	legacy, err := legacyRegistryCode()
+	require.NoError(t, err)
 	current := gas_subsidies_registry.GetCode()
+	require.NotEqual(t, current, legacy)
 
 	tests := map[string]struct {
 		clientVersions []string
@@ -111,8 +109,6 @@ func TestSubsidiesRegistryCode_SuitsTheOldestClientOfTheNetwork(t *testing.T) {
 // place in the network that client has. Deciding before every version is read
 // would make the outcome depend on the order the clients come in.
 func TestSubsidiesRegistryCode_RejectsAnUnreadableClientVersion(t *testing.T) {
-	serveLegacyRegistryCode(t, "6001600101")
-
 	tests := map[string][]string{
 		"only client":            {"sonic:local"},
 		"after a current client": {"2.2.0", "sonic:local"},
@@ -124,32 +120,6 @@ func TestSubsidiesRegistryCode_RejectsAnUnreadableClientVersion(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			_, err := subsidiesRegistryCode(clientVersions)
 			require.ErrorContains(t, err, "unable to read the client version")
-		})
-	}
-}
-
-func TestSubsidiesRegistryCode_ReportsAnUnusableFetchResult(t *testing.T) {
-	tests := map[string]http.HandlerFunc{
-		"missing file": func(writer http.ResponseWriter, _ *http.Request) {
-			writer.WriteHeader(http.StatusNotFound)
-		},
-		"no bytecode": func(writer http.ResponseWriter, _ *http.Request) {
-			_, _ = writer.Write([]byte("\n"))
-		},
-		"not hexadecimal": func(writer http.ResponseWriter, _ *http.Request) {
-			_, _ = writer.Write([]byte("not a contract"))
-		},
-	}
-
-	for name, handler := range tests {
-		t.Run(name, func(t *testing.T) {
-			server := httptest.NewServer(handler)
-			t.Cleanup(server.Close)
-			redirectLegacyRegistryCodeURL(t, server.URL)
-
-			_, err := subsidiesRegistryCode([]string{"2.1.6"})
-			require.ErrorContains(t, err,
-				"failed to fetch the "+legacyRegistryRelease+" subsidies registry")
 		})
 	}
 }
@@ -167,16 +137,13 @@ func TestSubsidiesRegistryCode_CurrentRegistryStillReturnsTheExtendedGasConfig(t
 }
 
 // TestSubsidiesRegistryCode_LegacyRegistryReturnsTheOldGasConfig runs the
-// fetched contract to confirm it is the one clients before v2.2.0 can read: they
-// require a getGasConfig result of exactly three words.
+// checked-in contract to confirm it is the one clients before v2.2.0 can read:
+// they require a getGasConfig result of exactly three words.
 func TestSubsidiesRegistryCode_LegacyRegistryReturnsTheOldGasConfig(t *testing.T) {
 	require := require.New(t)
 
-	code, err := subsidiesRegistryCode(
-		[]string{strings.TrimPrefix(legacyRegistryRelease, "v")})
-	if err != nil {
-		t.Skip("fetching the legacy subsidies registry needs network access:", err)
-	}
+	code, err := subsidiesRegistryCode([]string{"2.1.6"})
+	require.NoError(err)
 	require.Len(getGasConfigResult(t, code), 3*32)
 }
 
@@ -188,29 +155,4 @@ func getGasConfigResult(t *testing.T, code []byte) []byte {
 	result, _, err := runtime.Execute(code, input, nil)
 	require.NoError(t, err)
 	return result
-}
-
-// serveLegacyRegistryCode redirects the fetch of the legacy registry to a local
-// server handing out the given bytecode, and returns the decoded bytecode.
-func serveLegacyRegistryCode(t *testing.T, codeInHex string) []byte {
-	t.Helper()
-	server := httptest.NewServer(http.HandlerFunc(
-		func(writer http.ResponseWriter, _ *http.Request) {
-			_, _ = writer.Write([]byte(codeInHex + "\n"))
-		}))
-	t.Cleanup(server.Close)
-	redirectLegacyRegistryCodeURL(t, server.URL)
-
-	code, err := hex.DecodeString(codeInHex)
-	require.NoError(t, err)
-	return code
-}
-
-// redirectLegacyRegistryCodeURL points the fetch of the legacy registry at the
-// given URL for the duration of the test.
-func redirectLegacyRegistryCodeURL(t *testing.T, url string) {
-	t.Helper()
-	original := legacyRegistryCodeURL
-	legacyRegistryCodeURL = url
-	t.Cleanup(func() { legacyRegistryCodeURL = original })
 }

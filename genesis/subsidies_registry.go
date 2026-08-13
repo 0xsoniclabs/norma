@@ -2,14 +2,12 @@ package genesis
 
 import (
 	"cmp"
+	_ "embed"
 	"encoding/hex"
 	"fmt"
-	"io"
-	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	gas_subsidies_registry "github.com/0xsoniclabs/sonic/gossip/blockproc/subsidies/registry"
 )
@@ -34,16 +32,14 @@ import (
 // v2.2.0 understand. v2.1.5 shipped the same bytecode.
 const legacyRegistryRelease = "v2.1.6"
 
-// legacyRegistryCodeURL locates the on-chain bytecode of that release's registry
-// in the Sonic repository. It is fetched when a network needs it, so that the
-// genesis holds the artifact the release actually shipped instead of a copy of
-// it aging inside Norma. Tests redirect this to a local server.
-var legacyRegistryCodeURL = "https://raw.githubusercontent.com/0xsoniclabs/sonic/" +
-	legacyRegistryRelease +
-	"/gossip/blockproc/subsidies/registry/subsidies_contract.bin"
-
-// legacyRegistryFetchTimeout bounds the fetch of the legacy registry bytecode.
-const legacyRegistryFetchTimeout = 30 * time.Second
+// legacyRegistryCodeInHex is the on-chain bytecode of that release's registry,
+// copied verbatim from its
+// gossip/blockproc/subsidies/registry/subsidies_contract.bin - the artifact the
+// release deploys itself. Refresh it from that file at the tag if it ever has to
+// change.
+//
+//go:embed subsidies_registry_v2.1.6.bin
+var legacyRegistryCodeInHex string
 
 // firstExtendedRegistryVersion is the first client release reading both the
 // legacy and the extended registry ABI.
@@ -62,41 +58,18 @@ func subsidiesRegistryCode(clientVersions []string) ([]byte, error) {
 		legacy = legacy || version.isBefore(firstExtendedRegistryVersion)
 	}
 	if legacy {
-		return fetchLegacyRegistryCode()
+		return legacyRegistryCode()
 	}
 	return gas_subsidies_registry.GetCode(), nil
 }
 
-// fetchLegacyRegistryCode downloads the on-chain bytecode of the subsidies
-// registry as shipped by legacyRegistryRelease.
-func fetchLegacyRegistryCode() ([]byte, error) {
-	fail := func(err error) error {
-		return fmt.Errorf("failed to fetch the %s subsidies registry from %s: %w",
-			legacyRegistryRelease, legacyRegistryCodeURL, err)
-	}
-
-	client := http.Client{Timeout: legacyRegistryFetchTimeout}
-	response, err := client.Get(legacyRegistryCodeURL)
+// legacyRegistryCode decodes the on-chain bytecode of the subsidies registry as
+// shipped by legacyRegistryRelease.
+func legacyRegistryCode() ([]byte, error) {
+	code, err := hex.DecodeString(strings.TrimSpace(legacyRegistryCodeInHex))
 	if err != nil {
-		return nil, fail(err)
-	}
-	defer func() {
-		_ = response.Body.Close()
-	}()
-	if response.StatusCode != http.StatusOK {
-		return nil, fail(fmt.Errorf("unexpected status %s", response.Status))
-	}
-
-	encoded, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, fail(err)
-	}
-	code, err := hex.DecodeString(strings.TrimSpace(string(encoded)))
-	if err != nil {
-		return nil, fail(err)
-	}
-	if len(code) == 0 {
-		return nil, fail(fmt.Errorf("no bytecode served"))
+		return nil, fmt.Errorf("invalid %s subsidies registry bytecode: %w",
+			legacyRegistryRelease, err)
 	}
 	return code, nil
 }

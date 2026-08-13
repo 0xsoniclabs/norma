@@ -73,9 +73,10 @@ version:
   network starts**, not when the node that needs it joins, and an image that
   cannot report a version fails the run instead of being assumed recent.
 
-  The legacy bytecode is fetched from the Sonic repository at the tag that
-  shipped it rather than kept in Norma, so such a run needs network access to
-  `raw.githubusercontent.com` even when the client images are already built.
+  The legacy bytecode is checked in at
+  [genesis/subsidies_registry_v2.1.6.bin](genesis/subsidies_registry_v2.1.6.bin),
+  copied verbatim from that release's
+  `gossip/blockproc/subsidies/registry/subsidies_contract.bin`.
 
 ---
 
