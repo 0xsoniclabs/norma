@@ -28,14 +28,15 @@ import (
 //
 // Every node of a network imports the same file, so the parts of it that depend
 // on the client version - currently the subsidies registry - are chosen to suit
-// the oldest of the given client images.
+// the oldest client of the network. The versions are the ones the clients report
+// for themselves; see docker.ClientVersions.
 func GenerateJsonGenesis(
 	jsonFile string,
 	validatorStakes []uint64,
 	rules *opera.Rules,
-	clientImages []string,
+	clientVersions []string,
 ) error {
-	registryCode, err := subsidiesRegistryCode(clientImages)
+	registryCode, err := subsidiesRegistryCode(clientVersions)
 	if err != nil {
 		return err
 	}

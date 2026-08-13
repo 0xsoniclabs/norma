@@ -19,7 +19,8 @@ package driver
 // GetClientImages returns the client image of every node the network may run:
 // the genesis validators plus the nodes a scenario starts later, as listed in
 // ClientImages. The genesis file is generated once for the whole network, so its
-// version-dependent parts have to suit all of them.
+// version-dependent parts have to suit the clients in all of them; see
+// docker.ClientVersions.
 func (c *NetworkConfig) GetClientImages() []string {
 	images := make([]string, 0, len(c.Validators)+len(c.ClientImages))
 	for _, validator := range c.Validators {

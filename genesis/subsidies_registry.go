@@ -23,6 +23,12 @@ import (
 // forks them off the nodes that do sponsor the transaction. A network therefore
 // gets the registry that its oldest client understands, and the newer clients
 // read it through their backwards compatible path.
+//
+// Which shape a client reads follows from its version, and the versions are the
+// ones the clients report for themselves (see docker.ClientVersions). An image
+// reference is no substitute: "sonic:local" and "sonic:<commit hash>" build from
+// sources of any age, so a network of them could be handed a registry none of
+// its clients can read.
 
 // legacyRegistryRelease is the release shipping the registry the clients before
 // v2.2.0 understand. v2.1.5 shipped the same bytecode.
@@ -41,16 +47,22 @@ const legacyRegistryFetchTimeout = 30 * time.Second
 
 // firstExtendedRegistryVersion is the first client release reading both the
 // legacy and the extended registry ABI.
-var firstExtendedRegistryVersion = clientVersion{2, 2, 0}
+var firstExtendedRegistryVersion = clientVersion{major: 2, minor: 2}
 
 // subsidiesRegistryCode returns the bytecode of the subsidies registry to
-// install in the genesis state of a network running the given client images.
-func subsidiesRegistryCode(clientImages []string) ([]byte, error) {
-	for _, image := range clientImages {
-		version, isRelease := parseClientVersion(image)
-		if isRelease && version.isBefore(firstExtendedRegistryVersion) {
-			return fetchLegacyRegistryCode()
+// install in the genesis state of a network whose clients report the given
+// versions.
+func subsidiesRegistryCode(clientVersions []string) ([]byte, error) {
+	legacy := false
+	for _, reported := range clientVersions {
+		version, err := parseClientVersion(reported)
+		if err != nil {
+			return nil, err
 		}
+		legacy = legacy || version.isBefore(firstExtendedRegistryVersion)
+	}
+	if legacy {
+		return fetchLegacyRegistryCode()
 	}
 	return gas_subsidies_registry.GetCode(), nil
 }
@@ -89,41 +101,42 @@ func fetchLegacyRegistryCode() ([]byte, error) {
 	return code, nil
 }
 
-// clientVersion is the release version of a client, as named by an image tag.
+// clientVersion is the version a client reports for itself.
 type clientVersion struct {
 	major, minor, patch int
+	// preRelease marks a release candidate or development build. It runs
+	// under the name of a release that is not out yet, so it precedes it.
+	preRelease bool
 }
 
-// isBefore reports whether this version was released before the other one.
+// isBefore reports whether this version precedes the other one.
 func (v clientVersion) isBefore(other clientVersion) bool {
-	return cmp.Or(
+	if order := cmp.Or(
 		cmp.Compare(v.major, other.major),
 		cmp.Compare(v.minor, other.minor),
 		cmp.Compare(v.patch, other.patch),
-	) < 0
+	); order != 0 {
+		return order < 0
+	}
+	return v.preRelease && !other.preRelease
 }
 
-// releaseTag matches the image tag of a released client. The tag may carry a
-// suffix, like a release candidate number or a Go toolchain pin.
-var releaseTag = regexp.MustCompile(`^v(\d+)\.(\d+)(?:\.(\d+))?`)
+// reportedVersion matches a version as the Sonic version package formats it:
+// three numbers, followed by "-rc.<n>" or "-dev" for a pre-release.
+var reportedVersion = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(-\S+)?$`)
 
-// parseClientVersion extracts the release version from a client image
-// reference. It reports false for references that do not name a release -
-// "sonic:local", "sonic:latest", a commit hash, no tag at all - which all build
-// from sources newer than every release.
-func parseClientVersion(image string) (clientVersion, bool) {
-	name := image[strings.LastIndex(image, "/")+1:]
-	tag := ""
-	if colon := strings.LastIndex(name, ":"); colon >= 0 {
-		tag = name[colon+1:]
-	}
-	match := releaseTag.FindStringSubmatch(tag)
+// parseClientVersion reads the version a client reported for itself. A version
+// it cannot read is an error rather than an assumption: which registry a client
+// can read follows from its version, and a wrong guess forks the network.
+func parseClientVersion(reported string) (clientVersion, error) {
+	match := reportedVersion.FindStringSubmatch(reported)
 	if match == nil {
-		return clientVersion{}, false
+		return clientVersion{}, fmt.Errorf(
+			"unable to read the client version %q", reported)
 	}
-	// The groups hold digits only; an absent patch group converts to zero.
+	// The groups hold digits only.
 	major, _ := strconv.Atoi(match[1])
 	minor, _ := strconv.Atoi(match[2])
 	patch, _ := strconv.Atoi(match[3])
-	return clientVersion{major, minor, patch}, true
+	return clientVersion{major, minor, patch, match[4] != ""}, nil
 }

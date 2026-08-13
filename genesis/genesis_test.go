@@ -26,7 +26,7 @@ func TestGenerateJsonGenesis_BalancesAreReadableByOlderClients(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "genesis.json")
 	rules := opera.FakeNetRules(opera.GetSonicUpgrades())
 	require.NoError(GenerateJsonGenesis(
-		path, []uint64{5_000_000}, &rules, []string{"sonic:v2.1.6"}))
+		path, []uint64{5_000_000}, &rules, []string{"2.1.6"}))
 
 	content, err := os.ReadFile(path)
 	require.NoError(err)
@@ -52,18 +52,19 @@ func TestGenerateJsonGenesis_BalancesAreReadableByOlderClients(t *testing.T) {
 // registry selected for the network's client versions reaches the genesis file.
 func TestGenerateJsonGenesis_InstallsTheRegistryOfTheOldestClient(t *testing.T) {
 	tests := map[string][]string{
-		"legacy":  {"sonic:local", "sonic:v2.1.6"},
-		"current": {"sonic:local", "sonic:v2.2.0"},
+		"legacy":  {"2.3.0-dev", "2.1.6"},
+		"current": {"2.3.0-dev", "2.2.0"},
 	}
 
-	for name, images := range tests {
+	for name, clientVersions := range tests {
 		t.Run(name, func(t *testing.T) {
 			require := require.New(t)
 			serveLegacyRegistryCode(t, "6001600101")
 
 			path := filepath.Join(t.TempDir(), "genesis.json")
 			rules := opera.FakeNetRules(opera.GetSonicUpgrades())
-			require.NoError(GenerateJsonGenesis(path, []uint64{5_000_000}, &rules, images))
+			require.NoError(GenerateJsonGenesis(
+				path, []uint64{5_000_000}, &rules, clientVersions))
 
 			content, err := os.ReadFile(path)
 			require.NoError(err)
@@ -73,7 +74,7 @@ func TestGenerateJsonGenesis_InstallsTheRegistryOfTheOldestClient(t *testing.T) 
 			}
 			require.NoError(json.Unmarshal(content, &genesis))
 
-			want, err := subsidiesRegistryCode(images)
+			want, err := subsidiesRegistryCode(clientVersions)
 			require.NoError(err)
 
 			found := false

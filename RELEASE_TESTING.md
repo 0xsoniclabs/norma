@@ -58,10 +58,20 @@ version:
   scenario understands. Its `getGasConfig` and `chooseFund` signatures changed
   with v2.2.0; clients from v2.2.0 on read both shapes, earlier ones only the old
   one, and a client that cannot read the registry silently stops sponsoring —
-  which forks it off the nodes that do. So a scenario pinning any pre-v2.2.0
-  image runs the legacy registry, and the extended one is only exercised where
+  which forks it off the nodes that do. So a scenario running any pre-v2.2.0
+  client gets the legacy registry, and the extended one is only exercised where
   every node is v2.2.0 or newer. The images are collected from all `startNode`
   steps, so a node joining mid-scenario counts too.
+
+  The versions are the ones the clients report for themselves: each image is
+  asked with `sonicd version` before the genesis is written (see
+  [driver/docker/client_version.go](driver/docker/client_version.go)). An image
+  reference is no substitute — `sonic:local` builds from whatever the submodule
+  is checked out at, and `sonic:<commit hash>` from an arbitrary commit, so a tag
+  that names no release says nothing about the age of the client in it. As a
+  consequence **every client image of a scenario is built or pulled before the
+  network starts**, not when the node that needs it joins, and an image that
+  cannot report a version fails the run instead of being assumed recent.
 
   The legacy bytecode is fetched from the Sonic repository at the tag that
   shipped it rather than kept in Norma, so such a run needs network access to
