@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	gas_subsidies_registry "github.com/0xsoniclabs/sonic/gossip/blockproc/subsidies/registry"
+	"github.com/0xsoniclabs/sonic/integration/makefakegenesis"
 	"github.com/0xsoniclabs/sonic/opera"
 	"github.com/stretchr/testify/require"
 )
@@ -21,7 +23,8 @@ func TestGenerateJsonGenesis_BalancesAreReadableByOlderClients(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "genesis.json")
 	rules := opera.FakeNetRules(opera.GetSonicUpgrades())
-	require.NoError(GenerateJsonGenesis(path, []uint64{5_000_000}, &rules))
+	require.NoError(GenerateJsonGenesis(
+		path, []uint64{5_000_000}, &rules, []string{"2.1.6"}))
 
 	content, err := os.ReadFile(path)
 	require.NoError(err)
@@ -41,6 +44,47 @@ func TestGenerateJsonGenesis_BalancesAreReadableByOlderClients(t *testing.T) {
 		}
 	}
 	require.NotZero(funded, "no funded account found in the generated genesis")
+}
+
+// TestGenerateJsonGenesis_InstallsTheRegistryOfTheOldestClient checks that the
+// registry selected for the network's client versions reaches the genesis file.
+func TestGenerateJsonGenesis_InstallsTheRegistryOfTheOldestClient(t *testing.T) {
+	tests := map[string][]string{
+		"legacy":  {"2.3.0-dev", "2.1.6"},
+		"current": {"2.3.0-dev", "2.2.0"},
+	}
+
+	for name, clientVersions := range tests {
+		t.Run(name, func(t *testing.T) {
+			require := require.New(t)
+
+			path := filepath.Join(t.TempDir(), "genesis.json")
+			rules := opera.FakeNetRules(opera.GetSonicUpgrades())
+			require.NoError(GenerateJsonGenesis(
+				path, []uint64{5_000_000}, &rules, clientVersions))
+
+			content, err := os.ReadFile(path)
+			require.NoError(err)
+
+			var genesis struct {
+				Accounts []makefakegenesis.Account
+			}
+			require.NoError(json.Unmarshal(content, &genesis))
+
+			want, err := subsidiesRegistryCode(clientVersions)
+			require.NoError(err)
+
+			found := false
+			for _, account := range genesis.Accounts {
+				if account.Address != gas_subsidies_registry.GetAddress() {
+					continue
+				}
+				require.Equal(want, []byte(account.Code))
+				found = true
+			}
+			require.True(found, "no subsidies registry account in the generated genesis")
+		})
+	}
 }
 
 func TestEncodeBalancesAsNumbers_UnquotesBalancesOnly(t *testing.T) {

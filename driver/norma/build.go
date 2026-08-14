@@ -26,7 +26,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/urfave/cli/v2"
@@ -66,16 +65,6 @@ func build(ctx *cli.Context) error {
 		return fmt.Errorf("no scenario files found in %q", targetPath)
 	}
 
-	// Parse scenarios and gather client image refs that EnsureImages would build.
-	images, err := collectBuildableImages(files)
-	if err != nil {
-		return err
-	}
-
-	slog.Info("build plan", "scenarioFiles", len(files), "images", len(images))
-	for _, image := range images {
-		slog.Info("build image", "image", image)
-	}
 	if runDry {
 		slog.Info("dry run enabled; no images will be built")
 	}
@@ -86,15 +75,8 @@ func build(ctx *cli.Context) error {
 		return err
 	}
 
-	// Ensure client images (or print dry-run plan).
-	if len(images) == 0 {
-		slog.Info("no buildable client images found in selected scenarios")
-	} else if runDry {
-		slog.Info("would ensure images (build/pull via EnsureImages)", "images", strings.Join(images, ", "))
-	} else {
-		if err := docker.EnsureImages(ctx.Context, images, repoRoot); err != nil {
-			return err
-		}
+	if _, err := ensureClientImages(ctx.Context, files, repoRoot, runDry); err != nil {
+		return err
 	}
 
 	for _, image := range []string{
@@ -165,6 +147,41 @@ func collectScenarioFiles(path string) ([]string, error) {
 	return files, nil
 }
 
+// ensureClientImages makes the client images the given scenarios start their
+// nodes from locally available and returns them. Every image of a scenario is
+// built up front, including the ones of nodes joining later: the genesis is
+// written before the first node starts and depends on the version each of these
+// images reports for its client (see docker.ClientVersions).
+func ensureClientImages(
+	ctx context.Context,
+	files []string,
+	buildRoot string,
+	runDry bool,
+) ([]string, error) {
+	images, err := collectBuildableImages(files)
+	if err != nil {
+		return nil, err
+	}
+
+	slog.Info("build plan", "scenarioFiles", len(files), "images", len(images))
+	for _, image := range images {
+		slog.Info("build image", "image", image)
+	}
+
+	switch {
+	case len(images) == 0:
+		slog.Info("no buildable client images found in selected scenarios")
+	case runDry:
+		slog.Info("would ensure images (build/pull via EnsureImages)",
+			"images", strings.Join(images, ", "))
+	default:
+		if err := docker.EnsureImages(ctx, images, buildRoot); err != nil {
+			return nil, err
+		}
+	}
+	return images, nil
+}
+
 // collectBuildableImages parses scenarios and returns the unique image refs
 // that are expected to be built by docker.EnsureImages.
 //
@@ -183,11 +200,7 @@ func collectBuildableImages(paths []string) ([]string, error) {
 			return nil, err
 		}
 
-		for _, step := range scenario.Steps {
-			if step.Function != parser.FuncStartNode {
-				continue
-			}
-			image := driver.ResolveClientImageName(step.ImageName)
+		for _, image := range collectClientImages(&scenario) {
 			if docker.WillBuildImage(image) {
 				images[image] = struct{}{}
 			}

@@ -44,6 +44,40 @@ proxy and has no `replace` directive pointing at `./sonic`. The submodule
 revision therefore affects only the `sonic:local` docker build — never the
 Norma binary.
 
+### The genesis is a cross-version artifact
+
+One genesis file is generated per network, by the Norma binary, and imported by
+every node with the sonictool of its own image. Anything in it that a client
+version reads differently therefore has to suit *every* pinned image of the
+scenario, not just the candidate — see
+[genesis/genesis.go](genesis/genesis.go). Two places currently depend on the
+version:
+
+- **Account balances** are written as JSON numbers, which every version decodes.
+- **The subsidies registry** is installed in the shape the *oldest* client of the
+  scenario understands. Its `getGasConfig` and `chooseFund` signatures changed
+  with v2.2.0; clients from v2.2.0 on read both shapes, earlier ones only the old
+  one, and a client that cannot read the registry silently stops sponsoring —
+  which forks it off the nodes that do. So a scenario running any pre-v2.2.0
+  client gets the legacy registry, and the extended one is only exercised where
+  every node is v2.2.0 or newer. The images are collected from all `startNode`
+  steps, so a node joining mid-scenario counts too.
+
+  The versions are the ones the clients report for themselves: each image is
+  asked with `sonicd version` before the genesis is written (see
+  [driver/docker/client_version.go](driver/docker/client_version.go)). An image
+  reference is no substitute — `sonic:local` builds from whatever the submodule
+  is checked out at, and `sonic:<commit hash>` from an arbitrary commit, so a tag
+  that names no release says nothing about the age of the client in it. As a
+  consequence **every client image of a scenario is built or pulled before the
+  network starts**, not when the node that needs it joins, and an image that
+  cannot report a version fails the run instead of being assumed recent.
+
+  The legacy bytecode is checked in at
+  [genesis/subsidies_registry_v2.1.6.bin](genesis/subsidies_registry_v2.1.6.bin),
+  copied verbatim from that release's
+  `gossip/blockproc/subsidies/registry/subsidies_contract.bin`.
+
 ---
 
 ## 2. Every version reference has a role

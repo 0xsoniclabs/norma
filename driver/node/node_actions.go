@@ -37,7 +37,7 @@ const (
 	// sonicdBinaryPath identifies the client binary. It doubles as the
 	// identity used to find the running process via /proc/<pid>/exe, which
 	// avoids substring collisions with siblings such as sonictool.
-	sonicdBinaryPath = "/sonicd"
+	sonicdBinaryPath = docker.SonicdBinaryPath
 	// sonicToolBinaryPath is the maintenance tool used for genesis import
 	// and database healing.
 	sonicToolBinaryPath = "/sonictool"

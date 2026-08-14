@@ -195,6 +195,7 @@ func runScenario(ctx context.Context, path, outputDir, label string, skipChecks,
 		Validators:   validators,
 		NetworkRules: scenario.InitialRules,
 		OutputDir:    outputDir,
+		ClientImages: collectClientImages(scenario),
 	})
 	if err != nil {
 		return err
@@ -329,6 +330,21 @@ func extractBootstrapValidators(scenario *parser.Scenario) (driver.Validators, m
 	}
 
 	return validators, genesisIds, nil
+}
+
+// collectClientImages returns the client image of every node the scenario
+// starts, resolved the way node startup resolves it. The genesis file is
+// generated before the first node runs, and its version-dependent parts have to
+// suit every client that reads it, including the ones started later.
+func collectClientImages(scenario *parser.Scenario) []string {
+	images := make([]string, 0, len(scenario.Steps))
+	for _, step := range scenario.Steps {
+		if step.Function != parser.FuncStartNode {
+			continue
+		}
+		images = append(images, driver.ResolveClientImageName(step.ImageName))
+	}
+	return images
 }
 
 func openBrowser(s string) error {

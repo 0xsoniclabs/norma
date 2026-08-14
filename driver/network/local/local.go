@@ -147,7 +147,7 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 		rpcWorkerPool:  rpc.NewRpcWorkerPool(ctx),
 	}
 
-	if err := net.prepareGenesis(); err != nil {
+	if err := net.prepareGenesis(ctx); err != nil {
 		return nil, errors.Join(fmt.Errorf("failed to prepare genesis: %w", err), net.Shutdown())
 	}
 
@@ -310,7 +310,12 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 // configuration provided at startup and stores it in a temporary directory.
 // The path to the generated genesis.json file is stored in the LocalNetwork
 // struct for later use during node creation.
-func (n *LocalNetwork) prepareGenesis() error {
+func (n *LocalNetwork) prepareGenesis(ctx context.Context) error {
+	clientVersions, err := docker.ClientVersions(ctx, n.config.GetClientImages())
+	if err != nil {
+		return fmt.Errorf("failed to read the client versions of the network: %w", err)
+	}
+
 	tmpDir, err := os.MkdirTemp("", "norma-genesis-*")
 	if err != nil {
 		return fmt.Errorf("failed to create genesis temp dir: %w", err)
@@ -322,7 +327,12 @@ func (n *LocalNetwork) prepareGenesis() error {
 	}
 
 	genesisPath := filepath.Join(tmpDir, "genesis.json")
-	if err := genesis.GenerateJsonGenesis(genesisPath, driver.GetValidatorStakes(n.config.Validators), &rules); err != nil {
+	if err := genesis.GenerateJsonGenesis(
+		genesisPath,
+		driver.GetValidatorStakes(n.config.Validators),
+		&rules,
+		clientVersions,
+	); err != nil {
 		return errors.Join(fmt.Errorf("failed to generate genesis file: %w", err), os.RemoveAll(tmpDir))
 	}
 

@@ -348,7 +348,7 @@ func NewOperaNode(
 		}
 	}
 
-	genesisJSONPath, genesisTempDir, err := resolveGenesisFile(config)
+	genesisJSONPath, genesisTempDir, err := resolveGenesisFile(ctx, image, config)
 	track(genesisTempDir)
 	if err != nil {
 		cleanupTempDirs()
@@ -438,12 +438,25 @@ func NewOperaNode(
 // When the config does not name one, a genesis is generated into a fresh
 // temporary directory, whose path is returned as the second result so the
 // caller can register it for cleanup.
-func resolveGenesisFile(config *OperaNodeConfig) (path, tempDir string, err error) {
+func resolveGenesisFile(
+	ctx context.Context,
+	image string,
+	config *OperaNodeConfig,
+) (path, tempDir string, err error) {
 	if config.GenesisJsonPath != nil && *config.GenesisJsonPath != "" {
 		return *config.GenesisJsonPath, "", nil
 	}
 	if config.NetworkConfig == nil {
 		return "", "", fmt.Errorf("missing network config for genesis generation")
+	}
+
+	// This node reads the genesis too, and it is not necessarily one of the
+	// nodes the network was configured with.
+	clientVersions, err := docker.ClientVersions(
+		ctx, append(config.NetworkConfig.GetClientImages(), image))
+	if err != nil {
+		return "", "", fmt.Errorf(
+			"failed to read the client versions of the network: %w", err)
 	}
 
 	tempDir, err = os.MkdirTemp("", "norma-node-genesis-*")
@@ -461,7 +474,8 @@ func resolveGenesisFile(config *OperaNodeConfig) (path, tempDir string, err erro
 	path = filepath.Join(tempDir, "genesis.json")
 	if err := genesis.GenerateJsonGenesis(path,
 		driver.GetValidatorStakes(config.NetworkConfig.Validators),
-		&rules); err != nil {
+		&rules,
+		clientVersions); err != nil {
 		return "", tempDir, fmt.Errorf(
 			"failed to generate temporary genesis: %w", err)
 	}
