@@ -35,6 +35,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/image"
 	dockerNetwork "github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
@@ -147,8 +148,13 @@ func (h *ExecHandle) setResult(exitCode int, err error) {
 
 // ContainerConfig defines parameters for running Docker Containers.
 type ContainerConfig struct {
-	Hostname        string
-	ImageName       string
+	Hostname string
+	// Image is the reference this run pinned the image the container runs
+	// under, see EnsureImage. It is not the reference that image was asked
+	// for: that one is shared with every other build on the host, and docker
+	// resolves it anew whenever it is used, so it can name another image by
+	// the time a container is created.
+	Image           string
 	ShutdownTimeout *time.Duration
 	Environment     map[string]string
 	Entrypoint      []string // Entrypoint to run when starting the container. Optional.
@@ -206,6 +212,32 @@ func Purge(ctx context.Context) error {
 		}
 	}
 
+	return removePinnedImages(ctx, cli)
+}
+
+// removePinnedImages drops the references norma kept the images of its runs
+// under, see EnsureImage. Only the reference is dropped: docker removes an
+// image with the last reference naming it, so what an image was built or pulled
+// under keeps it.
+func removePinnedImages(ctx context.Context, cli *Client) error {
+	pinned, err := cli.cli.ImageList(ctx, image.ListOptions{
+		Filters: filters.NewArgs(filters.Arg("reference", pinnedRepository+":*")),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list the pinned images: %w", err)
+	}
+	for _, img := range pinned {
+		for _, ref := range img.RepoTags {
+			if !strings.HasPrefix(ref, pinnedRepository+":") {
+				continue
+			}
+			// A reference another run still holds a container on is that run's
+			// to drop, and no reason to fail the purge of everything else.
+			if _, err := cli.cli.ImageRemove(ctx, ref, image.RemoveOptions{}); err != nil {
+				slog.Warn("failed to drop a pinned image reference", "ref", ref, "err", err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -243,7 +275,7 @@ func (c *Client) Start(ctx context.Context, config *ContainerConfig) (*Container
 	init := true
 	stopTimeout := int(config.ShutdownTimeout.Seconds())
 	resp, err := c.cli.ContainerCreate(ctx, &container.Config{
-		Image:      config.ImageName,
+		Image:      config.Image,
 		Tty:        false,
 		Env:        envVars,
 		Entrypoint: config.Entrypoint,
@@ -442,7 +474,7 @@ func (c *Container) resolveIP() error {
 // SaveLogTo fetches the log of the container and saves it to the given directory.
 func (c *Container) SaveLogTo(ctx context.Context, directory string) error {
 	dst := filepath.Join(directory,
-		fmt.Sprintf("%s_%s.log", c.config.ImageName, c.id))
+		fmt.Sprintf("%s_%s.log", c.config.Hostname, c.id))
 
 	// When the payload process runs as a background exec, its output is
 	// not part of the container's stdout but is already captured in full

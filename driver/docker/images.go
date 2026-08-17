@@ -25,11 +25,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/client"
 )
 
 // sonicRepositoryURL is the canonical remote source used when building
@@ -67,104 +70,338 @@ func SonicLocalPath() string {
 	return sonicLocalPath
 }
 
-// imageBuildKind describes how an image should be materialized when it is not
-// already available locally.
-type imageBuildKind int
-
-const (
-	// imageBuildNone means no local build strategy applies. In this case the
-	// image is obtained by pullImage.
-	imageBuildNone imageBuildKind = iota
-	// imageBuildSonicRemote means the image should be built from the remote
-	// Sonic repository URL (optionally pinned to a tag via #<tag>).
-	imageBuildSonicRemote
-	// imageBuildSonicLocal means the image should be built from local Sonic
-	// sources (the repository's "sonic" directory).
-	imageBuildSonicLocal
-)
-
-// imageBuildPlan captures the selected provisioning strategy for one image
-// reference.
-//
-// clientSrc is passed to docker build as the value of the "client-src" build
-// context expected by the repository Dockerfile.
+// imageBuildPlan says where the client sources of one image reference come
+// from.
 type imageBuildPlan struct {
-	kind      imageBuildKind
-	clientSrc string
+	// source is where the client sources are taken from: a path on disk for a
+	// local build, the repository URL for a remote one, and nowhere for an
+	// image that is pulled rather than built. It is passed to docker build as
+	// the value of the "client-src" build context the repository Dockerfile
+	// expects.
+	source string
+	// gitRef is the branch, tag or commit to build in that repository. It is
+	// set for a remote build only.
+	gitRef string
 }
 
-// EnsureImages makes sure the given image refs are locally available.
+// builds reports whether the image is built from sources rather than pulled.
+func (p imageBuildPlan) builds() bool {
+	return p.source != ""
+}
+
+// clientSrc is the "client-src" build context docker is given. A remote build
+// names the commit the git ref points to right now rather than the ref itself,
+// so that what the image contains is decided and recorded here, and not by
+// whatever the ref names by the time docker looks.
+func (p imageBuildPlan) clientSrc(ctx context.Context) (string, error) {
+	if p.gitRef == "" {
+		return p.source, nil
+	}
+	commit, err := resolveCommit(ctx, p.source, p.gitRef)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s#%s", p.source, commit), nil
+}
+
+// gitHeadRef is the git ref naming the default branch of a repository.
+const gitHeadRef = "HEAD"
+
+// onceCache resolves a value for a key once and hands that result to every
+// caller asking later. Concurrent callers wait for the running resolution
+// instead of starting a second one. A failed resolution is forgotten, so a
+// later caller can try again.
+type onceCache struct {
+	mutex   sync.Mutex
+	entries map[string]*onceEntry
+}
+
+// onceEntry is the outcome of one resolution: the value it produced, or the
+// error that ended the attempt.
+type onceEntry struct {
+	done  chan struct{}
+	value string
+	err   error
+}
+
+func (c *onceCache) get(
+	ctx context.Context,
+	key string,
+	resolve func() (string, error),
+) (string, error) {
+	c.mutex.Lock()
+	if entry, found := c.entries[key]; found {
+		c.mutex.Unlock()
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-entry.done:
+			return entry.value, entry.err
+		}
+	}
+	entry := &onceEntry{done: make(chan struct{})}
+	if c.entries == nil {
+		c.entries = map[string]*onceEntry{}
+	}
+	c.entries[key] = entry
+	c.mutex.Unlock()
+
+	entry.value, entry.err = resolve()
+	close(entry.done)
+
+	if entry.err != nil {
+		c.forget(key)
+	}
+	return entry.value, entry.err
+}
+
+func (c *onceCache) forget(key string) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	delete(c.entries, key)
+}
+
+// resolvedImages holds the image every reference resolved to in this run.
+var resolvedImages onceCache
+
+// EnsureImage makes the image of the given reference locally available and
+// returns the reference this run keeps that image under.
 //
-// The function provides the runtime image provisioning path used by
-// scenario execution. It performs the following steps:
+// A reference is resolved once per run, and every caller after the first one
+// gets the image of that first resolution. Client references are mutable:
+// "sonic:local" builds from a working copy and "sonic:main" from a branch, so
+// resolving one twice can produce two different clients. The genesis of a
+// network is written for the versions its images reported (see ClientVersions),
+// and a node started from a later build of the same reference may be a client
+// that genesis does not suit, which forks it off the rest of the network.
 //
-//  1. Normalize and deduplicate image references.
-//  2. Resolve the Norma build root (see ResolveBuildRoot).
-//  3. For each image:
-//     - choose build or pull strategy via planImage;
-//     - build (Sonic-specific refs) or pull (all other refs).
+// The image that first resolution produced is therefore kept under a reference
+// of this run, and that is what callers start their containers from. Neither
+// the reference they asked for nor the bare image survives a run on its own:
+// the host is shared with every other build on it, one of which moves the
+// reference to its own client, and an image no reference names any more is the
+// first thing a docker prune reclaims - while a run keeps starting nodes long
+// after it resolved its images. The pinned reference is norma's own, and every
+// call re-establishes it, so a host that dropped it does not take the run along.
 //
-// For Sonic image refs, it lazily builds from the project's Dockerfile:
-//   - sonic: from sonicRepositoryURL
+// For Sonic image refs, the image is built from the project's Dockerfile:
+//   - sonic, sonic:latest: from the default branch of sonicRepositoryURL
 //   - sonic:local: from the currently configured sonic local path (see
 //     SetSonicLocalPath / SonicLocalPath, default DefaultSonicLocalPath)
-//   - sonic:<tag>: from sonicRepositoryURL#<tag>
-//   - sonic:<commit hash>: from sonicRepositoryURL#<commit hash>
+//   - sonic:<branch or tag>: from that ref of sonicRepositoryURL
+//   - sonic:<commit hash>: from that commit of sonicRepositoryURL
 //
-// Other images are pulled if missing.
-//
-// The operation is idempotent with respect to already present tags, and relies
-// on Docker's own image/layer cache for repeated builds.
-func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) error {
-	if len(imageRefs) == 0 {
-		return nil
-	}
-	if buildRoot == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("failed to get working directory: %w", err)
-		}
-		buildRoot = cwd
-	}
-
-	buildRoot, err := ResolveBuildRoot(buildRoot)
+// Other images are pulled.
+func EnsureImage(ctx context.Context, imageRef, buildRoot string) (string, error) {
+	imageID, err := resolvedImages.get(ctx, imageRef, func() (string, error) {
+		return resolveImage(ctx, imageRef, buildRoot)
+	})
 	if err != nil {
-		return err
+		return "", err
 	}
-	slog.Info("resolved build root", "path", buildRoot)
+	return pinImage(ctx, imageRef, imageID, buildRoot)
+}
 
-	refs := NormalizeImageRefs(imageRefs)
-	slog.Info("checking images", "refs", refs)
+// pinnedRepository is the docker repository this run keeps the images it
+// resolved under. A reference in it is norma's own, so nothing but norma moves
+// it, and it keeps the image it names from being one no reference names.
+const pinnedRepository = "norma-pinned"
+
+// pinnedImageRef is the reference the image of the given ID is kept under. It
+// names the image itself, so a run that resolved the same image pins it under
+// the same reference, and one that resolved another image under another.
+func pinnedImageRef(imageID string) string {
+	return pinnedRepository + ":" + strings.TrimPrefix(imageID, "sha256:")
+}
+
+// pinMutex serializes pinning, so that nodes starting at the same time do not
+// each resolve the same lost image again.
+var pinMutex sync.Mutex
+
+// pinImage keeps the given image under its pinned reference, and returns that
+// reference.
+//
+// Pinning it is also how the host is asked whether it still has it: tagging an
+// image is idempotent, and the one way it fails is the image being gone - which
+// happens while a run is still starting nodes on it, either because a prune
+// reclaimed it or because a concurrent build of the reference it was resolved
+// from left it under no reference at all. It is then resolved again, and the run
+// only continues if that produced the same image: another one holds another
+// client than the genesis of the network was written for.
+func pinImage(ctx context.Context, imageRef, imageID, buildRoot string) (string, error) {
+	ref := pinnedImageRef(imageID)
+
+	pinMutex.Lock()
+	defer pinMutex.Unlock()
+
 	cli, err := NewClient()
 	if err != nil {
-		return fmt.Errorf("failed to create docker client: %w", err)
+		return "", fmt.Errorf("failed to create docker client: %w", err)
 	}
 	defer func() {
 		_ = cli.Close()
 	}()
 
-	for _, ref := range refs {
-
-		plan := planImage(ref)
-		start := time.Now()
-		switch plan.kind {
-		case imageBuildSonicRemote, imageBuildSonicLocal:
-			slog.Info("building image", "ref", ref, "clientSrc", plan.clientSrc)
-			if err := buildImage(ctx, buildRoot, ref, plan.clientSrc); err != nil {
-				return err
-			}
-		case imageBuildNone:
-			slog.Info("pulling image", "ref", ref)
-			if err := pullImage(ctx, cli, ref); err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("unsupported image plan for %q", ref)
+	err = cli.cli.ImageTag(ctx, imageID, ref)
+	if client.IsErrNotFound(err) {
+		slog.Warn("the image of a reference is gone, resolving it again",
+			"ref", imageRef, "id", imageID)
+		again, resolveErr := resolveImage(ctx, imageRef, buildRoot)
+		if resolveErr != nil {
+			return "", fmt.Errorf("image %s (%s) is gone, and resolving it again failed: %w",
+				imageRef, imageID, resolveErr)
 		}
-		slog.Info("image ready", "ref", ref, "took", time.Since(start))
+		if again != imageID {
+			return "", fmt.Errorf("image %s is gone, and its sources now produce %s "+
+				"rather than the %s this run was set up for", imageRef, again, imageID)
+		}
+		err = cli.cli.ImageTag(ctx, imageID, ref)
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to pin image %s as %q: %w", imageID, ref, err)
+	}
+	return ref, nil
+}
+
+// EnsureImages makes sure the given image refs are locally available, see
+// EnsureImage. It serves callers that only want the images built or pulled,
+// like the build command; a caller that starts a container from one needs the
+// reference EnsureImage returns.
+func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) error {
+	refs := NormalizeImageRefs(imageRefs)
+	if len(refs) == 0 {
+		return nil
+	}
+	slog.Info("checking images", "refs", refs)
+	for _, ref := range refs {
+		if _, err := EnsureImage(ctx, ref, buildRoot); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// resolveImage builds or pulls the image of the given reference and returns the
+// ID of the image this produced.
+func resolveImage(ctx context.Context, imageRef, buildRoot string) (string, error) {
+	start := time.Now()
+	plan := planImage(imageRef)
+
+	var id string
+	if plan.builds() {
+		root, err := ResolveBuildRoot(buildRoot)
+		if err != nil {
+			return "", err
+		}
+		clientSrc, err := plan.clientSrc(ctx)
+		if err != nil {
+			return "", err
+		}
+		slog.Info("building image", "ref", imageRef, "buildRoot", root, "clientSrc", clientSrc)
+		if id, err = buildImage(ctx, root, imageRef, clientSrc); err != nil {
+			return "", err
+		}
+	} else {
+		cli, err := NewClient()
+		if err != nil {
+			return "", fmt.Errorf("failed to create docker client: %w", err)
+		}
+		defer func() {
+			_ = cli.Close()
+		}()
+		slog.Info("pulling image", "ref", imageRef)
+		if err := pullImage(ctx, cli, imageRef); err != nil {
+			return "", err
+		}
+		if id, err = imageID(ctx, cli, imageRef); err != nil {
+			return "", err
+		}
 	}
 
-	return nil
+	slog.Info("image ready", "ref", imageRef, "id", id, "took", time.Since(start))
+	return id, nil
+}
+
+// commitHash matches a git commit hash: the object name git ls-remote lists a
+// ref with, and the one git ref that no repository has to be asked about.
+var commitHash = regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`)
+
+// peeledSuffix marks the line on which git ls-remote reports the commit an
+// annotated tag points to, next to the line reporting the tag object itself.
+const peeledSuffix = "^{}"
+
+// resolveCommit asks the remote repository which commit the given git ref
+// points to at this moment. A ref the repository does not know is taken to be a
+// commit hash, which is a ref only the repository itself can resolve.
+func resolveCommit(ctx context.Context, repositoryURL, gitRef string) (string, error) {
+	// The candidates are the refs git itself would try, in its order of
+	// precedence: a bare name is ambiguous, and a repository may well hold both
+	// a tag and a branch of that name.
+	candidates := []string{gitHeadRef}
+	if gitRef != gitHeadRef {
+		candidates = []string{"refs/tags/" + gitRef, "refs/heads/" + gitRef}
+	}
+
+	// Only the candidates are asked for: a repository the size of Sonic's has
+	// thousands of refs, and one is wanted. A pattern is matched against a whole
+	// ref name, so the peeled line of a tag is only reported if it is asked for
+	// under that name too.
+	args := []string{"ls-remote", repositoryURL}
+	for _, candidate := range candidates {
+		args = append(args, candidate, candidate+peeledSuffix)
+	}
+	cmd := exec.CommandContext(ctx, "git", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to ask %s for the commit of %q: %w\n%s",
+			repositoryURL, gitRef, err, strings.TrimSpace(string(output)))
+	}
+	commits := parseRemoteRefs(output)
+
+	for _, candidate := range candidates {
+		if commit, found := commits[candidate]; found {
+			return commit, nil
+		}
+	}
+	if commitHash.MatchString(gitRef) {
+		return gitRef, nil
+	}
+	return "", fmt.Errorf("repository %s has no branch or tag %q",
+		repositoryURL, gitRef)
+}
+
+// parseRemoteRefs reads the refs and the commits they point to from the output
+// of git ls-remote. An annotated tag is listed twice: as the tag object and,
+// marked with "^{}", as the commit it points to. The latter is what checking
+// out the tag yields, so it takes precedence.
+func parseRemoteRefs(output []byte) map[string]string {
+	commits := map[string]string{}
+	peeled := map[string]bool{}
+	for line := range strings.Lines(string(output)) {
+		fields := strings.Fields(line)
+		if len(fields) != 2 || !commitHash.MatchString(fields[0]) {
+			continue
+		}
+		commit, ref := fields[0], fields[1]
+		if tag, found := strings.CutSuffix(ref, peeledSuffix); found {
+			commits[tag] = commit
+			peeled[tag] = true
+			continue
+		}
+		if !peeled[ref] {
+			commits[ref] = commit
+		}
+	}
+	return commits
+}
+
+// imageID reads the ID of the locally available image of the given reference.
+func imageID(ctx context.Context, cli *Client, imageRef string) (string, error) {
+	info, _, err := cli.cli.ImageInspectWithRaw(ctx, imageRef)
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect image %q: %w", imageRef, err)
+	}
+	return info.ID, nil
 }
 
 // NormalizeImageRefs removes empty refs, deduplicates, and returns image refs
@@ -215,76 +452,76 @@ func pullImage(ctx context.Context, cli *Client, imageRef string) error {
 //
 // On failure, the function returns the docker command error along with captured
 // combined stdout/stderr output to aid diagnostics.
-func buildImage(ctx context.Context, buildRoot, imageRef, clientSrc string) error {
-	args := []string{"build", "--build-context", fmt.Sprintf("client-src=%s", clientSrc), ".", "-t", imageRef}
+//
+// The ID is what the build reports for its own result, not what the tag names
+// afterwards. The tag is shared with every other build on the host, and a run
+// of another norma builds its own client under it, so between tagging and
+// asking the tag it can already name an image this build never produced.
+func buildImage(ctx context.Context, buildRoot, imageRef, clientSrc string) (string, error) {
+	idFile, err := os.CreateTemp("", "norma-image-id-*")
+	if err != nil {
+		return "", fmt.Errorf("failed to create the id file for image %q: %w", imageRef, err)
+	}
+	idPath := idFile.Name()
+	_ = idFile.Close()
+	defer func() {
+		_ = os.Remove(idPath)
+	}()
+
+	args := []string{"build", "--build-context", fmt.Sprintf("client-src=%s", clientSrc),
+		"--iidfile", idPath, ".", "-t", imageRef}
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Dir = buildRoot
 	cmd.Env = append(os.Environ(), "DOCKER_BUILDKIT=1")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to build image %q: %w\n%s", imageRef, err, strings.TrimSpace(string(output)))
+		return "", fmt.Errorf("failed to build image %q: %w\n%s", imageRef, err, strings.TrimSpace(string(output)))
 	}
-	return nil
+
+	id, err := os.ReadFile(idPath) //#nosec G304 -- the path is the temporary file created above
+	if err != nil {
+		return "", fmt.Errorf("failed to read the id of image %q: %w", imageRef, err)
+	}
+	if len(strings.TrimSpace(string(id))) == 0 {
+		return "", fmt.Errorf("the build of image %q reported no image id", imageRef)
+	}
+	return strings.TrimSpace(string(id)), nil
 }
 
 // planImage resolves imageRef into an internal build plan.
 //
 // Current mapping rules:
-//   - "sonic"       => remote build from sonicRepositoryURL
+//   - "sonic", "sonic:latest" => remote build from the default branch of
+//     sonicRepositoryURL; "latest" is a Docker tag convention, not a git ref
 //   - "sonic:local" => local build from the currently configured sonic local
 //     path (see SetSonicLocalPath / SonicLocalPath, default
 //     DefaultSonicLocalPath)
-//   - "sonic:<tag>" => remote build from sonicRepositoryURL#<tag>
-//   - "sonic:<commit hash>" => remote build from sonicRepositoryURL#<commit hash>
+//   - "sonic:<branch, tag or commit hash>" => remote build from that ref of
+//     sonicRepositoryURL
 //   - everything else => no build strategy (pull)
 //
-// The returned plan is consumed by EnsureImages.
+// The returned plan is consumed by resolveImage.
 func planImage(imageRef string) imageBuildPlan {
-	if imageRef == "sonic" {
-		return imageBuildPlan{kind: imageBuildSonicRemote, clientSrc: sonicRepositoryURL}
+	if imageRef == "sonic" || imageRef == "sonic:latest" {
+		return imageBuildPlan{source: sonicRepositoryURL, gitRef: gitHeadRef}
 	}
 	if imageRef == "sonic:local" {
-		return imageBuildPlan{kind: imageBuildSonicLocal, clientSrc: sonicLocalPath}
+		return imageBuildPlan{source: sonicLocalPath}
 	}
-	if imageRef == "sonic:latest" {
-		// "latest" is a Docker tag convention, not a git ref; build from repo HEAD.
-		return imageBuildPlan{kind: imageBuildSonicRemote, clientSrc: sonicRepositoryURL}
+	if tag, found := strings.CutPrefix(imageRef, "sonic:"); found && tag != "" {
+		return imageBuildPlan{source: sonicRepositoryURL, gitRef: tag}
 	}
-	if strings.HasPrefix(imageRef, "sonic:") {
-		tag := strings.TrimPrefix(imageRef, "sonic:")
-		if tag != "" {
-			return imageBuildPlan{
-				kind:      imageBuildSonicRemote,
-				clientSrc: fmt.Sprintf("%s#%s", sonicRepositoryURL, tag),
-			}
-		}
-	}
-	return imageBuildPlan{kind: imageBuildNone}
+	return imageBuildPlan{}
 }
 
-// WillBuildImage reports whether EnsureImages will build (not pull) the given
+// WillBuildImage reports whether EnsureImage will build (not pull) the given
 // image reference.
 //
 // This is true for Sonic image refs handled via local or remote source build
-// contexts (e.g. sonic, sonic:local, sonic:<tag-or-commit>). For all other
-// refs, EnsureImages will pull instead.
+// contexts (e.g. sonic, sonic:local, sonic:<tag-or-commit>). All other refs are
+// pulled instead.
 func WillBuildImage(imageRef string) bool {
-	plan := planImage(imageRef)
-	return plan.kind == imageBuildSonicRemote || plan.kind == imageBuildSonicLocal
-}
-
-// deduplicateAndSort removes blank entries, deduplicates refs, and returns
-// them in lexical order.
-//
-// Sorting keeps execution deterministic and log output stable across runs.
-func deduplicateAndSort(in []string) []string {
-	return NormalizeImageRefs(in)
-}
-
-// resolveBuildRoot finds the Norma repository root to execute docker builds.
-// See ResolveBuildRoot.
-func resolveBuildRoot(startDir string) (string, error) {
-	return ResolveBuildRoot(startDir)
+	return planImage(imageRef).builds()
 }
 
 // normaModulePath is the Go module path of this repository. It is the only

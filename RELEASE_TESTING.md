@@ -14,11 +14,11 @@ old version forking. What follows is a role-based procedure instead.
 
 `imageName` values are resolved by [driver/docker/images.go](driver/docker/images.go):
 
-| Reference                   | Resolution                                                   |
-| --------------------------- | ------------------------------------------------------------ |
-| omitted / `sonic:local`     | docker build from the [sonic](sonic) submodule               |
-| `sonic:vX.Y.Z`              | docker build from `github.com/0xsoniclabs/sonic.git#vX.Y.Z`  |
-| `sonic`                     | docker build from the remote repository's **default branch** |
+| Reference                   | Resolution                                                    |
+| --------------------------- | ------------------------------------------------------------- |
+| omitted / `sonic:local`     | docker build from the [sonic](sonic) submodule                |
+| `sonic:vX.Y.Z`              | docker build from the commit that `vX.Y.Z` names in `github.com/0xsoniclabs/sonic.git` |
+| `sonic`                     | docker build from the remote repository's **default branch**  |
 
 Consequences:
 
@@ -38,6 +38,15 @@ Consequences:
   so the submodule pointer is what decides which code the candidate actually
   is. `--sonic-path` can override this for local experiments, but the committed
   submodule revision is what CI and release runs build.
+- A reference is **resolved once per run**, and the nodes are started from the
+  image that resolution produced, which norma keeps under a `norma-pinned:<image
+  id>` reference of its own. The sources behind a reference move: a branch gets a
+  commit, a submodule gets checked out anew, and a docker tag can be re-pointed
+  by anything else on the host — which is also why the run does not leave its
+  image under one of those. A remote reference is therefore looked up with `git
+  ls-remote` and built from the commit it names right then, and every node of the
+  run gets that image — so a run tests one client per reference, and the log says
+  which commit and which image that was. `norma purge` drops the pins again.
 
 Norma's Go dependency on `github.com/0xsoniclabs/sonic` comes from the module
 proxy and has no `replace` directive pointing at `./sonic`. The submodule

@@ -79,7 +79,7 @@ func TestClientVersions_AsksTheImagesForTheirVersion(t *testing.T) {
 		t.Skipf("docker socket not available: %v", err)
 	}
 
-	buildRoot, err := resolveBuildRoot(".")
+	buildRoot, err := ResolveBuildRoot(".")
 	if err != nil {
 		t.Fatalf("failed to resolve build root: %v", err)
 	}

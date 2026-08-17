@@ -326,6 +326,17 @@ func networkExists(t *testing.T, cli *Client, id string) bool {
 	return exists
 }
 
+// ensureTestImage returns the reference the image of the given one is pinned
+// under, pulling it if it is not available yet.
+func ensureTestImage(t *testing.T, imageRef string) string {
+	t.Helper()
+	pinnedImage, err := EnsureImage(t.Context(), imageRef, "")
+	if err != nil {
+		t.Fatalf("failed to ensure image %q: %v", imageRef, err)
+	}
+	return pinnedImage
+}
+
 func startContainer(t *testing.T) (*Client, *Container) {
 	cli, err := NewClient()
 	if err != nil {
@@ -335,7 +346,7 @@ func startContainer(t *testing.T) (*Client, *Container) {
 	timeout := time.Second
 	cont, err := cli.Start(t.Context(), &ContainerConfig{
 		Hostname:        t.Name(),
-		ImageName:       "hello-world",
+		Image:           ensureTestImage(t, "hello-world"),
 		ShutdownTimeout: &timeout,
 	})
 	if err != nil {
@@ -359,7 +370,7 @@ func startRunningContainer(t *testing.T, dn *Network) (*Client, *Container) {
 	timeout := time.Second
 	cont, err := cli.Start(t.Context(), &ContainerConfig{
 		Hostname:        t.Name(),
-		ImageName:       "alpine",                            // use minimal linux image
+		Image:           ensureTestImage(t, "alpine"),        // minimal linux image
 		Entrypoint:      []string{"tail", "-f", "/dev/null"}, // keep container running
 		ShutdownTimeout: &timeout,
 		Network:         dn,
