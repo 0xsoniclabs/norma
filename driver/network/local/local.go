@@ -55,7 +55,14 @@ type LocalNetwork struct {
 	// validator nodes created during startup.
 	nodes map[driver.NodeID]*node.OperaNode
 
-	// nodesMutex synchronizes access to the list of nodes.
+	// suspended tracks nodes whose client process is known to be down
+	// (SuspendNode was called, e.g. after a killSonic step). Peer
+	// operations skip these nodes instead of retrying their dead RPC
+	// endpoint for minutes. Guarded by nodesMutex.
+	suspended map[driver.Node]bool
+
+	// nodesMutex synchronizes access to the list of nodes and the
+	// suspended set.
 	nodesMutex sync.Mutex
 
 	// bootstrapped is set once the first node has joined and never resets:
@@ -142,6 +149,7 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 		config:         *config,
 		primaryAccount: primaryAccount,
 		nodes:          map[driver.NodeID]*node.OperaNode{},
+		suspended:      map[driver.Node]bool{},
 		apps:           []driver.Application{},
 		listeners:      map[driver.NetworkListener]bool{},
 		rpcWorkerPool:  rpc.NewRpcWorkerPool(ctx),
@@ -202,8 +210,16 @@ func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaN
 	if err != nil {
 		return fmt.Errorf("failed to get node id; %v", err)
 	}
-	var succeeded int
+	var attempted, succeeded int
 	for _, other := range n.nodes {
+		// A suspended node's client is known to be down; dialing it would
+		// only burn the retry budget. It re-peers itself when resumed.
+		if n.suspended[other] {
+			slog.Info("skipping suspended node while adding peers",
+				"node", other.GetLabel())
+			continue
+		}
+		attempted++
 		if err = other.AddPeer(ctx, id); err != nil {
 			label := other.GetLabel()
 			if checkErr := other.CheckRunning(ctx); checkErr != nil {
@@ -215,7 +231,7 @@ func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaN
 			succeeded++
 		}
 	}
-	if len(n.nodes) > 0 && succeeded == 0 {
+	if attempted > 0 && succeeded == 0 {
 		return fmt.Errorf("failed to add peer; no existing node was reachable")
 	}
 	n.nodes[id] = node
@@ -355,9 +371,12 @@ func (n *LocalNetwork) RemoveNode(node driver.Node) error {
 	}
 
 	delete(n.nodes, id)
+	delete(n.suspended, node)
 	for _, other := range n.nodes {
+		if n.suspended[other] {
+			continue
+		}
 		if err = other.RemovePeer(n.ctx, id); err != nil {
-			n.nodesMutex.Unlock()
 			return fmt.Errorf("failed to remove peer; %v", err)
 		}
 	}
@@ -592,6 +611,10 @@ func (n *LocalNetwork) UnregisterListener(listener driver.NetworkListener) {
 }
 
 func (n *LocalNetwork) SuspendNode(node driver.Node) {
+	n.nodesMutex.Lock()
+	n.suspended[node] = true
+	n.nodesMutex.Unlock()
+
 	n.listenerMutex.Lock()
 	for listener := range n.listeners {
 		listener.BeforeNodeRemoval(node)
@@ -600,6 +623,10 @@ func (n *LocalNetwork) SuspendNode(node driver.Node) {
 }
 
 func (n *LocalNetwork) ResumeNode(node driver.Node) {
+	n.nodesMutex.Lock()
+	delete(n.suspended, node)
+	n.nodesMutex.Unlock()
+
 	n.listenerMutex.Lock()
 	for listener := range n.listeners {
 		listener.AfterNodeCreation(node)

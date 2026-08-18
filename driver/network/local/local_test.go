@@ -34,6 +34,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -459,6 +460,46 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestReconnectNodeAndRemoveNode_Succeed_WhenOnlyOtherNodeIsSuspended(t *testing.T) {
+	t.Parallel()
+	require := require.New(t)
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
+	net, err := NewLocalLegacyNetwork(t.Context(), &config)
+	require.NoError(err, "failed to create new local network")
+	t.Cleanup(func() {
+		require.NoError(net.Shutdown())
+	})
+
+	validators := net.GetActiveNodes()
+	require.Len(validators, 1, "expected one genesis validator")
+	validator := validators[0]
+
+	observer, err := net.CreateNode(&driver.NodeConfig{
+		Name:  "observer-" + t.Name(),
+		Image: driver.DefaultClientDockerImageName,
+	})
+	require.NoError(err, "failed to create node")
+
+	// Take the validator's client down the way a killSonic step does:
+	// suspend first, then SIGKILL the client while the container lives on.
+	opera, ok := validator.(*node.OperaNode)
+	require.True(ok, "validator is not an OperaNode")
+	net.SuspendNode(validator)
+	require.NoError(opera.ForceStopSonicd(t.Context()),
+		"failed to kill validator client")
+
+	// The suspended validator is the only potential peer left. Both peer
+	// management operations must skip its dead RPC endpoint and succeed
+	// immediately, rather than retrying it for minutes and failing.
+	require.NoError(net.ReconnectNode(t.Context(), observer),
+		"reconnect stalled on suspended node")
+	require.NoError(net.RemoveNode(observer),
+		"remove stalled on suspended node")
+
+	require.NoError(observer.Stop(t.Context()), "failed to stop node")
+	require.NoError(observer.Cleanup(context.Background()), "failed to cleanup node")
 }
 
 func TestLocalNetwork_Num_Validators_Started(t *testing.T) {
