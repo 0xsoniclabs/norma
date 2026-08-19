@@ -15,7 +15,7 @@ func TestNewContext_DoesNotDeployHelperContract(t *testing.T) {
 
 	mockRpc := rpc.NewMockClient(ctrl)
 	factory := NewMockRpcClientFactory(ctrl)
-	factory.EXPECT().DialRandomRpc().Return(mockRpc, nil)
+	factory.EXPECT().DialSystemRpc().Return(mockRpc, nil)
 
 	mockRpc.EXPECT().Close()
 
@@ -40,7 +40,7 @@ func TestFundAccounts_AttemptsToDeployHelperOnFirstCall(t *testing.T) {
 
 	mockRpc := rpc.NewMockClient(ctrl)
 	factory := NewMockRpcClientFactory(ctrl)
-	factory.EXPECT().DialRandomRpc().Return(mockRpc, nil)
+	factory.EXPECT().DialSystemRpc().Return(mockRpc, nil)
 
 	ctx, err := NewContext(context.Background(), factory, nil, genesis.NetworkRulesPatch{})
 	if err != nil {

@@ -49,19 +49,30 @@ type AppContext interface {
 
 type RpcClientFactory interface {
 	DialRandomRpc() (rpc.Client, error)
+
+	// DialSystemRpc returns a client for the node that carries transactions sent
+	// from the shared system account, which the treasury is. See NewContext.
+	DialSystemRpc() (rpc.Client, error)
 }
 
-// NewContext initializes an application context bound to a random RPC client,
-// treasury account, and the scenario network rules patch. The provided context
-// is used for the network operations performed through this app context, so
-// cancelling it (for example on a check failure or timeout) aborts pending
-// receipt waits and RPC calls.
+// NewContext initializes an application context bound to the node that carries
+// the shared system account's transactions, the treasury account, and the
+// scenario network rules patch. The provided context is used for the network
+// operations performed through this app context, so cancelling it (for example
+// on a check failure or timeout) aborts pending receipt waits and RPC calls.
 func NewContext(ctx context.Context, factory RpcClientFactory, treasury *Account, networkRules genesis.NetworkRulesPatch) (AppContext, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("context cannot be nil")
 	}
 
-	rpcClient, err := factory.DialRandomRpc()
+	// Every transaction this context sends — contract deployments and account
+	// funding — is paid for by the treasury, which is the same on-chain account
+	// the driver sends epoch advances and rule updates from. Their nonce is read
+	// from the pending state of the node they go through, so spreading them over
+	// several nodes lets one read a nonce another has already spent. Sharing the
+	// driver's pinned node keeps that single sequence in order. Generated load
+	// still reaches the network through its own clients.
+	rpcClient, err := factory.DialSystemRpc()
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to network: %w", err)
 	}
@@ -203,11 +214,12 @@ func (c *appContext) FundAccounts(accounts []common.Address, value *big.Int) err
 		}
 		txs = append(txs, tx)
 
-		nonce, err := c.rpcClient.PendingNonceAt(c.ctx, c.GetTreasure().address)
-		if err != nil {
-			return fmt.Errorf("failed to refresh pending nonce: %w", err)
-		}
-		opts.Nonce = new(big.Int).SetUint64(nonce)
+		// Advance the nonce from the one just spent rather than asking the node
+		// for it again. A node that has not yet taken this transaction into its
+		// pool still reports the nonce this batch used, and the next batch would
+		// then reuse it and quietly replace this one, leaving its accounts
+		// unfunded.
+		opts.Nonce = new(big.Int).Add(opts.Nonce, big.NewInt(1))
 	}
 
 	// Wait for all the transactions to be completed.
