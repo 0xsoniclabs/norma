@@ -17,12 +17,12 @@ const colorReset = "\x1b[0m"
 // that colour, so the steps stand out from the rest of the output and from each
 // other.
 //
-// The values are 256-colour SGR sequences. Reds and yellows are deliberately
-// absent: go-ethereum's terminal handler uses them for the level of warnings
-// and errors, and an operation colour should not read as a failure.
+// The values are 256-colour SGR sequences. Bright reds and yellows are avoided
+// because go-ethereum's terminal handler uses them for warning/error levels,
+// and an operation colour should not read as a failure.
 //
 // Every operation in parser.AllStepFunctions must appear here;
-// TestOperationColors_CoverEveryStepFunction enforces that.
+// TestOperationColors_OperationColor_CoversEveryStepFunction enforces that.
 var operationColors = map[parser.StepFunction]string{
 	// Node lifecycle.
 	parser.FuncStartNode: "\x1b[38;5;42m",  // green — a node comes up
