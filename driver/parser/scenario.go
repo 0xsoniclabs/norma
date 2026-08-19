@@ -90,6 +90,11 @@ var allCheckFunctions = [...]StepFunction{
 	FuncCheckValidatorsActive,
 }
 
+// AllStepFunctions returns every top-level step function a scenario may use.
+func AllStepFunctions() []StepFunction {
+	return slices.Clone(allStepFunctions[:])
+}
+
 // toStepFunction returns the StepFunction for a given string, or an error if not recognized.
 func toStepFunction(s string) (StepFunction, error) {
 	for _, fn := range allStepFunctions {
