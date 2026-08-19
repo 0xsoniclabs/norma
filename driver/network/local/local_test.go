@@ -33,6 +33,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/node"
+	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -661,6 +662,44 @@ func TestLocalNetwork_DialSystemRpc_ReturnsSameNodeOnEveryCall(t *testing.T) {
 			continue
 		}
 		require.Equal(first, label, "system node moved on call %d", i+1)
+	}
+}
+
+// A node can accept a connection while its RPC serves nothing. Dialling alone
+// would then look like success, and the pinned node would never be re-chosen.
+func TestLocalNetwork_ProbeRpc_FailsWhenNodeAcceptsButDoesNotAnswer(t *testing.T) {
+	tests := map[string]struct {
+		blockNumber func(m *rpc.MockClient)
+		wantErr     bool
+	}{
+		"answers": {
+			blockNumber: func(m *rpc.MockClient) {
+				m.EXPECT().BlockNumber(gomock.Any()).Return(uint64(1), nil)
+			},
+			wantErr: false,
+		},
+		"accepts but does not answer": {
+			blockNumber: func(m *rpc.MockClient) {
+				m.EXPECT().BlockNumber(gomock.Any()).Return(uint64(0), context.DeadlineExceeded)
+			},
+			wantErr: true,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			require := require.New(t)
+
+			client := rpc.NewMockClient(gomock.NewController(t))
+			test.blockNumber(client)
+
+			err := probeRpc(client)
+			if test.wantErr {
+				require.Error(err)
+				return
+			}
+			require.NoError(err)
+		})
 	}
 }
 

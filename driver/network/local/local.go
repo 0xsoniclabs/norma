@@ -431,11 +431,7 @@ func (n *LocalNetwork) dialAnyRpc() (rpcdriver.Client, string, error) {
 				"node", chosen.GetLabel(), "error", err)
 			continue
 		}
-		// Verify the connection is actually alive with a quick call.
-		probeCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_, probeErr := client.BlockNumber(probeCtx)
-		cancel()
-		if probeErr != nil {
+		if probeErr := probeRpc(client); probeErr != nil {
 			slog.Warn("node not responding in DialRandomRpc, skipping",
 				"node", chosen.GetLabel(), "error", probeErr)
 			client.Close()
@@ -459,19 +455,21 @@ func (n *LocalNetwork) dialAnyRpc() (rpcdriver.Client, string, error) {
 //
 // Pinning them to one node rules that out: each waits for its own receipt from
 // this node, so by the time the next one asks, the node has the block and
-// reports the nonce following it. The pin is only re-chosen when the node it
-// names has become unreachable, which is also the one moment the hazard can
-// return — unavoidable, since the sequence has to continue somewhere.
+// reports the nonce following it. The pin is re-chosen only when the node it
+// names stops answering — a state it is probed for, since a node can accept a
+// connection while serving nothing — which is also the one moment the hazard can
+// return, unavoidable since the sequence has to continue somewhere.
 func (n *LocalNetwork) dialSystemRpc() (rpcdriver.Client, error) {
 	n.systemRpcMu.Lock()
 	defer n.systemRpcMu.Unlock()
 
 	if n.systemRpcLabel != "" {
-		if client, err := n.dialRpcByLabel(n.systemRpcLabel); err == nil {
+		client, err := n.dialRpcByLabel(n.systemRpcLabel)
+		if err == nil {
 			return client, nil
 		}
-		slog.Warn("pinned system-transaction node is unreachable, choosing another",
-			"node", n.systemRpcLabel)
+		slog.Warn("pinned system-transaction node is not answering, choosing another",
+			"node", n.systemRpcLabel, "error", err)
 	}
 
 	client, label, err := n.dialAnyRpc()
@@ -489,9 +487,31 @@ func (n *LocalNetwork) dialRpcByLabel(label string) (rpcdriver.Client, error) {
 		if string(node.GetLabel()) != label {
 			continue
 		}
-		return node.DialRpc(n.ctx)
+		client, err := node.DialRpc(n.ctx)
+		if err != nil {
+			return nil, err
+		}
+		if err := probeRpc(client); err != nil {
+			client.Close()
+			return nil, fmt.Errorf("node %q is not answering: %w", label, err)
+		}
+		return client, nil
 	}
 	return nil, fmt.Errorf("node %q is no longer active", label)
+}
+
+// rpcProbeTimeout bounds the call used to tell a live RPC from a socket that
+// merely accepts connections.
+const rpcProbeTimeout = 2 * time.Second
+
+// probeRpc reports whether a dialled client actually answers. A node can accept
+// a connection while its RPC serves nothing, so dialling alone does not
+// establish that it is usable.
+func probeRpc(client rpcdriver.Client) error {
+	ctx, cancel := context.WithTimeout(context.Background(), rpcProbeTimeout)
+	defer cancel()
+	_, err := client.BlockNumber(ctx)
+	return err
 }
 
 func (n *LocalNetwork) ApplyNetworkRules(ctx context.Context, rules driver.NetworkRules) error {
