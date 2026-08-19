@@ -1,0 +1,97 @@
+Name: Liveness DB Heal Catch Up After Long Outage
+
+Description: >-
+  Builds a deep, state-heavy chain under sustained load, then SIGKILLs one
+  low-stake validator so its database is left dirty and keeps it down while
+  the remaining quorum extends the chain for another 150 seconds. The
+  database is healed and the node restarted in place, which gives it 60
+  seconds to reach the head the network reached without it — so a node that
+  cannot re-join after a long absence fails the scenario.
+
+InitialNetworkRules:
+  Emitter:
+    # A third of the default 600ms event interval, so the chain accumulates
+    # blocks roughly three times as fast. Gas power still throttles total
+    # throughput, so this buys block count rather than more transactions.
+    Interval: 200ms
+  Blocks:
+    # Lowest value the client accepts; keeps blocks coming through any lull
+    # in the load.
+    MaxEmptyBlockSkipPeriod: 4s
+  Epochs:
+    # Short epochs, so the recovering node replays several epoch seals
+    # rather than one flat run of blocks.
+    MaxEpochDuration: 30s
+
+Scenario:
+  # Quorum holders: 30M of the 31M total stake stays online throughout, so
+  # block production never depends on the node under test.
+  - startNode: stable
+    type: validator
+    instances: 3
+    stake: 10_000_000
+
+  # The node under test. The checkpoint interval is deliberately coarse
+  # rather than 1: heal rolls back up to 100 blocks of state, which is real
+  # work, but stays bounded enough not to eat the scenario deadline.
+  - startNode: frail
+    type: validator
+    stake: 1_000_000
+    extraArguments: "--statedb.checkpointinterval 100"
+
+  # Transaction volume, for block count.
+  - runApp: churn
+    type: counter
+    users: 100
+    rate:
+      constant: 100
+
+  # Storage growth, for sync weight. Each store transaction allocates 260
+  # fresh slots, so this is what makes the missed blocks expensive to
+  # replay rather than merely numerous. It also costs ~6.5 MGas, so 1.5/s
+  # plus the counter load lands around 10 MGas/s — under the 15 MGas/s the
+  # network targets, so the load does not just queue up as a backlog.
+  - runApp: bulk
+    type: store
+    users: 10
+    rate:
+      constant: 1.5
+
+  # Give the chain some depth before the kill. It does not need to be long:
+  # the outage below is what actually creates the gap.
+  - waitFor: 60s
+
+  # SIGKILL: sonicd dies without flushing, leaving the database dirty.
+  - killSonic: frail
+
+  # The remaining three validators have to carry the network alone.
+  - checks:
+      - blocksProduced
+
+  # The gap. Load keeps running, so the chain grows the whole time the node
+  # is absent. Kept to 150s deliberately: at 180s a measured run closed the
+  # gap in 32s of the runner's 60s sync budget, and a release test wants
+  # more headroom than that on a slower machine.
+  - waitFor: 150s
+
+  # Recover the dirty database, then restart sonicd inside the container
+  # that is still alive. The restart is the assertion: the runner records
+  # the network height, waits up to 60s for the node to reach it, and fails
+  # the step if it never gets there.
+  - healDb: frail
+  - startNode: frail
+    type: validator
+
+  - stopApp: churn
+  - stopApp: bulk
+
+  # The recovered node must still be a member of the validator set — it was
+  # never unregistered, so a node that came back as an observer is a bug.
+  #
+  # blockHeights and blockHashes are deliberately not repeated here: the
+  # end-of-scenario checks the parser appends already run both. Repeating
+  # them is not free — blockHashes walks every block from genesis with one
+  # RPC each, and running it here as well cost a measured 79s on top of the
+  # end check, against a 10 minute scenario deadline.
+  - checks:
+      - validatorsActive
