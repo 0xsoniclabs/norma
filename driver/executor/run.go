@@ -83,6 +83,13 @@ func RunAndCaptureEventExecution(
 	return executions, err
 }
 
+// A step is logged twice, under the operation's own name, once as it starts and
+// once when it is done. These distinguish the two.
+const (
+	phaseStarted   = "started"
+	phaseCompleted = "completed"
+)
+
 // defaultScenarioTimeout is the maximum time a scenario is
 // allowed to run before being aborted.
 const defaultScenarioTimeout = 10 * time.Minute
@@ -149,9 +156,9 @@ func runWithObserver(
 		default:
 		}
 
-		slog.Info("executing step",
+		slog.Info(string(step.Function),
 			"step", i+1,
-			"function", step.Function,
+			"phase", phaseStarted,
 			"identifier", step.Identifier,
 		)
 
@@ -177,9 +184,9 @@ func runWithObserver(
 			return fmt.Errorf("step %d (%s %s) failed: %w", i+1, step.Function, step.Identifier, err)
 		}
 
-		slog.Info("step completed",
+		slog.Info(string(step.Function),
 			"step", i+1,
-			"function", step.Function,
+			"phase", phaseCompleted,
 			"duration", end.Sub(start),
 		)
 
