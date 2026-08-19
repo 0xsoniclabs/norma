@@ -94,6 +94,14 @@ type LocalNetwork struct {
 	// appContextMu guards lazy initialization of appContext.
 	appContextMu sync.Mutex
 
+	// systemRpcLabel is the node that transactions from the shared system
+	// account are sent through. See dialSystemRpc for why they must not be
+	// spread over several nodes. Guarded by systemRpcMu.
+	systemRpcLabel string
+
+	// systemRpcMu guards systemRpcLabel.
+	systemRpcMu sync.Mutex
+
 	// temporary host directory used while preparing genesis artifacts
 	genesisTmpDir string
 	// host path to the generated genesis.json file
@@ -393,9 +401,16 @@ func (n *LocalNetwork) RegisterTransactionObserver(observer driver.TransactionOb
 }
 
 func (n *LocalNetwork) DialRandomRpc() (rpcdriver.Client, error) {
+	client, _, err := n.dialAnyRpc()
+	return client, err
+}
+
+// dialAnyRpc dials a randomly chosen reachable node, reporting which one it
+// settled on so callers that need to keep using it can remember the label.
+func (n *LocalNetwork) dialAnyRpc() (rpcdriver.Client, string, error) {
 	nodes := n.GetActiveNodes()
 	if len(nodes) == 0 {
-		return nil, driver.ErrEmptyNetwork
+		return nil, "", driver.ErrEmptyNetwork
 	}
 	reliable := make([]driver.Node, 0, len(nodes))
 	for _, node := range nodes {
@@ -426,13 +441,61 @@ func (n *LocalNetwork) DialRandomRpc() (rpcdriver.Client, error) {
 			client.Close()
 			continue
 		}
-		return client, nil
+		return client, string(chosen.GetLabel()), nil
 	}
-	return nil, fmt.Errorf("no reachable node found among %d active nodes", len(reliable))
+	return nil, "", fmt.Errorf("no reachable node found among %d active nodes", len(reliable))
+}
+
+// dialSystemRpc returns a client for the node that carries transactions sent
+// from the shared system account (fakenet key 1) — epoch advances and rule
+// updates.
+//
+// Those transactions form a single nonce sequence, and their nonce is read from
+// the pending state of whichever node they are submitted through. Nodes observe
+// a block a moment apart, so submitting two of them through different nodes lets
+// the second read a nonce the first has already spent. Such a transaction can
+// never be included, is eventually dropped from the pool, and surfaces as a
+// receipt timeout reporting the transaction as "not present".
+//
+// Pinning them to one node rules that out: each waits for its own receipt from
+// this node, so by the time the next one asks, the node has the block and
+// reports the nonce following it. The pin is only re-chosen when the node it
+// names has become unreachable, which is also the one moment the hazard can
+// return — unavoidable, since the sequence has to continue somewhere.
+func (n *LocalNetwork) dialSystemRpc() (rpcdriver.Client, error) {
+	n.systemRpcMu.Lock()
+	defer n.systemRpcMu.Unlock()
+
+	if n.systemRpcLabel != "" {
+		if client, err := n.dialRpcByLabel(n.systemRpcLabel); err == nil {
+			return client, nil
+		}
+		slog.Warn("pinned system-transaction node is unreachable, choosing another",
+			"node", n.systemRpcLabel)
+	}
+
+	client, label, err := n.dialAnyRpc()
+	if err != nil {
+		return nil, err
+	}
+	n.systemRpcLabel = label
+	return client, nil
+}
+
+// dialRpcByLabel dials the named node, failing if it is not active or does not
+// answer.
+func (n *LocalNetwork) dialRpcByLabel(label string) (rpcdriver.Client, error) {
+	for _, node := range n.GetActiveNodes() {
+		if string(node.GetLabel()) != label {
+			continue
+		}
+		return node.DialRpc(n.ctx)
+	}
+	return nil, fmt.Errorf("node %q is no longer active", label)
 }
 
 func (n *LocalNetwork) ApplyNetworkRules(ctx context.Context, rules driver.NetworkRules) error {
-	client, err := n.DialRandomRpc()
+	client, err := n.dialSystemRpc()
 	if err != nil {
 		return fmt.Errorf("failed to connect to network: %w", err)
 	}
@@ -442,7 +505,7 @@ func (n *LocalNetwork) ApplyNetworkRules(ctx context.Context, rules driver.Netwo
 }
 
 func (n *LocalNetwork) AdvanceEpoch(ctx context.Context, epochIncrement int) error {
-	client, err := n.DialRandomRpc()
+	client, err := n.dialSystemRpc()
 	if err != nil {
 		return fmt.Errorf("failed to connect to network: %w", err)
 	}
