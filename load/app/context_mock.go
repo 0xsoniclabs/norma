@@ -196,3 +196,18 @@ func (mr *MockRpcClientFactoryMockRecorder) DialRandomRpc() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DialRandomRpc", reflect.TypeOf((*MockRpcClientFactory)(nil).DialRandomRpc))
 }
+
+// DialSystemRpc mocks base method.
+func (m *MockRpcClientFactory) DialSystemRpc() (rpc.Client, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DialSystemRpc")
+	ret0, _ := ret[0].(rpc.Client)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DialSystemRpc indicates an expected call of DialSystemRpc.
+func (mr *MockRpcClientFactoryMockRecorder) DialSystemRpc() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DialSystemRpc", reflect.TypeOf((*MockRpcClientFactory)(nil).DialSystemRpc))
+}

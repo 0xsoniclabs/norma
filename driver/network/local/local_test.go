@@ -648,7 +648,7 @@ func TestLocalNetwork_DialSystemRpc_ReturnsSameNodeOnEveryCall(t *testing.T) {
 
 	var first string
 	for i := range 5 {
-		client, err := net.dialSystemRpc()
+		client, err := net.DialSystemRpc()
 		require.NoError(err, "call %d", i+1)
 		client.Close()
 
