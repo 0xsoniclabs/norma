@@ -13,9 +13,9 @@ import (
 
 // newLogHandler builds the handler the application logs through. When the output
 // can carry colour, a line whose message is an operation has that message
-// printed in the operation's colour; the rest of the line, and every line that
-// names no operation, is left to go-ethereum's terminal handler exactly as
-// before.
+// printed in the operation's colour and its phase value (started/completed) in
+// the phase's colour; the rest of the line, and every line that names no
+// operation, is left to go-ethereum's terminal handler exactly as before.
 func newLogHandler(output io.Writer, useColor bool) slog.Handler {
 	if !useColor {
 		return log.NewTerminalHandler(output, false)
@@ -67,14 +67,28 @@ func (h *operationColorHandler) Handle(ctx context.Context, r slog.Record) error
 		color, _ = operationColor(parser.StepFunction(r.Message))
 	}
 
+	// An operation line also carries a "phase" attribute saying whether the step
+	// started or completed; each phase value gets a colour of its own.
+	phase := ""
+	if color != "" {
+		r.Attrs(func(a slog.Attr) bool {
+			if a.Key == "phase" {
+				phase = a.Value.String()
+				return false
+			}
+			return true
+		})
+	}
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	if color != "" {
 		h.writer.color = color
 		h.writer.message = r.Message
+		h.writer.phase = phase
 		defer func() {
-			h.writer.color, h.writer.message = "", ""
+			h.writer.color, h.writer.message, h.writer.phase = "", "", ""
 		}()
 	}
 
@@ -97,16 +111,18 @@ func (h *operationColorHandler) WithGroup(name string) slog.Handler {
 	}
 }
 
-// messageColorWriter colours the message inside an already formatted log line,
-// leaving every other part of it untouched.
+// messageColorWriter colours the message, and the phase value if the line has
+// one, inside an already formatted log line, leaving every other part of it
+// untouched.
 //
-// color and message are set and cleared by operationColorHandler.Handle while it
-// holds the shared lock, which is also what serialises the Write in between. An
-// empty colour passes the line through byte for byte.
+// color, message, and phase are set and cleared by operationColorHandler.Handle
+// while it holds the shared lock, which is also what serialises the Write in
+// between. An empty colour passes the line through byte for byte.
 type messageColorWriter struct {
 	out     io.Writer
 	color   string
 	message string
+	phase   string
 }
 
 func newMessageColorWriter(out io.Writer) *messageColorWriter {
@@ -132,16 +148,46 @@ func (w *messageColorWriter) Write(p []byte) (int, error) {
 	start := i + len(prefix)
 	end := start + len(w.message)
 
-	buf := make([]byte, 0, len(p)+len(w.color)+len(colorReset))
+	// Room for the line plus two colour/reset pairs (message and phase); the
+	// colour sequences are all of similar, small length.
+	buf := make([]byte, 0, len(p)+2*(len(w.color)+len(colorReset)))
 	buf = append(buf, p[:start]...)
 	buf = append(buf, w.color...)
 	buf = append(buf, p[start:end]...)
 	buf = append(buf, colorReset...)
-	buf = append(buf, p[end:]...)
+	buf = append(buf, w.colorPhase(p[end:])...)
 
 	if _, err := w.out.Write(buf); err != nil {
 		return 0, err
 	}
 	// Report the caller's length, not the recoloured one, so it sees a full write.
 	return len(p), nil
+}
+
+// colorPhase colours the value of the phase attribute in rest, the part of an
+// operation line following the message. The terminal handler writes a coloured
+// attribute as "<levelcolor>key\x1b[0m=value", and phase values are plain words
+// it never quotes, so the value sits verbatim behind "phase\x1b[0m=".
+func (w *messageColorWriter) colorPhase(rest []byte) []byte {
+	color, ok := phaseColor(w.phase)
+	if !ok {
+		return rest
+	}
+
+	attr := []byte("phase" + colorReset + "=" + w.phase)
+	i := bytes.Index(rest, attr)
+	if i < 0 {
+		return rest
+	}
+
+	start := i + len(attr) - len(w.phase)
+	end := i + len(attr)
+
+	buf := make([]byte, 0, len(rest)+len(color)+len(colorReset))
+	buf = append(buf, rest[:start]...)
+	buf = append(buf, color...)
+	buf = append(buf, rest[start:end]...)
+	buf = append(buf, colorReset...)
+	buf = append(buf, rest[end:]...)
+	return buf
 }

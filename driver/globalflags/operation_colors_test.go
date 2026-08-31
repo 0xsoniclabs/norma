@@ -96,6 +96,44 @@ func TestOperationColorHandler_Handle_ColorsEveryOperation(t *testing.T) {
 	}
 }
 
+func TestOperationColors_PhaseColor_AssignsUniqueColorPerPhase(t *testing.T) {
+	require := require.New(t)
+
+	started, ok := phaseColor("started")
+	require.True(ok)
+	completed, ok := phaseColor("completed")
+	require.True(ok)
+	require.NotEqual(started, completed)
+}
+
+func TestOperationColorHandler_Handle_ColorsThePhaseValueInThePhaseColor(t *testing.T) {
+	for _, phase := range []string{"started", "completed"} {
+		t.Run(phase, func(t *testing.T) {
+			require := require.New(t)
+			logger, buf := newTestLogger(t)
+
+			logger.Info(string(parser.FuncStartNode), "step", 1, "phase", phase, "identifier", "validator-1")
+
+			color, ok := phaseColor(phase)
+			require.True(ok)
+			require.Equal([]string{phase}, coloredSpans(buf.String(), color))
+		})
+	}
+}
+
+// A phase attribute on a line that names no operation is not a step phase and
+// keeps its plain colour.
+func TestOperationColorHandler_Handle_LeavesPhaseAloneOutsideOperationLines(t *testing.T) {
+	require := require.New(t)
+	logger, buf := newTestLogger(t)
+
+	logger.Info("some other message", "phase", "started")
+
+	color, ok := phaseColor("started")
+	require.True(ok)
+	require.NotContains(buf.String(), color)
+}
+
 func TestOperationColorHandler_Handle_UsesDifferentColorPerOperation(t *testing.T) {
 	require := require.New(t)
 	logger, buf := newTestLogger(t)
@@ -267,6 +305,65 @@ func TestMessageColorWriter_Write_ColorsOnlyTheMessage(t *testing.T) {
 			require.NoError(err)
 			require.Equal(len(test.line), n)
 			require.Equal(test.want, coloredSpans(out.String(), color))
+		})
+	}
+}
+
+func TestMessageColorWriter_Write_ColorsThePhaseValue(t *testing.T) {
+	const color = "\x1b[38;5;42m"
+	// The terminal handler writes a coloured attribute as
+	// "<levelcolor>key\x1b[0m=value"; the writer keys on that shape.
+	const attr = "\x1b[32mphase\x1b[0m="
+
+	startedColor, ok := phaseColor("started")
+	if !ok {
+		t.Fatal("phase \"started\" has no colour assigned")
+	}
+
+	tests := map[string]struct {
+		phase string
+		line  string
+		want  []string
+	}{
+		"phase present": {
+			phase: "started",
+			line:  "INFO [TIME] startNode    \x1b[32mstep\x1b[0m=1 " + attr + "started\n",
+			want:  []string{"started"},
+		},
+		"phase absent from the line": {
+			phase: "started",
+			line:  "INFO [TIME] startNode    \x1b[32mstep\x1b[0m=1\n",
+			want:  nil,
+		},
+		"no phase expected": {
+			phase: "",
+			line:  "INFO [TIME] startNode    " + attr + "started\n",
+			want:  nil,
+		},
+		"phase without a colour is left alone": {
+			phase: "resumed",
+			line:  "INFO [TIME] startNode    " + attr + "resumed\n",
+			want:  nil,
+		},
+		"value in another attribute is left alone": {
+			phase: "started",
+			line:  "INFO [TIME] startNode    \x1b[32mid\x1b[0m=started " + attr + "started\n",
+			want:  []string{"started"},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			require := require.New(t)
+
+			out := &bytes.Buffer{}
+			w := newMessageColorWriter(out)
+			w.color, w.message, w.phase = color, "startNode", test.phase
+
+			n, err := w.Write([]byte(test.line))
+			require.NoError(err)
+			require.Equal(len(test.line), n)
+			require.Equal(test.want, coloredSpans(out.String(), startedColor))
 		})
 	}
 }

@@ -12,6 +12,21 @@ import (
 // colorReset ends a coloured run.
 const colorReset = "\x1b[0m"
 
+// phaseColors gives each value of the "phase" attribute on operation lines its
+// own colour, so whether a step is starting or done is told apart at a glance.
+// The keys mirror the phase constants in driver/executor/run.go, which logs the
+// attribute.
+var phaseColors = map[string]string{
+	"started":   "\x1b[38;5;37m",         // teal — the step is under way
+	"completed": "\x1b[38;2;66;132;255m", // blue (#4284FF) — the step is done
+}
+
+// phaseColor returns the colour assigned to phase, or false if phase has none.
+func phaseColor(phase string) (string, bool) {
+	color, ok := phaseColors[phase]
+	return color, ok
+}
+
 // operationColors gives every scenario operation its own colour. On a log line
 // that names an operation, the message and the operation name are printed in
 // that colour, so the steps stand out from the rest of the output and from each
