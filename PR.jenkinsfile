@@ -1,7 +1,9 @@
 // Norma CI test norma using "make test"
 
+@Library('shared-library') _
+
 pipeline {
-    agent { label 'x86-8-32-l || x86-8-32-m' }
+    agent { label 'medium' }
 
     options {
         timestamps()
@@ -10,11 +12,7 @@ pipeline {
     }
 
     environment {
-        GOROOT = '/usr/local/go'
-        DOCKER_API_VERSION = 1.45
-        GOMEMLIMIT = '60GiB'
-        GOCACHE = '/mnt/tmp-disk/go-cache'
-        TMPDIR = '/mnt/tmp-disk/'
+        GOMEMLIMIT = goMemLimit()
     }
 
     stages {
