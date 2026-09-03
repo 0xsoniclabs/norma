@@ -1,0 +1,54 @@
+name: Scenarios
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/scenarios.yml'
+      - 'scenarios/**.yml'
+      - 'scenarios/**.yaml'
+
+concurrency:
+  group: scenarios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changed:
+    name: run changed scenarios
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+        submodules: recursive
+    - name: setup go
+      uses: actions/setup-go@v7
+      with:
+        go-version: "1.26.0"
+    - name: run scenarios added or modified by this PR
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        mkdir -p output
+        files=$(git diff --name-only --diff-filter=AMR "$BASE_SHA" HEAD -- 'scenarios/**.yml' 'scenarios/**.yaml')
+        echo "scenarios to run:"
+        echo "${files:-<none>}"
+        for file in $files; do
+          echo "::group::$file"
+          go run ./driver/norma run --skip-report-rendering -o output "$file"
+          echo "::endgroup::"
+        done
+    - name: upload monitoring data
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: norma-output
+        path: output
+    - name: purge
+      if: always()
+      run: go run ./driver/norma purge
