@@ -46,6 +46,7 @@ func diff(ctx *cli.Context) (err error) {
 		return err
 	}
 	defer func() { err = errors.Join(err, file.Close()) }()
+
 	for _, src := range args.Slice() {
 		content, err := os.ReadFile(src)
 		if err != nil {
