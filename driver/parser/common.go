@@ -27,6 +27,23 @@ const namePatternStr = `^[A-Za-z0-9-.]+$`
 // application identifiers must match.
 var NamePattern = regexp.MustCompile(namePatternStr)
 
+// filePatternStr constrains the names of files in a network's shared
+// directory: a leading alphanumeric rules out both `.`, `..` and anything a
+// command line would read as a flag, and no separator is allowed, so a name
+// always denotes a file in the shared directory itself.
+const filePatternStr = `^[A-Za-z0-9][A-Za-z0-9._-]*$`
+
+// FilePattern is the regular expression that names of files in a network's
+// shared directory must match.
+var FilePattern = regexp.MustCompile(filePatternStr)
+
+// The database check modes accepted by the checkDb step, naming the two
+// state databases sonictool can verify.
+const (
+	DbCheckModeLive    = "live"
+	DbCheckModeArchive = "archive"
+)
+
 // isTypeValid reports whether the given node type is one of the supported
 // values (observer, rpc, validator).
 func isTypeValid(t string) error {
