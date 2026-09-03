@@ -48,6 +48,12 @@ const (
 	FuncWaitFor      StepFunction = "waitFor"
 	FuncKillSonic    StepFunction = "killSonic"
 	FuncHealDb       StepFunction = "healDb"
+	FuncStopSonic    StepFunction = "stopSonic"
+
+	// File management steps, operating on a node whose client is stopped.
+	FuncExportGenesis StepFunction = "exportGenesis"
+	FuncImportGenesis StepFunction = "importGenesis"
+	FuncCheckDb       StepFunction = "checkDb"
 
 	// Check functions used as items inside a checks: step.
 	FuncCheckBlockGasRate     StepFunction = "blockGasRate"
@@ -76,6 +82,10 @@ var allStepFunctions = [...]StepFunction{
 	FuncWaitFor,
 	FuncKillSonic,
 	FuncHealDb,
+	FuncStopSonic,
+	FuncExportGenesis,
+	FuncImportGenesis,
+	FuncCheckDb,
 }
 
 // allCheckFunctions lists every check function valid as a sub-item of a checks: step.
@@ -311,6 +321,13 @@ type Step struct {
 
 	// WaitFor parameters
 	Duration time.Duration
+
+	// File management parameters
+	// File names a file in the network's shared directory, read or written
+	// by exportGenesis and importGenesis.
+	File string
+	// DbMode selects which state database checkDb verifies.
+	DbMode string
 }
 
 // DelegateTarget specifies a single delegation from a named external
@@ -434,7 +451,8 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 		default:
 			return fmt.Errorf("undelegate value must be a node name or a list of targets")
 		}
-	case FuncKillSonic, FuncHealDb:
+	case FuncKillSonic, FuncHealDb, FuncStopSonic,
+		FuncExportGenesis, FuncImportGenesis, FuncCheckDb:
 		// Value is a node name (same as stopNode).
 		if val.Kind == yaml.ScalarNode && val.Tag != "!!null" &&
 			val.Value != "" {
@@ -543,6 +561,22 @@ var stepFunctionDescriptions = map[StepFunction]string{
 	FuncWaitFor:      "Pause scenario execution for a fixed duration.",
 	FuncKillSonic:    "Kill the sonicd process with SIGKILL, leaving the database dirty.",
 	FuncHealDb:       "Run sonictool heal on a killed node to recover its database.",
+	FuncStopSonic:    "Stop the sonicd process gracefully, keeping the node's container and data directory.",
+	FuncExportGenesis: `Export the chain of a stopped node into a g-file in the
+    network's shared directory, from where another node -- including one
+    running a different client version -- can import it. Example:
+      - exportGenesis: observer-old
+        file: from-old.g`,
+	FuncImportGenesis: `Replace the database of a stopped node with the one described by a
+    g-file in the network's shared directory. The node keeps its
+    identity: only the database is replaced, not the validator keystore.
+    Example:
+      - importGenesis: observer-new
+        file: from-old.g`,
+	FuncCheckDb: `Verify the consistency of a stopped node's state database with
+    sonictool check. Example:
+      - checkDb: observer-new
+        mode: live`,
 }
 
 // paramDescriptions provides a human-readable description for each parameter key.
@@ -556,24 +590,30 @@ var paramDescriptions = map[string]string{
 	"extraArguments": "Extra command line arguments for sonicd.",
 	"users":          "Number of concurrent user accounts the application should simulate.",
 	"rate":           "Transaction rate configuration for the application.",
+	"file":           "Required. Name of a file in the network's shared directory; a plain file name, no path.",
+	"mode":           "Which state database to check: \"live\" (the default) or \"archive\".",
 }
 
 // allowedParams defines which parameter keys are valid for each step function.
 var allowedParams = map[StepFunction][]string{
-	FuncStartNode:    {"type", "imageName", "dataVolume", "stake", "instances", "failing", "extraArguments"},
-	FuncStopNode:     {},
-	FuncRunApp:       {"type", "users", "rate"},
-	FuncStopApp:      {},
-	FuncUpdateRules:  {},
-	FuncDelegate:     {},
-	FuncUndelegate:   {},
-	FuncVerifyStakes: {},
-	FuncAdvanceEpoch: {},
-	FuncWaitForEpoch: {},
-	FuncWaitFor:      {},
-	FuncChecks:       {},
-	FuncKillSonic:    {},
-	FuncHealDb:       {},
+	FuncStartNode:     {"type", "imageName", "dataVolume", "stake", "instances", "failing", "extraArguments"},
+	FuncStopNode:      {},
+	FuncRunApp:        {"type", "users", "rate"},
+	FuncStopApp:       {},
+	FuncUpdateRules:   {},
+	FuncDelegate:      {},
+	FuncUndelegate:    {},
+	FuncVerifyStakes:  {},
+	FuncAdvanceEpoch:  {},
+	FuncWaitForEpoch:  {},
+	FuncWaitFor:       {},
+	FuncChecks:        {},
+	FuncKillSonic:     {},
+	FuncHealDb:        {},
+	FuncStopSonic:     {},
+	FuncExportGenesis: {"file"},
+	FuncImportGenesis: {"file"},
+	FuncCheckDb:       {"mode"},
 }
 
 // parseParam parses a single parameter key-value pair.
@@ -644,6 +684,18 @@ func (s *Step) parseParam(key string, val *yaml.Node) error {
 			return fmt.Errorf("invalid rate value: %w", err)
 		}
 		s.Rate = &r
+	case "file":
+		var v string
+		if err := val.Decode(&v); err != nil {
+			return fmt.Errorf("invalid file value: %w", err)
+		}
+		s.File = v
+	case "mode":
+		var v string
+		if err := val.Decode(&v); err != nil {
+			return fmt.Errorf("invalid mode value: %w", err)
+		}
+		s.DbMode = v
 	}
 	return nil
 }
