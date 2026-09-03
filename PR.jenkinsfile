@@ -37,6 +37,22 @@ pipeline {
                 sh 'go test ./...  -p 2 --parallel 2 --timeout 30m --failfast'
             }
         }
+
+        // Scenarios are only checked for validity by the tests above; the ones
+        // this PR adds or modifies are executed for real.
+        stage('Run Changed Scenarios') {
+            when { changeRequest() }
+            steps {
+                sh '''
+                    git fetch --no-tags origin "+refs/heads/${CHANGE_TARGET}:refs/remotes/origin/${CHANGE_TARGET}"
+                    files=$(git diff --name-only --diff-filter=AMR "origin/${CHANGE_TARGET}...HEAD" -- 'scenarios/**.yml' 'scenarios/**.yaml')
+                    echo "scenarios to run: ${files:-<none>}"
+                    for file in $files; do
+                        go run ./driver/norma run --skip-report-rendering "$file"
+                    done
+                '''
+            }
+        }
     }
 
     post {
