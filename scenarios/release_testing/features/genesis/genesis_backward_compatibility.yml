@@ -1,0 +1,73 @@
+# Two client versions swap g-files and each imports the other's.
+#
+# The epoch-boundary alignment and the choice not to restart a node from an
+# imported file are load-bearing; SCENARIO_SPECIFICATION.md 3.12 says why.
+# observer-v220 is a Baseline pin: rotate it to the newest release.
+
+Name: Genesis Backward Compatibility
+
+Description: >-
+  Exports a g-file from a v2.2.0 client and from the candidate,
+  swaps them, and asserts each version can import the other's.
+
+InitialNetworkRules:
+  Blocks:
+    MaxEmptyBlockSkipPeriod: 20s
+
+DisableEndChecks: true
+
+Scenario:
+  # Holds the whole stake, so stopping an observer cannot stall the chain.
+  - startNode: validator
+    type: validator
+    stake: 50_000_000
+
+  - startNode: observer-v220
+    type: observer
+    imageName: "sonic:v2.2.0"
+
+  - startNode: observer-local
+    type: observer
+
+  # Give the exports a world state, not just the genesis accounts.
+  - runApp: load
+    type: counter
+    users: 5
+    rate:
+      constant: 10
+
+  - waitFor: 20s
+
+  # Both versions agreed on the chain before either export was written.
+  - checks:
+      - blocksProduced
+      - blockHashes
+
+  - stopApp: load
+
+  # Park the head on the epoch seal; the short wait lets observers catch up.
+  - waitForEpoch
+  - waitFor: 3s
+
+  # An export reads the database directly, so nothing may be writing it.
+  - stopSonic: observer-v220
+  - stopSonic: observer-local
+
+  - exportGenesis: observer-v220
+    file: from-v220.g
+  - exportGenesis: observer-local
+    file: from-local.g
+
+  - importGenesis: observer-v220
+    file: from-local.g
+  - checkDb: observer-v220
+    mode: live
+  - checkDb: observer-v220
+    mode: archive
+
+  - importGenesis: observer-local
+    file: from-v220.g
+  - checkDb: observer-local
+    mode: live
+  - checkDb: observer-local
+    mode: archive
