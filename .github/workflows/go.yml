@@ -19,9 +19,7 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v7
-    # `lint` is a required status check, so the job must always report. Filter
-    # here rather than on the trigger: a path-filtered job that never starts
-    # never reports, and PRs with no Go changes stay blocked forever.
+
     - name: look for go changes
       id: changed
       uses: dorny/paths-filter@v4
@@ -32,12 +30,15 @@ jobs:
            - '.golangci.yml'
            - '**/*.go'
            - 'go.mod'
+
     - name: setup go
       if: steps.changed.outputs.go == 'true'
       uses: actions/setup-go@v7 # Use actions/setup-go to specify the Go version
       with:
         go-version: "1.26.0"
         cache-dependency-path: go.sum
+
+
     - name: golangci-lint go
       if: steps.changed.outputs.go == 'true'
       uses: golangci/golangci-lint-action@v9
