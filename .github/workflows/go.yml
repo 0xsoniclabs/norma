@@ -3,16 +3,12 @@ name: Go
 permissions:
   contents: read
   checks: write
+  pull-requests: read
 
 on:
   push:
     branches: [ main ]
   pull_request:
-    paths:
-     - '.github/workflows/go.yml'
-     - '.golangci.yml'
-     - '**/*.go'
-     - 'go.mod'
     branches: [ "**" ]
 
 jobs:
@@ -23,11 +19,14 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v7
+
     - name: setup go
       uses: actions/setup-go@v7 # Use actions/setup-go to specify the Go version
       with:
         go-version: "1.26.0"
-        cache-dependency-path: go/go.sum
+        cache-dependency-path: go.sum
+
+
     - name: golangci-lint go
       uses: golangci/golangci-lint-action@v9
       with:
