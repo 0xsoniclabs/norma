@@ -87,5 +87,3 @@ Scenario:
   - checks:
       - blocksProduced:
           tolerance: 10
-
-# Touched to exercise the changed-scenario CI pass; drop before merging.

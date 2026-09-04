@@ -48,7 +48,7 @@ pipeline {
                     files=$(git diff --name-only --diff-filter=AMR "origin/${CHANGE_TARGET}...HEAD" -- 'scenarios/**.yml' 'scenarios/**.yaml')
                     echo "scenarios to run: ${files:-<none>}"
                     for file in $files; do
-                        go run ./driver/norma run --skip-report-rendering "$file"
+                        ./build/norma run --skip-report-rendering "$file"
                     done
                 '''
             }
