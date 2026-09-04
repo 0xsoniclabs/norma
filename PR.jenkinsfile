@@ -6,6 +6,7 @@ pipeline {
     agent { label 'medium' }
 
     options {
+        basicJobPriority priority: 8
         timestamps()
         timeout(time: 3, unit: 'HOURS')
         disableConcurrentBuilds(abortPrevious: true)
