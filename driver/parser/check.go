@@ -114,7 +114,8 @@ func (s *Step) Check() error {
 			return fmt.Errorf("%s requires a node identifier", s.Function)
 		}
 		return nil
-	case FuncExportGenesis, FuncImportGenesis:
+	case FuncExportGenesis, FuncImportGenesis,
+		FuncExportEvents, FuncImportEvents:
 		return s.checkGenesisFileStep()
 	case FuncCheckDb:
 		return s.checkCheckDb()

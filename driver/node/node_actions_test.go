@@ -86,6 +86,18 @@ func TestOperaNode_Actions_RejectUnexpectedStates(t *testing.T) {
 			accepts: []NodeState{NodeStateKilled},
 			invoke:  func(n *OperaNode) error { return n.HealSonicd(t.Context()) },
 		},
+		"ExportEvents": {
+			accepts: []NodeState{NodeStateReady},
+			invoke: func(n *OperaNode) error {
+				return n.ExportEvents(t.Context(), "exported.events")
+			},
+		},
+		"ImportEvents": {
+			accepts: []NodeState{NodeStateReady},
+			invoke: func(n *OperaNode) error {
+				return n.ImportEvents(t.Context(), "exported.events")
+			},
+		},
 		"ExportGenesis": {
 			accepts: []NodeState{NodeStateReady},
 			invoke: func(n *OperaNode) error {
@@ -686,6 +698,12 @@ func TestOperaNode_GenesisActions_FailWithoutASharedDirectory(t *testing.T) {
 		},
 		"ImportGenesis": func(n *OperaNode) error {
 			return n.ImportGenesis(t.Context(), "exported.g")
+		},
+		"ExportEvents": func(n *OperaNode) error {
+			return n.ExportEvents(t.Context(), "exported.events")
+		},
+		"ImportEvents": func(n *OperaNode) error {
+			return n.ImportEvents(t.Context(), "exported.events")
 		},
 	}
 

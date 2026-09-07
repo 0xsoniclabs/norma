@@ -122,6 +122,8 @@ detailed parameter semantics for the non-trivial ones.
 | `waitForSonicExit` | Wait for a client that stops itself, keeping the node. |
 | `exportGenesis`| Write a stopped node's chain to a g-file.                |
 | `importGenesis`| Replace a stopped node's database from a g-file.         |
+| `exportEvents` | Write a stopped node's event DAG to a file.              |
+| `importEvents` | Add events from a file to a stopped node's database.     |
 | `checkDb`      | Verify a stopped node's state database.                  |
 
 ### 3.1 `startNode`
@@ -322,7 +324,7 @@ The node stays tracked, so a later `startNode` with the same identifier and
 `type` restarts the client in place. A node whose client is stopped leaves
 the active set, so checks, the end checks included, skip it.
 
-### 3.12 File management: `exportGenesis`, `importGenesis`, `checkDb`
+### 3.12 File management: the genesis and events steps, `checkDb`
 
 Every node mounts one shared directory, `<output-dir>/shared` on the host,
 where these steps read and write their files. They require the node's
@@ -333,6 +335,10 @@ client to be stopped (§3.11).
   file: from-a.g
 - importGenesis: observer-b   # replaces the database, keeps the keystore
   file: from-a.g
+- exportEvents: observer-a
+  file: from-a.events
+- importEvents: fresh-a
+  file: from-a.events
 - checkDb: observer-b
   mode: live                  # live (default) or archive
 ```

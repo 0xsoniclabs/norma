@@ -1247,6 +1247,30 @@ Scenario:
 	require.ErrorContains(t, scenario.Check(), "requires a node identifier")
 }
 
+func TestParseBytes_EventsSteps(t *testing.T) {
+	input := `
+Name: Events Test
+Description: Moves an event DAG between two nodes.
+Scenario:
+  - exportEvents: exporter
+    file: from-old.events
+
+  - importEvents: fresh
+    file: from-old.events
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+	require.NoError(t, scenario.Check())
+
+	require.Equal(t, FuncExportEvents, scenario.Steps[0].Function)
+	require.Equal(t, "exporter", scenario.Steps[0].Identifier)
+	require.Equal(t, "from-old.events", scenario.Steps[0].File)
+
+	require.Equal(t, FuncImportEvents, scenario.Steps[1].Function)
+	require.Equal(t, "fresh", scenario.Steps[1].Identifier)
+	require.Equal(t, "from-old.events", scenario.Steps[1].File)
+}
+
 func TestParseBytes_FileManagementSteps(t *testing.T) {
 	input := `
 Name: Genesis Exchange Test
@@ -1328,6 +1352,25 @@ func TestScenario_Check_FileManagementSteps(t *testing.T) {
 		input     string
 		wantError string
 	}{
+		"export events without a file": {
+			input: `
+Name: Test
+Description: Test
+Scenario:
+  - exportEvents: node-A
+`,
+			wantError: "requires a 'file' parameter",
+		},
+		"import events with a path in the file name": {
+			input: `
+Name: Test
+Description: Test
+Scenario:
+  - importEvents: node-A
+    file: /etc/passwd
+`,
+			wantError: "file name must match",
+		},
 		"export without a file": {
 			input: `
 Name: Test

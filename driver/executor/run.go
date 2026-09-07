@@ -276,6 +276,10 @@ func executeStep(
 		return execExportGenesis(ctx, step, state)
 	case parser.FuncImportGenesis:
 		return execImportGenesis(ctx, step, state)
+	case parser.FuncExportEvents:
+		return execExportEvents(ctx, step, state)
+	case parser.FuncImportEvents:
+		return execImportEvents(ctx, step, state)
 	case parser.FuncCheckDb:
 		return execCheckDb(ctx, step, state)
 	case parser.FuncDelegate:
@@ -986,6 +990,40 @@ func execImportGenesis(
 	toolCtx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
 	defer cancel()
 	return opera.ImportGenesis(toolCtx, step.File)
+}
+
+// execExportEvents exports a stopped node's event DAG to the shared
+// directory.
+func execExportEvents(
+	ctx context.Context,
+	step *parser.Step,
+	state *runState,
+) error {
+	opera, err := operaNode(step, state)
+	if err != nil {
+		return err
+	}
+
+	toolCtx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
+	defer cancel()
+	return opera.ExportEvents(toolCtx, step.File)
+}
+
+// execImportEvents adds events from the shared directory to a stopped
+// node's database.
+func execImportEvents(
+	ctx context.Context,
+	step *parser.Step,
+	state *runState,
+) error {
+	opera, err := operaNode(step, state)
+	if err != nil {
+		return err
+	}
+
+	toolCtx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
+	defer cancel()
+	return opera.ImportEvents(toolCtx, step.File)
 }
 
 // execCheckDb verifies a stopped node's state database.
