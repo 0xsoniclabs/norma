@@ -281,6 +281,10 @@ func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNod
 	// Direct the client's output into the run's output directory so it
 	// survives the teardown that follows a failed scenario.
 	nodeConfig.LogsDir = n.config.OutputDir
+	// One directory shared by every node, kept with the run's output.
+	if n.config.OutputDir != "" {
+		nodeConfig.SharedFilesDir = filepath.Join(n.config.OutputDir, "shared")
+	}
 	node, err := node.StartOperaDockerNode(ctx, n.docker, n.network, nodeConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start opera docker; %v", err)

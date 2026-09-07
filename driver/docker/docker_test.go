@@ -21,6 +21,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -393,4 +394,43 @@ func createNetwork(t *testing.T) (*Client, *Network) {
 	})
 
 	return cli, net
+}
+
+// The shared directory moves files between nodes, so a file written inside
+// the container has to be the same file on the host.
+func TestClient_Start_SharedDirBindingIsWritableFromTheContainer(t *testing.T) {
+	cli, err := NewClient()
+	if err != nil {
+		t.Fatalf("failed to create a docker client: %v", err)
+	}
+	t.Cleanup(func() { _ = cli.Close() })
+
+	hostDir := t.TempDir()
+	binding := hostDir + ":/shared"
+	timeout := time.Second
+	cont, err := cli.Start(t.Context(), &ContainerConfig{
+		Hostname:         t.Name(),
+		ImageName:        "alpine",
+		Entrypoint:       []string{"tail", "-f", "/dev/null"},
+		ShutdownTimeout:  &timeout,
+		SharedDirBinding: &binding,
+	})
+	if err != nil {
+		t.Fatalf("failed to start container: %v", err)
+	}
+	t.Cleanup(func() { _ = cont.Cleanup(context.Background()) })
+
+	if output, err := cont.Exec(t.Context(),
+		[]string{"sh", "-c", "echo exported > /shared/exported.g"}); err != nil {
+		t.Fatalf("failed to write into the shared directory: %v - output: %s",
+			err, output)
+	}
+
+	content, err := os.ReadFile(filepath.Join(hostDir, "exported.g"))
+	if err != nil {
+		t.Fatalf("the file written in the container is not on the host: %v", err)
+	}
+	if got, want := strings.TrimSpace(string(content)), "exported"; got != want {
+		t.Errorf("unexpected content, got %q, want %q", got, want)
+	}
 }
