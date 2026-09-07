@@ -1023,9 +1023,15 @@ func requiresBlockProductionCheck(step parser.Step) bool {
 	}
 }
 
+// blockProductionTimeout bounds waitForBlockProduction, whose random node
+// may have stopped following the chain.
+const blockProductionTimeout = 2 * time.Minute
+
 // waitForBlockProduction waits until the network produces a new block,
 // confirming it is actively processing transactions after an epoch transition.
 func waitForBlockProduction(ctx context.Context, net driver.Network) error {
+	ctx, cancel := context.WithTimeout(ctx, blockProductionTimeout)
+	defer cancel()
 	client, err := net.DialRandomRpc()
 	if err != nil {
 		// If we can't connect, log and proceed — the next step will fail
