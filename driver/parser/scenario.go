@@ -55,6 +55,8 @@ const (
 	// File management steps, operating on a node whose client is stopped.
 	FuncExportGenesis StepFunction = "exportGenesis"
 	FuncImportGenesis StepFunction = "importGenesis"
+	FuncExportEvents  StepFunction = "exportEvents"
+	FuncImportEvents  StepFunction = "importEvents"
 	FuncCheckDb       StepFunction = "checkDb"
 
 	// Check functions used as items inside a checks: step.
@@ -89,6 +91,8 @@ var allStepFunctions = [...]StepFunction{
 	FuncWaitForSonicExit,
 	FuncExportGenesis,
 	FuncImportGenesis,
+	FuncExportEvents,
+	FuncImportEvents,
 	FuncCheckDb,
 }
 
@@ -462,7 +466,8 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 			return fmt.Errorf("undelegate value must be a node name or a list of targets")
 		}
 	case FuncKillSonic, FuncHealDb, FuncStopSonic,
-		FuncExportGenesis, FuncImportGenesis, FuncCheckDb, FuncWaitForSonicExit:
+		FuncExportGenesis, FuncImportGenesis,
+		FuncExportEvents, FuncImportEvents, FuncCheckDb, FuncWaitForSonicExit:
 		// Value is a node name (same as stopNode).
 		if val.Kind == yaml.ScalarNode && val.Tag != "!!null" &&
 			val.Value != "" {
@@ -587,7 +592,9 @@ var stepFunctionDescriptions = map[StepFunction]string{
 	FuncExportGenesis: "Export a stopped node's chain into a g-file in the shared directory.",
 	FuncImportGenesis: "Replace a stopped node's database from a g-file in the shared directory, " +
 		"keeping its keystore.",
-	FuncCheckDb: "Verify a stopped node's state database with sonictool check.",
+	FuncExportEvents: "Export a stopped node's event DAG into a file in the shared directory.",
+	FuncImportEvents: "Add the events in a file from the shared directory to a stopped node's database.",
+	FuncCheckDb:      "Verify a stopped node's state database with sonictool check.",
 }
 
 // paramDescriptions provides a human-readable description for each parameter key.
@@ -626,6 +633,8 @@ var allowedParams = map[StepFunction][]string{
 	FuncWaitForSonicExit: {},
 	FuncExportGenesis:    {"file"},
 	FuncImportGenesis:    {"file"},
+	FuncExportEvents:     {"file"},
+	FuncImportEvents:     {"file"},
 	FuncCheckDb:          {"mode"},
 }
 

@@ -665,6 +665,61 @@ func (n *OperaNode) ImportGenesis(ctx context.Context, fileName string) error {
 	return n.transition(NodeStateMaintenance, NodeStateReady)
 }
 
+// ExportEvents writes the node's event DAG, every epoch of it, to fileName
+// in the network's shared directory. Requires a stopped client and only
+// reads, so the node is left ready.
+func (n *OperaNode) ExportEvents(ctx context.Context, fileName string) error {
+	path, err := n.sharedFilePath(fileName)
+	if err != nil {
+		return err
+	}
+	if err := n.beginMaintenance(ctx, "export events"); err != nil {
+		return err
+	}
+	slog.Info("Exporting events", "node", n.config.Label, "file", path)
+
+	output, err := n.container.ExecWithOptions(ctx, []string{
+		sonicToolBinaryPath,
+		"--datadir", dataDir,
+		"events", "export", path,
+	}, docker.ExecOptions{LogName: "sonictool-events-export"})
+	if err != nil {
+		n.forceSetState(NodeStateReady)
+		return fmt.Errorf("sonictool events export failed: %w - output: %s",
+			err, output)
+	}
+	slog.Info("Events exported", "node", n.config.Label, "file", path)
+	return n.transition(NodeStateMaintenance, NodeStateReady)
+}
+
+// ImportEvents adds the events in fileName to the node's database, which it
+// keeps otherwise intact. Requires a stopped client; a failure leaves the
+// database as it was, so the node is left ready.
+func (n *OperaNode) ImportEvents(ctx context.Context, fileName string) error {
+	path, err := n.sharedFilePath(fileName)
+	if err != nil {
+		return err
+	}
+	if err := n.beginMaintenance(ctx, "import events"); err != nil {
+		return err
+	}
+	slog.Info("Importing events", "node", n.config.Label, "file", path)
+
+	output, err := n.container.ExecWithOptions(ctx, []string{
+		sonicToolBinaryPath,
+		"--datadir", dataDir,
+		"--statedb.livecache", "1",
+		"events", "import", path,
+	}, docker.ExecOptions{LogName: "sonictool-events-import"})
+	if err != nil {
+		n.forceSetState(NodeStateReady)
+		return fmt.Errorf("sonictool events import failed: %w - output: %s",
+			err, output)
+	}
+	slog.Info("Events imported", "node", n.config.Label, "file", path)
+	return n.transition(NodeStateMaintenance, NodeStateReady)
+}
+
 // CheckDatabase verifies the state database named by mode, one of
 // parser.DbCheckModeLive (the default) or parser.DbCheckModeArchive.
 // Requires a stopped client.

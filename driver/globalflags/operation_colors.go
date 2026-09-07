@@ -65,6 +65,8 @@ var operationColors = map[parser.StepFunction]string{
 	parser.FuncWaitForBlocks: "\x1b[38;5;248m", // light grey — waiting on the chain
 
 	// Client lifecycle and file management.
+	parser.FuncExportEvents:     "\x1b[38;5;116m", // teal
+	parser.FuncImportEvents:     "\x1b[38;5;110m", // slate
 	parser.FuncCheckDb:          "\x1b[38;5;187m", // sand -- a database is verified
 	parser.FuncExportGenesis:    "\x1b[38;5;111m", // light blue
 	parser.FuncImportGenesis:    "\x1b[38;5;105m", // violet
