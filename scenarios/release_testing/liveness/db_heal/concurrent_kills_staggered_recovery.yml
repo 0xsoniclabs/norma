@@ -1,0 +1,78 @@
+Name: Liveness DB Heal Concurrent Failures Staggered Recovery
+
+Description: >-
+  Kills three low-stake validators' sonicd processes at the same time with
+  SIGKILL, leaving their databases dirty, while three high-stake validators
+  keep quorum and block production alive. Each database is then healed and
+  the validators are restarted one at a time, so every node recovers and
+  re-syncs from a different block height.
+
+Scenario:
+  # High-stake validators that keep quorum while the others are down
+  # (30M of 33M total stake stays online).
+  - startNode: stable
+    type: validator
+    instances: 3
+    stake: 10_000_000
+
+  # Low-stake validators that will be killed and healed. Frequent
+  # checkpoints keep the healed state close to the chain head.
+  - startNode: frail-1
+    type: validator
+    stake: 1_000_000
+    extraArguments: "--statedb.checkpointinterval 1"
+
+  - startNode: frail-2
+    type: validator
+    stake: 1_000_000
+    extraArguments: "--statedb.checkpointinterval 1"
+
+  - startNode: frail-3
+    type: validator
+    stake: 1_000_000
+    extraArguments: "--statedb.checkpointinterval 1"
+
+  # Light load so block heights keep advancing during the outage.
+  - runApp: load
+    type: counter
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 10s
+
+  # Kill all three at the same time — DBs left dirty, containers running.
+  - killSonic: frail-1
+  - killSonic: frail-2
+  - killSonic: frail-3
+
+  # The stable majority must keep producing blocks.
+  - checks:
+      - blocksProduced
+
+  # Heal and restart one validator at a time; the waits in between make
+  # each node rejoin the network at a different block height.
+  - healDb: frail-1
+  - startNode: frail-1
+    type: validator
+
+  - waitFor: 10s
+
+  - healDb: frail-2
+  - startNode: frail-2
+    type: validator
+
+  - waitFor: 10s
+
+  - healDb: frail-3
+  - startNode: frail-3
+    type: validator
+
+  - stopApp: load
+
+  # All six validators should converge on the same chain.
+  - checks:
+      - blockHeights:
+          tolerance: 5
+      - blockHashes
+      - validatorsActive
