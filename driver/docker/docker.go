@@ -147,16 +147,17 @@ func (h *ExecHandle) setResult(exitCode int, err error) {
 
 // ContainerConfig defines parameters for running Docker Containers.
 type ContainerConfig struct {
-	Hostname        string
-	ImageName       string
-	ShutdownTimeout *time.Duration
-	Environment     map[string]string
-	Entrypoint      []string // Entrypoint to run when starting the container. Optional.
-	Network         *Network // Docker network to join
-	DataDirBinding  *string  // mount client datadir to this path on host
-	GenesisFileBind *string  // mount genesis file on host to /genesis.json:ro in container
-	KeystoreBinding *string  // mount keystore dir on host to /datadir/keystore:ro in container
-	LogsDir         *string  // host directory for exec output logs
+	Hostname         string
+	ImageName        string
+	ShutdownTimeout  *time.Duration
+	Environment      map[string]string
+	Entrypoint       []string // Entrypoint to run when starting the container. Optional.
+	Network          *Network // Docker network to join
+	DataDirBinding   *string  // mount client datadir to this path on host
+	GenesisFileBind  *string  // mount genesis file on host to /genesis.json:ro in container
+	KeystoreBinding  *string  // mount keystore dir on host to /datadir/keystore:ro in container
+	SharedDirBinding *string  // mount a directory shared by all nodes of the network
+	LogsDir          *string  // host directory for exec output logs
 }
 
 // NewClient creates a new client facilitating the creation of Docker
@@ -238,6 +239,9 @@ func (c *Client) Start(ctx context.Context, config *ContainerConfig) (*Container
 	}
 	if config.KeystoreBinding != nil {
 		binds = append(binds, *config.KeystoreBinding)
+	}
+	if config.SharedDirBinding != nil {
+		binds = append(binds, *config.SharedDirBinding)
 	}
 
 	init := true
