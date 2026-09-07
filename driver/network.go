@@ -106,6 +106,13 @@ type Network interface {
 	// is no node on the network with a ErrorEmptyNetwork error.
 	DialRandomRpc() (rpc.Client, error)
 
+	// DialSystemRpc returns a connection to the single node that carries
+	// transactions sent from the shared system account. Everything signed by
+	// that account — epoch advances, rule updates, treasury payouts — must go
+	// through one node so its nonce is read from one pending state and stays
+	// in one sequence.
+	DialSystemRpc() (rpc.Client, error)
+
 	// ApplyNetworkRules applies the given network rules to the network.
 	ApplyNetworkRules(ctx context.Context, rules NetworkRules) error
 
