@@ -94,6 +94,10 @@ const (
 // allowed to run before being aborted.
 const defaultScenarioTimeout = 10 * time.Minute
 
+// clientExitTimeout caps the wait for a client that stops itself, which
+// happens no sooner than the epoch boundary it was told to stop at.
+const clientExitTimeout = 5 * time.Minute
+
 // sonicToolTimeout caps a single sonictool invocation. Each walks the whole
 // node state, so the bound is generous for slow CI hosts.
 const sonicToolTimeout = 15 * time.Minute
@@ -264,6 +268,8 @@ func executeStep(
 		return execKillSonic(ctx, step, net, state)
 	case parser.FuncHealDb:
 		return execHealDb(ctx, step, state)
+	case parser.FuncWaitForSonicExit:
+		return execWaitForSonicExit(ctx, step, net, state)
 	case parser.FuncStopSonic:
 		return execStopSonic(ctx, step, net, state)
 	case parser.FuncDelegate:
@@ -922,6 +928,25 @@ func execStopSonic(
 	net.SuspendNode(opera)
 
 	return opera.StopSonicd(ctx)
+}
+
+// execWaitForSonicExit waits for a client that stops itself and leaves the
+// node as stopSonic would. Suspended first, so nothing dials a vanishing RPC.
+func execWaitForSonicExit(
+	ctx context.Context,
+	step *parser.Step,
+	net driver.Network,
+	state *runState,
+) error {
+	opera, err := operaNode(step, state)
+	if err != nil {
+		return err
+	}
+	net.SuspendNode(opera)
+
+	waitCtx, cancel := context.WithTimeout(ctx, clientExitTimeout)
+	defer cancel()
+	return opera.AwaitSonicdExit(waitCtx)
 }
 
 // operaNode resolves an identifier to the tracked node it names, which must

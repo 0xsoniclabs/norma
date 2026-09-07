@@ -410,6 +410,34 @@ func (n *OperaNode) StopSonicd(ctx context.Context) error {
 	return n.transition(NodeStateStopping, NodeStateReady)
 }
 
+// AwaitSonicdExit waits for a client that stops itself, as one started with
+// --exitwhensynced.epoch does. A clean exit leaves the node Ready, any other
+// exit code Killed. Accepts Running, or Killed when the watcher recorded the
+// exit first: the exit code, not the timing, says whether the DB was flushed.
+func (n *OperaNode) AwaitSonicdExit(ctx context.Context) error {
+	if err := n.transitionFromAny(NodeStateStopping,
+		NodeStateRunning, NodeStateKilled); err != nil {
+		return err
+	}
+	handle := n.clientHandle()
+	if handle == nil {
+		n.forceSetState(NodeStateKilled)
+		return fmt.Errorf("node %q: client process was not started", n.GetLabel())
+	}
+	slog.Info("Waiting for sonicd to exit on its own", "node", n.config.Label)
+
+	if err := n.waitForSonicdExit(ctx); err != nil {
+		n.forceSetState(NodeStateRunning)
+		return fmt.Errorf("node %q: %w", n.GetLabel(), err)
+	}
+	if code := handle.ExitCode(); code != 0 {
+		n.forceSetState(NodeStateKilled)
+		return fmt.Errorf("node %q: client exited with code %d; "+
+			"the database must be healed", n.GetLabel(), code)
+	}
+	return n.transition(NodeStateStopping, NodeStateReady)
+}
+
 // ForceStopSonicd sends SIGKILL to sonicd, giving it no chance to flush
 // the database. Intended for db-heal testing. Requires NodeStateRunning,
 // or NodeStateStopping to escalate a graceful stop that did not complete,
