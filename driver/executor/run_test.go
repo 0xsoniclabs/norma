@@ -714,6 +714,89 @@ func TestRun_RunAndCaptureEventExecution_CapturesAllSteps(t *testing.T) {
 	}
 }
 
+func TestRun_PrepareNode_BootstrapsFromGFileWithoutStarting(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	node.EXPECT().GetLabel().Return("fresh-old").AnyTimes()
+	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+
+	// The step hands the g-file and image to the network, and asks for
+	// nothing else: no validator registration, no sync wait.
+	net.EXPECT().CreateNode(gomock.Any()).DoAndReturn(
+		func(config *driver.NodeConfig) (driver.Node, error) {
+			if got, want := config.GenesisFile, "from-new.g"; got != want {
+				t.Errorf("GenesisFile: got %q, want %q", got, want)
+			}
+			if got, want := config.Image, "sonic:v2.2.0"; got != want {
+				t.Errorf("Image: got %q, want %q", got, want)
+			}
+			if config.Validator {
+				t.Error("a prepared node must not be a validator")
+			}
+			return node, nil
+		})
+
+	scenario := parser.Scenario{
+		Name:             "Prepare",
+		Description:      "Test scenario.",
+		DisableEndChecks: true,
+		Steps: []parser.Step{
+			{
+				Function:   parser.FuncPrepareNode,
+				Identifier: "fresh-old",
+				NodeType:   "observer",
+				ImageName:  "sonic:v2.2.0",
+				File:       "from-new.g",
+			},
+		},
+	}
+
+	if err := run(
+		t.Context(), net, &scenario, nil, registry,
+	); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRun_PrepareNode_RejectsAnExistingNode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := NewMockvalidatorRegistry(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	node.EXPECT().GetLabel().Return("fresh-old").AnyTimes()
+	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+
+	// Only the first prepareNode reaches the network.
+	net.EXPECT().CreateNode(gomock.Any()).Return(node, nil).Times(1)
+
+	step := parser.Step{
+		Function:   parser.FuncPrepareNode,
+		Identifier: "fresh-old",
+		NodeType:   "observer",
+		File:       "from-new.g",
+	}
+	scenario := parser.Scenario{
+		Name:             "Prepare twice",
+		Description:      "Test scenario.",
+		DisableEndChecks: true,
+		Steps:            []parser.Step{step, step},
+	}
+
+	err := run(t.Context(), net, &scenario, nil, registry)
+	if err == nil {
+		t.Fatal("expected an error for a duplicate prepareNode")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestRun_Delegate_FundsAndDelegatesForEachTarget(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)

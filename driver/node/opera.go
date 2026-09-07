@@ -138,6 +138,9 @@ type OperaNodeConfig struct {
 	// SharedFilesDir is the host directory mounted at sharedDir. Every node
 	// of a network gets the same one. Empty mounts nothing.
 	SharedFilesDir string
+	// GenesisFile names a g-file in the shared directory to bootstrap
+	// from instead of genesis.json.
+	GenesisFile string
 }
 
 // imageEnsureState stores the completion signal and final error for one

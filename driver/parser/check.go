@@ -114,6 +114,8 @@ func (s *Step) Check() error {
 			return fmt.Errorf("%s requires a node identifier", s.Function)
 		}
 		return nil
+	case FuncPrepareNode:
+		return s.checkPrepareNode()
 	case FuncExportGenesis, FuncImportGenesis,
 		FuncExportEvents, FuncImportEvents:
 		return s.checkGenesisFileStep()
@@ -270,6 +272,22 @@ func (s *Step) checkSubChecks() error {
 		}
 	}
 
+	return errors.Join(errs...)
+}
+
+// checkPrepareNode validates a prepareNode step: it names a node like
+// startNode does, and a g-file like the other file management steps.
+// A validator is rejected because it would need a stake registered before
+// it joins, which only startNode does.
+func (s *Step) checkPrepareNode() error {
+	errs := []error{s.checkStartNode(), s.checkGenesisFileStep()}
+	if s.NodeType == "validator" {
+		errs = append(errs, fmt.Errorf(
+			"prepareNode cannot prepare a validator, only an observer or rpc node"))
+	}
+	if s.Instances != nil {
+		errs = append(errs, fmt.Errorf("prepareNode does not support instances"))
+	}
 	return errors.Join(errs...)
 }
 

@@ -120,6 +120,7 @@ detailed parameter semantics for the non-trivial ones.
 | `healDb`       | Recover the database of a killed node.                   |
 | `stopSonic`    | Stop the client gracefully, keeping the node.            |
 | `waitForSonicExit` | Wait for a client that stops itself, keeping the node. |
+| `prepareNode`  | Create a node from a g-file, leaving its client stopped. |
 | `exportGenesis`| Write a stopped node's chain to a g-file.                |
 | `importGenesis`| Replace a stopped node's database from a g-file.         |
 | `exportEvents` | Write a stopped node's event DAG to a file.              |
@@ -324,13 +325,17 @@ The node stays tracked, so a later `startNode` with the same identifier and
 `type` restarts the client in place. A node whose client is stopped leaves
 the active set, so checks, the end checks included, skip it.
 
-### 3.12 File management: the genesis and events steps, `checkDb`
+### 3.12 File management: `prepareNode`, the genesis and events steps, `checkDb`
 
 Every node mounts one shared directory, `<output-dir>/shared` on the host,
-where these steps read and write their files. They require the node's
-client to be stopped (§3.11).
+where these steps read and write their files. All but `prepareNode` require
+the node's client to be stopped (§3.11).
 
 ```yaml
+- prepareNode: fresh-a        # bootstrapped from a g-file, client left stopped
+  type: observer              # observer (default) or rpc; startNode starts it later
+  imageName: "sonic:v2.2.0"
+  file: from-b.g
 - exportGenesis: observer-a   # whole chain, archive included
   file: from-a.g
 - importGenesis: observer-b   # replaces the database, keeps the keystore

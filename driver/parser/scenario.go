@@ -52,6 +52,7 @@ const (
 	FuncWaitForSonicExit StepFunction = "waitForSonicExit"
 
 	// File management steps, operating on a node whose client is stopped.
+	FuncPrepareNode   StepFunction = "prepareNode"
 	FuncExportGenesis StepFunction = "exportGenesis"
 	FuncImportGenesis StepFunction = "importGenesis"
 	FuncExportEvents  StepFunction = "exportEvents"
@@ -87,6 +88,7 @@ var allStepFunctions = [...]StepFunction{
 	FuncHealDb,
 	FuncStopSonic,
 	FuncWaitForSonicExit,
+	FuncPrepareNode,
 	FuncExportGenesis,
 	FuncImportGenesis,
 	FuncExportEvents,
@@ -460,7 +462,7 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 		default:
 			return fmt.Errorf("undelegate value must be a node name or a list of targets")
 		}
-	case FuncKillSonic, FuncHealDb, FuncStopSonic,
+	case FuncKillSonic, FuncHealDb, FuncStopSonic, FuncPrepareNode,
 		FuncExportGenesis, FuncImportGenesis,
 		FuncExportEvents, FuncImportEvents, FuncCheckDb, FuncWaitForSonicExit:
 		// Value is a node name (same as stopNode).
@@ -522,8 +524,9 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 
 // stepFunctionDescriptions provides a human-readable description for each step function.
 var stepFunctionDescriptions = map[StepFunction]string{
-	FuncStartNode: "Start a new network node (validator, observer, or rpc).",
-	FuncStopNode:  "Stop a running network node by name.",
+	FuncStartNode:   "Start a new network node (validator, observer, or rpc).",
+	FuncPrepareNode: "Create a node bootstrapped from a g-file in the shared directory, leaving its client stopped; a later startNode with the same identifier starts it.",
+	FuncStopNode:    "Stop a running network node by name.",
 	FuncDelegate: `Delegate stake from one or more named external delegator accounts
     to validator nodes.
     Each target in the list has three required fields:
@@ -613,6 +616,7 @@ var allowedParams = map[StepFunction][]string{
 	FuncHealDb:           {},
 	FuncStopSonic:        {},
 	FuncWaitForSonicExit: {},
+	FuncPrepareNode:      {"type", "imageName", "file", "failing", "extraArguments"},
 	FuncExportGenesis:    {"file"},
 	FuncImportGenesis:    {"file"},
 	FuncExportEvents:     {"file"},

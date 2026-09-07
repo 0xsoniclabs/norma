@@ -102,6 +102,18 @@ func (n *OperaNode) Initialize(ctx context.Context) (err error) {
 		}
 	}()
 
+	// Resolved first, so a bad file name fails before anything is created.
+	genesisArgs := []string{"genesis", "json", "--experimental", "/genesis.json"}
+	if n.config.GenesisFile != "" {
+		path, err := n.sharedFilePath(n.config.GenesisFile)
+		if err != nil {
+			return err
+		}
+		genesisArgs = []string{"genesis", "--experimental", path}
+		slog.Info("Bootstrapping from g-file",
+			"node", n.config.Label, "file", path)
+	}
+
 	// Skip initialization only when re-using a populated mount directory.
 	needsInit := n.config.MountDataDir == nil || isDirEmpty(*n.config.MountDataDir)
 	if needsInit {
@@ -110,12 +122,11 @@ func (n *OperaNode) Initialize(ctx context.Context) (err error) {
 			return fmt.Errorf("failed to create datadir: %w - output: %s", err, output)
 		}
 
-		sonicToolCmd := []string{
+		sonicToolCmd := append([]string{
 			sonicToolBinaryPath,
 			"--datadir", dataDir,
 			"--statedb.livecache", "1",
-			"genesis", "json", "--experimental", "/genesis.json",
-		}
+		}, genesisArgs...)
 		output, err := n.container.ExecWithOptions(ctx, sonicToolCmd,
 			docker.ExecOptions{LogName: "sonictool-genesis"})
 		if err != nil {

@@ -688,6 +688,40 @@ func TestOperaNode_SharedFilePath_RejectsNamesThatAreNotPlainFiles(t *testing.T)
 	}
 }
 
+// A g-file that cannot be resolved has to be refused before the data
+// directory is touched, so a bad name costs nothing but the step.
+func TestOperaNode_Initialize_RejectsAnUnusableGenesisFile(t *testing.T) {
+	for name, gFile := range map[string]string{
+		"path":     "../escape.g",
+		"absolute": "/etc/passwd",
+		"empty":    " ",
+	} {
+		t.Run(name, func(t *testing.T) {
+			node := newNodeInState(t, NodeStateUninitialized)
+			node.config.GenesisFile = gFile
+
+			// The container is nil, so reaching it would panic: the test
+			// passes only if the name is refused before that.
+			if err := node.Initialize(t.Context()); err == nil {
+				t.Fatalf("g-file %q must be refused", gFile)
+			}
+			if got := node.GetState(); got != NodeStateUninitialized {
+				t.Errorf("node must be left uninitialized, got %s", got)
+			}
+		})
+	}
+
+	t.Run("no-shared-directory", func(t *testing.T) {
+		node := newNodeInState(t, NodeStateUninitialized)
+		node.config.SharedFilesDir = ""
+		node.config.GenesisFile = "from-new.g"
+
+		if err := node.Initialize(t.Context()); err == nil {
+			t.Fatal("a g-file must be refused without a shared directory")
+		}
+	})
+}
+
 // Without a shared directory there is nowhere for a g-file to come
 // from or go to, so the actions must say so rather than exec an unmounted
 // path.

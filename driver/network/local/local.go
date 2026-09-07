@@ -285,6 +285,21 @@ func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNod
 	if n.config.OutputDir != "" {
 		nodeConfig.SharedFilesDir = filepath.Join(n.config.OutputDir, "shared")
 	}
+	// A node bootstrapped from a g-file is left stopped and suspended;
+	// starting its client later peers it and announces it to monitoring.
+	if nodeConfig.GenesisFile != "" {
+		prepared, err := node.CreateOperaDockerNode(ctx, n.docker, n.network, nodeConfig)
+		if err != nil {
+			return nil, err
+		}
+		// Keyed by label until ReconnectNode re-keys it by enode ID.
+		n.nodesMutex.Lock()
+		n.nodes[driver.NodeID(nodeConfig.Label)] = prepared
+		n.suspended[prepared] = true
+		n.nodesMutex.Unlock()
+		return prepared, nil
+	}
+
 	node, err := node.StartOperaDockerNode(ctx, n.docker, n.network, nodeConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start opera docker; %v", err)
@@ -331,6 +346,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 		GenesisJsonPath: &n.genesisJsonPath,
 		MountDataDir:    datadir,
 		ExtraArguments:  config.ExtraArguments,
+		GenesisFile:     config.GenesisFile,
 	})
 }
 

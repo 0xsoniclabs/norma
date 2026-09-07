@@ -268,6 +268,8 @@ func executeStep(
 		return execKillSonic(ctx, step, net, state)
 	case parser.FuncHealDb:
 		return execHealDb(ctx, step, state)
+	case parser.FuncPrepareNode:
+		return execPrepareNode(step, net, state)
 	case parser.FuncWaitForSonicExit:
 		return execWaitForSonicExit(ctx, step, net, state)
 	case parser.FuncStopSonic:
@@ -957,6 +959,42 @@ func execWaitForSonicExit(
 	waitCtx, cancel := context.WithTimeout(ctx, clientExitTimeout)
 	defer cancel()
 	return opera.AwaitSonicdExit(waitCtx)
+}
+
+// execPrepareNode creates a node bootstrapped from a g-file, leaving its
+// client stopped so the database can be checked before it joins. A later
+// startNode with the same identifier starts it in place.
+func execPrepareNode(
+	step *parser.Step,
+	net driver.Network,
+	state *runState,
+) error {
+	name := step.Identifier
+	if _, exists := state.nodes[name]; exists {
+		return fmt.Errorf("node %q already exists", name)
+	}
+
+	image := driver.DefaultClientDockerImageName
+	if step.ImageName != "" {
+		image = step.ImageName
+	}
+
+	node, err := net.CreateNode(&driver.NodeConfig{
+		Name:           name,
+		Failing:        step.Failing,
+		Image:          image,
+		ExtraArguments: step.ExtraArguments,
+		GenesisFile:    step.File,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to prepare node %s: %w", name, err)
+	}
+
+	state.nodes[name] = node
+	state.nodeHistory[name] = true
+	slog.Info("node prepared from g-file",
+		"node", name, "file", step.File, "image", image)
+	return nil
 }
 
 // execExportGenesis exports a stopped node's chain to the shared directory.
