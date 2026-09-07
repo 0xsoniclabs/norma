@@ -26,6 +26,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/sonic/gossip/contract/sfc100"
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -143,6 +144,19 @@ func TestEnsureValidatorsActive_Fails_WhenAValidatorNeverJoinsTheSet(t *testing.
 	err := registry.ensureValidatorsActive(context.Background(), []int{2, 3})
 	require.ErrorContains(t, err, "validators [3] did not join")
 	require.ErrorContains(t, err, "active validators are [1 2]")
+}
+
+// Funding is signed by the treasury, the shared system account, so it must go
+// through the node pinned for that account's transactions. A DialRandomRpc
+// call would be unexpected on this mock.
+func TestFundDelegator_UsesTheSystemTransactionNode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().DialSystemRpc().Return(nil, fmt.Errorf("no nodes"))
+
+	registry := netBasedValidatorRegistry{net: net}
+	err := registry.fundDelegator(context.Background(), common.Address{}, 1)
+	require.ErrorContains(t, err, "no nodes")
 }
 
 func TestMissingValidators_ReportsWhatTheSetDoesNotHold(t *testing.T) {

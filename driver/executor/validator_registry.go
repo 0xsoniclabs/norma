@@ -235,7 +235,11 @@ func (a netBasedValidatorRegistry) undelegateAs(
 func (a netBasedValidatorRegistry) fundDelegator(
 	ctx context.Context, delegator common.Address, amount uint64,
 ) error {
-	rpcClient, err := a.net.DialRandomRpc()
+	// Funding is signed by the treasury, the shared system account, so it has
+	// to go through the node that carries that account's nonce sequence. The
+	// other registry operations sign with per-validator or per-delegator keys
+	// and are free to use any node.
+	rpcClient, err := a.net.DialSystemRpc()
 	if err != nil {
 		return fmt.Errorf("failed to connect to RPC; %v", err)
 	}
