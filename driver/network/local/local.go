@@ -95,7 +95,7 @@ type LocalNetwork struct {
 	appContextMu sync.Mutex
 
 	// systemRpcLabel is the node that transactions from the shared system
-	// account are sent through. See dialSystemRpc for why they must not be
+	// account are sent through. See DialSystemRpc for why they must not be
 	// spread over several nodes. Guarded by systemRpcMu.
 	systemRpcLabel string
 
@@ -442,7 +442,7 @@ func (n *LocalNetwork) dialAnyRpc() (rpcdriver.Client, string, error) {
 	return nil, "", fmt.Errorf("no reachable node found among %d active nodes", len(reliable))
 }
 
-// dialSystemRpc returns a client for the node that carries transactions sent
+// DialSystemRpc returns a client for the node that carries transactions sent
 // from the shared system account (fakenet key 1) — epoch advances and rule
 // updates.
 //
@@ -455,11 +455,10 @@ func (n *LocalNetwork) dialAnyRpc() (rpcdriver.Client, string, error) {
 //
 // Pinning them to one node rules that out: each waits for its own receipt from
 // this node, so by the time the next one asks, the node has the block and
-// reports the nonce following it. The pin is re-chosen only when the node it
-// names stops answering — a state it is probed for, since a node can accept a
-// connection while serving nothing — which is also the one moment the hazard can
-// return, unavoidable since the sequence has to continue somewhere.
-func (n *LocalNetwork) dialSystemRpc() (rpcdriver.Client, error) {
+// reports the nonce following it. The pin is only re-chosen when the node it
+// names has become unreachable, which is also the one moment the hazard can
+// return — unavoidable, since the sequence has to continue somewhere.
+func (n *LocalNetwork) DialSystemRpc() (rpcdriver.Client, error) {
 	n.systemRpcMu.Lock()
 	defer n.systemRpcMu.Unlock()
 
@@ -515,7 +514,7 @@ func probeRpc(client rpcdriver.Client) error {
 }
 
 func (n *LocalNetwork) ApplyNetworkRules(ctx context.Context, rules driver.NetworkRules) error {
-	client, err := n.dialSystemRpc()
+	client, err := n.DialSystemRpc()
 	if err != nil {
 		return fmt.Errorf("failed to connect to network: %w", err)
 	}
@@ -525,7 +524,7 @@ func (n *LocalNetwork) ApplyNetworkRules(ctx context.Context, rules driver.Netwo
 }
 
 func (n *LocalNetwork) AdvanceEpoch(ctx context.Context, epochIncrement int) error {
-	client, err := n.dialSystemRpc()
+	client, err := n.DialSystemRpc()
 	if err != nil {
 		return fmt.Errorf("failed to connect to network: %w", err)
 	}
