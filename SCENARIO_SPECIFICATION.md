@@ -119,6 +119,7 @@ detailed parameter semantics for the non-trivial ones.
 | `killSonic`    | SIGKILL the client, leaving its database dirty.          |
 | `healDb`       | Recover the database of a killed node.                   |
 | `stopSonic`    | Stop the client gracefully, keeping the node.            |
+| `waitForSonicExit` | Wait for a client that stops itself, keeping the node. |
 
 ### 3.1 `startNode`
 
@@ -302,7 +303,7 @@ string (`10s`, `1m`, `1h30m`, …) and must be positive.
 - waitFor: 15s
 ```
 
-### 3.11 Client lifecycle: `stopSonic`, `killSonic`, `healDb`
+### 3.11 Client lifecycle: `stopSonic`, `killSonic`, `healDb`, `waitForSonicExit`
 
 These act on the client process of a running node and keep its container
 and data directory. Each takes a node identifier and no parameters.
@@ -311,6 +312,7 @@ and data directory. Each takes a node identifier and no parameters.
 - stopSonic: validator-1         # SIGINT, database flushed
 - killSonic: validator-1         # SIGKILL, database left dirty
 - healDb: validator-1            # sonictool heal, only after killSonic
+- waitForSonicExit: exporter-1   # a client that stops itself, e.g. --exitwhensynced.epoch
 ```
 
 The node stays tracked, so a later `startNode` with the same identifier and
