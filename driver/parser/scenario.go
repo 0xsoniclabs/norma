@@ -543,17 +543,18 @@ var stepFunctionDescriptions = map[StepFunction]string{
     internal bookkeeping for every delegator that participated in the
     scenario so far. Fails if any tracked (delegator, validator) pair
     has an on-chain stake that differs from the expected value.`,
-	FuncUpdateRules:      "Update one or more network rules (key/value pairs).",
-	FuncAdvanceEpoch:     "Advance the network to the next epoch by sending transactions.",
-	FuncWaitForEpoch:     "Wait until the network reaches the next epoch boundary.",
-	FuncRunApp:           "Start a load-generating application.",
-	FuncStopApp:          "Stop a running load-generating application by name.",
-	FuncChecks:           "Run one or more checks (see 'Available checks' below).",
-	FuncWaitFor:          "Pause scenario execution for a fixed duration.",
-	FuncKillSonic:        "Kill the sonicd process with SIGKILL, leaving the database dirty.",
-	FuncHealDb:           "Run sonictool heal on a killed node to recover its database.",
-	FuncStopSonic:        "Stop the sonicd process gracefully, keeping the node's container and data directory.",
-	FuncWaitForSonicExit: "Wait for a sonicd process that stops itself, such as one started with --exitwhensynced.epoch, then treat the node as stopped by stopSonic.",
+	FuncUpdateRules:  "Update one or more network rules (key/value pairs).",
+	FuncAdvanceEpoch: "Advance the network to the next epoch by sending transactions.",
+	FuncWaitForEpoch: "Wait until the network reaches the next epoch boundary.",
+	FuncRunApp:       "Start a load-generating application.",
+	FuncStopApp:      "Stop a running load-generating application by name.",
+	FuncChecks:       "Run one or more checks (see 'Available checks' below).",
+	FuncWaitFor:      "Pause scenario execution for a fixed duration.",
+	FuncKillSonic:    "Kill the sonicd process with SIGKILL, leaving the database dirty.",
+	FuncHealDb:       "Run sonictool heal on a killed node to recover its database.",
+	FuncStopSonic:    "Stop the sonicd process gracefully, keeping the node's container and data directory.",
+	FuncWaitForSonicExit: "Wait for a sonicd process that stops itself, such as one " +
+		"started with --exitwhensynced.epoch, then treat the node as stopped by stopSonic.",
 }
 
 // paramDescriptions provides a human-readable description for each parameter key.
