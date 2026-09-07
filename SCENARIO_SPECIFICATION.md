@@ -350,6 +350,17 @@ the node's client to be stopped (§3.11).
 
 `file` is a plain name matching `^[A-Za-z0-9][A-Za-z0-9._-]*$`.
 
+A g-file has to be exported on an epoch boundary. It records the exporter's
+block state as it was when the client stopped, and a node bootstrapped from
+a mid-epoch state replays the epoch's events on top of counters that already
+include them, seals the epoch differently and is rejected with `wrong event
+epoch hash`. The export tool only warns (`not in a beginning of an epoch`).
+`killSonic`, `healDb`, `exportGenesis` on an exporter started with
+`--statedb.checkpointinterval 1` yields a boundary export, since heal
+reverts the node to the start of its latest sealed epoch. Alternatively an
+exporter started with `--exitwhensynced.epoch N` and marked `failing` stops
+itself at the boundary, and `waitForSonicExit` waits for it.
+
 ---
 
 ## 4. Network Rules Patch

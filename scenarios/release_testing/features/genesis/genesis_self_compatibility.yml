@@ -1,0 +1,51 @@
+Name: Genesis Self Compatibility
+
+Description: >-
+  The candidate exports a g-file on an epoch boundary, and a fresh
+  candidate node bootstraps from it, joins the network and follows the
+  chain.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    GasSubsidies: false
+    Brio: false
+
+Scenario:
+  - startNode: validator
+    type: validator
+    stake: 50_000_000
+
+  # Checkpoints every block let healDb roll back to the latest sealed epoch.
+  - startNode: exporter-local
+    type: observer
+    extraArguments: "--statedb.checkpointinterval 1"
+
+  - runApp: load
+    type: counter
+    users: 5
+    rate:
+      constant: 10
+
+  - waitFor: 20s
+
+  - stopApp: load
+
+  # healDb restores the state of the last completed epoch, so the export is
+  # taken on an epoch boundary (SCENARIO_SPECIFICATION.md 3.12).
+  - killSonic: exporter-local
+  - healDb: exporter-local
+
+  - exportGenesis: exporter-local
+    file: from-local.g
+
+  - prepareNode: fresh-local
+    type: observer
+    file: from-local.g
+  - checkDb: fresh-local
+    mode: live
+  - checkDb: fresh-local
+    mode: archive
+  - startNode: fresh-local
+    type: observer
