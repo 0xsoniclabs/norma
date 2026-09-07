@@ -94,6 +94,10 @@ const (
 // allowed to run before being aborted.
 const defaultScenarioTimeout = 10 * time.Minute
 
+// clientExitTimeout caps the wait for a client that stops itself, which
+// happens no sooner than the epoch boundary it was told to stop at.
+const clientExitTimeout = 5 * time.Minute
+
 // sonicToolTimeout caps a single sonictool invocation. Each walks the whole
 // node state, so the bound is generous for slow CI hosts.
 const sonicToolTimeout = 15 * time.Minute
@@ -264,6 +268,10 @@ func executeStep(
 		return execKillSonic(ctx, step, net, state)
 	case parser.FuncHealDb:
 		return execHealDb(ctx, step, state)
+	case parser.FuncWaitForSonicExit:
+		return execWaitForSonicExit(ctx, step, net, state)
+	case parser.FuncStopSonic:
+		return execStopSonic(ctx, step, net, state)
 	case parser.FuncDelegate:
 		return execDelegate(ctx, step, registry, state)
 	case parser.FuncUndelegate:
@@ -901,6 +909,61 @@ func execHealDb(
 	healCtx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
 	defer cancel()
 	return opera.HealSonicd(healCtx)
+}
+
+// execStopSonic stops the client gracefully, leaving the container and the
+// node's entry in state.nodes so a later startNode restarts it in place.
+func execStopSonic(
+	ctx context.Context,
+	step *parser.Step,
+	net driver.Network,
+	state *runState,
+) error {
+	opera, err := operaNode(step, state)
+	if err != nil {
+		return err
+	}
+
+	// Notify monitoring that this node is going offline.
+	net.SuspendNode(opera)
+
+	err = opera.StopSonicd(ctx)
+	if err != nil {
+		resumeIfRunning(net, opera)
+	}
+	return err
+}
+
+// execWaitForSonicExit waits for a client that stops itself and leaves the
+// node as stopSonic would. Suspended first, so nothing dials a vanishing RPC.
+func execWaitForSonicExit(
+	ctx context.Context,
+	step *parser.Step,
+	net driver.Network,
+	state *runState,
+) error {
+	opera, err := operaNode(step, state)
+	if err != nil {
+		return err
+	}
+	net.SuspendNode(opera)
+
+	waitCtx, cancel := context.WithTimeout(ctx, clientExitTimeout)
+	defer cancel()
+	err = opera.AwaitSonicdExit(waitCtx)
+	if err != nil {
+		resumeIfRunning(net, opera)
+	}
+	return err
+}
+
+// resumeIfRunning undoes the monitoring suspension of a stop attempt that
+// failed and left the client running, so the node is not treated as
+// inactive while it keeps producing blocks.
+func resumeIfRunning(net driver.Network, opera *node.OperaNode) {
+	if opera.GetState() == node.NodeStateRunning {
+		net.ResumeNode(opera)
+	}
 }
 
 // operaNode resolves an identifier to the tracked node it names, which must
