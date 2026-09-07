@@ -64,6 +64,7 @@ var operationColors = map[parser.StepFunction]string{
 	parser.FuncWaitFor: "\x1b[38;5;244m", // grey — nothing is happening
 
 	// Client lifecycle and file management.
+	parser.FuncPrepareNode:      "\x1b[38;5;84m",  // light green -- a node exists but does not run
 	parser.FuncExportEvents:     "\x1b[38;5;116m", // teal
 	parser.FuncImportEvents:     "\x1b[38;5;110m", // slate
 	parser.FuncCheckDb:          "\x1b[38;5;187m", // sand -- a database is verified

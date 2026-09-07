@@ -1247,6 +1247,33 @@ Scenario:
 	require.ErrorContains(t, scenario.Check(), "requires a node identifier")
 }
 
+func TestParseBytes_PrepareNodeStep(t *testing.T) {
+	input := `
+Name: Bootstrap Test
+Description: Bootstraps a fresh node from a g-file.
+Scenario:
+  - prepareNode: fresh-old
+    type: observer
+    imageName: "sonic:v2.2.0"
+    file: from-new.g
+
+  - checkDb: fresh-old
+
+  - startNode: fresh-old
+    type: observer
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+	require.NoError(t, scenario.Check())
+
+	step := scenario.Steps[0]
+	require.Equal(t, FuncPrepareNode, step.Function)
+	require.Equal(t, "fresh-old", step.Identifier)
+	require.Equal(t, "observer", step.NodeType)
+	require.Equal(t, "sonic:v2.2.0", step.ImageName)
+	require.Equal(t, "from-new.g", step.File)
+}
+
 func TestParseBytes_EventsSteps(t *testing.T) {
 	input := `
 Name: Events Test
@@ -1368,6 +1395,38 @@ Description: Test
 Scenario:
   - importEvents: node-A
     file: /etc/passwd
+`,
+			wantError: "file name must match",
+		},
+		"prepare without a file": {
+			input: `
+Name: Test
+Description: Test
+Scenario:
+  - prepareNode: fresh-old
+    type: observer
+`,
+			wantError: "requires a 'file' parameter",
+		},
+		"prepare a validator": {
+			input: `
+Name: Test
+Description: Test
+Scenario:
+  - prepareNode: fresh-val
+    type: validator
+    file: from-new.g
+`,
+			wantError: "cannot prepare a validator",
+		},
+		"prepare with a path in the file name": {
+			input: `
+Name: Test
+Description: Test
+Scenario:
+  - prepareNode: fresh-old
+    type: observer
+    file: ../escape.g
 `,
 			wantError: "file name must match",
 		},

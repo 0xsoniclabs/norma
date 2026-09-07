@@ -202,6 +202,9 @@ type NodeConfig struct {
 	Image          string
 	DataVolume     *string
 	ExtraArguments string
+	// GenesisFile names a g-file in the network's shared directory to
+	// bootstrap from instead of genesis.json; the node is left stopped.
+	GenesisFile string
 }
 
 type ApplicationConfig struct {

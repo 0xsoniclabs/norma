@@ -184,6 +184,7 @@ longer says anything about the current release: move it to
 | `examples/`                                | Documentation surface. Never widen. Bump a pin only when it falls out of the support window, so the docs do not cite ancient tags. |
 | `release_testing/features/*` (unpinned)    | **Add `vNEW` as a feature peer** if `vNEW` implements the feature (§5a). Only stay all-candidate while no release implements it. |
 | `release_testing/features/*` (compat)      | Do **not** rotate. The interesting pin is the *oldest* client that supports the feature — and `vNEW` joins it. |
+| `release_testing/features/genesis/`        | `genesis_legacy_compatibility.yml` pins v2.1.6, the last pre-2.2.0 g-file format: never rotate. `genesis_backward_compatibility.yml` pins the first release of the current release branch: rotate when a new branch opens. `genesis_self_compatibility.yml` has no pin. |
 | `release_testing/liveness/`, `validators/` (migration) | Rotate, except migration *source* versions, which accumulate one node per supported upgrade path (§3). |
 | `release_testing/stress/`                  | Rotate the Baseline pin. Leave single-version scenarios alone.                          |
 | `release_testing/rules/`                   | Do **not** rotate — the pin is the oldest client supporting that rule, and `vNEW` joins as a feature peer (§5a). |
