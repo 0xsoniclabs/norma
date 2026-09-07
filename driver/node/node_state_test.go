@@ -32,6 +32,7 @@ var allNodeStates = []NodeState{
 	NodeStateStopping,
 	NodeStateKilled,
 	NodeStateHealing,
+	NodeStateMaintenance,
 }
 
 func TestNodeState_String_IsUniqueAndDefinedForAllStates(t *testing.T) {

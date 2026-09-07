@@ -135,6 +135,9 @@ type OperaNodeConfig struct {
 	// empty, a temporary directory is used that is removed on cleanup, so
 	// callers that want the logs to outlive the run must set this.
 	LogsDir string
+	// SharedFilesDir is the host directory mounted at sharedDir. Every node
+	// of a network gets the same one. Empty mounts nothing.
+	SharedFilesDir string
 }
 
 // imageEnsureState stores the completion signal and final error for one
@@ -331,6 +334,9 @@ func printLog(ctx context.Context, node *OperaNode) error {
 // dataDir is the path where the node stores its state inside the container.
 const dataDir = "/datadir"
 
+// sharedDir is where SharedFilesDir is mounted inside the container.
+const sharedDir = "/shared"
+
 // containerShutdownTimeout bounds how long docker waits for the container
 // to exit after being signalled before it is killed.
 const containerShutdownTimeout = 180 * time.Second
@@ -397,6 +403,17 @@ func NewOperaNode(
 
 	genesisBind := fmt.Sprintf("%s:/genesis.json:ro", genesisJSONPath)
 
+	var sharedDirBinding *string
+	if config.SharedFilesDir != "" {
+		// Create it so docker does not make it a root-owned directory.
+		if err := os.MkdirAll(config.SharedFilesDir, 0777); err != nil {
+			cleanupTempDirs()
+			return nil, fmt.Errorf("failed to create shared files dir: %w", err)
+		}
+		sharedDirBinding = new(string)
+		*sharedDirBinding = fmt.Sprintf("%s:%s", config.SharedFilesDir, sharedDir)
+	}
+
 	keystoreBinding, keystoreTempDir, err := resolveValidatorKeystore(config, envs)
 	track(keystoreTempDir)
 	if err != nil {
@@ -419,16 +436,17 @@ func NewOperaNode(
 	shutdownTimeout := containerShutdownTimeout
 	container, err := client.Start(ctx,
 		&docker.ContainerConfig{
-			Hostname:        config.Label,
-			ImageName:       image,
-			ShutdownTimeout: &shutdownTimeout,
-			Environment:     envs,
-			Entrypoint:      containerEntrypoint,
-			Network:         dn,
-			DataDirBinding:  dataDirBinding,
-			GenesisFileBind: &genesisBind,
-			KeystoreBinding: keystoreBinding,
-			LogsDir:         &logsDir,
+			Hostname:         config.Label,
+			ImageName:        image,
+			ShutdownTimeout:  &shutdownTimeout,
+			Environment:      envs,
+			Entrypoint:       containerEntrypoint,
+			Network:          dn,
+			DataDirBinding:   dataDirBinding,
+			GenesisFileBind:  &genesisBind,
+			KeystoreBinding:  keystoreBinding,
+			SharedDirBinding: sharedDirBinding,
+			LogsDir:          &logsDir,
 		})
 	if err != nil {
 		cleanupTempDirs()

@@ -272,6 +272,16 @@ func executeStep(
 		return execWaitForSonicExit(ctx, step, net, state)
 	case parser.FuncStopSonic:
 		return execStopSonic(ctx, step, net, state)
+	case parser.FuncExportGenesis:
+		return execExportGenesis(ctx, step, state)
+	case parser.FuncImportGenesis:
+		return execImportGenesis(ctx, step, state)
+	case parser.FuncExportEvents:
+		return execExportEvents(ctx, step, state)
+	case parser.FuncImportEvents:
+		return execImportEvents(ctx, step, state)
+	case parser.FuncCheckDb:
+		return execCheckDb(ctx, step, state)
 	case parser.FuncDelegate:
 		return execDelegate(ctx, step, registry, state)
 	case parser.FuncUndelegate:
@@ -947,6 +957,89 @@ func execWaitForSonicExit(
 	waitCtx, cancel := context.WithTimeout(ctx, clientExitTimeout)
 	defer cancel()
 	return opera.AwaitSonicdExit(waitCtx)
+}
+
+// execExportGenesis exports a stopped node's chain to the shared directory.
+func execExportGenesis(
+	ctx context.Context,
+	step *parser.Step,
+	state *runState,
+) error {
+	opera, err := operaNode(step, state)
+	if err != nil {
+		return err
+	}
+
+	toolCtx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
+	defer cancel()
+	return opera.ExportGenesis(toolCtx, step.File)
+}
+
+// execImportGenesis replaces a stopped node's database from a g-file in the
+// shared directory.
+func execImportGenesis(
+	ctx context.Context,
+	step *parser.Step,
+	state *runState,
+) error {
+	opera, err := operaNode(step, state)
+	if err != nil {
+		return err
+	}
+
+	toolCtx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
+	defer cancel()
+	return opera.ImportGenesis(toolCtx, step.File)
+}
+
+// execExportEvents exports a stopped node's event DAG to the shared
+// directory.
+func execExportEvents(
+	ctx context.Context,
+	step *parser.Step,
+	state *runState,
+) error {
+	opera, err := operaNode(step, state)
+	if err != nil {
+		return err
+	}
+
+	toolCtx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
+	defer cancel()
+	return opera.ExportEvents(toolCtx, step.File)
+}
+
+// execImportEvents adds events from the shared directory to a stopped
+// node's database.
+func execImportEvents(
+	ctx context.Context,
+	step *parser.Step,
+	state *runState,
+) error {
+	opera, err := operaNode(step, state)
+	if err != nil {
+		return err
+	}
+
+	toolCtx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
+	defer cancel()
+	return opera.ImportEvents(toolCtx, step.File)
+}
+
+// execCheckDb verifies a stopped node's state database.
+func execCheckDb(
+	ctx context.Context,
+	step *parser.Step,
+	state *runState,
+) error {
+	opera, err := operaNode(step, state)
+	if err != nil {
+		return err
+	}
+
+	toolCtx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
+	defer cancel()
+	return opera.CheckDatabase(toolCtx, step.DbMode)
 }
 
 // operaNode resolves an identifier to the tracked node it names, which must

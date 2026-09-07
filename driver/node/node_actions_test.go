@@ -28,6 +28,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
+	"github.com/0xsoniclabs/norma/driver/parser"
 )
 
 // newNodeInState builds a node with no container, usable for exercising the
@@ -36,8 +37,13 @@ import (
 func newNodeInState(t *testing.T, state NodeState) *OperaNode {
 	t.Helper()
 	return &OperaNode{
-		config: &OperaNodeConfig{Label: t.Name()},
-		state:  state,
+		config: &OperaNodeConfig{
+			Label: t.Name(),
+			// Set so the sonictool actions get past resolving their file
+			// argument and reach the state guard under test.
+			SharedFilesDir: t.TempDir(),
+		},
+		state: state,
 	}
 }
 
@@ -79,6 +85,36 @@ func TestOperaNode_Actions_RejectUnexpectedStates(t *testing.T) {
 		"HealSonicd": {
 			accepts: []NodeState{NodeStateKilled},
 			invoke:  func(n *OperaNode) error { return n.HealSonicd(t.Context()) },
+		},
+		"ExportEvents": {
+			accepts: []NodeState{NodeStateReady},
+			invoke: func(n *OperaNode) error {
+				return n.ExportEvents(t.Context(), "exported.events")
+			},
+		},
+		"ImportEvents": {
+			accepts: []NodeState{NodeStateReady},
+			invoke: func(n *OperaNode) error {
+				return n.ImportEvents(t.Context(), "exported.events")
+			},
+		},
+		"ExportGenesis": {
+			accepts: []NodeState{NodeStateReady},
+			invoke: func(n *OperaNode) error {
+				return n.ExportGenesis(t.Context(), "some.g")
+			},
+		},
+		"ImportGenesis": {
+			accepts: []NodeState{NodeStateReady},
+			invoke: func(n *OperaNode) error {
+				return n.ImportGenesis(t.Context(), "some.g")
+			},
+		},
+		"CheckDatabase": {
+			accepts: []NodeState{NodeStateReady},
+			invoke: func(n *OperaNode) error {
+				return n.CheckDatabase(t.Context(), parser.DbCheckModeLive)
+			},
 		},
 	}
 
@@ -626,5 +662,126 @@ func TestResolveLogsDir_FallsBackToTemporaryDirectory(t *testing.T) {
 	}
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 		t.Errorf("fallback logs dir was not created: %v", err)
+	}
+}
+
+// A shared file name ends up on a container command line, so anything that
+// could denote a file outside the shared directory has to be refused.
+func TestOperaNode_SharedFilePath_RejectsNamesThatAreNotPlainFiles(t *testing.T) {
+	node := newNodeInState(t, NodeStateReady)
+
+	if got, err := node.sharedFilePath("exported.g"); err != nil {
+		t.Fatalf("a plain file name must be accepted: %v", err)
+	} else if want := sharedDir + "/exported.g"; got != want {
+		t.Errorf("unexpected path, got %q, want %q", got, want)
+	}
+
+	for _, name := range []string{
+		"", ".", "..", "sub/exported.g", "../escaped.g", "/absolute.g",
+		`windows\path.g`,
+	} {
+		t.Run("name-"+name, func(t *testing.T) {
+			if _, err := node.sharedFilePath(name); err == nil {
+				t.Errorf("%q must be rejected as a shared file name", name)
+			}
+		})
+	}
+}
+
+// Without a shared directory there is nowhere for a g-file to come
+// from or go to, so the actions must say so rather than exec an unmounted
+// path.
+func TestOperaNode_GenesisActions_FailWithoutASharedDirectory(t *testing.T) {
+	actions := map[string]func(*OperaNode) error{
+		"ExportGenesis": func(n *OperaNode) error {
+			return n.ExportGenesis(t.Context(), "exported.g")
+		},
+		"ImportGenesis": func(n *OperaNode) error {
+			return n.ImportGenesis(t.Context(), "exported.g")
+		},
+		"ExportEvents": func(n *OperaNode) error {
+			return n.ExportEvents(t.Context(), "exported.events")
+		},
+		"ImportEvents": func(n *OperaNode) error {
+			return n.ImportEvents(t.Context(), "exported.events")
+		},
+	}
+
+	for name, invoke := range actions {
+		t.Run(name, func(t *testing.T) {
+			node := newNodeInState(t, NodeStateReady)
+			node.config.SharedFilesDir = ""
+
+			err := invoke(node)
+			if err == nil {
+				t.Fatalf("%s must fail without a shared directory", name)
+			}
+			if !strings.Contains(err.Error(), "shared files directory") {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if got := node.GetState(); got != NodeStateReady {
+				t.Errorf("state must be unchanged, got %s, want %s",
+					got, NodeStateReady)
+			}
+		})
+	}
+}
+
+func TestOperaNode_CheckDatabase_RejectsUnknownMode(t *testing.T) {
+	node := newNodeInState(t, NodeStateReady)
+
+	err := node.CheckDatabase(t.Context(), "both")
+	if err == nil {
+		t.Fatalf("expected an unknown check mode to be refused")
+	}
+	if !strings.Contains(err.Error(), "check mode") {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got := node.GetState(); got != NodeStateReady {
+		t.Errorf("state must be unchanged, got %s, want %s",
+			got, NodeStateReady)
+	}
+}
+
+// An export and a check only read, so a node whose action failed is still a
+// node that can be started.
+func TestOperaNode_ReadOnlyMaintenance_RestoresReadyStateOnFailure(t *testing.T) {
+	actions := map[string]func(*OperaNode) error{
+		"ExportGenesis": func(n *OperaNode) error {
+			return n.ExportGenesis(t.Context(), "exported.g")
+		},
+		"CheckDatabase": func(n *OperaNode) error {
+			return n.CheckDatabase(t.Context(), parser.DbCheckModeLive)
+		},
+	}
+
+	for name, invoke := range actions {
+		t.Run(name, func(t *testing.T) {
+			// Fails for lack of a container, which is enough to exercise
+			// the state handling of a failed action.
+			node := newNodeInState(t, NodeStateReady)
+			if err := invoke(node); err == nil {
+				t.Fatalf("expected %s to fail without a container", name)
+			}
+			if got := node.GetState(); got != NodeStateReady {
+				t.Errorf("unexpected state after a failed %s, got %s, want %s",
+					name, got, NodeStateReady)
+			}
+		})
+	}
+}
+
+// An omitted mode means the live database, so it must get past the mode
+// check rather than be reported as unknown.
+func TestOperaNode_CheckDatabase_DefaultsToTheLiveDatabase(t *testing.T) {
+	node := newNodeInState(t, NodeStateReady)
+
+	// Fails for lack of a container, which is past the mode check.
+	err := node.CheckDatabase(t.Context(), "")
+	if err == nil {
+		t.Fatalf("expected the check to fail without a container")
+	}
+	if strings.Contains(err.Error(), "check mode") {
+		t.Errorf("an omitted mode must default, got %v", err)
 	}
 }

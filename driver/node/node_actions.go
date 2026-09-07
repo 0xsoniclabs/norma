@@ -27,6 +27,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver/docker"
 	"github.com/0xsoniclabs/norma/driver/network"
+	"github.com/0xsoniclabs/norma/driver/parser"
 )
 
 // Paths inside the container. Stage 2 of the Dockerfile copies the
@@ -598,4 +599,182 @@ func isDirEmpty(path string) bool {
 		}
 	}
 	return true
+}
+
+// ExportGenesis writes the node's chain, archive included, to fileName in
+// the network's shared directory. Requires a stopped client.
+func (n *OperaNode) ExportGenesis(ctx context.Context, fileName string) error {
+	path, err := n.sharedFilePath(fileName)
+	if err != nil {
+		return err
+	}
+	if err := n.beginMaintenance(ctx, "export a g-file"); err != nil {
+		return err
+	}
+	slog.Info("Exporting g-file", "node", n.config.Label, "file", path)
+
+	output, err := n.container.ExecWithOptions(ctx, []string{
+		sonicToolBinaryPath,
+		"--datadir", dataDir,
+		"genesis", "export", path,
+	}, docker.ExecOptions{LogName: "sonictool-genesis-export"})
+	if err != nil {
+		n.forceSetState(NodeStateReady)
+		return fmt.Errorf("sonictool genesis export failed: %w - output: %s",
+			err, output)
+	}
+	slog.Info("G-file exported", "node", n.config.Label, "file", path)
+	return n.transition(NodeStateMaintenance, NodeStateReady)
+}
+
+// ImportGenesis replaces the node's database from fileName in the network's
+// shared directory. Requires a stopped client; a failure leaves the node
+// without a database and unable to start.
+func (n *OperaNode) ImportGenesis(ctx context.Context, fileName string) error {
+	path, err := n.sharedFilePath(fileName)
+	if err != nil {
+		return err
+	}
+	if err := n.beginMaintenance(ctx, "import a g-file"); err != nil {
+		return err
+	}
+	slog.Info("Importing g-file", "node", n.config.Label, "file", path)
+
+	// sonictool needs an empty data directory, so drop the database only;
+	// the validator keystore stays and the node keeps its identity.
+	rmCmd := []string{"rm", "-rf"}
+	for _, dir := range []string{"chaindata", "carmen", "errlock"} {
+		rmCmd = append(rmCmd, dataDir+"/"+dir)
+	}
+	if output, err := n.container.Exec(ctx, rmCmd); err != nil {
+		return fmt.Errorf("failed to remove the existing database: %w - output: %s",
+			err, output)
+	}
+
+	output, err := n.container.ExecWithOptions(ctx, []string{
+		sonicToolBinaryPath,
+		"--datadir", dataDir,
+		"--statedb.livecache", "1",
+		"genesis", "--experimental", path,
+	}, docker.ExecOptions{LogName: "sonictool-genesis-import"})
+	if err != nil {
+		return fmt.Errorf("sonictool genesis import failed: %w - output: %s",
+			err, output)
+	}
+	slog.Info("G-file imported", "node", n.config.Label, "file", path)
+	return n.transition(NodeStateMaintenance, NodeStateReady)
+}
+
+// ExportEvents writes the node's event DAG, every epoch of it, to fileName
+// in the network's shared directory. Requires a stopped client and only
+// reads, so the node is left ready.
+func (n *OperaNode) ExportEvents(ctx context.Context, fileName string) error {
+	path, err := n.sharedFilePath(fileName)
+	if err != nil {
+		return err
+	}
+	if err := n.beginMaintenance(ctx, "export events"); err != nil {
+		return err
+	}
+	slog.Info("Exporting events", "node", n.config.Label, "file", path)
+
+	output, err := n.container.ExecWithOptions(ctx, []string{
+		sonicToolBinaryPath,
+		"--datadir", dataDir,
+		"events", "export", path,
+	}, docker.ExecOptions{LogName: "sonictool-events-export"})
+	if err != nil {
+		n.forceSetState(NodeStateReady)
+		return fmt.Errorf("sonictool events export failed: %w - output: %s",
+			err, output)
+	}
+	slog.Info("Events exported", "node", n.config.Label, "file", path)
+	return n.transition(NodeStateMaintenance, NodeStateReady)
+}
+
+// ImportEvents adds the events in fileName to the node's database, which it
+// keeps otherwise intact. Requires a stopped client; a failure leaves the
+// database as it was, so the node is left ready.
+func (n *OperaNode) ImportEvents(ctx context.Context, fileName string) error {
+	path, err := n.sharedFilePath(fileName)
+	if err != nil {
+		return err
+	}
+	if err := n.beginMaintenance(ctx, "import events"); err != nil {
+		return err
+	}
+	slog.Info("Importing events", "node", n.config.Label, "file", path)
+
+	output, err := n.container.ExecWithOptions(ctx, []string{
+		sonicToolBinaryPath,
+		"--datadir", dataDir,
+		"--statedb.livecache", "1",
+		"events", "import", path,
+	}, docker.ExecOptions{LogName: "sonictool-events-import"})
+	if err != nil {
+		n.forceSetState(NodeStateReady)
+		return fmt.Errorf("sonictool events import failed: %w - output: %s",
+			err, output)
+	}
+	slog.Info("Events imported", "node", n.config.Label, "file", path)
+	return n.transition(NodeStateMaintenance, NodeStateReady)
+}
+
+// CheckDatabase verifies the state database named by mode, one of
+// parser.DbCheckModeLive (the default) or parser.DbCheckModeArchive.
+// Requires a stopped client.
+func (n *OperaNode) CheckDatabase(ctx context.Context, mode string) error {
+	switch mode {
+	case "":
+		mode = parser.DbCheckModeLive
+	case parser.DbCheckModeLive, parser.DbCheckModeArchive:
+	default:
+		return fmt.Errorf("node %q: unknown database check mode %q",
+			n.GetLabel(), mode)
+	}
+	if err := n.beginMaintenance(ctx, "check the database"); err != nil {
+		return err
+	}
+	slog.Info("Checking database", "node", n.config.Label, "mode", mode)
+
+	output, err := n.container.ExecWithOptions(ctx, []string{
+		sonicToolBinaryPath,
+		"--datadir", dataDir,
+		"check", mode,
+	}, docker.ExecOptions{LogName: "sonictool-check-" + mode})
+	if err != nil {
+		n.forceSetState(NodeStateReady)
+		return fmt.Errorf("sonictool check %s failed: %w - output: %s",
+			mode, err, output)
+	}
+	slog.Info("Database checked", "node", n.config.Label, "mode", mode)
+	return n.transition(NodeStateMaintenance, NodeStateReady)
+}
+
+// beginMaintenance claims the node for a sonictool command, confirming no
+// client process is holding the data directory. purpose names the operation.
+func (n *OperaNode) beginMaintenance(ctx context.Context, purpose string) error {
+	if err := n.transition(NodeStateReady, NodeStateMaintenance); err != nil {
+		return err
+	}
+	// Check /proc rather than trusting the state we just left.
+	if err := n.requireNoClientRunning(ctx, purpose); err != nil {
+		n.forceSetState(NodeStateReady)
+		return err
+	}
+	return nil
+}
+
+// sharedFilePath resolves name inside the container's shared directory. The
+// name reaches a command line, so the parser's file name rule is enforced.
+func (n *OperaNode) sharedFilePath(name string) (string, error) {
+	if n.config.SharedFilesDir == "" {
+		return "", fmt.Errorf(
+			"node %q has no shared files directory configured", n.GetLabel())
+	}
+	if !parser.FilePattern.MatchString(name) {
+		return "", fmt.Errorf(
+			"node %q: %q is not a valid shared file name", n.GetLabel(), name)
+	}
+	return sharedDir + "/" + name, nil
 }

@@ -1526,3 +1526,65 @@ func undelegateStep(node, delegator string, stake *uint64) parser.Step {
 		},
 	}
 }
+
+// The file management steps act through a node's container, so naming a
+// node norma did not create must be reported rather than reaching a nil one.
+func TestFileManagementSteps_RejectNodesTheyCannotDrive(t *testing.T) {
+	steps := map[string]func(context.Context, *parser.Step, driver.Network, *runState) error{
+		"stopSonic": execStopSonic,
+		"exportGenesis": func(
+			ctx context.Context, s *parser.Step, _ driver.Network, st *runState,
+		) error {
+			return execExportGenesis(ctx, s, st)
+		},
+		"importGenesis": func(
+			ctx context.Context, s *parser.Step, _ driver.Network, st *runState,
+		) error {
+			return execImportGenesis(ctx, s, st)
+		},
+		"checkDb": func(
+			ctx context.Context, s *parser.Step, _ driver.Network, st *runState,
+		) error {
+			return execCheckDb(ctx, s, st)
+		},
+	}
+
+	targets := map[string]struct {
+		nodes     map[string]driver.Node
+		wantError string
+	}{
+		"unknown node": {
+			nodes:     nil,
+			wantError: "not found in active nodes",
+		},
+		"node norma does not own": {
+			nodes:     map[string]driver.Node{"ghost": nil},
+			wantError: "is not an OperaNode",
+		},
+	}
+
+	for stepName, invoke := range steps {
+		for targetName, target := range targets {
+			t.Run(stepName+"/"+targetName, func(t *testing.T) {
+				// No call is expected on the network: the step must fail
+				// before it announces anything.
+				net := driver.NewMockNetwork(gomock.NewController(t))
+				state := &runState{nodes: map[string]driver.Node{}}
+				for name, n := range target.nodes {
+					state.nodes[name] = n
+				}
+
+				err := invoke(t.Context(), &parser.Step{
+					Identifier: "ghost",
+					File:       "exported.g",
+				}, net, state)
+				if err == nil {
+					t.Fatalf("expected %s to fail", stepName)
+				}
+				if !strings.Contains(err.Error(), target.wantError) {
+					t.Errorf("unexpected error: %v", err)
+				}
+			})
+		}
+	}
+}
