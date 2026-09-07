@@ -149,7 +149,7 @@ func TestEnsureValidatorsActive_Fails_WhenAValidatorNeverJoinsTheSet(t *testing.
 // Funding is signed by the treasury, the shared system account, so it must go
 // through the node pinned for that account's transactions. A DialRandomRpc
 // call would be unexpected on this mock.
-func TestFundDelegator_UsesTheSystemTransactionNode(t *testing.T) {
+func TestFundDelegator_UsesSystemTransactionNode_WhenTreasuryFundsDelegator(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().DialSystemRpc().Return(nil, fmt.Errorf("no nodes"))
