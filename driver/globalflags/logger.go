@@ -44,8 +44,7 @@ var AllLoggerFlags = []cli.Flag{
 func SetupLogger(ctx *cli.Context) error {
 
 	output := io.Writer(os.Stdout)
-	handler := log.NewTerminalHandler(output, canColor())
-	glogger := log.NewGlogHandler(handler)
+	glogger := log.NewGlogHandler(newLogHandler(output, canColor()))
 
 	verbosity := log.FromLegacyLevel(ctx.Int(verbosityFlag.Name))
 	glogger.Verbosity(verbosity)
