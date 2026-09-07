@@ -264,6 +264,8 @@ func executeStep(
 		return execKillSonic(ctx, step, net, state)
 	case parser.FuncHealDb:
 		return execHealDb(ctx, step, state)
+	case parser.FuncStopSonic:
+		return execStopSonic(ctx, step, net, state)
 	case parser.FuncDelegate:
 		return execDelegate(ctx, step, registry, state)
 	case parser.FuncUndelegate:
@@ -901,6 +903,25 @@ func execHealDb(
 	healCtx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
 	defer cancel()
 	return opera.HealSonicd(healCtx)
+}
+
+// execStopSonic stops the client gracefully, leaving the container and the
+// node's entry in state.nodes so a later startNode restarts it in place.
+func execStopSonic(
+	ctx context.Context,
+	step *parser.Step,
+	net driver.Network,
+	state *runState,
+) error {
+	opera, err := operaNode(step, state)
+	if err != nil {
+		return err
+	}
+
+	// Notify monitoring that this node is going offline.
+	net.SuspendNode(opera)
+
+	return opera.StopSonicd(ctx)
 }
 
 // operaNode resolves an identifier to the tracked node it names, which must
