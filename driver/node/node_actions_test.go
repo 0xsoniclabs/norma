@@ -76,6 +76,12 @@ func TestOperaNode_Actions_RejectUnexpectedStates(t *testing.T) {
 			accepts: []NodeState{NodeStateRunning, NodeStateStopping},
 			invoke:  func(n *OperaNode) error { return n.ForceStopSonicd(t.Context()) },
 		},
+		// Killed is accepted too: the exit watcher may have recorded the
+		// self-exit before the step got to wait for it.
+		"AwaitSonicdExit": {
+			accepts: []NodeState{NodeStateRunning, NodeStateKilled},
+			invoke:  func(n *OperaNode) error { return n.AwaitSonicdExit(t.Context()) },
+		},
 		"HealSonicd": {
 			accepts: []NodeState{NodeStateKilled},
 			invoke:  func(n *OperaNode) error { return n.HealSonicd(t.Context()) },
@@ -139,6 +145,63 @@ func TestOperaNode_StopSonicd_RestoresRunningStateOnFailure(t *testing.T) {
 		t.Errorf("unexpected state after failed stop, got %s, want %s",
 			got, NodeStateRunning)
 	}
+}
+
+// The exit code, not the timing of the exit, decides whether the database
+// was flushed: a clean exit leaves the node ready to be started again,
+// anything else needs a heal first.
+func TestOperaNode_AwaitSonicdExit(t *testing.T) {
+	t.Run("a clean exit leaves the node ready", func(t *testing.T) {
+		node := newNodeInState(t, NodeStateRunning)
+		node.sonicd = docker.NewExitedExecHandle(0, nil)
+
+		if err := node.AwaitSonicdExit(t.Context()); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := node.GetState(); got != NodeStateReady {
+			t.Errorf("unexpected state, got %s, want %s", got, NodeStateReady)
+		}
+	})
+
+	t.Run("a failed exit leaves the node killed", func(t *testing.T) {
+		node := newNodeInState(t, NodeStateRunning)
+		node.sonicd = docker.NewExitedExecHandle(1, fmt.Errorf("boom"))
+
+		if err := node.AwaitSonicdExit(t.Context()); err == nil {
+			t.Fatalf("expected an error for a non-zero exit code")
+		}
+		if got := node.GetState(); got != NodeStateKilled {
+			t.Errorf("unexpected state, got %s, want %s", got, NodeStateKilled)
+		}
+	})
+
+	// The client is still up and still holds the data directory, so the
+	// node must go back to running rather than be reported as stopped.
+	t.Run("a timeout restores the running state", func(t *testing.T) {
+		node := newNodeInState(t, NodeStateRunning)
+		node.sonicd = &docker.ExecHandle{Done: make(chan struct{})}
+
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		if err := node.AwaitSonicdExit(ctx); err == nil {
+			t.Fatalf("expected an error when the client has not exited")
+		}
+		if got := node.GetState(); got != NodeStateRunning {
+			t.Errorf("unexpected state, got %s, want %s", got, NodeStateRunning)
+		}
+	})
+
+	t.Run("a node whose client was never started is killed", func(t *testing.T) {
+		node := newNodeInState(t, NodeStateRunning)
+
+		if err := node.AwaitSonicdExit(t.Context()); err == nil {
+			t.Fatalf("expected an error without a client process")
+		}
+		if got := node.GetState(); got != NodeStateKilled {
+			t.Errorf("unexpected state, got %s, want %s", got, NodeStateKilled)
+		}
+	})
 }
 
 // A kill attempt leaves the database dirty even when signalling fails, so
