@@ -936,7 +936,11 @@ func execStopSonic(
 	// Notify monitoring that this node is going offline.
 	net.SuspendNode(opera)
 
-	return opera.StopSonicd(ctx)
+	err = opera.StopSonicd(ctx)
+	if err != nil {
+		resumeIfRunning(net, opera)
+	}
+	return err
 }
 
 // execWaitForSonicExit waits for a client that stops itself and leaves the
@@ -955,7 +959,20 @@ func execWaitForSonicExit(
 
 	waitCtx, cancel := context.WithTimeout(ctx, clientExitTimeout)
 	defer cancel()
-	return opera.AwaitSonicdExit(waitCtx)
+	err = opera.AwaitSonicdExit(waitCtx)
+	if err != nil {
+		resumeIfRunning(net, opera)
+	}
+	return err
+}
+
+// resumeIfRunning undoes the monitoring suspension of a stop attempt that
+// failed and left the client running, so the node is not treated as
+// inactive while it keeps producing blocks.
+func resumeIfRunning(net driver.Network, opera *node.OperaNode) {
+	if opera.GetState() == node.NodeStateRunning {
+		net.ResumeNode(opera)
+	}
 }
 
 // operaNode resolves an identifier to the tracked node it names, which must
