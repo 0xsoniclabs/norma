@@ -64,6 +64,9 @@ var operationColors = map[parser.StepFunction]string{
 	parser.FuncWaitFor: "\x1b[38;5;244m", // grey — nothing is happening
 
 	// Client lifecycle and file management.
+	parser.FuncCheckDb:          "\x1b[38;5;187m", // sand -- a database is verified
+	parser.FuncExportGenesis:    "\x1b[38;5;111m", // light blue
+	parser.FuncImportGenesis:    "\x1b[38;5;105m", // violet
 	parser.FuncWaitForSonicExit: "\x1b[38;5;137m", // tan -- the client goes down by itself
 	parser.FuncStopSonic:        "\x1b[38;5;130m", // burnt orange -- the client goes down gently
 }

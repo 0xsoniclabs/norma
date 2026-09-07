@@ -51,6 +51,11 @@ const (
 	FuncStopSonic        StepFunction = "stopSonic"
 	FuncWaitForSonicExit StepFunction = "waitForSonicExit"
 
+	// File management steps, operating on a node whose client is stopped.
+	FuncExportGenesis StepFunction = "exportGenesis"
+	FuncImportGenesis StepFunction = "importGenesis"
+	FuncCheckDb       StepFunction = "checkDb"
+
 	// Check functions used as items inside a checks: step.
 	FuncCheckBlockGasRate     StepFunction = "blockGasRate"
 	FuncCheckBlockHashes      StepFunction = "blockHashes"
@@ -80,6 +85,9 @@ var allStepFunctions = [...]StepFunction{
 	FuncHealDb,
 	FuncStopSonic,
 	FuncWaitForSonicExit,
+	FuncExportGenesis,
+	FuncImportGenesis,
+	FuncCheckDb,
 }
 
 // allCheckFunctions lists every check function valid as a sub-item of a checks: step.
@@ -320,6 +328,11 @@ type Step struct {
 
 	// WaitFor parameters
 	Duration time.Duration
+
+	// File management parameters: a file in the network's shared directory
+	// and the state database checkDb verifies.
+	File   string
+	DbMode string
 }
 
 // DelegateTarget specifies a single delegation from a named external
@@ -443,7 +456,8 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 		default:
 			return fmt.Errorf("undelegate value must be a node name or a list of targets")
 		}
-	case FuncKillSonic, FuncHealDb, FuncStopSonic, FuncWaitForSonicExit:
+	case FuncKillSonic, FuncHealDb, FuncStopSonic,
+		FuncExportGenesis, FuncImportGenesis, FuncCheckDb, FuncWaitForSonicExit:
 		// Value is a node name (same as stopNode).
 		if val.Kind == yaml.ScalarNode && val.Tag != "!!null" &&
 			val.Value != "" {
@@ -554,6 +568,9 @@ var stepFunctionDescriptions = map[StepFunction]string{
 	FuncHealDb:           "Run sonictool heal on a killed node to recover its database.",
 	FuncStopSonic:        "Stop the sonicd process gracefully, keeping the node's container and data directory.",
 	FuncWaitForSonicExit: "Wait for a sonicd process that stops itself, such as one started with --exitwhensynced.epoch, then treat the node as stopped by stopSonic.",
+	FuncExportGenesis:    "Export a stopped node's chain into a g-file in the shared directory.",
+	FuncImportGenesis:    "Replace a stopped node's database from a g-file in the shared directory, keeping its keystore.",
+	FuncCheckDb:          "Verify a stopped node's state database with sonictool check.",
 }
 
 // paramDescriptions provides a human-readable description for each parameter key.
@@ -567,6 +584,8 @@ var paramDescriptions = map[string]string{
 	"extraArguments": "Extra command line arguments for sonicd.",
 	"users":          "Number of concurrent user accounts the application should simulate.",
 	"rate":           "Transaction rate configuration for the application.",
+	"file":           "Required. Name of a file in the network's shared directory; a plain file name, no path.",
+	"mode":           "Which state database to check: \"live\" (the default) or \"archive\".",
 }
 
 // allowedParams defines which parameter keys are valid for each step function.
@@ -587,6 +606,9 @@ var allowedParams = map[StepFunction][]string{
 	FuncHealDb:           {},
 	FuncStopSonic:        {},
 	FuncWaitForSonicExit: {},
+	FuncExportGenesis:    {"file"},
+	FuncImportGenesis:    {"file"},
+	FuncCheckDb:          {"mode"},
 }
 
 // parseParam parses a single parameter key-value pair.
@@ -657,6 +679,18 @@ func (s *Step) parseParam(key string, val *yaml.Node) error {
 			return fmt.Errorf("invalid rate value: %w", err)
 		}
 		s.Rate = &r
+	case "file":
+		var v string
+		if err := val.Decode(&v); err != nil {
+			return fmt.Errorf("invalid file value: %w", err)
+		}
+		s.File = v
+	case "mode":
+		var v string
+		if err := val.Decode(&v); err != nil {
+			return fmt.Errorf("invalid mode value: %w", err)
+		}
+		s.DbMode = v
 	}
 	return nil
 }

@@ -114,6 +114,10 @@ func (s *Step) Check() error {
 			return fmt.Errorf("%s requires a node identifier", s.Function)
 		}
 		return nil
+	case FuncExportGenesis, FuncImportGenesis:
+		return s.checkGenesisFileStep()
+	case FuncCheckDb:
+		return s.checkCheckDb()
 	case FuncAdvanceEpoch, FuncWaitForEpoch:
 		return nil
 	case FuncChecks:
@@ -265,5 +269,37 @@ func (s *Step) checkSubChecks() error {
 		}
 	}
 
+	return errors.Join(errs...)
+}
+
+// checkGenesisFileStep validates a step naming a node and a file in the
+// shared directory: the genesis and events, import and export steps.
+func (s *Step) checkGenesisFileStep() error {
+	errs := []error{}
+	if s.Identifier == "" {
+		errs = append(errs, fmt.Errorf("%s requires a node identifier", s.Function))
+	}
+	if s.File == "" {
+		errs = append(errs, fmt.Errorf("%s requires a 'file' parameter", s.Function))
+	} else if !FilePattern.MatchString(s.File) {
+		errs = append(errs, fmt.Errorf(
+			"file name must match %v, got %v", filePatternStr, s.File))
+	}
+	return errors.Join(errs...)
+}
+
+// checkCheckDb validates a checkDb step.
+func (s *Step) checkCheckDb() error {
+	errs := []error{}
+	if s.Identifier == "" {
+		errs = append(errs, fmt.Errorf("%s requires a node identifier", s.Function))
+	}
+	switch s.DbMode {
+	case "", DbCheckModeLive, DbCheckModeArchive:
+	default:
+		errs = append(errs, fmt.Errorf(
+			"checkDb mode must be %q or %q, got %v",
+			DbCheckModeLive, DbCheckModeArchive, s.DbMode))
+	}
 	return errors.Join(errs...)
 }
