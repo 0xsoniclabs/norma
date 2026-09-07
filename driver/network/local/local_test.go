@@ -33,6 +33,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/node"
+	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -632,6 +633,76 @@ func getChecksum(net *LocalNetwork, image string) (string, error) {
 	return fields[0], nil
 }
 
+// Every transaction spending the shared system account's nonce must go through
+// the same node, so a lagging node cannot hand out a nonce already spent.
+func TestLocalNetwork_DialSystemRpc_ReturnsSameNodeOnEveryCall(t *testing.T) {
+	require := require.New(t)
+	t.Parallel()
+
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
+	net, err := NewLocalLegacyNetwork(t.Context(), &config)
+	require.NoError(err)
+	t.Cleanup(func() {
+		require.NoError(net.Shutdown())
+	})
+
+	var first string
+	for i := range 5 {
+		client, err := net.dialSystemRpc()
+		require.NoError(err, "call %d", i+1)
+		client.Close()
+
+		net.systemRpcMu.Lock()
+		label := net.systemRpcLabel
+		net.systemRpcMu.Unlock()
+
+		require.NotEmpty(label, "call %d left no pinned node", i+1)
+		if i == 0 {
+			first = label
+			continue
+		}
+		require.Equal(first, label, "system node moved on call %d", i+1)
+	}
+}
+
+// A node can accept a connection while its RPC serves nothing. Dialling alone
+// would then look like success, and the pinned node would never be re-chosen.
+func TestLocalNetwork_ProbeRpc_FailsWhenNodeAcceptsButDoesNotAnswer(t *testing.T) {
+	tests := map[string]struct {
+		blockNumber func(m *rpc.MockClient)
+		wantErr     bool
+	}{
+		"answers": {
+			blockNumber: func(m *rpc.MockClient) {
+				m.EXPECT().BlockNumber(gomock.Any()).Return(uint64(1), nil)
+			},
+			wantErr: false,
+		},
+		"accepts but does not answer": {
+			blockNumber: func(m *rpc.MockClient) {
+				m.EXPECT().BlockNumber(gomock.Any()).Return(uint64(0), context.DeadlineExceeded)
+			},
+			wantErr: true,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			require := require.New(t)
+
+			client := rpc.NewMockClient(gomock.NewController(t))
+			test.blockNumber(client)
+
+			err := probeRpc(client)
+			if test.wantErr {
+				require.Error(err)
+				return
+			}
+			require.NoError(err)
+		})
+	}
+}
+
 func TestLocalNetworkApplyNetworkRules_Success(t *testing.T) {
 	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
@@ -723,6 +794,35 @@ func TestLocalNetworkAdvanceEpoch_Success(t *testing.T) {
 	if got, want := newEpoch, originalEpoch+hexutil.Uint64(epochIncrement); got < want {
 		t.Errorf("epoch did not advance correctly, got %d, want %d", got, want)
 	}
+}
+
+// Two advances in a row are what the parser appends to every scenario, and used
+// to fail the second one by reading a nonce the first had already spent.
+func TestLocalNetwork_AdvanceEpoch_SucceedsWhenCalledTwiceInARow(t *testing.T) {
+	require := require.New(t)
+	t.Parallel()
+
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
+	net, err := NewLocalLegacyNetwork(t.Context(), &config)
+	require.NoError(err)
+	t.Cleanup(func() {
+		require.NoError(net.Shutdown())
+	})
+
+	for i := range 2 {
+		require.NoError(net.AdvanceEpoch(t.Context(), 1), "advance %d of 2", i+1)
+	}
+
+	net.systemRpcMu.Lock()
+	pinned := net.systemRpcLabel
+	net.systemRpcMu.Unlock()
+	require.NotEmpty(pinned, "no node was pinned for system transactions")
+
+	active := make([]string, 0, len(net.GetActiveNodes()))
+	for _, node := range net.GetActiveNodes() {
+		active = append(active, string(node.GetLabel()))
+	}
+	require.Contains(active, pinned)
 }
 
 func TestLocalNetwork_FailingFlagPropagated(t *testing.T) {
