@@ -94,11 +94,9 @@ const (
 // allowed to run before being aborted.
 const defaultScenarioTimeout = 10 * time.Minute
 
-// healDbTimeout caps how long a single `sonictool heal` invocation may
-// run before we consider it hung. Healing a small test DB is expected
-// to take seconds; the timeout is generous so that CI on slow hosts
-// still succeeds.
-const healDbTimeout = 15 * time.Minute
+// sonicToolTimeout caps a single sonictool invocation. Each walks the whole
+// node state, so the bound is generous for slow CI hosts.
+const sonicToolTimeout = 15 * time.Minute
 
 // run is the internal implementation, allowing injection of
 // a validatorRegistry for testing.
@@ -877,44 +875,46 @@ func execKillSonic(
 	net driver.Network,
 	state *runState,
 ) error {
-	n, ok := state.nodes[step.Identifier]
-	if !ok {
-		return fmt.Errorf("node %q not found in active nodes", step.Identifier)
-	}
-
-	opera, ok := n.(*node.OperaNode)
-	if !ok {
-		return fmt.Errorf("node %q is not an OperaNode", step.Identifier)
+	opera, err := operaNode(step, state)
+	if err != nil {
+		return err
 	}
 
 	// Notify monitoring that this node is going offline.
-	net.SuspendNode(n)
+	net.SuspendNode(opera)
 
 	return opera.ForceStopSonicd(ctx)
 }
 
 // execHealDb runs sonictool heal on a killed node, recovering the
-// database and transitioning the node back to ready. The call is
-// bounded by healDbTimeout so a stuck sonictool cannot hang the entire
-// scenario indefinitely.
+// database and transitioning the node back to ready.
 func execHealDb(
 	ctx context.Context,
 	step *parser.Step,
 	state *runState,
 ) error {
-	n, ok := state.nodes[step.Identifier]
-	if !ok {
-		return fmt.Errorf("node %q not found in active nodes", step.Identifier)
+	opera, err := operaNode(step, state)
+	if err != nil {
+		return err
 	}
 
-	opera, ok := n.(*node.OperaNode)
-	if !ok {
-		return fmt.Errorf("node %q is not an OperaNode", step.Identifier)
-	}
-
-	healCtx, cancel := context.WithTimeout(ctx, healDbTimeout)
+	healCtx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
 	defer cancel()
 	return opera.HealSonicd(healCtx)
+}
+
+// operaNode resolves an identifier to the tracked node it names, which must
+// be one norma drives through its container.
+func operaNode(step *parser.Step, state *runState) (*node.OperaNode, error) {
+	n, ok := state.nodes[step.Identifier]
+	if !ok {
+		return nil, fmt.Errorf("node %q not found in active nodes", step.Identifier)
+	}
+	opera, ok := n.(*node.OperaNode)
+	if !ok {
+		return nil, fmt.Errorf("node %q is not an OperaNode", step.Identifier)
+	}
+	return opera, nil
 }
 
 // execStopApp stops a running application.
