@@ -116,6 +116,12 @@ detailed parameter semantics for the non-trivial ones.
 | `stopApp`      | Stop a running load-generating application.              |
 | `checks`       | Run one or more health checks.                           |
 | `waitFor`      | Pause scenario execution for a fixed duration.           |
+| `killSonic`    | SIGKILL the client, leaving its database dirty.          |
+| `healDb`       | Recover the database of a killed node.                   |
+| `stopSonic`    | Stop the client gracefully, keeping the node.            |
+| `exportGenesis`| Write a stopped node's chain to a g-file.                |
+| `importGenesis`| Replace a stopped node's database from a g-file.         |
+| `checkDb`      | Verify a stopped node's state database.                  |
 
 ### 3.1 `startNode`
 
@@ -298,6 +304,87 @@ string (`10s`, `1m`, `1h30m`, …) and must be positive.
 ```yaml
 - waitFor: 15s
 ```
+
+### 3.11 Client lifecycle: `stopSonic`, `killSonic`, `healDb`
+
+These act on the client process of a running node, leaving the container and
+data directory in place. Each takes a node identifier and no parameters.
+
+```yaml
+- stopSonic: validator-1    # SIGINT, database flushed
+- killSonic: validator-1    # SIGKILL, database left dirty
+- healDb: validator-1       # sonictool heal, only after killSonic
+```
+
+Unlike [`stopNode`](#32-stopnode), the node stays tracked, so a later
+`startNode` with the same identifier restarts the client in place with the
+history it had. That `startNode` must repeat the node's `type`, which decides
+whether the client comes back as a validator.
+
+`healDb` fails unless the node was killed: a graceful stop leaves nothing to
+heal.
+
+A node with a stopped client is unreachable over RPC but its container is
+still up, so the implicit end checks (§1) will try to read it and fail. A
+scenario that leaves a client stopped must set `DisableEndChecks: true` and
+assert what it needs while the clients are up.
+
+### 3.12 File management: `exportGenesis`, `importGenesis`, `checkDb`
+
+Every node of a network mounts one shared directory, on the host at
+`<output-dir>/shared`. Files named by these steps live there, so a file one
+node writes can be read by another — including one on a different client
+version. They survive the run.
+
+All three require the node's client to be **stopped** (§3.11): they read or
+rewrite the data directory directly, and a running client holding it would
+make an export inconsistent and an import a corruption.
+
+```yaml
+- exportGenesis: observer-a
+  file: from-a.g            # required
+
+- importGenesis: observer-b
+  file: from-a.g            # required
+
+- checkDb: observer-b
+  mode: live                # optional; live (default) or archive
+```
+
+- **`file`** — Required. A plain file name matching
+  `^[A-Za-z0-9][A-Za-z0-9._-]*$`, resolved inside the shared directory. A
+  name with a path separator or a leading `.` or `-` is rejected at load
+  time.
+- **`mode`** — Which database `checkDb` verifies: `live`, the one block
+  processing uses, or `archive`, the historical states an RPC node serves.
+
+`exportGenesis` writes the whole chain, archive included. `importGenesis`
+replaces only the database, so the validator keystore stays and the node
+keeps its identity; the file is accepted as experimental, since a test
+network's genesis carries none of the signatures sonictool trusts. A failed
+import leaves the node unusable, its old database already gone.
+
+Two caveats, both about *when* a node is stopped rather than which versions
+are involved.
+
+**Export on an epoch boundary.** The export snapshots the block the node
+stopped on, but its archive section only reaches the last sealed epoch, so a
+node stopped mid-epoch writes blocks whose state cannot be looked up
+(`block N is not present in the archive`). To park the head on a boundary,
+raise `Blocks.MaxEmptyBlockSkipPeriod` in `InitialNetworkRules` so an idle
+network stops filling gaps with empty blocks, stop the load, `waitForEpoch`,
+then stop the client — see
+[genesis_backward_compatibility.yml](scenarios/release_testing/features/genesis/genesis_backward_compatibility.yml).
+Use the genesis rather than `updateRules`: the rules are part of the epoch
+state, and the runner's wait for a block after `updateRules` costs a full
+skip period.
+
+**Do not restart a node from an imported g-file.** It rejoins a
+running network only while the network is still in the epoch after the
+file's.
+Past that it reconstructs one epoch, then rejects its peers with
+`wrong event epoch hash` permanently. Assert what the import produced —
+`checkDb live` and `checkDb archive` — instead.
 
 ---
 

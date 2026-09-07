@@ -1201,3 +1201,170 @@ Scenario:
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unknown check function")
 }
+
+func TestParseBytes_FileManagementSteps(t *testing.T) {
+	input := `
+Name: Genesis Exchange Test
+Description: Swaps g-files between two nodes.
+Scenario:
+  - startNode: node-A
+    type: observer
+
+  - stopSonic: node-A
+
+  - exportGenesis: node-A
+    file: from-a.g
+
+  - importGenesis: node-A
+    file: from-b.g
+
+  - checkDb: node-A
+    mode: archive
+
+  - checkDb: node-A
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+	require.NoError(t, scenario.Check())
+
+	steps := scenario.Steps
+	require.Equal(t, FuncStopSonic, steps[1].Function)
+	require.Equal(t, "node-A", steps[1].Identifier)
+
+	require.Equal(t, FuncExportGenesis, steps[2].Function)
+	require.Equal(t, "node-A", steps[2].Identifier)
+	require.Equal(t, "from-a.g", steps[2].File)
+
+	require.Equal(t, FuncImportGenesis, steps[3].Function)
+	require.Equal(t, "from-b.g", steps[3].File)
+
+	require.Equal(t, FuncCheckDb, steps[4].Function)
+	require.Equal(t, DbCheckModeArchive, steps[4].DbMode)
+
+	// An omitted mode is left to the node to default.
+	require.Equal(t, FuncCheckDb, steps[5].Function)
+	require.Empty(t, steps[5].DbMode)
+}
+
+func TestParseBytes_FileManagementSteps_RejectInvalidInput(t *testing.T) {
+	tests := map[string]string{
+		"file on a step that takes none": `
+Name: Test
+Scenario:
+  - stopSonic: node-A
+    file: from-a.g
+`,
+		"mode on exportGenesis": `
+Name: Test
+Scenario:
+  - exportGenesis: node-A
+    mode: live
+`,
+		"file as a list": `
+Name: Test
+Scenario:
+  - exportGenesis: node-A
+    file: [a.g, b.g]
+`,
+	}
+
+	for name, input := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := ParseBytes([]byte(input))
+			require.Error(t, err)
+		})
+	}
+}
+
+// A bad file name is refused when the scenario loads, not minutes into a
+// run.
+func TestScenario_Check_FileManagementSteps(t *testing.T) {
+	tests := map[string]struct {
+		input     string
+		wantError string
+	}{
+		"export without a file": {
+			input: `
+Name: Test
+Description: Test
+Scenario:
+  - exportGenesis: node-A
+`,
+			wantError: "requires a 'file' parameter",
+		},
+		"import without a file": {
+			input: `
+Name: Test
+Description: Test
+Scenario:
+  - importGenesis: node-A
+    file: ""
+`,
+			wantError: "requires a 'file' parameter",
+		},
+		"file in a subdirectory": {
+			input: `
+Name: Test
+Description: Test
+Scenario:
+  - exportGenesis: node-A
+    file: sub/from-a.g
+`,
+			wantError: "file name must match",
+		},
+		"file escaping the shared directory": {
+			input: `
+Name: Test
+Description: Test
+Scenario:
+  - importGenesis: node-A
+    file: ../from-a.g
+`,
+			wantError: "file name must match",
+		},
+		"file that looks like a flag": {
+			input: `
+Name: Test
+Description: Test
+Scenario:
+  - importGenesis: node-A
+    file: --datadir
+`,
+			wantError: "file name must match",
+		},
+		"unknown check mode": {
+			input: `
+Name: Test
+Description: Test
+Scenario:
+  - checkDb: node-A
+    mode: both
+`,
+			wantError: "checkDb mode must be",
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			scenario, err := ParseBytes([]byte(tt.input))
+			require.NoError(t, err)
+			err = scenario.Check()
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tt.wantError)
+		})
+	}
+}
+
+// A step function that the help output does not describe exists only in the
+// parser's tables.
+func TestPrintHelp_CoversTheFileManagementSteps(t *testing.T) {
+	var out strings.Builder
+	require.NoError(t, PrintHelp(&out))
+
+	for _, fn := range []StepFunction{
+		FuncStopSonic, FuncExportGenesis, FuncImportGenesis, FuncCheckDb,
+	} {
+		require.Contains(t, out.String(), string(fn))
+	}
+	require.Contains(t, out.String(), "shared directory")
+}

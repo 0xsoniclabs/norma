@@ -29,10 +29,16 @@ package node
 //	Running       --ForceStopSonicd--> Killed
 //	Stopping      --ForceStopSonicd--> Killed
 //	Killed        --HealSonicd-------> Healing      --> Ready
+//	Ready         --ExportGenesis----> Maintenance  --> Ready
+//	Ready         --ImportGenesis----> Maintenance  --> Ready
+//	Ready         --CheckDatabase----> Maintenance  --> Ready
 //
 // Failure returns the node to the state the action started from, except
-// for ForceStopSonicd: once a kill has been attempted the database must be
-// assumed dirty, so the node stays in Killed and heal is the only way out.
+// for ForceStopSonicd and ImportGenesis. Once a kill has been attempted the
+// database must be assumed dirty, so the node stays in Killed and heal is
+// the only way out; a failed genesis import leaves the data directory
+// half-written, so the node stays in Maintenance, from which no client can
+// be started.
 //
 // The state records what norma is allowed to do next; it is not by itself
 // evidence about the client process. Three mechanisms keep the two from
@@ -76,6 +82,11 @@ const (
 	// NodeStateHealing is the transitional state entered while
 	// sonictool heal is running against a killed node.
 	NodeStateHealing
+	// NodeStateMaintenance is the transitional state entered while a
+	// sonictool command other than heal runs against a stopped node. A
+	// node left here may have an emptied data directory, so it is
+	// deliberately a dead end.
+	NodeStateMaintenance
 )
 
 // String returns a human-readable name for the state, used in error
@@ -98,6 +109,8 @@ func (s NodeState) String() string {
 		return "killed"
 	case NodeStateHealing:
 		return "healing"
+	case NodeStateMaintenance:
+		return "maintenance"
 	default:
 		return "unknown"
 	}
