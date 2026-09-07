@@ -114,7 +114,7 @@ func (s *Step) Check() error {
 			return fmt.Errorf("waitForBlocks requires a positive block count")
 		}
 		return nil
-	case FuncKillSonic, FuncHealDb:
+	case FuncKillSonic, FuncHealDb, FuncStopSonic:
 		if s.Identifier == "" {
 			return fmt.Errorf("%s requires a node identifier", s.Function)
 		}

@@ -49,6 +49,7 @@ const (
 	FuncWaitForBlocks StepFunction = "waitForBlocks"
 	FuncKillSonic     StepFunction = "killSonic"
 	FuncHealDb        StepFunction = "healDb"
+	FuncStopSonic     StepFunction = "stopSonic"
 
 	// Check functions used as items inside a checks: step.
 	FuncCheckBlockGasRate     StepFunction = "blockGasRate"
@@ -78,6 +79,7 @@ var allStepFunctions = [...]StepFunction{
 	FuncWaitForBlocks,
 	FuncKillSonic,
 	FuncHealDb,
+	FuncStopSonic,
 }
 
 // allCheckFunctions lists every check function valid as a sub-item of a checks: step.
@@ -444,7 +446,7 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 		default:
 			return fmt.Errorf("undelegate value must be a node name or a list of targets")
 		}
-	case FuncKillSonic, FuncHealDb:
+	case FuncKillSonic, FuncHealDb, FuncStopSonic:
 		// Value is a node name (same as stopNode).
 		if val.Kind == yaml.ScalarNode && val.Tag != "!!null" &&
 			val.Value != "" {
@@ -563,6 +565,7 @@ var stepFunctionDescriptions = map[StepFunction]string{
 	FuncWaitForBlocks: "Wait until the network has produced the given number of new blocks.",
 	FuncKillSonic:     "Kill the sonicd process with SIGKILL, leaving the database dirty.",
 	FuncHealDb:        "Run sonictool heal on a killed node to recover its database.",
+	FuncStopSonic:     "Stop the sonicd process gracefully, keeping the node's container and data directory.",
 }
 
 // paramDescriptions provides a human-readable description for each parameter key.
@@ -595,6 +598,7 @@ var allowedParams = map[StepFunction][]string{
 	FuncChecks:        {},
 	FuncKillSonic:     {},
 	FuncHealDb:        {},
+	FuncStopSonic:     {},
 }
 
 // parseParam parses a single parameter key-value pair.
