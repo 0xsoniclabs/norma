@@ -96,7 +96,7 @@ const defaultScenarioTimeout = 10 * time.Minute
 
 // sonicToolTimeout caps a single sonictool invocation. Each walks the whole
 // node state, so the bound is generous for slow CI hosts.
-const sonicToolTimeout = 15 * time.Minute
+const sonicToolTimeout = 3 * time.Minute
 
 // run is the internal implementation, allowing injection of
 // a validatorRegistry for testing.
