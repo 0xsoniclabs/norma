@@ -185,8 +185,46 @@ func ensureImageAvailable(ctx context.Context, image string) error {
 	return err
 }
 
-// StartOperaDockerNode creates a new OperaNode running in a Docker container.
+// StartOperaDockerNode creates a new OperaNode running in a Docker
+// container, with its client started and synced with the network.
 func StartOperaDockerNode(
+	ctx context.Context,
+	client *docker.Client,
+	dn *docker.Network,
+	config *OperaNodeConfig,
+) (*OperaNode, error) {
+	node, err := CreateOperaDockerNode(ctx, client, dn, config)
+	if err != nil {
+		return nil, err
+	}
+
+	started := false
+	defer func() {
+		if !started {
+			// defer needs its own context
+			_ = node.Cleanup(context.Background())
+		}
+	}()
+
+	if err = node.StartSonicd(ctx); err != nil {
+		return nil, fmt.Errorf("failed to start sonicd: %w", err)
+	}
+
+	if err = node.WaitForSync(ctx); err != nil {
+		return nil, errors.Join(
+			printLog(ctx, node),
+			fmt.Errorf("failed to get node online: %w", err),
+		)
+	}
+
+	started = true
+	return node, nil
+}
+
+// CreateOperaDockerNode creates a new OperaNode in a Docker container and
+// initializes its data directory, leaving the client stopped. The node is
+// not connected to the network yet; starting its client is what joins it.
+func CreateOperaDockerNode(
 	ctx context.Context,
 	client *docker.Client,
 	dn *docker.Network,
@@ -226,37 +264,21 @@ func StartOperaDockerNode(
 		return nil, fmt.Errorf("failed to start docker node: %w", err)
 	}
 
-	// Ensure the container and temp dirs are cleaned up if any
-	// subsequent exec step fails before we return the OperaNode.
-	started := false
+	// Ensure the container and temp dirs are cleaned up if the
+	// initialization below fails before we return the OperaNode.
+	initialized := false
 	defer func() {
-		if !started {
+		if !initialized {
 			// defer needs its own context
 			_ = node.Cleanup(context.Background())
 		}
 	}()
 
-	// --- Exec-based startup sequence ---
-
-	// Initialize datadir with sonictool.
 	if err = node.Initialize(ctx); err != nil {
 		return nil, fmt.Errorf("failed to initialize datadir: %w", err)
 	}
 
-	// Start sonicd in the background.
-	if err = node.StartSonicd(ctx); err != nil {
-		return nil, fmt.Errorf("failed to start sonicd: %w", err)
-	}
-
-	// Wait for the node to sync and become ready.
-	if err = node.WaitForSync(ctx); err != nil {
-		return nil, errors.Join(
-			printLog(ctx, node),
-			fmt.Errorf("failed to get node online: %w", err),
-		)
-	}
-
-	started = true
+	initialized = true
 	return node, nil
 }
 

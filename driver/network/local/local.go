@@ -667,7 +667,8 @@ func (n *LocalNetwork) GetActiveNodes() []driver.Node {
 	defer n.nodesMutex.Unlock()
 	res := make([]driver.Node, 0, len(n.nodes))
 	for _, node := range n.nodes {
-		if node.IsRunning() {
+		// The container outlives a stopped client, so suspension is checked too.
+		if node.IsRunning() && !n.suspended[node] {
 			res = append(res, node)
 		}
 	}

@@ -503,6 +503,37 @@ func TestReconnectNodeAndRemoveNode_Succeed_WhenOnlyOtherNodeIsSuspended(t *test
 	require.NoError(observer.Cleanup(context.Background()), "failed to cleanup node")
 }
 
+// A suspended node's client is down, so every check that enumerates the
+// active nodes would try to read an RPC that is not there. The container
+// outlives the client, so IsRunning alone does not exclude it.
+func TestLocalNetwork_GetActiveNodes_SkipsSuspendedNodes(t *testing.T) {
+	require := require.New(t)
+
+	config := driver.NetworkConfig{
+		Validators: driver.NewDefaultTestValidators(t.Name(), 2),
+	}
+	net, err := NewLocalLegacyNetwork(t.Context(), &config)
+	require.NoError(err, "failed to create new local network")
+	t.Cleanup(func() {
+		require.NoError(net.Shutdown())
+	})
+
+	active := net.GetActiveNodes()
+	require.Len(active, 2, "expected both genesis validators")
+
+	suspended := active[0]
+	net.SuspendNode(suspended)
+
+	remaining := net.GetActiveNodes()
+	require.Len(remaining, 1, "the suspended node must not be reported active")
+	require.NotEqual(suspended.GetLabel(), remaining[0].GetLabel())
+	require.True(suspended.IsRunning(),
+		"the container is expected to outlive the suspended client")
+
+	net.ResumeNode(suspended)
+	require.Len(net.GetActiveNodes(), 2, "a resumed node must be active again")
+}
+
 func TestLocalNetwork_Num_Validators_Started(t *testing.T) {
 	for i := 1; i < 3; i++ {
 		t.Run(fmt.Sprintf("num-validators-%d", i), func(t *testing.T) {
