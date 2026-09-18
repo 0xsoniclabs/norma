@@ -34,20 +34,22 @@ import (
 type StepFunction string
 
 const (
-	FuncStartNode    StepFunction = "startNode"
-	FuncStopNode     StepFunction = "stopNode"
-	FuncDelegate     StepFunction = "delegate"
-	FuncUndelegate   StepFunction = "undelegate"
-	FuncVerifyStakes StepFunction = "verifyStakes"
-	FuncUpdateRules  StepFunction = "updateRules"
-	FuncAdvanceEpoch StepFunction = "advanceEpoch"
-	FuncWaitForEpoch StepFunction = "waitForEpoch"
-	FuncRunApp       StepFunction = "runApp"
-	FuncStopApp      StepFunction = "stopApp"
-	FuncChecks       StepFunction = "checks"
-	FuncWaitFor      StepFunction = "waitFor"
-	FuncKillSonic    StepFunction = "killSonic"
-	FuncHealDb       StepFunction = "healDb"
+	FuncStartNode        StepFunction = "startNode"
+	FuncStopNode         StepFunction = "stopNode"
+	FuncDelegate         StepFunction = "delegate"
+	FuncUndelegate       StepFunction = "undelegate"
+	FuncVerifyStakes     StepFunction = "verifyStakes"
+	FuncUpdateRules      StepFunction = "updateRules"
+	FuncAdvanceEpoch     StepFunction = "advanceEpoch"
+	FuncWaitForEpoch     StepFunction = "waitForEpoch"
+	FuncRunApp           StepFunction = "runApp"
+	FuncStopApp          StepFunction = "stopApp"
+	FuncChecks           StepFunction = "checks"
+	FuncWaitFor          StepFunction = "waitFor"
+	FuncKillSonic        StepFunction = "killSonic"
+	FuncHealDb           StepFunction = "healDb"
+	FuncStopSonic        StepFunction = "stopSonic"
+	FuncWaitForSonicExit StepFunction = "waitForSonicExit"
 
 	// Check functions used as items inside a checks: step.
 	FuncCheckBlockGasRate     StepFunction = "blockGasRate"
@@ -76,6 +78,8 @@ var allStepFunctions = [...]StepFunction{
 	FuncWaitFor,
 	FuncKillSonic,
 	FuncHealDb,
+	FuncStopSonic,
+	FuncWaitForSonicExit,
 }
 
 // allCheckFunctions lists every check function valid as a sub-item of a checks: step.
@@ -439,7 +443,7 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 		default:
 			return fmt.Errorf("undelegate value must be a node name or a list of targets")
 		}
-	case FuncKillSonic, FuncHealDb:
+	case FuncKillSonic, FuncHealDb, FuncStopSonic, FuncWaitForSonicExit:
 		// Value is a node name (same as stopNode).
 		if val.Kind == yaml.ScalarNode && val.Tag != "!!null" &&
 			val.Value != "" {
@@ -548,6 +552,9 @@ var stepFunctionDescriptions = map[StepFunction]string{
 	FuncWaitFor:      "Pause scenario execution for a fixed duration.",
 	FuncKillSonic:    "Kill the sonicd process with SIGKILL, leaving the database dirty.",
 	FuncHealDb:       "Run sonictool heal on a killed node to recover its database.",
+	FuncStopSonic:    "Stop the sonicd process gracefully, keeping the node's container and data directory.",
+	FuncWaitForSonicExit: "Wait for a sonicd process that stops itself, such as one " +
+		"started with --exitwhensynced.epoch, then treat the node as stopped by stopSonic.",
 }
 
 // paramDescriptions provides a human-readable description for each parameter key.
@@ -565,20 +572,22 @@ var paramDescriptions = map[string]string{
 
 // allowedParams defines which parameter keys are valid for each step function.
 var allowedParams = map[StepFunction][]string{
-	FuncStartNode:    {"type", "imageName", "dataVolume", "stake", "instances", "failing", "extraArguments"},
-	FuncStopNode:     {},
-	FuncRunApp:       {"type", "users", "rate"},
-	FuncStopApp:      {},
-	FuncUpdateRules:  {},
-	FuncDelegate:     {},
-	FuncUndelegate:   {},
-	FuncVerifyStakes: {},
-	FuncAdvanceEpoch: {},
-	FuncWaitForEpoch: {},
-	FuncWaitFor:      {},
-	FuncChecks:       {},
-	FuncKillSonic:    {},
-	FuncHealDb:       {},
+	FuncStartNode:        {"type", "imageName", "dataVolume", "stake", "instances", "failing", "extraArguments"},
+	FuncStopNode:         {},
+	FuncRunApp:           {"type", "users", "rate"},
+	FuncStopApp:          {},
+	FuncUpdateRules:      {},
+	FuncDelegate:         {},
+	FuncUndelegate:       {},
+	FuncVerifyStakes:     {},
+	FuncAdvanceEpoch:     {},
+	FuncWaitForEpoch:     {},
+	FuncWaitFor:          {},
+	FuncChecks:           {},
+	FuncKillSonic:        {},
+	FuncHealDb:           {},
+	FuncStopSonic:        {},
+	FuncWaitForSonicExit: {},
 }
 
 // parseParam parses a single parameter key-value pair.
