@@ -100,7 +100,7 @@ norma:
 	go build -o $(BUILD_DIR)/norma ./driver/norma
 
 test: pull-hello-world-image pull-alpine-image build-r-renderer-image
-	go test ./... -v
+	go test ./... -v -timeout 30m
 
 clean:
 	rm -rvf $(CURDIR)/build
