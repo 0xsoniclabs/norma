@@ -1,0 +1,217 @@
+Name: Testnet Brio Hardfork Across Released Clients
+
+Description: >-
+  Starts a v2.1.6, v2.2.0, v2.2.1 and v2.2.2 validator set on the exact rules
+  reported by rpc.testnet.soniclabs.com on 2026-09-18, runs every load
+  generator Allegro supports for two minutes, then applies the planned testnet
+  hardfork - Brio, gas subsidies and transaction bundles on, single proposer
+  off - and keeps that load running while adding the generators the new rules
+  unlock. v2.1.6 has the Brio rule but not the implementation, so it forks on
+  activation; the three v2.2.x validators hold the quorum that keeps the
+  network producing blocks.
+
+InitialNetworkRules:
+  Dag:
+    MaxParents: 12
+    MaxFreeParents: 6
+    MaxExtraData: 128
+  Emitter:
+    Interval: 750ms
+    StallThreshold: 30s
+    StalledInterval: 60s
+  Epochs:
+    MaxEpochGas: 1_875_000_000
+    MaxEpochDuration: 30m
+  Blocks:
+    MaxBlockGas: 5_000_000_000
+    MaxEmptyBlockSkipPeriod: 4s
+  Economy:
+    BlockMissedSlack: 50
+    MinGasPrice: 0
+    MinBaseFee: 1000000000
+    Gas:
+      MaxEventGas: 30_030_000
+      EventGas: 28_000
+      ParentGas: 2_400
+      ExtraDataGas: 25
+      BlockVotesBaseGas: 1_024
+      BlockVoteGas: 512
+      EpochVoteGas: 1_536
+      MisbehaviourProofGas: 71_536
+    ShortGasPower:
+      AllocPerSec: 1_000_000_000
+      MaxAllocPeriod: 5s
+      StartupAllocPeriod: 1s
+      MinStartupGas: 560_000
+    LongGasPower:
+      AllocPerSec: 1_000_000_000
+      MaxAllocPeriod: 5s
+      StartupAllocPeriod: 1s
+      MinStartupGas: 560_000
+  Upgrades:
+    Berlin: true
+    London: true
+    Llr: false
+    Sonic: true
+    Allegro: true
+    Brio: false
+    SingleProposerBlockFormation: false
+    GasSubsidies: false
+    TransactionBundles: false
+
+Scenario:
+  - startNode: validator-v220
+    type: validator
+    imageName: "sonic:v2.2.0"
+
+  - startNode: validator-v221
+    type: validator
+    imageName: "sonic:v2.2.1"
+
+  - startNode: validator-v222
+    type: validator
+    imageName: "sonic:v2.2.2"
+
+  # Equal stakes: the forking v2.1.6 holds a quarter, so the v2.2.x
+  # validators keep the two-thirds quorum without it.
+  - startNode: validator-v216
+    type: validator
+    imageName: "sonic:v2.1.6"
+    failing: true
+
+  # Allegro-era load: every application type that runs without Brio, gas
+  # subsidies or bundles.
+  - runApp: allegro-counter
+    type: counter
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: allegro-erc20
+    type: erc20
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: allegro-store
+    type: store
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: allegro-uniswap
+    type: uniswap
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: allegro-smartaccount
+    type: smartaccount
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: allegro-transient
+    type: transient
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: allegro-selfdestruct-old
+    type: selfdestructoldcontract
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: allegro-selfdestruct-new
+    type: selfdestructnewcontract
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: allegro-ecdsa
+    type: ecdsa
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: allegro-bls12add
+    type: bls12add
+    users: 10
+    rate:
+      constant: 5
+
+  - waitFor: 2m
+
+  # The hardfork under test.
+  - updateRules:
+      Upgrades:
+        Brio: true
+        SingleProposerBlockFormation: false
+        GasSubsidies: true
+        TransactionBundles: true
+
+  # MaxEpochDuration is testnet's 30m, so the seals have to be forced.
+  - advanceEpoch
+  - advanceEpoch
+
+  - checks:
+      - networkRules:
+          rules:
+            Upgrades:
+              Sonic: true
+              Allegro: true
+              Brio: true
+              SingleProposerBlockFormation: false
+              GasSubsidies: true
+              TransactionBundles: true
+
+  # The Allegro load keeps running; these add the generators that only work
+  # once Brio, gas subsidies and transaction bundles are live.
+  - runApp: brio-subsidies
+    type: subsidies
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: brio-largecontract
+    type: largecontract
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: brio-allofbundle
+    type: allofbundle
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: brio-oneofbundle
+    type: oneofbundle
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: brio-subsidizedbundle
+    type: subsidizedbundle
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: brio-failingbundle
+    type: failingbundle
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: brio-duplicatedbundle
+    type: duplicatedbundle
+    users: 10
+    rate:
+      constant: 5
+
+  - waitFor: 2m
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
