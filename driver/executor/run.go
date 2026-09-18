@@ -90,9 +90,10 @@ const (
 	phaseCompleted = "completed"
 )
 
-// defaultScenarioTimeout is the maximum time a scenario is
-// allowed to run before being aborted.
-const defaultScenarioTimeout = 10 * time.Minute
+// DefaultScenarioTimeout is the maximum time a scenario is allowed to run
+// before being aborted. It applies only when the caller passes a context
+// without a deadline of its own; `norma run --timeout` sets one.
+const DefaultScenarioTimeout = 10 * time.Minute
 
 // sonicToolTimeout caps a single sonictool invocation. Each walks the whole
 // node state, so the bound is generous for slow CI hosts.
@@ -131,8 +132,13 @@ func runWithObserver(
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, defaultScenarioTimeout)
-	defer cancel()
+	// A caller that set its own deadline has already decided how long the
+	// scenario may run.
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, DefaultScenarioTimeout)
+		defer cancel()
+	}
 
 	state := &runState{
 		nodes:          make(map[string]driver.Node),
