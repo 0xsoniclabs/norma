@@ -55,6 +55,7 @@ var runCommand = cli.Command{
 		&skipReportRendering,
 		&outputDirectory,
 		&openReport,
+		&scenarioTimeout,
 	},
 }
 
@@ -82,6 +83,11 @@ var (
 		Name:  "open-report",
 		Usage: "automatically open the rendered report in the default browser after rendering",
 	}
+	scenarioTimeout = cli.DurationFlag{
+		Name:  "timeout",
+		Usage: "maximum time the scenario may run before being aborted, e.g. 25m; pass a large value to effectively remove the limit",
+		Value: executor.DefaultScenarioTimeout,
+	}
 )
 
 func run(ctx *cli.Context) (err error) {
@@ -94,6 +100,7 @@ func run(ctx *cli.Context) (err error) {
 	skipChecks := ctx.Bool(skipChecks.Name)
 	skipReportRendering := ctx.Bool(skipReportRendering.Name)
 	openReport := ctx.Bool(openReport.Name)
+	timeout := ctx.Duration(scenarioTimeout.Name)
 
 	path := args.First()
 
@@ -123,7 +130,7 @@ func run(ctx *cli.Context) (err error) {
 		if label == "" {
 			label = fmt.Sprintf("eval_%d", time.Now().Unix())
 		}
-		if err := runScenario(ctx.Context, file, outputDir, label, skipChecks, skipReportRendering, openReport); err != nil {
+		if err := runScenario(ctx.Context, file, outputDir, label, skipChecks, skipReportRendering, openReport, timeout); err != nil {
 			return fmt.Errorf("failed to run scenario %q: %w", file, err)
 		}
 	}
@@ -131,7 +138,7 @@ func run(ctx *cli.Context) (err error) {
 	return nil
 }
 
-func runScenario(ctx context.Context, path, outputDir, label string, skipChecks, skipReportRendering, openReport bool) error {
+func runScenario(ctx context.Context, path, outputDir, label string, skipChecks, skipReportRendering, openReport bool, timeout time.Duration) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -269,8 +276,17 @@ func runScenario(ctx context.Context, path, outputDir, label string, skipChecks,
 	slog.Info("running scenario", "path", path)
 	logger := startProgressLogger(monitor, net)
 	defer logger.shutdown()
+	// The scenario runs under its own deadline so that the outer context stays
+	// usable for dumping node logs after a timeout.
+	runCtx := ctx
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		runCtx, cancel = context.WithTimeout(runCtx, timeout)
+		defer cancel()
+	}
+
 	stepExecutions, err = executor.RunAndCaptureEventExecution(
-		ctx,
+		runCtx,
 		net,
 		scenario,
 		checks,
