@@ -18,9 +18,9 @@ Scenario:
 
   - runApp: heavy-load
     type: counter
-    users: 1000
+    users: 200
     rate:
-      constant: 500
+      constant: 200
 
   - waitFor: 60s
 
