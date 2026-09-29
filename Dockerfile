@@ -14,27 +14,21 @@
 #
 # Stage 1a: Build Client
 #
-# It prepeares an image with dependencies for the client.
-# Its caches the dependencies first, so that the build is faster.
-#
 # It checks out the required version of the client, and builds it.
 #
 FROM golang:1.26.3 AS client-build
 
 WORKDIR /client
 
-# Download expected Client version from the outside defined location.
 # The 'client-src' parameter is passed as '--build-context' to the docker build command.
-
-# Download Sonic dependencies first to cache them.
-COPY --from=client-src go.mod .
-RUN go mod download
-
-# Copy the rest of the client source code to build it.
+# The whole source is copied before any module is resolved: its go.mod may
+# `replace` a dependency with a directory inside it, such as a private fork
+# cloned there by CI. The module cache mount keeps dependencies cached instead.
 COPY --from=client-src . .
 
-# Build the client
-RUN --mount=type=cache,target=/root/.cache/go-build make sonicd sonictool
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    make sonicd sonictool
 
 #
 # Stage 2: Build the final image
