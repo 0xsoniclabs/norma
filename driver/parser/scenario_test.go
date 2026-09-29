@@ -1201,3 +1201,48 @@ Scenario:
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unknown check function")
 }
+
+func TestParseBytes_StopSonic(t *testing.T) {
+	scenario, err := ParseBytes([]byte(`
+Name: Test
+Description: Stops a client gracefully.
+Scenario:
+  - stopSonic: node-A
+`))
+	require.NoError(t, err)
+	require.NoError(t, scenario.Check())
+	require.Equal(t, FuncStopSonic, scenario.Steps[0].Function)
+	require.Equal(t, "node-A", scenario.Steps[0].Identifier)
+
+	scenario, err = ParseBytes([]byte(`
+Name: Test
+Scenario:
+  - stopSonic
+`))
+	require.NoError(t, err)
+	require.ErrorContains(t, scenario.Check(), "requires a node identifier")
+}
+
+func TestParseBytes_WaitForSonicExit(t *testing.T) {
+	scenario, err := ParseBytes([]byte(`
+Name: Test
+Description: A client that stops itself.
+Scenario:
+  - startNode: exporter
+    type: observer
+    extraArguments: "--exitwhensynced.epoch 3"
+  - waitForSonicExit: exporter
+`))
+	require.NoError(t, err)
+	require.NoError(t, scenario.Check())
+	require.Equal(t, FuncWaitForSonicExit, scenario.Steps[1].Function)
+	require.Equal(t, "exporter", scenario.Steps[1].Identifier)
+
+	scenario, err = ParseBytes([]byte(`
+Name: Test
+Scenario:
+  - waitForSonicExit
+`))
+	require.NoError(t, err)
+	require.ErrorContains(t, scenario.Check(), "requires a node identifier")
+}

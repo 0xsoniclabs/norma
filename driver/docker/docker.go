@@ -145,6 +145,17 @@ func (h *ExecHandle) setResult(exitCode int, err error) {
 	}
 }
 
+// NewExitedExecHandle returns a handle for a process that has already
+// terminated with the given result, for tests that need a finished process
+// without running one.
+func NewExitedExecHandle(exitCode int, err error) *ExecHandle {
+	done := make(chan struct{})
+	close(done)
+	h := &ExecHandle{Done: done}
+	h.setResult(exitCode, err)
+	return h
+}
+
 // ContainerConfig defines parameters for running Docker Containers.
 type ContainerConfig struct {
 	Hostname        string
