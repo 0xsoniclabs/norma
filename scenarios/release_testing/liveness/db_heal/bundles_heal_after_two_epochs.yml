@@ -1,0 +1,92 @@
+Name: Liveness DB Heal Bundles After Two Epochs
+
+Description: >-
+  Runs transaction bundles across two local validators until the chain is
+  past the 1024-block bundle replay window, then SIGKILLs a low-stake one so
+  its database is left dirty and keeps it down for two epochs while the
+  remaining quorum keeps processing bundles. The database is healed and the
+  node restarted in place, and it must sync back through the bundle-bearing
+  blocks and epoch seals it missed.
+
+InitialNetworkRules:
+  Upgrades:
+    Sonic: true
+    Allegro: true
+    GasSubsidies: true
+    Brio: true
+    TransactionBundles: true
+  Emitter:
+    # A sixth of the default 600ms, which measured ~0.84 blocks/s here: the
+    # 1024 blocks below would not fit the scenario deadline otherwise.
+    Interval: 100ms
+  Blocks:
+    # Lowest value the client accepts; keeps blocks coming through any lull
+    # in the load.
+    MaxEmptyBlockSkipPeriod: 4s
+  Epochs:
+    # Short epochs, so the two-epoch outage stays well inside the deadline.
+    MaxEpochDuration: 20s
+
+Scenario:
+  # Quorum holder: 75% of the stake stays online throughout, above the 2/3
+  # needed, so block production never depends on the node under test.
+  - startNode: stable
+    type: validator
+    stake: 3_000_000
+
+  - startNode: frail
+    type: validator
+    stake: 1_000_000
+    extraArguments: "--statedb.checkpointinterval 1"
+
+  - runApp: all-of
+    type: allofbundle
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: one-of
+    type: oneofbundle
+    users: 10
+    rate:
+      constant: 5
+
+  - runApp: subsidized
+    type: subsidizedbundle
+    users: 10
+    rate:
+      constant: 5
+
+  # Heal restores the last sealed epoch and refuses it unless the epoch before
+  # ends at least 1024 blocks past the genesis, so the chain is grown past
+  # that window and two more epochs are sealed on top of it.
+  # ponytail: time-based, assumes ~5 blocks/s; a slower machine falls short
+  # and heal refuses with "reaches back to the genesis". Wait on a block
+  # height instead if that happens.
+  - waitFor: 260s
+  - advanceEpoch
+  - advanceEpoch
+
+  - killSonic: frail
+
+  - checks:
+      - blocksProduced
+
+  # The outage: the network seals two epochs of bundles without the node.
+  - waitForEpoch
+  - waitForEpoch
+
+  # The restart is the assertion: the runner waits for the node to reach the
+  # network height and fails the step if it never gets there.
+  - healDb: frail
+  - startNode: frail
+    type: validator
+
+  - waitFor: 20s
+
+  - stopApp: all-of
+  - stopApp: one-of
+  - stopApp: subsidized
+
+  - checks:
+      - validatorsActive
