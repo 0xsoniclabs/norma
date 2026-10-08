@@ -1064,7 +1064,7 @@ func waitForBlocks(ctx context.Context, client rpc.Client, count uint64) error {
 	if err != nil {
 		return fmt.Errorf("failed to get block number: %w", err)
 	}
-	for height := baseline; height < baseline+count; {
+	for height := baseline; height-baseline < count; {
 		if time.Since(grownAt) > blockProductionTimeout {
 			return fmt.Errorf("no block produced for %v, at block %d of %d",
 				blockProductionTimeout, height-baseline, count)

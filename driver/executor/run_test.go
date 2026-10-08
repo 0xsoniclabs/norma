@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"math"
 	"math/big"
 	"slices"
 	"strings"
@@ -33,6 +34,7 @@ import (
 	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -1510,6 +1512,51 @@ func TestDelegation_SingleAccountRepeatedlyDelegatesAndUndelegates(t *testing.T)
 	}
 }
 
+func TestExecuteStep_ReturnsOnceCountIsProduced_WhenWaitingForBlocks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	// One read for the baseline, then one per block: the height grows by one
+	// per read, so a fourth read means it waited for exactly three blocks.
+	net := netWithBlockNumbers(ctrl, growingBlockHeight(), 4)
+
+	step := parser.Step{Function: parser.FuncWaitForBlocks, Blocks: 3}
+	require.NoError(t, executeStep(t.Context(), &step, net, nil, nil, &runState{}))
+}
+
+func TestExecuteStep_WaitsPastTheTimeout_WhenBlocksKeepArriving(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	const count = 8
+	net := netWithBlockNumbers(ctrl, growingBlockHeight(), count+1)
+	setBlockProductionTimeout(t, 500*time.Millisecond)
+
+	step := parser.Step{Function: parser.FuncWaitForBlocks, Blocks: count}
+	start := time.Now()
+	require.NoError(t, executeStep(t.Context(), &step, net, nil, nil, &runState{}))
+	require.Greater(t, time.Since(start), blockProductionTimeout)
+}
+
+func TestExecuteStep_FailsWithAStall_WhenTheChainStopsGrowing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := netWithBlockNumbers(ctrl, constantBlockHeight(7), -1)
+	// Negative, so the chain counts as stalled from the first poll on.
+	setBlockProductionTimeout(t, -1)
+
+	step := parser.Step{Function: parser.FuncWaitForBlocks, Blocks: 3}
+	err := executeStep(t.Context(), &step, net, nil, nil, &runState{})
+	require.ErrorContains(t, err, "no block produced")
+}
+
+// A count this large would wrap a baseline+count target below the baseline,
+// ending the wait before it began.
+func TestExecuteStep_KeepsWaiting_WhenTheCountIsTheLargestUint64(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := netWithBlockNumbers(ctrl, constantBlockHeight(7), -1)
+	setBlockProductionTimeout(t, -1)
+
+	step := parser.Step{Function: parser.FuncWaitForBlocks, Blocks: math.MaxUint64}
+	err := executeStep(t.Context(), &step, net, nil, nil, &runState{})
+	require.ErrorContains(t, err, "no block produced")
+}
+
 func delegateStep(node, delegator string, stake uint64) parser.Step {
 	return parser.Step{
 		Function: parser.FuncDelegate,
@@ -1528,38 +1575,34 @@ func undelegateStep(node, delegator string, stake *uint64) parser.Step {
 	}
 }
 
-func TestRun_WaitForBlocks_ReturnsOnceTheCountIsProduced(t *testing.T) {
-	ctrl := gomock.NewController(t)
+// netWithBlockNumbers returns a network whose single RPC client answers
+// BlockNumber from heights, expecting reads calls, or any number if negative.
+func netWithBlockNumbers(
+	ctrl *gomock.Controller,
+	heights func(context.Context) (uint64, error),
+	reads int,
+) driver.Network {
 	client := rpc.NewMockClient(ctrl)
-	// One read for the baseline, then one per block: the height grows by one
-	// per read, so a fourth read means it waited for exactly three blocks.
-	client.EXPECT().BlockNumber(gomock.Any()).DoAndReturn(growingBlockHeight()).Times(4)
+	call := client.EXPECT().BlockNumber(gomock.Any()).DoAndReturn(heights)
+	if reads < 0 {
+		call.AnyTimes()
+	} else {
+		call.Times(reads)
+	}
 	client.EXPECT().Close()
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().DialRandomRpc().Return(client, nil)
+	return net
+}
 
-	step := parser.Step{Function: parser.FuncWaitForBlocks, Blocks: 3}
-	if err := executeStep(t.Context(), &step, net, nil, nil, &runState{}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+func constantBlockHeight(height uint64) func(context.Context) (uint64, error) {
+	return func(context.Context) (uint64, error) {
+		return height, nil
 	}
 }
 
-func TestRun_WaitForBlocks_FailsWhenTheChainStalls(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	client := rpc.NewMockClient(ctrl)
-	client.EXPECT().BlockNumber(gomock.Any()).Return(uint64(7), nil).AnyTimes()
-	client.EXPECT().Close()
-	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().DialRandomRpc().Return(client, nil)
-
-	// Negative, so the chain counts as stalled from the first poll on.
+func setBlockProductionTimeout(t *testing.T, timeout time.Duration) {
 	original := blockProductionTimeout
-	blockProductionTimeout = -1
+	blockProductionTimeout = timeout
 	t.Cleanup(func() { blockProductionTimeout = original })
-
-	step := parser.Step{Function: parser.FuncWaitForBlocks, Blocks: 3}
-	err := executeStep(t.Context(), &step, net, nil, nil, &runState{})
-	if err == nil || !strings.Contains(err.Error(), "no block produced") {
-		t.Fatalf("expected a stall error, got %v", err)
-	}
 }
