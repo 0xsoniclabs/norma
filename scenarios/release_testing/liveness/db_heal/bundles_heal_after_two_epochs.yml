@@ -34,6 +34,12 @@ Scenario:
     type: validator
     stake: 3_000_000
 
+  # The bundle apps query nonces and block numbers through the node the driver
+  # pins for system transactions, picked on first use and kept while it
+  # answers. Using it now, with only the stable node up, pins that one; pinned
+  # to the frail node, the apps would send nothing during the outage.
+  - advanceEpoch
+
   - startNode: frail
     type: validator
     stake: 1_000_000
@@ -66,6 +72,11 @@ Scenario:
   - waitFor: 260s
   - advanceEpoch
   - advanceEpoch
+
+  # Heal rolls back to the last seal, so only the blocks after it are
+  # re-executed; give them bundles. Kept under MaxEpochDuration so no seal
+  # lands in between.
+  - waitFor: 15s
 
   - killSonic: frail
 
