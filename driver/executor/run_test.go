@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"math"
 	"math/big"
 	"slices"
 	"strings"
@@ -29,9 +30,11 @@ import (
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/checking"
 	"github.com/0xsoniclabs/norma/driver/parser"
+	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -1509,6 +1512,51 @@ func TestDelegation_SingleAccountRepeatedlyDelegatesAndUndelegates(t *testing.T)
 	}
 }
 
+func TestExecuteStep_ReturnsOnceCountIsProduced_WhenWaitingForBlocks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	// One read for the baseline, then one per block: the height grows by one
+	// per read, so a fourth read means it waited for exactly three blocks.
+	net := netWithBlockNumbers(ctrl, growingBlockHeight(), 4)
+
+	step := parser.Step{Function: parser.FuncWaitForBlocks, Blocks: 3}
+	require.NoError(t, executeStep(t.Context(), &step, net, nil, nil, &runState{}))
+}
+
+func TestExecuteStep_WaitsPastTheTimeout_WhenBlocksKeepArriving(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	const count = 8
+	net := netWithBlockNumbers(ctrl, growingBlockHeight(), count+1)
+	setBlockProductionTimeout(t, 500*time.Millisecond)
+
+	step := parser.Step{Function: parser.FuncWaitForBlocks, Blocks: count}
+	start := time.Now()
+	require.NoError(t, executeStep(t.Context(), &step, net, nil, nil, &runState{}))
+	require.Greater(t, time.Since(start), blockProductionTimeout)
+}
+
+func TestExecuteStep_FailsWithAStall_WhenTheChainStopsGrowing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := netWithBlockNumbers(ctrl, constantBlockHeight(7), -1)
+	// Negative, so the chain counts as stalled from the first poll on.
+	setBlockProductionTimeout(t, -1)
+
+	step := parser.Step{Function: parser.FuncWaitForBlocks, Blocks: 3}
+	err := executeStep(t.Context(), &step, net, nil, nil, &runState{})
+	require.ErrorContains(t, err, "no block produced")
+}
+
+// A count this large would wrap a baseline+count target below the baseline,
+// ending the wait before it began.
+func TestExecuteStep_KeepsWaiting_WhenTheCountIsTheLargestUint64(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := netWithBlockNumbers(ctrl, constantBlockHeight(7), -1)
+	setBlockProductionTimeout(t, -1)
+
+	step := parser.Step{Function: parser.FuncWaitForBlocks, Blocks: math.MaxUint64}
+	err := executeStep(t.Context(), &step, net, nil, nil, &runState{})
+	require.ErrorContains(t, err, "no block produced")
+}
+
 func delegateStep(node, delegator string, stake uint64) parser.Step {
 	return parser.Step{
 		Function: parser.FuncDelegate,
@@ -1525,4 +1573,36 @@ func undelegateStep(node, delegator string, stake *uint64) parser.Step {
 			{Node: node, Delegator: delegator, Stake: stake},
 		},
 	}
+}
+
+// netWithBlockNumbers returns a network whose single RPC client answers
+// BlockNumber from heights, expecting reads calls, or any number if negative.
+func netWithBlockNumbers(
+	ctrl *gomock.Controller,
+	heights func(context.Context) (uint64, error),
+	reads int,
+) driver.Network {
+	client := rpc.NewMockClient(ctrl)
+	call := client.EXPECT().BlockNumber(gomock.Any()).DoAndReturn(heights)
+	if reads < 0 {
+		call.AnyTimes()
+	} else {
+		call.Times(reads)
+	}
+	client.EXPECT().Close()
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().DialRandomRpc().Return(client, nil)
+	return net
+}
+
+func constantBlockHeight(height uint64) func(context.Context) (uint64, error) {
+	return func(context.Context) (uint64, error) {
+		return height, nil
+	}
+}
+
+func setBlockProductionTimeout(t *testing.T, timeout time.Duration) {
+	original := blockProductionTimeout
+	blockProductionTimeout = timeout
+	t.Cleanup(func() { blockProductionTimeout = original })
 }

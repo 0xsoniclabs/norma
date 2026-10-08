@@ -116,6 +116,7 @@ detailed parameter semantics for the non-trivial ones.
 | `stopApp`      | Stop a running load-generating application.              |
 | `checks`       | Run one or more health checks.                           |
 | `waitFor`      | Pause scenario execution for a fixed duration.           |
+| `waitForBlocks` | Wait until the network has produced N new blocks.      |
 
 ### 3.1 `startNode`
 
@@ -298,6 +299,20 @@ string (`10s`, `1m`, `1h30m`, …) and must be positive.
 ```yaml
 - waitFor: 15s
 ```
+
+### 3.11 `waitForBlocks`
+
+Blocks until the network has produced the given number of blocks past its
+height when the step starts. The value is a positive integer; underscores may
+be used (`1_100`).
+
+```yaml
+- waitForBlocks: 1_100
+```
+
+Use it where a step depends on the chain length rather than on elapsed time,
+which varies with the machine. The step fails if the chain stops growing for
+2 minutes.
 
 ---
 

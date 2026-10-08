@@ -1201,3 +1201,42 @@ Scenario:
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unknown check function")
 }
+
+func TestParseBytes_ReadsTheBlockCount_WhenWaitingForBlocks(t *testing.T) {
+	input := `
+Name: Wait For Blocks Test
+Description: t
+Scenario:
+  - waitForBlocks: 1_100
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+	require.Equal(t, FuncWaitForBlocks, scenario.Steps[0].Function)
+	require.Equal(t, uint64(1100), scenario.Steps[0].Blocks)
+}
+
+func TestParseBytes_Fails_WhenTheBlockCountIsInvalid(t *testing.T) {
+	cases := map[string]string{
+		"missing":  "",
+		"word":     "ten",
+		"negative": "-5",
+		"float":    "1.5",
+	}
+	for name, value := range cases {
+		t.Run(name, func(t *testing.T) {
+			input := "Name: T\nDescription: t\nScenario:\n" +
+				"  - waitForBlocks: " + value + "\n"
+			_, err := ParseBytes([]byte(input))
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestCheck_Fails_WhenTheBlockCountIsZero(t *testing.T) {
+	scenario := Scenario{
+		Name:        "Test",
+		Description: "A test scenario.",
+		Steps:       []Step{{Function: FuncWaitForBlocks}},
+	}
+	require.ErrorContains(t, scenario.Check(), "positive block count")
+}

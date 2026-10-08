@@ -60,8 +60,9 @@ var operationColors = map[parser.StepFunction]string{
 	parser.FuncWaitForEpoch: "\x1b[38;5;109m", // steel blue
 
 	// Passive steps.
-	parser.FuncChecks:  "\x1b[38;5;220m", // gold
-	parser.FuncWaitFor: "\x1b[38;5;244m", // grey — nothing is happening
+	parser.FuncChecks:        "\x1b[38;5;220m", // gold
+	parser.FuncWaitFor:       "\x1b[38;5;244m", // grey — nothing is happening
+	parser.FuncWaitForBlocks: "\x1b[38;5;248m", // light grey — waiting on the chain
 }
 
 // operationColor returns the colour assigned to op, or false if op has none.

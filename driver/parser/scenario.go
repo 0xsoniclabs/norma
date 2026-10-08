@@ -34,20 +34,21 @@ import (
 type StepFunction string
 
 const (
-	FuncStartNode    StepFunction = "startNode"
-	FuncStopNode     StepFunction = "stopNode"
-	FuncDelegate     StepFunction = "delegate"
-	FuncUndelegate   StepFunction = "undelegate"
-	FuncVerifyStakes StepFunction = "verifyStakes"
-	FuncUpdateRules  StepFunction = "updateRules"
-	FuncAdvanceEpoch StepFunction = "advanceEpoch"
-	FuncWaitForEpoch StepFunction = "waitForEpoch"
-	FuncRunApp       StepFunction = "runApp"
-	FuncStopApp      StepFunction = "stopApp"
-	FuncChecks       StepFunction = "checks"
-	FuncWaitFor      StepFunction = "waitFor"
-	FuncKillSonic    StepFunction = "killSonic"
-	FuncHealDb       StepFunction = "healDb"
+	FuncStartNode     StepFunction = "startNode"
+	FuncStopNode      StepFunction = "stopNode"
+	FuncDelegate      StepFunction = "delegate"
+	FuncUndelegate    StepFunction = "undelegate"
+	FuncVerifyStakes  StepFunction = "verifyStakes"
+	FuncUpdateRules   StepFunction = "updateRules"
+	FuncAdvanceEpoch  StepFunction = "advanceEpoch"
+	FuncWaitForEpoch  StepFunction = "waitForEpoch"
+	FuncRunApp        StepFunction = "runApp"
+	FuncStopApp       StepFunction = "stopApp"
+	FuncChecks        StepFunction = "checks"
+	FuncWaitFor       StepFunction = "waitFor"
+	FuncWaitForBlocks StepFunction = "waitForBlocks"
+	FuncKillSonic     StepFunction = "killSonic"
+	FuncHealDb        StepFunction = "healDb"
 
 	// Check functions used as items inside a checks: step.
 	FuncCheckBlockGasRate     StepFunction = "blockGasRate"
@@ -74,6 +75,7 @@ var allStepFunctions = [...]StepFunction{
 	FuncStopApp,
 	FuncChecks,
 	FuncWaitFor,
+	FuncWaitForBlocks,
 	FuncKillSonic,
 	FuncHealDb,
 }
@@ -316,6 +318,9 @@ type Step struct {
 
 	// WaitFor parameters
 	Duration time.Duration
+
+	// WaitForBlocks parameters
+	Blocks uint64
 }
 
 // DelegateTarget specifies a single delegation from a named external
@@ -477,6 +482,15 @@ func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
 			return fmt.Errorf("waitFor duration must be positive, got %s", d)
 		}
 		s.Duration = d
+	case FuncWaitForBlocks:
+		// Value is the number of blocks to wait for.
+		// The tag check rejects floats, which Decode would truncate.
+		if val.Kind != yaml.ScalarNode || val.Tag != "!!int" {
+			return fmt.Errorf("waitForBlocks requires a block count, got %q", val.Value)
+		}
+		if err := val.Decode(&s.Blocks); err != nil {
+			return fmt.Errorf("invalid block count %q: %w", val.Value, err)
+		}
 	case FuncChecks:
 		// Value is a sequence of check specifications.
 		if val.Kind == yaml.SequenceNode {
@@ -539,15 +553,16 @@ var stepFunctionDescriptions = map[StepFunction]string{
     internal bookkeeping for every delegator that participated in the
     scenario so far. Fails if any tracked (delegator, validator) pair
     has an on-chain stake that differs from the expected value.`,
-	FuncUpdateRules:  "Update one or more network rules (key/value pairs).",
-	FuncAdvanceEpoch: "Advance the network to the next epoch by sending transactions.",
-	FuncWaitForEpoch: "Wait until the network reaches the next epoch boundary.",
-	FuncRunApp:       "Start a load-generating application.",
-	FuncStopApp:      "Stop a running load-generating application by name.",
-	FuncChecks:       "Run one or more checks (see 'Available checks' below).",
-	FuncWaitFor:      "Pause scenario execution for a fixed duration.",
-	FuncKillSonic:    "Kill the sonicd process with SIGKILL, leaving the database dirty.",
-	FuncHealDb:       "Run sonictool heal on a killed node to recover its database.",
+	FuncUpdateRules:   "Update one or more network rules (key/value pairs).",
+	FuncAdvanceEpoch:  "Advance the network to the next epoch by sending transactions.",
+	FuncWaitForEpoch:  "Wait until the network reaches the next epoch boundary.",
+	FuncRunApp:        "Start a load-generating application.",
+	FuncStopApp:       "Stop a running load-generating application by name.",
+	FuncChecks:        "Run one or more checks (see 'Available checks' below).",
+	FuncWaitFor:       "Pause scenario execution for a fixed duration.",
+	FuncWaitForBlocks: "Wait until the network has produced the given number of new blocks.",
+	FuncKillSonic:     "Kill the sonicd process with SIGKILL, leaving the database dirty.",
+	FuncHealDb:        "Run sonictool heal on a killed node to recover its database.",
 }
 
 // paramDescriptions provides a human-readable description for each parameter key.
@@ -565,20 +580,21 @@ var paramDescriptions = map[string]string{
 
 // allowedParams defines which parameter keys are valid for each step function.
 var allowedParams = map[StepFunction][]string{
-	FuncStartNode:    {"type", "imageName", "dataVolume", "stake", "instances", "failing", "extraArguments"},
-	FuncStopNode:     {},
-	FuncRunApp:       {"type", "users", "rate"},
-	FuncStopApp:      {},
-	FuncUpdateRules:  {},
-	FuncDelegate:     {},
-	FuncUndelegate:   {},
-	FuncVerifyStakes: {},
-	FuncAdvanceEpoch: {},
-	FuncWaitForEpoch: {},
-	FuncWaitFor:      {},
-	FuncChecks:       {},
-	FuncKillSonic:    {},
-	FuncHealDb:       {},
+	FuncStartNode:     {"type", "imageName", "dataVolume", "stake", "instances", "failing", "extraArguments"},
+	FuncStopNode:      {},
+	FuncRunApp:        {"type", "users", "rate"},
+	FuncStopApp:       {},
+	FuncUpdateRules:   {},
+	FuncDelegate:      {},
+	FuncUndelegate:    {},
+	FuncVerifyStakes:  {},
+	FuncAdvanceEpoch:  {},
+	FuncWaitForEpoch:  {},
+	FuncWaitFor:       {},
+	FuncWaitForBlocks: {},
+	FuncChecks:        {},
+	FuncKillSonic:     {},
+	FuncHealDb:        {},
 }
 
 // parseParam parses a single parameter key-value pair.
