@@ -29,6 +29,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/checking"
 	"github.com/0xsoniclabs/norma/driver/parser"
+	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -1524,5 +1525,41 @@ func undelegateStep(node, delegator string, stake *uint64) parser.Step {
 		UndelegateTargets: []parser.UndelegateTarget{
 			{Node: node, Delegator: delegator, Stake: stake},
 		},
+	}
+}
+
+func TestRun_WaitForBlocks_ReturnsOnceTheCountIsProduced(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	client := rpc.NewMockClient(ctrl)
+	// One read for the baseline, then one per block: the height grows by one
+	// per read, so a fourth read means it waited for exactly three blocks.
+	client.EXPECT().BlockNumber(gomock.Any()).DoAndReturn(growingBlockHeight()).Times(4)
+	client.EXPECT().Close()
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().DialRandomRpc().Return(client, nil)
+
+	step := parser.Step{Function: parser.FuncWaitForBlocks, Blocks: 3}
+	if err := executeStep(t.Context(), &step, net, nil, nil, &runState{}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRun_WaitForBlocks_FailsWhenTheChainStalls(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	client := rpc.NewMockClient(ctrl)
+	client.EXPECT().BlockNumber(gomock.Any()).Return(uint64(7), nil).AnyTimes()
+	client.EXPECT().Close()
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().DialRandomRpc().Return(client, nil)
+
+	// Negative, so the chain counts as stalled from the first poll on.
+	original := blockProductionTimeout
+	blockProductionTimeout = -1
+	t.Cleanup(func() { blockProductionTimeout = original })
+
+	step := parser.Step{Function: parser.FuncWaitForBlocks, Blocks: 3}
+	err := executeStep(t.Context(), &step, net, nil, nil, &runState{})
+	if err == nil || !strings.Contains(err.Error(), "no block produced") {
+		t.Fatalf("expected a stall error, got %v", err)
 	}
 }

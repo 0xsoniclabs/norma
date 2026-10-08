@@ -30,6 +30,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver/checking"
 	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/0xsoniclabs/norma/driver/parser"
+	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -286,6 +287,14 @@ func executeStep(
 		return waitForBlockProduction(ctx, net)
 	case parser.FuncWaitForEpoch:
 		return net.WaitForEpochChange(ctx)
+	case parser.FuncWaitForBlocks:
+		client, err := net.DialRandomRpc()
+		if err != nil {
+			return fmt.Errorf("failed to connect to network: %w", err)
+		}
+		defer client.Close()
+		slog.Info("waiting for blocks", "count", step.Blocks)
+		return waitForBlocks(ctx, client, step.Blocks)
 	case parser.FuncChecks:
 		for i, spec := range step.SubChecks {
 			checkerName, ok := checkFunctionToCheckerName[spec.Function]
@@ -1018,20 +1027,18 @@ func requiresBlockProductionCheck(step parser.Step) bool {
 	case parser.FuncRunApp, parser.FuncUpdateRules, parser.FuncAdvanceEpoch:
 		return true
 	default:
-		// stopNode, undelegate, waitFor, waitForEpoch, stopApp, checks — skip
+		// stopNode, undelegate, waitFor, waitForEpoch, waitForBlocks, stopApp, checks — skip
 		return false
 	}
 }
 
-// blockProductionTimeout bounds waitForBlockProduction, whose random node
-// may have stopped following the chain.
-const blockProductionTimeout = 2 * time.Minute
+// blockProductionTimeout bounds how long the chain may stand still while
+// waiting for blocks, as the random node polled may have stopped following it.
+var blockProductionTimeout = 2 * time.Minute
 
 // waitForBlockProduction waits until the network produces a new block,
 // confirming it is actively processing transactions after an epoch transition.
 func waitForBlockProduction(ctx context.Context, net driver.Network) error {
-	ctx, cancel := context.WithTimeout(ctx, blockProductionTimeout)
-	defer cancel()
 	client, err := net.DialRandomRpc()
 	if err != nil {
 		// If we can't connect, log and proceed — the next step will fail
@@ -1040,27 +1047,42 @@ func waitForBlockProduction(ctx context.Context, net driver.Network) error {
 		return nil
 	}
 	defer client.Close()
+	return waitForBlocks(ctx, client, 1)
+}
 
-	baseline, err := client.BlockNumber(ctx)
+// waitForBlocks waits until the chain seen by client has grown by count
+// blocks, failing once it has not grown for blockProductionTimeout.
+func waitForBlocks(ctx context.Context, client rpc.Client, count uint64) error {
+	grownAt := time.Now()
+	blockNumber := func() (uint64, error) {
+		ctx, cancel := context.WithDeadline(ctx, grownAt.Add(blockProductionTimeout))
+		defer cancel()
+		return client.BlockNumber(ctx)
+	}
+
+	baseline, err := blockNumber()
 	if err != nil {
 		return fmt.Errorf("failed to get block number: %w", err)
 	}
-
-	for {
+	for height := baseline; height < baseline+count; {
+		if time.Since(grownAt) > blockProductionTimeout {
+			return fmt.Errorf("no block produced for %v, at block %d of %d",
+				blockProductionTimeout, height-baseline, count)
+		}
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("context cancelled while waiting for block production: %w", ctx.Err())
-		default:
+		case <-time.After(100 * time.Millisecond):
 		}
-		block, err := client.BlockNumber(ctx)
+		block, err := blockNumber()
 		if err != nil {
 			return fmt.Errorf("failed to get block number: %w", err)
 		}
-		if block > baseline {
-			return nil
+		if block > height {
+			height, grownAt = block, time.Now()
 		}
-		time.Sleep(100 * time.Millisecond)
 	}
+	return nil
 }
 
 // delegatorGasBudget is the extra amount (in S) transferred to a delegator
