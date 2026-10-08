@@ -66,10 +66,7 @@ Scenario:
   # Heal restores the last sealed epoch and refuses it unless the epoch before
   # ends at least 1024 blocks past the genesis, so the chain is grown past
   # that window and two more epochs are sealed on top of it.
-  # ponytail: time-based, assumes ~5 blocks/s; a slower machine falls short
-  # and heal refuses with "reaches back to the genesis". Wait on a block
-  # height instead if that happens.
-  - waitFor: 260s
+  - waitForBlocks: 1_100
   - advanceEpoch
   - advanceEpoch
 
