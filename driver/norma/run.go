@@ -57,6 +57,7 @@ var runCommand = cli.Command{
 		&outputDirectory,
 		&openReport,
 		&scenarioTimeout,
+		&tuiFlag,
 	},
 }
 
@@ -118,38 +119,47 @@ func run(ctx *cli.Context) (err error) {
 	// into a new subfolder so the output is easy to follow.
 	info, statErr := os.Stat(path)
 	printFolders := statErr == nil && info.IsDir()
-	lastFolder := ""
 
-	for _, file := range files {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if printFolders {
-			if folder := filepath.Dir(file); folder != lastFolder {
-				lastFolder = folder
-				fmt.Printf("=== scenarios in %s ===\n", folder)
+	runAll := func(runCtx context.Context, ui *tui) error {
+		lastFolder := ""
+		for _, file := range files {
+			if runCtx.Err() != nil {
+				return runCtx.Err()
+			}
+			if printFolders {
+				if folder := filepath.Dir(file); folder != lastFolder {
+					lastFolder = folder
+					fmt.Fprintf(stdout, "=== scenarios in %s ===\n", folder)
+				}
+			}
+			label := ctx.String(evalLabel.Name)
+			if label == "" {
+				label = fmt.Sprintf("eval_%d", time.Now().Unix())
+			}
+			if err := runScenario(
+				runCtx, file, outputDir, label,
+				skipChecks, skipReportRendering, openReport, timeout, ui,
+			); err != nil {
+				return fmt.Errorf("failed to run scenario %q: %w", file, err)
 			}
 		}
-		label := ctx.String(evalLabel.Name)
-		if label == "" {
-			label = fmt.Sprintf("eval_%d", time.Now().Unix())
-		}
-		if err := runScenario(
-			ctx.Context, file, outputDir, label,
-			skipChecks, skipReportRendering, openReport, timeout,
-		); err != nil {
-			return fmt.Errorf("failed to run scenario %q: %w", file, err)
-		}
+		return nil
 	}
 
-	return nil
+	if ctx.Bool(tuiFlag.Name) {
+		return runWithTUI(ctx, runAll)
+	}
+	return runAll(ctx.Context, nil)
 }
 
+// runScenario runs the scenario in the file at path, showing its progress in
+// ui unless ui is nil.
 func runScenario(
 	ctx context.Context,
 	path, outputDir, label string,
 	skipChecks, skipReportRendering, openReport bool,
 	timeout time.Duration,
+	ui *tui,
 ) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -199,7 +209,7 @@ func runScenario(
 	}
 
 	// Log initial rules.
-	fmt.Println(scenario.InitialRules.PrettyPrint()) // multi line print
+	fmt.Fprintln(stdout, scenario.InitialRules.PrettyPrint()) // multi line print
 
 	// Startup network. Genesis is configured from the first startNode step,
 	// which must be a validator. The step is NOT removed — nodes are started
@@ -290,6 +300,10 @@ func runScenario(
 	// usable for dumping node logs after a timeout.
 	runCtx, cancelRun := context.WithTimeout(ctx, timeout)
 	defer cancelRun()
+
+	if ui != nil {
+		defer ui.show(scenario, monitor)()
+	}
 
 	stepExecutions, err = executor.RunAndCaptureEventExecution(
 		runCtx,
