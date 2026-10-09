@@ -45,13 +45,19 @@ func TestRate_IsIncreasePerSecondOverWindow(t *testing.T) {
 	_, ok := rate(series)
 	require.False(t, ok)
 
-	start := time.Unix(1000, 0)
+	start := time.Now().Add(-8 * time.Second)
 	for i, value := range []float64{0, 100, 120, 140, 160, 180, 200} {
 		require.NoError(t, series.Append(monitoring.NewTime(start.Add(time.Duration(i)*time.Second)), value))
 	}
 	got, ok := rate(series)
 	require.True(t, ok)
 	require.Equal(t, 20.0, got)
+
+	stale := &monitoring.SyncedSeries[monitoring.Time, float64]{}
+	require.NoError(t, stale.Append(monitoring.NewTime(start.Add(-time.Minute)), 0))
+	require.NoError(t, stale.Append(monitoring.NewTime(start), 100))
+	_, ok = rate(stale)
+	require.False(t, ok, "no rate once the counter is no longer collected")
 
 	require.NoError(t, series.Append(monitoring.NewTime(start.Add(7*time.Second)), 5))
 	_, ok = rate(series)

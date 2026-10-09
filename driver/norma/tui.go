@@ -61,8 +61,8 @@ func runWithTUI(cliCtx *cli.Context, runAll func(context.Context, *tui) error) e
 			newPlotTab("Epoch", func(m *monitoring.Monitor) map[string]float64 {
 				return perNode(m, nodemon.NodeBlockStatus, latest(func(s monitoring.BlockStatus) float64 { return float64(s.Epoch) }))
 			}),
-			newPlotTab("Txs received/s", func(m *monitoring.Monitor) map[string]float64 {
-				return perNode(m, txpoolReceived, rate)
+			newPlotTab("Txs committed/s", func(m *monitoring.Monitor) map[string]float64 {
+				return perNode(m, txsCommitted, rate)
 			}),
 			newPlotTab("Stake (S)", func(m *monitoring.Monitor) map[string]float64 {
 				return perNode(m, netmon.ValidatorStake, latest(weiToS))
@@ -252,9 +252,9 @@ func (p *plotTab) Draw(screen tcell.Screen) {
 	p.Plot.Draw(screen)
 }
 
-// txpoolReceived counts the transactions a node received into its pool, read
+// txsCommitted counts the transactions in the blocks a node committed, read
 // from its Prometheus metrics.
-var txpoolReceived = monitoring.Metric[monitoring.Node, monitoring.Series[monitoring.Time, float64]]{Name: "txpool_received"}
+var txsCommitted = monitoring.Metric[monitoring.Node, monitoring.Series[monitoring.Time, float64]]{Name: "chain_txs_processed"}
 
 // rateWindow is the time over which rate averages the increase of a counter.
 const rateWindow = 5 * time.Second
@@ -291,10 +291,11 @@ func latest[T any](toFloat func(T) float64) func(monitoring.Series[monitoring.Ti
 }
 
 // rate is the per-second increase of a counter over the last rateWindow. It
-// has no value while the window spans a reset of the counter.
+// has no value once the counter is no longer collected, as for a stopped node,
+// and while the window spans a reset of the counter.
 func rate(series monitoring.Series[monitoring.Time, float64]) (float64, bool) {
 	last := series.GetLatest()
-	if last == nil {
+	if last == nil || time.Since(last.Position.Time()) > rateWindow {
 		return 0, false
 	}
 	points := series.GetRange(last.Position-monitoring.Time(rateWindow), last.Position+1)

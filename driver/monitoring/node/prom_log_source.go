@@ -28,6 +28,7 @@ var (
 	// A list of Prometheus metrics that will be registered and obtained for processing.
 	metrics = []monitoring.PrometheusLogKey{
 		monitoring.NewPrometheusNameKey("txpool_received"),
+		monitoring.NewPrometheusNameKey("chain_txs_processed"),
 
 		monitoring.NewPrometheusNameKey("txpool_valid"),
 		monitoring.NewPrometheusNameKey("txpool_invalid"),
