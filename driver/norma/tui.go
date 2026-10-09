@@ -41,6 +41,7 @@ var lineColors = []tcell.Color{
 type tui struct {
 	app   *tview.Application
 	steps *tview.List
+	nodes *tview.Table
 	plots []*plotTab
 	log   *tview.TextView
 }
@@ -54,6 +55,7 @@ func runWithTUI(cliCtx *cli.Context, runAll func(context.Context, *tui) error) e
 	t := &tui{
 		app:   tview.NewApplication(),
 		steps: tview.NewList().ShowSecondaryText(false),
+		nodes: tview.NewTable().SetFixed(1, 0),
 		plots: []*plotTab{
 			newPlotTab("Block height", func(m *monitoring.Monitor) map[string]float64 {
 				return perNode(m, nodemon.NodeBlockStatus, latest(func(s monitoring.BlockStatus) float64 { return float64(s.BlockHeight) }))
@@ -71,6 +73,7 @@ func runWithTUI(cliCtx *cli.Context, runAll func(context.Context, *tui) error) e
 		log: tview.NewTextView().SetDynamicColors(true).SetMaxLines(10_000).ScrollToEnd(),
 	}
 	t.steps.SetBorder(true).SetTitle(" Steps ")
+	t.nodes.SetBorder(true).SetTitle(" Nodes ")
 	t.log.SetBorder(true).SetTitle(" Log ")
 	t.log.SetChangedFunc(func() { t.app.Draw() })
 
@@ -94,7 +97,9 @@ func runWithTUI(cliCtx *cli.Context, runAll func(context.Context, *tui) error) e
 		AddItem(plots, 0, 1, false).
 		AddItem(t.log, 0, 1, true)
 	root := tview.NewFlex().
-		AddItem(t.steps, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(t.steps, 0, 3, false).
+			AddItem(t.nodes, 0, 1, false), 0, 1, false).
 		AddItem(right, 0, 3, true)
 
 	finished := make(chan struct{})
@@ -174,12 +179,41 @@ func (t *tui) show(scenario *parser.Scenario, monitor *monitoring.Monitor) (stop
 				for _, plot := range t.plots {
 					plot.add(plot.sample(monitor))
 				}
+				t.showNodes(monitor)
 			})
 		}
 	}()
 	return func() {
 		close(done)
 		<-stopped
+	}
+}
+
+// showNodes lists the running nodes with their latest block and epoch.
+func (t *tui) showNodes(monitor *monitoring.Monitor) {
+	t.nodes.Clear()
+	for column, header := range []string{"Node", "Block", "Epoch"} {
+		align := tview.AlignRight
+		if column == 0 {
+			align = tview.AlignLeft
+		}
+		t.nodes.SetCell(0, column, tview.NewTableCell(header).SetAttributes(tcell.AttrBold).SetAlign(align).SetExpansion(1))
+	}
+	var labels []string
+	for _, node := range monitor.Network().GetActiveNodes() {
+		labels = append(labels, node.GetLabel())
+	}
+	slices.Sort(labels)
+	for i, label := range labels {
+		block, epoch := "-", "-"
+		if series, ok := monitoring.GetData(monitor, monitoring.Node(label), nodemon.NodeBlockStatus); ok && series != nil {
+			if point := series.GetLatest(); point != nil {
+				block, epoch = fmt.Sprint(point.Value.BlockHeight), fmt.Sprint(point.Value.Epoch)
+			}
+		}
+		t.nodes.SetCell(i+1, 0, tview.NewTableCell(label).SetExpansion(1))
+		t.nodes.SetCell(i+1, 1, tview.NewTableCell(block).SetAlign(tview.AlignRight).SetExpansion(1))
+		t.nodes.SetCell(i+1, 2, tview.NewTableCell(epoch).SetAlign(tview.AlignRight).SetExpansion(1))
 	}
 }
 
