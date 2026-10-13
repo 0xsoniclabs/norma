@@ -31,14 +31,17 @@ package node
 //	Killed        --HealSonicd-------> Healing      --> Ready
 //	Ready         --ExportGenesis----> Maintenance  --> Ready
 //	Ready         --ImportGenesis----> Maintenance  --> Ready
+//	Ready         --ExportEvents-----> Maintenance  --> Ready
+//	Ready         --ImportEvents-----> Maintenance  --> Ready
 //	Ready         --CheckDatabase----> Maintenance  --> Ready
 //
 // Failure returns the node to the state the action started from, except
 // for ForceStopSonicd and ImportGenesis. Once a kill has been attempted the
 // database must be assumed dirty, so the node stays in Killed and heal is
-// the only way out; a failed genesis import leaves the data directory
-// half-written, so the node stays in Maintenance, from which no client can
-// be started.
+// the only way out; a genesis import that fails at any point, including
+// while removing the old database, may leave the data directory partly
+// removed or half-written, so the node stays in Maintenance, from which no
+// client can be started.
 //
 // The state records what norma is allowed to do next; it is not by itself
 // evidence about the client process. Three mechanisms keep the two from

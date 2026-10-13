@@ -121,7 +121,7 @@ func (s *Step) Check() error {
 		return nil
 	case FuncExportGenesis, FuncImportGenesis,
 		FuncExportEvents, FuncImportEvents:
-		return s.checkGenesisFileStep()
+		return s.checkSharedFileStep()
 	case FuncCheckDb:
 		return s.checkCheckDb()
 	case FuncAdvanceEpoch, FuncWaitForEpoch:
@@ -278,9 +278,9 @@ func (s *Step) checkSubChecks() error {
 	return errors.Join(errs...)
 }
 
-// checkGenesisFileStep validates a step naming a node and a file in the
+// checkSharedFileStep validates a step naming a node and a file in the
 // shared directory: the genesis and events, import and export steps.
-func (s *Step) checkGenesisFileStep() error {
+func (s *Step) checkSharedFileStep() error {
 	errs := []error{}
 	if s.Identifier == "" {
 		errs = append(errs, fmt.Errorf("%s requires a node identifier", s.Function))
