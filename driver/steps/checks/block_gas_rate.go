@@ -19,17 +19,17 @@ package checks
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
-	"github.com/0xsoniclabs/norma/driver/steps"
 )
 
 // BlockGasRate asserts that no block in the observation window exceeds a gas
 // rate ceiling.
 type BlockGasRate struct {
-	Ceiling *float64 `yaml:"ceiling" help:"Maximum allowed value (float64) for a gas rate check."`
+	Ceiling *float64 `yaml:"ceiling" help:"Maximum allowed gas rate of a block, a non-negative whole number."`
 	Window
-	steps.Failing
+	Failing
 }
 
 func (*BlockGasRate) Name() string { return "blockGasRate" }
@@ -39,8 +39,10 @@ func (*BlockGasRate) Help() string {
 }
 
 func (c *BlockGasRate) Validate() error {
-	if c.Ceiling != nil && *c.Ceiling < 0 {
-		return fmt.Errorf("ceiling must be non-negative, got %v", *c.Ceiling)
+	// The checker compares against a whole number, so a fraction would be
+	// truncated.
+	if c.Ceiling != nil && (*c.Ceiling < 0 || *c.Ceiling != math.Trunc(*c.Ceiling)) {
+		return fmt.Errorf("ceiling must be a non-negative whole number, got %v", *c.Ceiling)
 	}
 	return c.Window.Validate()
 }

@@ -203,7 +203,7 @@ Scenario:
 	require.NotNil(t, step.Instances)
 	require.Equal(t, 3, *step.Instances)
 	require.Equal(t, "vol-A", step.DataVolume)
-	require.True(t, step.Failing.Failing)
+	require.True(t, step.Failing)
 }
 
 func TestParseBytes_Undelegate(t *testing.T) {
@@ -865,6 +865,64 @@ Scenario:
 `
 	_, err := ParseBytes([]byte(input))
 	require.ErrorContains(t, err, `line 6: parameter "type" is given twice`)
+}
+
+func TestParseBytes_RejectsUnknownKeysInsideParameterValues(t *testing.T) {
+	input := `
+Name: Test
+Scenario:
+  - runApp: load
+    type: counter
+    rate:
+      constant: 5
+      constnat: 50
+`
+	_, err := ParseBytes([]byte(input))
+	require.ErrorContains(t, err, "line 6: invalid rate value: field constnat not found")
+}
+
+// The checker compares against a whole number; a fraction would be truncated.
+func TestParseBytes_RejectsAFractionalGasRateCeiling(t *testing.T) {
+	input := `
+Name: Test
+Scenario:
+  - checks:
+      - blockGasRate:
+          ceiling: 0.9
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+	require.ErrorContains(t, scenario.Check(), "ceiling must be a non-negative whole number, got 0.9")
+}
+
+// startNode's failing marks a diverging node; only for checks does it turn a
+// pass into a failure.
+func TestParams_DescribeFailingForWhatItMeansToEachFunction(t *testing.T) {
+	helpOf := func(fn steps.Function) string {
+		for _, p := range steps.Params(fn) {
+			if p.Key == "failing" {
+				return p.Help
+			}
+		}
+		t.Fatalf("%s has no failing parameter", fn.Name())
+		return ""
+	}
+	require.Contains(t, helpOf(&nodelifetime.StartNode{}), "diverge")
+	require.NotContains(t, helpOf(&nodelifetime.StartNode{}), "treated as an error")
+	require.Contains(t, helpOf(&checks.BlockHashes{}), "treated as an error")
+}
+
+func TestParseBytes_RejectsUnknownInitialNetworkRules(t *testing.T) {
+	input := `
+Name: Test
+InitialNetworkRules:
+  Blocks:
+    MaxBlokGas: 1
+Scenario:
+  - advanceEpoch
+`
+	_, err := ParseBytes([]byte(input))
+	require.ErrorContains(t, err, "field MaxBlokGas not found")
 }
 
 func TestParseBytes_NonScalarStringParam(t *testing.T) {

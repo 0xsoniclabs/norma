@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
-	"github.com/0xsoniclabs/norma/driver/steps"
 	"github.com/0xsoniclabs/norma/genesis"
 )
 
@@ -29,7 +28,7 @@ import (
 type NetworkRules struct {
 	Rules genesis.NetworkRulesPatch `yaml:"rules" help:"Expected network rules patch (NetworkRulesPatch field structure)."`
 	Convergence
-	steps.Failing
+	Failing
 }
 
 func (*NetworkRules) Name() string { return "networkRules" }

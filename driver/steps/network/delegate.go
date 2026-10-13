@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/0xsoniclabs/norma/driver/steps"
 	"gopkg.in/yaml.v3"
@@ -95,6 +96,11 @@ func (s *Delegate) Validate() error {
 		}
 		if t.Stake == 0 {
 			return fmt.Errorf("delegate target %d: stake must be greater than zero", i+1)
+		}
+		// The account is funded with the stake plus a gas budget, which must
+		// not wrap around.
+		if t.Stake > math.MaxUint64-delegatorGasBudget {
+			return fmt.Errorf("delegate target %d: stake must be at most %d", i+1, uint64(math.MaxUint64)-delegatorGasBudget)
 		}
 	}
 	return nil

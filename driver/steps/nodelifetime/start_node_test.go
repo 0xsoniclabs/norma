@@ -58,7 +58,7 @@ func TestStartNode_Validate(t *testing.T) {
 // Only a node expected to work leaves a network the executor should wait on.
 func TestStartNode_AwaitsBlockProductionUnlessExpectedToFail(t *testing.T) {
 	require.True(t, (&StartNode{}).AwaitsBlockProduction())
-	require.False(t, (&StartNode{Failing: steps.Failing{Failing: true}}).AwaitsBlockProduction())
+	require.False(t, (&StartNode{Failing: true}).AwaitsBlockProduction())
 }
 
 // startEnv returns an environment on a network with no reachable node, so
@@ -136,7 +136,7 @@ func TestStartNode_SkipsSyncAndActivation_WhenTheNodeIsExpectedToFail(t *testing
 	// No EnsureValidatorsActive call is expected.
 	env, created := startEnv(t, ctrl, registry)
 
-	step := &StartNode{Node: steps.Node{Node: "frail"}, Type: "validator", Failing: steps.Failing{Failing: true}}
+	step := &StartNode{Node: steps.Node{Node: "frail"}, Type: "validator", Failing: true}
 	require.NoError(t, step.Run(t.Context(), env))
 
 	configs := created()

@@ -18,6 +18,7 @@ package network
 
 import (
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -108,4 +109,22 @@ func TestDelegate_RejectsUnknownTargetFields(t *testing.T) {
 
 	_, err = decode(t, "delegate:\n  - node: val-1\n    node: val-2\n")
 	require.ErrorContains(t, err, `parameter "node" is given twice`)
+}
+
+// Unknown rules are rejected rather than dropped, which would apply the rest
+// of the patch without them.
+func TestUpdateRules_RejectsUnknownRules(t *testing.T) {
+	_, err := decode(t, "updateRules:\n  Blocks:\n    MaxBlockGas: 100000\n    MaxEmptyBlockSkipPerod: 3s\n")
+	require.ErrorContains(t, err, "field MaxEmptyBlockSkipPerod not found")
+}
+
+// The delegator is funded with the stake plus a gas budget; a stake that
+// would wrap that sum around is rejected.
+func TestDelegate_RejectsAStakeTheFundingCannotCover(t *testing.T) {
+	limit := uint64(math.MaxUint64) - delegatorGasBudget
+	step := &Delegate{Targets: []DelegateTarget{{Node: "val", Delegator: "alice", Stake: limit + 1}}}
+	require.ErrorContains(t, step.Validate(), "stake must be at most")
+
+	step.Targets[0].Stake = limit
+	require.NoError(t, step.Validate())
 }

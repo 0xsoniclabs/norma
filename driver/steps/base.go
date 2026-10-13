@@ -101,11 +101,6 @@ func IsInstanceLabel(label, base string) bool {
 	return err == nil && instance >= 0 && strconv.Itoa(instance) == suffix
 }
 
-// Failing is the parameter marking a step or check as expected to fail.
-type Failing struct {
-	Failing bool `yaml:"failing" help:"When true, failure is expected; a passing result is treated as an error."`
-}
-
 // Duration is a non-negative time.Duration written as a string such as "30s".
 type Duration time.Duration
 

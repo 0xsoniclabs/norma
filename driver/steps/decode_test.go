@@ -162,3 +162,35 @@ func TestDecodeStrict_RejectsWhatYamlWouldIgnore(t *testing.T) {
 		})
 	}
 }
+
+type outer struct {
+	Inner struct {
+		Value int `yaml:"value"`
+	} `yaml:"inner"`
+}
+
+func TestDecodeKnown_RejectsUnknownKeysAtAnyDepth(t *testing.T) {
+	var node yaml.Node
+	require.NoError(t, yaml.Unmarshal([]byte("inner:\n  value: 1\n  valeu: 2\n"), &node))
+
+	var got outer
+	err := DecodeKnown(node.Content[0], &got)
+	require.EqualError(t, err, "field valeu not found in type struct { Value int \"yaml:\\\"value\\\"\" }")
+
+	require.NoError(t, yaml.Unmarshal([]byte("inner:\n  value: 1\n"), &node))
+	require.NoError(t, DecodeKnown(node.Content[0], &got))
+	require.Equal(t, 1, got.Inner.Value)
+}
+
+func TestDecodeKnown_KeepsYamlScalars(t *testing.T) {
+	var node yaml.Node
+	require.NoError(t, yaml.Unmarshal([]byte("5_000_000\n"), &node))
+	var got uint64
+	require.NoError(t, DecodeKnown(node.Content[0], &got))
+	require.Equal(t, uint64(5_000_000), got)
+
+	require.NoError(t, yaml.Unmarshal([]byte("~\n"), &node))
+	var ptr *int
+	require.NoError(t, DecodeKnown(node.Content[0], &ptr))
+	require.Nil(t, ptr)
+}
