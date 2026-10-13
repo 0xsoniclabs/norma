@@ -91,9 +91,10 @@ const (
 	phaseCompleted = "completed"
 )
 
-// defaultScenarioTimeout is the maximum time a scenario is
-// allowed to run before being aborted.
-const defaultScenarioTimeout = 10 * time.Minute
+// DefaultScenarioTimeout is the maximum time a scenario is allowed to run
+// before being aborted. It applies only when the caller passes a context
+// without a deadline of its own; `norma run --timeout` sets one.
+const DefaultScenarioTimeout = 10 * time.Minute
 
 // clientExitTimeout caps the wait for a client that stops itself, which
 // happens no sooner than the epoch boundary it was told to stop at.
@@ -136,8 +137,13 @@ func runWithObserver(
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, defaultScenarioTimeout)
-	defer cancel()
+	// A caller that set its own deadline has already decided how long the
+	// scenario may run.
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, DefaultScenarioTimeout)
+		defer cancel()
+	}
 
 	state := &runState{
 		nodes:          make(map[string]driver.Node),

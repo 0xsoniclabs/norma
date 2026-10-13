@@ -1668,3 +1668,45 @@ func TestFileManagementSteps_RejectNodesTheyCannotDrive(t *testing.T) {
 		}
 	}
 }
+
+func TestRun_KeepsCallerDeadline_WhenLongerThanDefault(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+
+	want := time.Now().Add(2 * DefaultScenarioTimeout)
+	ctx, cancel := context.WithDeadline(t.Context(), want)
+	defer cancel()
+
+	net.EXPECT().WaitForEpochChange(gomock.Any()).DoAndReturn(func(ctx context.Context) error {
+		got, _ := ctx.Deadline()
+		require.Equal(t, want, got)
+		return nil
+	})
+
+	scenario := parser.Scenario{
+		Name:        "Deadline",
+		Description: "Test scenario.",
+		Steps:       []parser.Step{{Function: parser.FuncWaitForEpoch}},
+	}
+
+	require.NoError(t, run(ctx, net, &scenario, nil, nil))
+}
+
+func TestRun_AbortsAtCallerDeadline_WhenStepBlocks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
+	defer cancel()
+
+	scenario := parser.Scenario{
+		Name:        "Deadline",
+		Description: "Test scenario.",
+		Steps:       []parser.Step{{Function: parser.FuncWaitFor, Duration: time.Minute}},
+	}
+
+	start := time.Now()
+	err := run(ctx, net, &scenario, nil, nil)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	require.Less(t, time.Since(start), time.Second)
+}
