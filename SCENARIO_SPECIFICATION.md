@@ -117,6 +117,10 @@ detailed parameter semantics for the non-trivial ones.
 | `checks`       | Run one or more health checks.                           |
 | `waitFor`      | Pause scenario execution for a fixed duration.           |
 | `waitForBlocks` | Wait until the network has produced N new blocks.      |
+| `killSonic`    | SIGKILL the client, leaving its database dirty.          |
+| `healDb`       | Recover the database of a killed node.                   |
+| `stopSonic`    | Stop the client gracefully, keeping the node.            |
+| `waitForSonicExit` | Wait for a client that stops itself, keeping the node. |
 
 ### 3.1 `startNode`
 
@@ -313,6 +317,22 @@ be used (`1_100`).
 Use it where a step depends on the chain length rather than on elapsed time,
 which varies with the machine. The step fails if the chain stops growing for
 2 minutes.
+
+### 3.12 Client lifecycle: `stopSonic`, `killSonic`, `healDb`, `waitForSonicExit`
+
+These act on the client process of a running node and keep its container
+and data directory. Each takes a node identifier and no parameters.
+
+```yaml
+- stopSonic: validator-1         # SIGINT, database flushed
+- killSonic: validator-1         # SIGKILL, database left dirty
+- healDb: validator-1            # sonictool heal, only after killSonic
+- waitForSonicExit: exporter-1   # a client that stops itself, e.g. --exitwhensynced.epoch
+```
+
+The node stays tracked, so a later `startNode` with the same identifier and
+`type` restarts the client in place. A node whose client is stopped leaves
+the active set, so checks, the end checks included, skip it.
 
 ---
 
