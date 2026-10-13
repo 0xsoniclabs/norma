@@ -28,14 +28,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestCheckScenarios iterates through all scenarios in this directory
-// and its sub-directories and checks whether the contained YAML files
-// define valid scenarios.
+// TestCheckScenarios iterates through all scenarios in this directory, its
+// sub-directories and the experiments directory, and checks whether the
+// contained YAML files define valid scenarios.
 func TestCheckScenarios(t *testing.T) {
-	files, err := listAll()
+	files, err := listAll(".")
 	require.NoError(t, err, "failed to get list of all scenario files")
 	require.NotEmpty(t, files, "failed to locate any scenario files")
-	for _, file := range files {
+	experiments, err := listAll(experimentsDir)
+	require.NoError(t, err, "failed to get list of all experiment files")
+	require.NotEmpty(t, experiments, "failed to locate any experiment files")
+	for _, file := range append(files, experiments...) {
 		t.Run(file, func(t *testing.T) {
 			scenario, err := parser.ParseFile(file)
 			require.NoError(t, err, "failed to parse file", file)
@@ -48,7 +51,7 @@ func TestCheckScenarios(t *testing.T) {
 // scenario starts at least one node running the local sonic sources. A scenario
 // that only uses released images would not test the code under release.
 func TestReleaseTestingScenarios_UseLocalClient(t *testing.T) {
-	files, err := listAll()
+	files, err := listAll(".")
 	require.NoError(t, err, "failed to get list of all scenario files")
 
 	prefix := releaseTestingDir + string(filepath.Separator)
@@ -76,9 +79,12 @@ func TestReleaseTestingScenarios_UseLocalClient(t *testing.T) {
 
 const releaseTestingDir = "release_testing"
 
-func listAll() ([]string, error) {
+// experimentsDir holds scenarios for one-off experiments, kept valid too.
+const experimentsDir = "../experiments"
+
+func listAll(root string) ([]string, error) {
 	files := []string{}
-	err := filepath.Walk(".",
+	err := filepath.Walk(root,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
