@@ -17,8 +17,11 @@
 package steps
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -144,12 +147,38 @@ func decodeFields(v reflect.Value, pairs []*yaml.Node, owner string) error {
 			return fmt.Errorf("line %d: parameter %q is given twice", key.Line, key.Value)
 		}
 		seen[key.Value] = true
-		if err := value.Decode(field.Addr().Interface()); err != nil {
+		if err := DecodeKnown(value, field.Addr().Interface()); err != nil {
 			return fmt.Errorf("line %d: invalid %s value: %w", key.Line, key.Value, err)
 		}
 	}
 	return nil
 }
+
+// DecodeKnown decodes value into out like yaml.Node.Decode, but rejects
+// mapping keys out does not declare at any depth, which yaml.Node.Decode
+// silently ignores.
+func DecodeKnown(value *yaml.Node, out any) error {
+	data, err := yaml.Marshal(value)
+	if err != nil {
+		return err
+	}
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	err = decoder.Decode(out)
+	// The lines yaml reports are relative to value, so they are dropped in
+	// favour of the caller's.
+	var typeErr *yaml.TypeError
+	if errors.As(err, &typeErr) {
+		messages := make([]string, len(typeErr.Errors))
+		for i, message := range typeErr.Errors {
+			messages[i] = relativeLine.ReplaceAllString(message, "")
+		}
+		return errors.New(strings.Join(messages, "; "))
+	}
+	return err
+}
+
+var relativeLine = regexp.MustCompile(`^line \d+: `)
 
 // visitParams calls visit for every field of v tagged `yaml`, descending into
 // embedded structs.

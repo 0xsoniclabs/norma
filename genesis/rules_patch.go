@@ -114,16 +114,6 @@ func NewRulesPatchFromOperaRules(rules opera.Rules) (NetworkRulesPatch, error) {
 	return patch, nil
 }
 
-func (p *NetworkRulesPatch) UnmarshalYAML(node *yaml.Node) error {
-	type alias NetworkRulesPatch
-	var decoded alias
-	if err := node.Decode(&decoded); err != nil {
-		return err
-	}
-	*p = NetworkRulesPatch(decoded)
-	return nil
-}
-
 func (p *NetworkRulesPatch) PrettyPrint() string {
 	b, err := yaml.Marshal(p)
 	if err != nil {

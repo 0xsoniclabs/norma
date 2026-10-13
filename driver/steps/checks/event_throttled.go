@@ -20,14 +20,13 @@ import (
 	"context"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
-	"github.com/0xsoniclabs/norma/driver/steps"
 )
 
 // EventThrottled asserts that the listed validators emit events markedly
 // slower than the rest.
 type EventThrottled struct {
 	ThrottledNodes []string `yaml:"throttledNodes" help:"List of node labels expected to be throttled."`
-	steps.Failing
+	Failing
 }
 
 func (*EventThrottled) Name() string { return "eventThrottled" }

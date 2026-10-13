@@ -21,14 +21,13 @@ import (
 	"fmt"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
-	"github.com/0xsoniclabs/norma/driver/steps"
 )
 
 // BlockHeights asserts that all nodes converge on the same block height.
 type BlockHeights struct {
 	Tolerance *int `yaml:"tolerance" help:"Allowed deviation (int, in blocks) between the heights of the nodes."`
 	Convergence
-	steps.Failing
+	Failing
 }
 
 func (*BlockHeights) Name() string { return "blockHeights" }

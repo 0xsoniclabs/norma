@@ -20,13 +20,12 @@ import (
 	"context"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
-	"github.com/0xsoniclabs/norma/driver/steps"
 )
 
 // BlocksProduced asserts that all nodes keep producing blocks.
 type BlocksProduced struct {
 	Window
-	steps.Failing
+	Failing
 }
 
 func (*BlocksProduced) Name() string { return "blocksProduced" }

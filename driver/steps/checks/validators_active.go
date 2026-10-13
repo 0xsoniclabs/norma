@@ -20,13 +20,12 @@ import (
 	"context"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
-	"github.com/0xsoniclabs/norma/driver/steps"
 )
 
 // ValidatorsActive asserts that every running validator node takes part in
 // consensus.
 type ValidatorsActive struct {
-	steps.Failing
+	Failing
 }
 
 func (*ValidatorsActive) Name() string { return "validatorsActive" }

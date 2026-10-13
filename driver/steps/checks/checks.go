@@ -137,8 +137,13 @@ func (c Convergence) configure(config checking.CheckerConfig) {
 	setDuration(config, c.Duration)
 }
 
+// Failing is the parameter marking a check as expected to fail.
+type Failing struct {
+	Failing bool `yaml:"failing" help:"When true, the check is expected to fail; a passing result is treated as an error."`
+}
+
 // newConfig returns the checker configuration every check starts from.
-func newConfig(failing steps.Failing) checking.CheckerConfig {
+func newConfig(failing Failing) checking.CheckerConfig {
 	config := checking.CheckerConfig{}
 	if failing.Failing {
 		config["failing"] = true

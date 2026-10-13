@@ -20,12 +20,11 @@ import (
 	"context"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
-	"github.com/0xsoniclabs/norma/driver/steps"
 )
 
 // BlockHashes asserts that all nodes agree on the block hashes.
 type BlockHashes struct {
-	steps.Failing
+	Failing
 }
 
 func (*BlockHashes) Name() string { return "blockHashes" }
