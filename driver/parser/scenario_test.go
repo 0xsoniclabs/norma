@@ -26,9 +26,12 @@ import (
 	"github.com/0xsoniclabs/norma/driver/checking"
 	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/0xsoniclabs/norma/driver/steps"
+	"github.com/0xsoniclabs/norma/driver/steps/apps"
 	"github.com/0xsoniclabs/norma/driver/steps/checks"
-	"github.com/0xsoniclabs/norma/driver/steps/staking"
-	"github.com/0xsoniclabs/norma/driver/steps/startnode"
+	"github.com/0xsoniclabs/norma/driver/steps/network"
+	"github.com/0xsoniclabs/norma/driver/steps/nodelifetime"
+	"github.com/0xsoniclabs/norma/driver/steps/sonictool"
+	"github.com/0xsoniclabs/norma/driver/steps/wait"
 	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/stretchr/testify/require"
 )
@@ -85,11 +88,11 @@ Scenario:
 	require.Equal(t, "Minimal Test", scenario.Name)
 	require.Len(t, scenario.Steps, 8)
 
-	start := stepAs[*startnode.StartNode](t, scenario.Steps[0])
+	start := stepAs[*nodelifetime.StartNode](t, scenario.Steps[0])
 	require.Equal(t, "validator-A", start.Target())
 	require.Equal(t, "validator", start.Type)
 
-	runApp := stepAs[*steps.RunApp](t, scenario.Steps[1])
+	runApp := stepAs[*apps.RunApp](t, scenario.Steps[1])
 	require.Equal(t, "load", runApp.Target())
 	require.Equal(t, "counter", runApp.Type)
 	require.NotNil(t, runApp.Users)
@@ -98,12 +101,12 @@ Scenario:
 	require.NotNil(t, runApp.Rate.Constant)
 	require.EqualValues(t, 5, *runApp.Rate.Constant)
 
-	stepAs[*steps.AdvanceEpoch](t, scenario.Steps[2])
+	stepAs[*network.AdvanceEpoch](t, scenario.Steps[2])
 
-	stopApp := stepAs[*steps.StopApp](t, scenario.Steps[3])
+	stopApp := stepAs[*apps.StopApp](t, scenario.Steps[3])
 	require.Equal(t, "load", stopApp.Target())
 
-	stopNode := stepAs[*steps.StopNode](t, scenario.Steps[4])
+	stopNode := stepAs[*nodelifetime.StopNode](t, scenario.Steps[4])
 	require.Equal(t, "validator-A", stopNode.Target())
 }
 
@@ -152,7 +155,7 @@ Scenario:
 	require.NoError(t, err)
 	require.Len(t, scenario.Steps, 5)
 
-	step := stepAs[*steps.UpdateRules](t, scenario.Steps[1])
+	step := stepAs[*network.UpdateRules](t, scenario.Steps[1])
 	require.NotNil(t, step.Rules.Economy)
 	require.NotNil(t, step.Rules.Economy.MinBaseFee)
 	if got := big.Int(*step.Rules.Economy.MinBaseFee); got.Cmp(big.NewInt(3000000000)) != 0 {
@@ -177,7 +180,7 @@ Scenario:
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
-	step := stepAs[*startnode.StartNode](t, scenario.Steps[0])
+	step := stepAs[*nodelifetime.StartNode](t, scenario.Steps[0])
 	require.Equal(t, "my-node", step.Target())
 	require.Equal(t, "validator", step.Type)
 	require.Equal(t, "sonic:v2.0.2", step.ImageName)
@@ -204,15 +207,15 @@ Scenario:
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
-	start := stepAs[*startnode.StartNode](t, scenario.Steps[0])
+	start := stepAs[*nodelifetime.StartNode](t, scenario.Steps[0])
 	require.Equal(t, "validator-A", start.Target())
 
-	step := stepAs[*staking.Undelegate](t, scenario.Steps[1])
+	step := stepAs[*network.Undelegate](t, scenario.Steps[1])
 	require.Len(t, step.Targets, 1)
 	require.Equal(t, "validator-A", step.Targets[0].Node)
 	require.Nil(t, step.Targets[0].Stake)
 
-	step = stepAs[*staking.Undelegate](t, scenario.Steps[2])
+	step = stepAs[*network.Undelegate](t, scenario.Steps[2])
 	require.Len(t, step.Targets, 1)
 	require.Equal(t, "validator-A", step.Targets[0].Node)
 	require.NotNil(t, step.Targets[0].Stake)
@@ -238,7 +241,7 @@ Scenario:
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
-	step := stepAs[*staking.Delegate](t, scenario.Steps[1])
+	step := stepAs[*network.Delegate](t, scenario.Steps[1])
 	require.Len(t, step.Targets, 2)
 
 	require.Equal(t, "heavy", step.Targets[0].Node)
@@ -280,7 +283,7 @@ Scenario:
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
-	step := stepAs[*staking.Undelegate](t, scenario.Steps[1])
+	step := stepAs[*network.Undelegate](t, scenario.Steps[1])
 	require.Len(t, step.Targets, 2)
 
 	require.Equal(t, "heavy", step.Targets[0].Node)
@@ -303,37 +306,37 @@ Scenario:
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
-	stepAs[*staking.VerifyStakes](t, scenario.Steps[0])
+	stepAs[*network.VerifyStakes](t, scenario.Steps[0])
 }
 
 func TestStepCheck_Delegate_ReportsSemanticErrors(t *testing.T) {
 	cases := map[string]struct {
-		targets   []staking.DelegateTarget
+		targets   []network.DelegateTarget
 		errSubstr string
 	}{
 		"no targets": {
 			errSubstr: "at least one target",
 		},
 		"missing node": {
-			targets: []staking.DelegateTarget{
+			targets: []network.DelegateTarget{
 				{Delegator: "alice", Stake: 100},
 			},
 			errSubstr: "'node' field",
 		},
 		"missing delegator": {
-			targets: []staking.DelegateTarget{
+			targets: []network.DelegateTarget{
 				{Node: "val", Stake: 100},
 			},
 			errSubstr: "'delegator' field",
 		},
 		"zero stake": {
-			targets: []staking.DelegateTarget{
+			targets: []network.DelegateTarget{
 				{Node: "val", Delegator: "alice", Stake: 0},
 			},
 			errSubstr: "stake must be greater than zero",
 		},
 		"invalid delegator name": {
-			targets: []staking.DelegateTarget{
+			targets: []network.DelegateTarget{
 				{Node: "val", Delegator: "not a name", Stake: 100},
 			},
 			errSubstr: "delegator name must match",
@@ -342,7 +345,7 @@ func TestStepCheck_Delegate_ReportsSemanticErrors(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			step := &staking.Delegate{Targets: tc.targets}
+			step := &network.Delegate{Targets: tc.targets}
 			err := step.Validate()
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tc.errSubstr)
@@ -351,8 +354,8 @@ func TestStepCheck_Delegate_ReportsSemanticErrors(t *testing.T) {
 }
 
 func TestStepCheck_UndelegateWithDelegator_RejectsInvalidDelegatorName(t *testing.T) {
-	step := &staking.Undelegate{
-		Targets: []staking.UndelegateTarget{
+	step := &network.Undelegate{
+		Targets: []network.UndelegateTarget{
 			{Node: "val", Delegator: "not a name"},
 		},
 	}
@@ -565,7 +568,7 @@ Scenario:
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
-	step := stepAs[*steps.RunApp](t, scenario.Steps[0])
+	step := stepAs[*apps.RunApp](t, scenario.Steps[0])
 	require.NotNil(t, step.Rate)
 	require.NotNil(t, step.Rate.Slope)
 	require.EqualValues(t, 20, step.Rate.Slope.Start)
@@ -589,8 +592,8 @@ Scenario:
 	)
 
 	require.Len(t, scenario.Steps, 4)
-	stepAs[*steps.AdvanceEpoch](t, scenario.Steps[1])
-	stepAs[*steps.AdvanceEpoch](t, scenario.Steps[2])
+	stepAs[*network.AdvanceEpoch](t, scenario.Steps[1])
+	stepAs[*network.AdvanceEpoch](t, scenario.Steps[2])
 	endChecks := stepAs[*checks.Checks](t, scenario.Steps[3])
 	require.Len(t, endChecks.Items, 2)
 	stepAs[*checks.BlockHashes](t, endChecks.Items[0])
@@ -623,7 +626,7 @@ func TestCheck_EmptyName(t *testing.T) {
 	scenario := Scenario{
 		Name:        "",
 		Description: "A test scenario.",
-		Steps:       Steps{&steps.AdvanceEpoch{}},
+		Steps:       Steps{&network.AdvanceEpoch{}},
 	}
 	err := scenario.Check()
 	require.Error(t, err)
@@ -633,7 +636,7 @@ func TestCheck_EmptyDescription(t *testing.T) {
 	scenario := Scenario{
 		Name:        "Test",
 		Description: "",
-		Steps:       Steps{&steps.AdvanceEpoch{}},
+		Steps:       Steps{&network.AdvanceEpoch{}},
 	}
 	err := scenario.Check()
 	require.Error(t, err)
@@ -643,7 +646,7 @@ func TestCheck_InvalidNodeName(t *testing.T) {
 	scenario := Scenario{
 		Name:        "Test",
 		Description: "A test scenario.",
-		Steps: Steps{&startnode.StartNode{
+		Steps: Steps{&nodelifetime.StartNode{
 			Node: steps.Node{Node: "invalid name with spaces"},
 			Type: "validator",
 		}},
@@ -656,7 +659,7 @@ func TestCheck_RunAppMissingRate(t *testing.T) {
 	scenario := Scenario{
 		Name:        "Test",
 		Description: "A test scenario.",
-		Steps: Steps{&steps.RunApp{
+		Steps: Steps{&apps.RunApp{
 			App:  steps.App{App: "load"},
 			Type: "counter",
 		}},
@@ -669,7 +672,7 @@ func TestCheck_UpdateRulesEmpty(t *testing.T) {
 	scenario := Scenario{
 		Name:        "Test",
 		Description: "A test scenario.",
-		Steps: Steps{&steps.UpdateRules{
+		Steps: Steps{&network.UpdateRules{
 			Rules: genesis.NetworkRulesPatch{},
 		}},
 	}
@@ -727,7 +730,7 @@ Scenario:
 	// Verify the rejoin pattern: validator-before-1 is started, stopped, then started again
 	starts := 0
 	for _, step := range scenario.Steps {
-		if start, ok := step.(*startnode.StartNode); ok && start.Target() == "validator-before-1" {
+		if start, ok := step.(*nodelifetime.StartNode); ok && start.Target() == "validator-before-1" {
 			starts++
 		}
 	}
@@ -896,7 +899,7 @@ Scenario:
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
-	step := stepAs[*steps.RunApp](t, scenario.Steps[0])
+	step := stepAs[*apps.RunApp](t, scenario.Steps[0])
 	require.Equal(t, "counter", step.Type)
 	require.Equal(t, "my-app", step.Target())
 }
@@ -971,7 +974,7 @@ Scenario:
 	require.Nil(t, r.Emitter)
 
 	// Verify updateRules step
-	step := stepAs[*steps.UpdateRules](t, scenario.Steps[1])
+	step := stepAs[*network.UpdateRules](t, scenario.Steps[1])
 	require.NotNil(t, step.Rules.Blocks)
 	require.NotNil(t, step.Rules.Blocks.MaxBlockGas)
 	require.EqualValues(t, 30000000000, *step.Rules.Blocks.MaxBlockGas)
@@ -1123,7 +1126,7 @@ Scenario:
 `
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
-	step := stepAs[*steps.WaitForBlocks](t, scenario.Steps[0])
+	step := stepAs[*wait.WaitForBlocks](t, scenario.Steps[0])
 	require.Equal(t, uint64(1100), step.Blocks)
 }
 
@@ -1148,7 +1151,7 @@ func TestCheck_Fails_WhenTheBlockCountIsZero(t *testing.T) {
 	scenario := Scenario{
 		Name:        "Test",
 		Description: "A test scenario.",
-		Steps:       Steps{&steps.WaitForBlocks{}},
+		Steps:       Steps{&wait.WaitForBlocks{}},
 	}
 	require.ErrorContains(t, scenario.Check(), "positive block count")
 }
@@ -1162,7 +1165,7 @@ Scenario:
 `))
 	require.NoError(t, err)
 	require.NoError(t, scenario.Check())
-	require.Equal(t, "node-A", stepAs[*steps.StopSonic](t, scenario.Steps[0]).Target())
+	require.Equal(t, "node-A", stepAs[*nodelifetime.StopSonic](t, scenario.Steps[0]).Target())
 
 	scenario, err = ParseBytes([]byte(`
 Name: Test
@@ -1185,7 +1188,7 @@ Scenario:
 `))
 	require.NoError(t, err)
 	require.NoError(t, scenario.Check())
-	require.Equal(t, "exporter", stepAs[*steps.WaitForSonicExit](t, scenario.Steps[1]).Target())
+	require.Equal(t, "exporter", stepAs[*wait.WaitForSonicExit](t, scenario.Steps[1]).Target())
 
 	scenario, err = ParseBytes([]byte(`
 Name: Test
@@ -1211,11 +1214,11 @@ Scenario:
 	require.NoError(t, err)
 	require.NoError(t, scenario.Check())
 
-	exported := stepAs[*steps.ExportEvents](t, scenario.Steps[0])
+	exported := stepAs[*sonictool.ExportEvents](t, scenario.Steps[0])
 	require.Equal(t, "exporter", exported.Target())
 	require.Equal(t, "from-old.events", exported.File)
 
-	imported := stepAs[*steps.ImportEvents](t, scenario.Steps[1])
+	imported := stepAs[*sonictool.ImportEvents](t, scenario.Steps[1])
 	require.Equal(t, "fresh", imported.Target())
 	require.Equal(t, "from-old.events", imported.File)
 }
@@ -1246,18 +1249,18 @@ Scenario:
 	require.NoError(t, scenario.Check())
 
 	all := scenario.Steps
-	require.Equal(t, "node-A", stepAs[*steps.StopSonic](t, all[1]).Target())
+	require.Equal(t, "node-A", stepAs[*nodelifetime.StopSonic](t, all[1]).Target())
 
-	exported := stepAs[*steps.ExportGenesis](t, all[2])
+	exported := stepAs[*sonictool.ExportGenesis](t, all[2])
 	require.Equal(t, "node-A", exported.Target())
 	require.Equal(t, "from-a.g", exported.File)
 
-	require.Equal(t, "from-b.g", stepAs[*steps.ImportGenesis](t, all[3]).File)
+	require.Equal(t, "from-b.g", stepAs[*sonictool.ImportGenesis](t, all[3]).File)
 
-	require.Equal(t, node.DbCheckModeArchive, stepAs[*steps.CheckDb](t, all[4]).Mode)
+	require.Equal(t, node.DbCheckModeArchive, stepAs[*checks.CheckDb](t, all[4]).Mode)
 
 	// An omitted mode is left to the node to default.
-	require.Empty(t, stepAs[*steps.CheckDb](t, all[5]).Mode)
+	require.Empty(t, stepAs[*checks.CheckDb](t, all[5]).Mode)
 }
 
 func TestParseBytes_FileManagementSteps_RejectInvalidInput(t *testing.T) {

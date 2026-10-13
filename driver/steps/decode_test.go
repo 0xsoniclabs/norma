@@ -17,16 +17,34 @@
 package steps
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
 
+// nodeStep takes a node name as its value and a mode parameter.
+type nodeStep struct {
+	Node
+	Mode string `yaml:"mode" help:"A mode."`
+}
+
+func (*nodeStep) Name() string                    { return "nodeStep" }
+func (*nodeStep) Help() string                    { return "A step on a node." }
+func (*nodeStep) Run(context.Context, *Env) error { return nil }
+
+// bareStep takes no value and no parameters.
+type bareStep struct{}
+
+func (*bareStep) Name() string                    { return "bareStep" }
+func (*bareStep) Help() string                    { return "A step without arguments." }
+func (*bareStep) Validate() error                 { return nil }
+func (*bareStep) Run(context.Context, *Env) error { return nil }
+
 var testKinds = []func() Step{
-	func() Step { return &StopNode{} },
-	func() Step { return &CheckDb{} },
-	func() Step { return &AdvanceEpoch{} },
+	func() Step { return &nodeStep{} },
+	func() Step { return &bareStep{} },
 }
 
 func decodeStep(t *testing.T, input string) (Step, error) {
@@ -37,27 +55,27 @@ func decodeStep(t *testing.T, input string) (Step, error) {
 }
 
 func TestDecode_ReadsValueAndParams(t *testing.T) {
-	step, err := decodeStep(t, "checkDb: node-A\nmode: archive\n")
+	step, err := decodeStep(t, "nodeStep: node-A\nmode: archive\n")
 	require.NoError(t, err)
-	require.Equal(t, &CheckDb{Node: Node{Node: "node-A"}, Mode: "archive"}, step)
+	require.Equal(t, &nodeStep{Node: Node{Node: "node-A"}, Mode: "archive"}, step)
 }
 
 func TestDecode_ReadsParamsListedBeforeTheFunctionKey(t *testing.T) {
-	step, err := decodeStep(t, "mode: live\ncheckDb: node-A\n")
+	step, err := decodeStep(t, "mode: live\nnodeStep: node-A\n")
 	require.NoError(t, err)
-	require.Equal(t, &CheckDb{Node: Node{Node: "node-A"}, Mode: "live"}, step)
+	require.Equal(t, &nodeStep{Node: Node{Node: "node-A"}, Mode: "live"}, step)
 }
 
 func TestDecode_ReadsParamsNestedUnderAFunctionWithoutValue(t *testing.T) {
-	step, err := decodeStep(t, "advanceEpoch: {}\n")
+	step, err := decodeStep(t, "bareStep: {}\n")
 	require.NoError(t, err)
-	require.Equal(t, &AdvanceEpoch{}, step)
+	require.Equal(t, &bareStep{}, step)
 }
 
 func TestDecode_AcceptsABareName(t *testing.T) {
-	step, err := decodeStep(t, "advanceEpoch\n")
+	step, err := decodeStep(t, "bareStep\n")
 	require.NoError(t, err)
-	require.Equal(t, &AdvanceEpoch{}, step)
+	require.Equal(t, &bareStep{}, step)
 }
 
 func TestDecode_ReportsInvalidInputWithItsLine(t *testing.T) {
@@ -67,12 +85,12 @@ func TestDecode_ReportsInvalidInputWithItsLine(t *testing.T) {
 	}{
 		"unknown name":           {"bogus\n", `line 1: unknown step function: "bogus"`},
 		"no function key":        {"mode: live\n", "line 1: no known step function"},
-		"two function keys":      {"stopNode: a\ncheckDb: a\n", `line 2: step contains multiple function keys: "stopNode" and "checkDb"`},
-		"unknown parameter":      {"checkDb: a\n\nfile: x\n", `line 3: parameter "file" is not valid for step checkDb`},
-		"value on a bare step":   {"advanceEpoch: now\n", `line 1: advanceEpoch does not take a value, got "now"`},
-		"parameter of bad type":  {"checkDb: a\nmode: [live]\n", "line 2: invalid mode value"},
-		"name that is not a str": {"stopNode: [a, b]\n", "line 1: value must be a name"},
-		"sequence as a step":     {"- stopNode\n", "line 1: step must be a string or mapping"},
+		"two function keys":      {"nodeStep: a\nbareStep:\n", `line 2: step contains multiple function keys: "nodeStep" and "bareStep"`},
+		"unknown parameter":      {"nodeStep: a\n\nfile: x\n", `line 3: parameter "file" is not valid for step nodeStep`},
+		"value on a bare step":   {"bareStep: now\n", `line 1: bareStep does not take a value, got "now"`},
+		"parameter of bad type":  {"nodeStep: a\nmode: [live]\n", "line 2: invalid mode value"},
+		"name that is not a str": {"nodeStep: [a, b]\n", "line 1: value must be a name"},
+		"sequence as a step":     {"- nodeStep\n", "line 1: step must be a string or mapping"},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -82,11 +100,7 @@ func TestDecode_ReportsInvalidInputWithItsLine(t *testing.T) {
 	}
 }
 
-func TestParams_ListsEmbeddedParamsInDeclarationOrder(t *testing.T) {
-	params := Params(&ExportGenesis{})
-	require.Len(t, params, 1)
-	require.Equal(t, "file", params[0].Key)
-	require.NotEmpty(t, params[0].Help)
-
-	require.Empty(t, Params(&StopNode{}))
+func TestParams_ListsTaggedFieldsAndSkipsTheValue(t *testing.T) {
+	require.Equal(t, []Param{{Key: "mode", Help: "A mode."}}, Params(&nodeStep{}))
+	require.Empty(t, Params(&bareStep{}))
 }

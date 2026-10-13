@@ -28,9 +28,11 @@ import (
 	"github.com/0xsoniclabs/norma/driver/checking"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/driver/steps"
+	"github.com/0xsoniclabs/norma/driver/steps/apps"
 	"github.com/0xsoniclabs/norma/driver/steps/checks"
-	"github.com/0xsoniclabs/norma/driver/steps/staking"
-	"github.com/0xsoniclabs/norma/driver/steps/startnode"
+	"github.com/0xsoniclabs/norma/driver/steps/network"
+	"github.com/0xsoniclabs/norma/driver/steps/nodelifetime"
+	"github.com/0xsoniclabs/norma/driver/steps/wait"
 	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/0xsoniclabs/norma/load/shaper"
 	"github.com/stretchr/testify/require"
@@ -80,10 +82,10 @@ func TestRun_StartAndStopNode(t *testing.T) {
 		Description: "Test scenario.",
 		Steps: parser.Steps{
 			startValidator("validator-A"),
-			&staking.Undelegate{
-				Targets: []staking.UndelegateTarget{{Node: "validator-A"}},
+			&network.Undelegate{
+				Targets: []network.UndelegateTarget{{Node: "validator-A"}},
 			},
-			&steps.StopNode{Node: steps.Node{Node: "validator-A"}},
+			&nodelifetime.StopNode{Node: steps.Node{Node: "validator-A"}},
 		},
 	}
 
@@ -122,7 +124,7 @@ func TestRun_StartNode_ForwardsCustomStake(t *testing.T) {
 		Description:      "Test scenario.",
 		DisableEndChecks: true,
 		Steps: parser.Steps{
-			&startnode.StartNode{Node: steps.Node{Node: "heavy"}, Type: "validator", Stake: &stake},
+			&nodelifetime.StartNode{Node: steps.Node{Node: "heavy"}, Type: "validator", Stake: &stake},
 		},
 	}
 
@@ -163,9 +165,9 @@ func TestRun_UndelegateSingleInstanceWithSuffix(t *testing.T) {
 		Description:      "Test scenario.",
 		DisableEndChecks: true,
 		Steps: parser.Steps{
-			&startnode.StartNode{Node: steps.Node{Node: "heavy"}, Type: "validator", Instances: &instances},
-			&staking.Undelegate{
-				Targets: []staking.UndelegateTarget{{Node: "heavy"}},
+			&nodelifetime.StartNode{Node: steps.Node{Node: "heavy"}, Type: "validator", Instances: &instances},
+			&network.Undelegate{
+				Targets: []network.UndelegateTarget{{Node: "heavy"}},
 			},
 		},
 	}
@@ -229,9 +231,9 @@ func TestRun_UndelegateMultiInstance(t *testing.T) {
 				Description:      "Test scenario.",
 				DisableEndChecks: true,
 				Steps: parser.Steps{
-					&startnode.StartNode{Node: steps.Node{Node: "validators"}, Type: "validator", Instances: &instances},
-					&staking.Undelegate{
-						Targets: []staking.UndelegateTarget{{Node: tc.target}},
+					&nodelifetime.StartNode{Node: steps.Node{Node: "validators"}, Type: "validator", Instances: &instances},
+					&network.Undelegate{
+						Targets: []network.UndelegateTarget{{Node: tc.target}},
 					},
 				},
 			}
@@ -274,7 +276,7 @@ func TestRun_StopNodeWithoutUndelegate(t *testing.T) {
 		Steps: parser.Steps{
 			startValidator("validator-A"),
 			// Stop without undelegate
-			&steps.StopNode{Node: steps.Node{Node: "validator-A"}},
+			&nodelifetime.StopNode{Node: steps.Node{Node: "validator-A"}},
 		},
 	}
 
@@ -327,7 +329,7 @@ func TestRun_RejoinNode(t *testing.T) {
 		Description: "Test scenario.",
 		Steps: parser.Steps{
 			startValidator("validator-A"),
-			&steps.StopNode{Node: steps.Node{Node: "validator-A"}},
+			&nodelifetime.StopNode{Node: steps.Node{Node: "validator-A"}},
 			startValidator("validator-A"),
 		},
 	}
@@ -355,13 +357,13 @@ func TestRun_RunAndStopApp(t *testing.T) {
 		Name:        "App",
 		Description: "Test scenario.",
 		Steps: parser.Steps{
-			&steps.RunApp{
+			&apps.RunApp{
 				App:   steps.App{App: "load"},
 				Type:  "counter",
 				Users: new(50),
 				Rate:  &shaper.Rate{Constant: &rate},
 			},
-			&steps.StopApp{App: steps.App{App: "load"}},
+			&apps.StopApp{App: steps.App{App: "load"}},
 		},
 	}
 
@@ -386,7 +388,7 @@ func TestRun_UpdateRules(t *testing.T) {
 		Name:        "Rules",
 		Description: "Test scenario.",
 		Steps: parser.Steps{
-			&steps.UpdateRules{
+			&network.UpdateRules{
 				Rules: genesis.NetworkRulesPatch{
 					Economy: &genesis.EconomyPatch{
 						MinBaseFee: &baseFee,
@@ -413,7 +415,7 @@ func TestRun_AdvanceEpoch(t *testing.T) {
 		Name:        "Epoch",
 		Description: "Test scenario.",
 		Steps: parser.Steps{
-			&steps.AdvanceEpoch{},
+			&network.AdvanceEpoch{},
 		},
 	}
 
@@ -456,7 +458,7 @@ func TestRun_ContextCancellation(t *testing.T) {
 		Name:        "Cancelled",
 		Description: "Test scenario.",
 		Steps: parser.Steps{
-			&steps.AdvanceEpoch{},
+			&network.AdvanceEpoch{},
 		},
 	}
 
@@ -505,7 +507,7 @@ func TestRun_MultiInstanceNode(t *testing.T) {
 		Name:        "Multi",
 		Description: "Test scenario.",
 		Steps: parser.Steps{
-			&startnode.StartNode{Node: steps.Node{Node: "validators"}, Type: "validator", Instances: &instances},
+			&nodelifetime.StartNode{Node: steps.Node{Node: "validators"}, Type: "validator", Instances: &instances},
 		},
 	}
 
@@ -522,8 +524,8 @@ func TestRun_RunAndCaptureEventExecution_CapturesAllSteps(t *testing.T) {
 		Name:        "Capture",
 		Description: "Test scenario.",
 		Steps: parser.Steps{
-			&steps.WaitFor{Duration: time.Millisecond},
-			&steps.WaitFor{Duration: 2 * time.Millisecond},
+			&wait.WaitFor{Duration: time.Millisecond},
+			&wait.WaitFor{Duration: 2 * time.Millisecond},
 		},
 	}
 
@@ -582,13 +584,13 @@ func TestRun_UndelegateWithDelegator_UsesDelegatorKey(t *testing.T) {
 		DisableEndChecks: true,
 		Steps: parser.Steps{
 			startValidator("heavy"),
-			&staking.Delegate{
-				Targets: []staking.DelegateTarget{
+			&network.Delegate{
+				Targets: []network.DelegateTarget{
 					{Node: "heavy", Delegator: "alice", Stake: 1_000_000},
 				},
 			},
-			&staking.Undelegate{
-				Targets: []staking.UndelegateTarget{
+			&network.Undelegate{
+				Targets: []network.UndelegateTarget{
 					{Node: "heavy", Delegator: "alice", Stake: &partial},
 				},
 			},
@@ -625,8 +627,8 @@ func TestRun_UndelegateWithUnknownDelegator_ReturnsError(t *testing.T) {
 		DisableEndChecks: true,
 		Steps: parser.Steps{
 			startValidator("heavy"),
-			&staking.Undelegate{
-				Targets: []staking.UndelegateTarget{
+			&network.Undelegate{
+				Targets: []network.UndelegateTarget{
 					{Node: "heavy", Delegator: "ghost"},
 				},
 			},
@@ -672,12 +674,12 @@ func TestRun_VerifyStakes_PassesWhenAllStakesMatch(t *testing.T) {
 		DisableEndChecks: true,
 		Steps: parser.Steps{
 			startValidator("heavy"),
-			&staking.Delegate{
-				Targets: []staking.DelegateTarget{
+			&network.Delegate{
+				Targets: []network.DelegateTarget{
 					{Node: "heavy", Delegator: "alice", Stake: 500_000},
 				},
 			},
-			&staking.VerifyStakes{},
+			&network.VerifyStakes{},
 		},
 	}
 
@@ -718,12 +720,12 @@ func TestRun_VerifyStakes_FailsOnMismatch(t *testing.T) {
 		DisableEndChecks: true,
 		Steps: parser.Steps{
 			startValidator("heavy"),
-			&staking.Delegate{
-				Targets: []staking.DelegateTarget{
+			&network.Delegate{
+				Targets: []network.DelegateTarget{
 					{Node: "heavy", Delegator: "alice", Stake: 500_000},
 				},
 			},
-			&staking.VerifyStakes{},
+			&network.VerifyStakes{},
 		},
 	}
 
@@ -764,17 +766,17 @@ func TestRun_VerifyStakes_ChecksFullyUndelegatedPairIsZero(t *testing.T) {
 		DisableEndChecks: true,
 		Steps: parser.Steps{
 			startValidator("heavy"),
-			&staking.Delegate{
-				Targets: []staking.DelegateTarget{
+			&network.Delegate{
+				Targets: []network.DelegateTarget{
 					{Node: "heavy", Delegator: "alice", Stake: 500_000},
 				},
 			},
-			&staking.Undelegate{
-				Targets: []staking.UndelegateTarget{
+			&network.Undelegate{
+				Targets: []network.UndelegateTarget{
 					{Node: "heavy", Delegator: "alice"},
 				},
 			},
-			&staking.VerifyStakes{},
+			&network.VerifyStakes{},
 		},
 	}
 
@@ -802,7 +804,7 @@ func TestRun_KeepsCallerDeadline_WhenLongerThanDefault(t *testing.T) {
 	scenario := parser.Scenario{
 		Name:        "Deadline",
 		Description: "Test scenario.",
-		Steps:       parser.Steps{&steps.WaitForEpoch{}},
+		Steps:       parser.Steps{&wait.WaitForEpoch{}},
 	}
 
 	require.NoError(t, run(ctx, net, &scenario, nil, nil))
@@ -818,7 +820,7 @@ func TestRun_AbortsAtCallerDeadline_WhenStepBlocks(t *testing.T) {
 	scenario := parser.Scenario{
 		Name:        "Deadline",
 		Description: "Test scenario.",
-		Steps:       parser.Steps{&steps.WaitFor{Duration: time.Minute}},
+		Steps:       parser.Steps{&wait.WaitFor{Duration: time.Minute}},
 	}
 
 	start := time.Now()
@@ -827,6 +829,6 @@ func TestRun_AbortsAtCallerDeadline_WhenStepBlocks(t *testing.T) {
 	require.Less(t, time.Since(start), time.Second)
 }
 
-func startValidator(name string) *startnode.StartNode {
-	return &startnode.StartNode{Node: steps.Node{Node: name}, Type: "validator"}
+func startValidator(name string) *nodelifetime.StartNode {
+	return &nodelifetime.StartNode{Node: steps.Node{Node: name}, Type: "validator"}
 }

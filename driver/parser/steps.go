@@ -18,35 +18,43 @@ package parser
 
 import (
 	"github.com/0xsoniclabs/norma/driver/steps"
+	"github.com/0xsoniclabs/norma/driver/steps/apps"
 	"github.com/0xsoniclabs/norma/driver/steps/checks"
-	"github.com/0xsoniclabs/norma/driver/steps/staking"
-	"github.com/0xsoniclabs/norma/driver/steps/startnode"
+	"github.com/0xsoniclabs/norma/driver/steps/network"
+	"github.com/0xsoniclabs/norma/driver/steps/nodelifetime"
+	"github.com/0xsoniclabs/norma/driver/steps/sonictool"
+	"github.com/0xsoniclabs/norma/driver/steps/wait"
 )
 
 // stepKinds lists every step a scenario may use.
 var stepKinds = []func() steps.Step{
-	func() steps.Step { return &startnode.StartNode{} },
-	func() steps.Step { return &steps.StopNode{} },
-	func() steps.Step { return &staking.Delegate{} },
-	func() steps.Step { return &staking.Undelegate{} },
-	func() steps.Step { return &staking.VerifyStakes{} },
-	func() steps.Step { return &steps.UpdateRules{} },
-	func() steps.Step { return &steps.AdvanceEpoch{} },
-	func() steps.Step { return &steps.WaitForEpoch{} },
-	func() steps.Step { return &steps.RunApp{} },
-	func() steps.Step { return &steps.StopApp{} },
+	func() steps.Step { return &nodelifetime.StartNode{} },
+	func() steps.Step { return &nodelifetime.StopNode{} },
+	func() steps.Step { return &nodelifetime.StopSonic{} },
+	func() steps.Step { return &nodelifetime.KillSonic{} },
+
+	func() steps.Step { return &sonictool.HealDb{} },
+	func() steps.Step { return &sonictool.ExportGenesis{} },
+	func() steps.Step { return &sonictool.ImportGenesis{} },
+	func() steps.Step { return &sonictool.ExportEvents{} },
+	func() steps.Step { return &sonictool.ImportEvents{} },
+
+	func() steps.Step { return &apps.RunApp{} },
+	func() steps.Step { return &apps.StopApp{} },
+
+	func() steps.Step { return &network.Delegate{} },
+	func() steps.Step { return &network.Undelegate{} },
+	func() steps.Step { return &network.VerifyStakes{} },
+	func() steps.Step { return &network.UpdateRules{} },
+	func() steps.Step { return &network.AdvanceEpoch{} },
+
+	func() steps.Step { return &wait.WaitFor{} },
+	func() steps.Step { return &wait.WaitForBlocks{} },
+	func() steps.Step { return &wait.WaitForEpoch{} },
+	func() steps.Step { return &wait.WaitForSonicExit{} },
+
 	func() steps.Step { return &checks.Checks{} },
-	func() steps.Step { return &steps.WaitFor{} },
-	func() steps.Step { return &steps.WaitForBlocks{} },
-	func() steps.Step { return &steps.KillSonic{} },
-	func() steps.Step { return &steps.HealDb{} },
-	func() steps.Step { return &steps.StopSonic{} },
-	func() steps.Step { return &steps.WaitForSonicExit{} },
-	func() steps.Step { return &steps.ExportGenesis{} },
-	func() steps.Step { return &steps.ImportGenesis{} },
-	func() steps.Step { return &steps.ExportEvents{} },
-	func() steps.Step { return &steps.ImportEvents{} },
-	func() steps.Step { return &steps.CheckDb{} },
+	func() steps.Step { return &checks.CheckDb{} },
 }
 
 // StepNames returns the name of every step a scenario may use.

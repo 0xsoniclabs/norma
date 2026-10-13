@@ -25,7 +25,8 @@ import (
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/driver/steps"
-	"github.com/0xsoniclabs/norma/driver/steps/startnode"
+	"github.com/0xsoniclabs/norma/driver/steps/nodelifetime"
+	"github.com/0xsoniclabs/norma/driver/steps/wait"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -36,10 +37,10 @@ import (
 func TestCollectClientImages_CoversEveryNodeOfTheScenario(t *testing.T) {
 	scenario := &parser.Scenario{
 		Steps: parser.Steps{
-			&startnode.StartNode{Node: steps.Node{Node: "validator-local"}},
-			&startnode.StartNode{Node: steps.Node{Node: "validator-v216"}, ImageName: "sonic:v2.1.6"},
-			&steps.WaitFor{},
-			&startnode.StartNode{Node: steps.Node{Node: "rpc-v220"}, ImageName: "sonic:v2.2.0"},
+			&nodelifetime.StartNode{Node: steps.Node{Node: "validator-local"}},
+			&nodelifetime.StartNode{Node: steps.Node{Node: "validator-v216"}, ImageName: "sonic:v2.1.6"},
+			&wait.WaitFor{},
+			&nodelifetime.StartNode{Node: steps.Node{Node: "rpc-v220"}, ImageName: "sonic:v2.2.0"},
 		},
 	}
 

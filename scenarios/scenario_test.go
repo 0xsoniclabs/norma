@@ -24,7 +24,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/parser"
-	"github.com/0xsoniclabs/norma/driver/steps/startnode"
+	"github.com/0xsoniclabs/norma/driver/steps/nodelifetime"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,7 +63,7 @@ func TestReleaseTestingScenarios_UseLocalClient(t *testing.T) {
 			require.NoError(t, err, "failed to parse file", file)
 
 			for _, step := range scenario.Steps {
-				start, ok := step.(*startnode.StartNode)
+				start, ok := step.(*nodelifetime.StartNode)
 				if ok && driver.ResolveClientImageName(start.ImageName) == driver.DefaultClientDockerImageName {
 					return
 				}

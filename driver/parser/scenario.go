@@ -27,6 +27,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver/steps"
 	"github.com/0xsoniclabs/norma/driver/steps/checks"
+	"github.com/0xsoniclabs/norma/driver/steps/network"
 	"github.com/0xsoniclabs/norma/genesis"
 	"gopkg.in/yaml.v3"
 )
@@ -92,8 +93,8 @@ func (s *Scenario) setDefaults() {
 
 	if !s.DisableEndChecks {
 		s.Steps = append(s.Steps,
-			&steps.AdvanceEpoch{},
-			&steps.AdvanceEpoch{},
+			&network.AdvanceEpoch{},
+			&network.AdvanceEpoch{},
 			&checks.Checks{Items: []checks.Check{
 				&checks.BlockHashes{},
 				&checks.BlockHeights{},

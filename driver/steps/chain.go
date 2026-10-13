@@ -41,12 +41,12 @@ func WaitForBlockProduction(ctx context.Context, net driver.Network) error {
 		return nil
 	}
 	defer client.Close()
-	return waitForBlocks(ctx, client, 1)
+	return WaitForBlocks(ctx, client, 1)
 }
 
-// waitForBlocks waits until the chain seen by client has grown by count
+// WaitForBlocks waits until the chain seen by client has grown by count
 // blocks, failing once it has not grown for blockProductionTimeout.
-func waitForBlocks(ctx context.Context, client rpc.Client, count uint64) error {
+func WaitForBlocks(ctx context.Context, client rpc.Client, count uint64) error {
 	grownAt := time.Now()
 	blockNumber := func() (uint64, error) {
 		ctx, cancel := context.WithDeadline(ctx, grownAt.Add(blockProductionTimeout))

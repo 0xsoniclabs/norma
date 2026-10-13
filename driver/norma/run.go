@@ -40,7 +40,7 @@ import (
 	_ "github.com/0xsoniclabs/norma/driver/monitoring/user"
 	"github.com/0xsoniclabs/norma/driver/network/local"
 	"github.com/0xsoniclabs/norma/driver/parser"
-	"github.com/0xsoniclabs/norma/driver/steps/startnode"
+	"github.com/0xsoniclabs/norma/driver/steps/nodelifetime"
 	"github.com/urfave/cli/v2"
 )
 
@@ -316,7 +316,7 @@ func extractBootstrapValidators(scenario *parser.Scenario) (driver.Validators, m
 		return nil, nil, fmt.Errorf("scenario has no steps")
 	}
 
-	step, ok := scenario.Steps[0].(*startnode.StartNode)
+	step, ok := scenario.Steps[0].(*nodelifetime.StartNode)
 	if !ok {
 		return nil, nil, fmt.Errorf(`first step must be "startNode", got %q`, scenario.Steps[0].Name())
 	}
@@ -356,7 +356,7 @@ func extractBootstrapValidators(scenario *parser.Scenario) (driver.Validators, m
 func collectClientImages(scenario *parser.Scenario) []string {
 	images := make([]string, 0, len(scenario.Steps))
 	for _, step := range scenario.Steps {
-		if start, ok := step.(*startnode.StartNode); ok {
+		if start, ok := step.(*nodelifetime.StartNode); ok {
 			images = append(images, driver.ResolveClientImageName(start.ImageName))
 		}
 	}

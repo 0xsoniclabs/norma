@@ -17,7 +17,6 @@
 package steps
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -82,33 +81,6 @@ func (a App) Validate() error {
 	return matchName("app", a.App)
 }
 
-// SharedFile is the parameter naming a file in the network's shared
-// directory.
-type SharedFile struct {
-	File string `yaml:"file" help:"Required. Name of a file in the network's shared directory; a plain file name, no path."`
-}
-
-func (f SharedFile) Validate() error {
-	if f.File == "" {
-		return errors.New("requires a 'file' parameter")
-	}
-	if !node.FilePattern.MatchString(f.File) {
-		return fmt.Errorf("file name must match %v, got %v", node.FilePattern, f.File)
-	}
-	return nil
-}
-
-// NodeFile is the base of steps moving a file between a stopped node and the
-// shared directory.
-type NodeFile struct {
-	Node
-	SharedFile
-}
-
-func (f NodeFile) Validate() error {
-	return errors.Join(f.Node.Validate(), f.SharedFile.Validate())
-}
-
 // Failing is the parameter marking a step or check as expected to fail.
 type Failing struct {
 	Failing bool `yaml:"failing" help:"When true, failure is expected; a passing result is treated as an error."`
@@ -131,25 +103,6 @@ func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
 	}
 	*d = Duration(parsed)
 	return nil
-}
-
-// sonicToolTimeout caps a single sonictool invocation. Each walks the whole
-// node state, so the bound is generous for slow CI hosts.
-const sonicToolTimeout = 3 * time.Minute
-
-// runSonicTool runs tool against the node n names, bounded by
-// sonicToolTimeout.
-func runSonicTool(
-	ctx context.Context, env *Env, n Node,
-	tool func(*node.OperaNode, context.Context) error,
-) error {
-	opera, err := n.Opera(env)
-	if err != nil {
-		return err
-	}
-	ctx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
-	defer cancel()
-	return tool(opera, ctx)
 }
 
 func decodeName(value *yaml.Node, name *string) error {
