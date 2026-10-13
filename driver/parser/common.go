@@ -18,28 +18,6 @@ package parser
 
 import (
 	"fmt"
-	"regexp"
-)
-
-const namePatternStr = `^[A-Za-z0-9-.]+$`
-
-// NamePattern is the regular expression that all node, validator, and
-// application identifiers must match.
-var NamePattern = regexp.MustCompile(namePatternStr)
-
-// filePatternStr constrains the names of files in a network's shared
-// directory to plain file names: no separators, no leading `.` or `-`.
-const filePatternStr = `^[A-Za-z0-9][A-Za-z0-9._-]*$`
-
-// FilePattern is the regular expression that names of files in a network's
-// shared directory must match.
-var FilePattern = regexp.MustCompile(filePatternStr)
-
-// The database check modes accepted by the checkDb step, naming the two
-// state databases sonictool can verify.
-const (
-	DbCheckModeLive    = "live"
-	DbCheckModeArchive = "archive"
 )
 
 // isTypeValid reports whether the given node type is one of the supported

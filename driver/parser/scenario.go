@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/norma/genesis"
+	"github.com/0xsoniclabs/norma/load/shaper"
 	"gopkg.in/yaml.v3"
 )
 
@@ -318,7 +319,7 @@ type Step struct {
 	// App parameters
 	AppType string
 	Users   *int
-	Rate    *Rate
+	Rate    *shaper.Rate
 
 	// Update rules parameters
 	Rules genesis.NetworkRulesPatch
@@ -701,7 +702,7 @@ func (s *Step) parseParam(key string, val *yaml.Node) error {
 		}
 		s.Users = &v
 	case "rate":
-		var r Rate
+		var r shaper.Rate
 		if err := val.Decode(&r); err != nil {
 			return fmt.Errorf("invalid rate value: %w", err)
 		}

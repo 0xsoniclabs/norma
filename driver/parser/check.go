@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/0xsoniclabs/norma/load/app"
 )
@@ -72,11 +73,11 @@ func (s *Step) Check() error {
 			if t.Node == "" {
 				return fmt.Errorf("undelegate target %d: missing required 'node' field", i+1)
 			}
-			if !NamePattern.Match([]byte(t.Node)) {
-				return fmt.Errorf("undelegate target %d: node name must match %v, got %v", i+1, namePatternStr, t.Node)
+			if !node.NamePattern.Match([]byte(t.Node)) {
+				return fmt.Errorf("undelegate target %d: node name must match %v, got %v", i+1, node.NamePattern, t.Node)
 			}
-			if t.Delegator != "" && !NamePattern.Match([]byte(t.Delegator)) {
-				return fmt.Errorf("undelegate target %d: delegator name must match %v, got %v", i+1, namePatternStr, t.Delegator)
+			if t.Delegator != "" && !node.NamePattern.Match([]byte(t.Delegator)) {
+				return fmt.Errorf("undelegate target %d: delegator name must match %v, got %v", i+1, node.NamePattern, t.Delegator)
 			}
 		}
 		return nil
@@ -88,14 +89,14 @@ func (s *Step) Check() error {
 			if t.Node == "" {
 				return fmt.Errorf("delegate target %d: missing required 'node' field", i+1)
 			}
-			if !NamePattern.Match([]byte(t.Node)) {
-				return fmt.Errorf("delegate target %d: node name must match %v, got %v", i+1, namePatternStr, t.Node)
+			if !node.NamePattern.Match([]byte(t.Node)) {
+				return fmt.Errorf("delegate target %d: node name must match %v, got %v", i+1, node.NamePattern, t.Node)
 			}
 			if t.Delegator == "" {
 				return fmt.Errorf("delegate target %d: missing required 'delegator' field", i+1)
 			}
-			if !NamePattern.Match([]byte(t.Delegator)) {
-				return fmt.Errorf("delegate target %d: delegator name must match %v, got %v", i+1, namePatternStr, t.Delegator)
+			if !node.NamePattern.Match([]byte(t.Delegator)) {
+				return fmt.Errorf("delegate target %d: delegator name must match %v, got %v", i+1, node.NamePattern, t.Delegator)
 			}
 			if t.Stake == 0 {
 				return fmt.Errorf("delegate target %d: stake must be greater than zero", i+1)
@@ -138,8 +139,8 @@ func (s *Step) checkStartNode() error {
 
 	if s.Identifier == "" {
 		errs = append(errs, fmt.Errorf("start node requires an identifier (name)"))
-	} else if !NamePattern.Match([]byte(s.Identifier)) {
-		errs = append(errs, fmt.Errorf("node name must match %v, got %v", namePatternStr, s.Identifier))
+	} else if !node.NamePattern.Match([]byte(s.Identifier)) {
+		errs = append(errs, fmt.Errorf("node name must match %v, got %v", node.NamePattern, s.Identifier))
 	}
 
 	// Validate node type if specified.
@@ -163,8 +164,8 @@ func (s *Step) checkStopNode() error {
 
 	if s.Identifier == "" {
 		errs = append(errs, fmt.Errorf("stop node requires an identifier (name)"))
-	} else if !NamePattern.Match([]byte(s.Identifier)) {
-		errs = append(errs, fmt.Errorf("node name must match %v, got %v", namePatternStr, s.Identifier))
+	} else if !node.NamePattern.Match([]byte(s.Identifier)) {
+		errs = append(errs, fmt.Errorf("node name must match %v, got %v", node.NamePattern, s.Identifier))
 	}
 
 	return errors.Join(errs...)
@@ -175,8 +176,8 @@ func (s *Step) checkRunApp() error {
 
 	if s.Identifier == "" {
 		errs = append(errs, fmt.Errorf("run app requires an identifier (name)"))
-	} else if !NamePattern.Match([]byte(s.Identifier)) {
-		errs = append(errs, fmt.Errorf("app name must match %v, got %v", namePatternStr, s.Identifier))
+	} else if !node.NamePattern.Match([]byte(s.Identifier)) {
+		errs = append(errs, fmt.Errorf("app name must match %v, got %v", node.NamePattern, s.Identifier))
 	}
 
 	appType := s.AppType
@@ -204,8 +205,8 @@ func (s *Step) checkStopApp() error {
 
 	if s.Identifier == "" {
 		errs = append(errs, fmt.Errorf("stop app requires an identifier (name)"))
-	} else if !NamePattern.Match([]byte(s.Identifier)) {
-		errs = append(errs, fmt.Errorf("app name must match %v, got %v", namePatternStr, s.Identifier))
+	} else if !node.NamePattern.Match([]byte(s.Identifier)) {
+		errs = append(errs, fmt.Errorf("app name must match %v, got %v", node.NamePattern, s.Identifier))
 	}
 
 	return errors.Join(errs...)
@@ -287,9 +288,9 @@ func (s *Step) checkSharedFileStep() error {
 	}
 	if s.File == "" {
 		errs = append(errs, fmt.Errorf("%s requires a 'file' parameter", s.Function))
-	} else if !FilePattern.MatchString(s.File) {
+	} else if !node.FilePattern.MatchString(s.File) {
 		errs = append(errs, fmt.Errorf(
-			"file name must match %v, got %v", filePatternStr, s.File))
+			"file name must match %v, got %v", node.FilePattern, s.File))
 	}
 	return errors.Join(errs...)
 }
@@ -301,11 +302,11 @@ func (s *Step) checkCheckDb() error {
 		errs = append(errs, fmt.Errorf("%s requires a node identifier", s.Function))
 	}
 	switch s.DbMode {
-	case "", DbCheckModeLive, DbCheckModeArchive:
+	case "", node.DbCheckModeLive, node.DbCheckModeArchive:
 	default:
 		errs = append(errs, fmt.Errorf(
 			"checkDb mode must be %q or %q, got %v",
-			DbCheckModeLive, DbCheckModeArchive, s.DbMode))
+			node.DbCheckModeLive, node.DbCheckModeArchive, s.DbMode))
 	}
 	return errors.Join(errs...)
 }

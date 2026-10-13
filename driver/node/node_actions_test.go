@@ -28,7 +28,6 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
-	"github.com/0xsoniclabs/norma/driver/parser"
 )
 
 // newNodeInState builds a node with no container, usable for exercising the
@@ -119,7 +118,7 @@ func TestOperaNode_Actions_RejectUnexpectedStates(t *testing.T) {
 		"CheckDatabase": {
 			accepts: []NodeState{NodeStateReady},
 			invoke: func(n *OperaNode) error {
-				return n.CheckDatabase(t.Context(), parser.DbCheckModeLive)
+				return n.CheckDatabase(t.Context(), DbCheckModeLive)
 			},
 		},
 	}
@@ -814,7 +813,7 @@ func TestOperaNode_ReadOnlyMaintenance_RestoresReadyStateOnFailure(t *testing.T)
 			return n.ExportGenesis(t.Context(), "exported.g")
 		},
 		"CheckDatabase": func(n *OperaNode) error {
-			return n.CheckDatabase(t.Context(), parser.DbCheckModeLive)
+			return n.CheckDatabase(t.Context(), DbCheckModeLive)
 		},
 	}
 

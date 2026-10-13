@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/stretchr/testify/require"
 )
@@ -1347,7 +1348,7 @@ Scenario:
 	require.Equal(t, "from-b.g", steps[3].File)
 
 	require.Equal(t, FuncCheckDb, steps[4].Function)
-	require.Equal(t, DbCheckModeArchive, steps[4].DbMode)
+	require.Equal(t, node.DbCheckModeArchive, steps[4].DbMode)
 
 	// An omitted mode is left to the node to default.
 	require.Equal(t, FuncCheckDb, steps[5].Function)

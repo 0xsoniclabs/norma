@@ -32,6 +32,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/norma/genesis"
+	"github.com/0xsoniclabs/norma/load/shaper"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
@@ -404,7 +405,7 @@ func TestRun_RunAndStopApp(t *testing.T) {
 				Identifier: "load",
 				AppType:    "counter",
 				Users:      new(50),
-				Rate:       &parser.Rate{Constant: &rate},
+				Rate:       &shaper.Rate{Constant: &rate},
 			},
 			{
 				Function:   parser.FuncStopApp,
