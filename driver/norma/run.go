@@ -133,7 +133,10 @@ func run(ctx *cli.Context) (err error) {
 		if label == "" {
 			label = fmt.Sprintf("eval_%d", time.Now().Unix())
 		}
-		if err := runScenario(ctx.Context, file, outputDir, label, skipChecks, skipReportRendering, openReport, timeout); err != nil {
+		if err := runScenario(
+			ctx.Context, file, outputDir, label,
+			skipChecks, skipReportRendering, openReport, timeout,
+		); err != nil {
 			return fmt.Errorf("failed to run scenario %q: %w", file, err)
 		}
 	}
@@ -141,7 +144,12 @@ func run(ctx *cli.Context) (err error) {
 	return nil
 }
 
-func runScenario(ctx context.Context, path, outputDir, label string, skipChecks, skipReportRendering, openReport bool, timeout time.Duration) error {
+func runScenario(
+	ctx context.Context,
+	path, outputDir, label string,
+	skipChecks, skipReportRendering, openReport bool,
+	timeout time.Duration,
+) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
