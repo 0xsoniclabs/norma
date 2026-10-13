@@ -19,8 +19,6 @@ package nodelifetime
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/0xsoniclabs/norma/driver/steps"
 
@@ -42,7 +40,6 @@ func (*StopNode) Help() string {
 
 func (s *StopNode) Run(ctx context.Context, env *steps.Env) error {
 	base := s.Node.Node
-	prefix := base + "-"
 
 	type stopTarget struct {
 		name string
@@ -50,18 +47,8 @@ func (s *StopNode) Run(ctx context.Context, env *steps.Env) error {
 	}
 	targets := make([]stopTarget, 0)
 	for name, node := range env.Nodes {
-		if name == base {
+		if name == base || steps.IsInstanceLabel(name, base) {
 			targets = append(targets, stopTarget{name: name, node: node})
-		} else if strings.HasPrefix(name, prefix) {
-			// Only match instances with a numeric suffix (e.g. "base-0",
-			// "base-1"), not unrelated nodes that share the prefix
-			// (e.g. "base-extra").
-			suffix := name[len(prefix):]
-			if _, err := strconv.Atoi(suffix); err == nil {
-				targets = append(targets, stopTarget{
-					name: name, node: node,
-				})
-			}
 		}
 	}
 

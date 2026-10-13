@@ -19,6 +19,8 @@ package steps
 import (
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/node"
@@ -79,6 +81,24 @@ func (a App) Validate() error {
 		return errors.New("requires an app identifier")
 	}
 	return matchName("app", a.App)
+}
+
+// InstanceLabel is the label of one of several instances of a node started
+// under base, e.g. "val-0".
+func InstanceLabel(base string, instance int) string {
+	return base + "-" + strconv.Itoa(instance)
+}
+
+// IsInstanceLabel reports whether label is one InstanceLabel gives an instance
+// of base. Other names sharing the prefix, such as "base-extra", "base--1" or
+// "base-01", belong to unrelated nodes.
+func IsInstanceLabel(label, base string) bool {
+	suffix, ok := strings.CutPrefix(label, base+"-")
+	if !ok {
+		return false
+	}
+	instance, err := strconv.Atoi(suffix)
+	return err == nil && instance >= 0 && strconv.Itoa(instance) == suffix
 }
 
 // Failing is the parameter marking a step or check as expected to fail.

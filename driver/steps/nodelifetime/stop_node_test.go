@@ -83,15 +83,19 @@ func TestStopNode_MultipleInstances(t *testing.T) {
 	}
 }
 
-func TestStopNode_IgnoresNonNumericSuffix(t *testing.T) {
+// Only labels startNode gives its instances are stopped; other nodes sharing
+// the prefix are unrelated, even when their suffix parses as a number.
+func TestStopNode_IgnoresNodesThatAreNotItsInstances(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	node := driver.NewMockNode(ctrl)
-	unrelated := driver.NewMockNode(ctrl)
 
 	env := steps.NewEnv(net, nil, nil)
 	env.Nodes["validator-0"] = node
-	env.Nodes["validator-extra"] = unrelated
+	unrelated := []string{"validator-extra", "validator--1", "validator-01"}
+	for _, label := range unrelated {
+		env.Nodes[label] = driver.NewMockNode(ctrl)
+	}
 
 	net.EXPECT().RemoveNode(node).Return(nil)
 	node.EXPECT().Stop(gomock.Any()).Return(nil)
@@ -105,7 +109,9 @@ func TestStopNode_IgnoresNonNumericSuffix(t *testing.T) {
 	if _, ok := env.Nodes["validator-0"]; ok {
 		t.Fatalf("expected validator-0 to be removed")
 	}
-	if _, ok := env.Nodes["validator-extra"]; !ok {
-		t.Fatalf("expected validator-extra to remain (non-numeric suffix)")
+	for _, label := range unrelated {
+		if _, ok := env.Nodes[label]; !ok {
+			t.Errorf("expected %s to remain", label)
+		}
 	}
 }

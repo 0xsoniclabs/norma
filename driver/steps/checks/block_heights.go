@@ -18,6 +18,7 @@ package checks
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
 	"github.com/0xsoniclabs/norma/driver/steps"
@@ -36,8 +37,14 @@ func (*BlockHeights) Help() string {
 	return "Assert that all nodes are within tolerance of the same block height, waiting up to duration for them to agree."
 }
 
-// Validate accepts any tolerance: demanding exact agreement is legitimate.
-func (*BlockHeights) Validate() error { return nil }
+// Validate rejects only a negative tolerance: demanding exact agreement is
+// legitimate.
+func (c *BlockHeights) Validate() error {
+	if c.Tolerance != nil && *c.Tolerance < 0 {
+		return fmt.Errorf("tolerance must be non-negative, got %d", *c.Tolerance)
+	}
+	return nil
+}
 
 func (c *BlockHeights) Run(ctx context.Context, checks checking.Checks) error {
 	config := newConfig(c.Failing)

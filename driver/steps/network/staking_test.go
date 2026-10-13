@@ -165,6 +165,25 @@ func TestDelegation_AmbiguousNodeNameIsReported(t *testing.T) {
 	}
 }
 
+// A node sharing the prefix but not named like an instance does not make the
+// single instance ambiguous.
+func TestDelegation_UnrelatedPrefixedNodeDoesNotMakeANameAmbiguous(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	registry := steps.NewMockValidatorRegistry(ctrl)
+	registry.EXPECT().FundDelegator(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	registry.EXPECT().Delegate(gomock.Any(), 2, uint64(1_000), gomock.Any()).Return(nil)
+
+	env := newTestEnv(registry, map[string]driver.Node{
+		"heavy-0":     validatorNode(ctrl, 2),
+		"heavy-extra": validatorNode(ctrl, 3),
+		"heavy-01":    validatorNode(ctrl, 4),
+	})
+
+	if err := delegateStep("heavy", "alice", 1_000).Run(t.Context(), env); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 // Funding precedes delegation; when the treasury transfer fails the delegation
 // must not be attempted, because the account cannot pay for it.
 func TestDelegate_FundingFailureSkipsTheDelegation(t *testing.T) {

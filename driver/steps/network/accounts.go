@@ -59,14 +59,14 @@ func getOrCreateDelegator(ledger *steps.Ledger, name string) (*steps.Delegator, 
 func resolveValidatorId(env *steps.Env, name string) (int, error) {
 	tracked, ok := env.Nodes[name]
 	if !ok {
-		tracked, ok = env.Nodes[name+"-0"]
+		tracked, ok = env.Nodes[steps.InstanceLabel(name, 0)]
 		if !ok {
 			return 0, fmt.Errorf("node %q not found in active nodes", name)
 		}
 		if hasMultipleInstances(env, name) {
 			return 0, fmt.Errorf(
 				"node %q has multiple instances; use an explicit instance name (e.g. %q)",
-				name, name+"-0",
+				name, steps.InstanceLabel(name, 0),
 			)
 		}
 	}
@@ -80,17 +80,13 @@ func resolveValidatorId(env *steps.Env, name string) (int, error) {
 // hasMultipleInstances reports whether env tracks more than one numbered
 // instance for the given base name (e.g. "name-0", "name-1").
 func hasMultipleInstances(env *steps.Env, baseName string) bool {
-	prefix := baseName + "-"
 	count := 0
-	for key := range env.Nodes {
-		if len(key) > len(prefix) && key[:len(prefix)] == prefix {
+	for label := range env.Nodes {
+		if steps.IsInstanceLabel(label, baseName) {
 			count++
-			if count > 1 {
-				return true
-			}
 		}
 	}
-	return false
+	return count > 1
 }
 
 func matchName(field, name string) error {

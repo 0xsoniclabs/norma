@@ -165,3 +165,21 @@ func TestNetworkRules_RejectsRulesTheNetworkWouldRefuse(t *testing.T) {
 	require.ErrorContains(t, check.Validate(), "invalid rules")
 	require.NoError(t, (&NetworkRules{}).Validate())
 }
+
+func TestBlockGasRate_RejectsANegativeCeiling(t *testing.T) {
+	negative, zero := -1.0, 0.0
+	require.ErrorContains(t, (&BlockGasRate{Ceiling: &negative}).Validate(), "ceiling must be non-negative")
+	require.NoError(t, (&BlockGasRate{Ceiling: &zero}).Validate())
+	require.NoError(t, (&BlockGasRate{}).Validate())
+
+	// The window floor still applies alongside it.
+	short := 1
+	require.ErrorContains(t, (&BlockGasRate{Window: Window{Tolerance: &short}}).Validate(), "observation window")
+}
+
+func TestBlockHeights_RejectsANegativeTolerance(t *testing.T) {
+	negative, zero := -1, 0
+	require.ErrorContains(t, (&BlockHeights{Tolerance: &negative}).Validate(), "tolerance must be non-negative")
+	require.NoError(t, (&BlockHeights{Tolerance: &zero}).Validate())
+	require.NoError(t, (&BlockHeights{}).Validate())
+}

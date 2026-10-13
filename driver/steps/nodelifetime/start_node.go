@@ -67,7 +67,7 @@ func (s *StartNode) InstanceCount() int {
 // single instance, the name with a numeric suffix otherwise.
 func (s *StartNode) InstanceName(instance int) string {
 	if s.InstanceCount() > 1 {
-		return fmt.Sprintf("%s-%d", s.Node.Node, instance)
+		return steps.InstanceLabel(s.Node.Node, instance)
 	}
 	return s.Node.Node
 }

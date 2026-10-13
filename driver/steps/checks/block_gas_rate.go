@@ -18,6 +18,7 @@ package checks
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
 	"github.com/0xsoniclabs/norma/driver/steps"
@@ -35,6 +36,13 @@ func (*BlockGasRate) Name() string { return "blockGasRate" }
 
 func (*BlockGasRate) Help() string {
 	return "Assert that every block produced during the observation window has a gas rate at or below a ceiling."
+}
+
+func (c *BlockGasRate) Validate() error {
+	if c.Ceiling != nil && *c.Ceiling < 0 {
+		return fmt.Errorf("ceiling must be non-negative, got %v", *c.Ceiling)
+	}
+	return c.Window.Validate()
 }
 
 func (c *BlockGasRate) Run(ctx context.Context, checks checking.Checks) error {
