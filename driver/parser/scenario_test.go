@@ -19,6 +19,7 @@ package parser
 import (
 	"math/big"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -66,6 +67,21 @@ func TestAllFunctionsAndParamsAreDocumented(t *testing.T) {
 			require.NotEmptyf(t, strings.TrimSpace(p.Help), "parameter %q of %q has empty description", p.Key, fn.Name())
 		}
 	}
+}
+
+// The executor waits for a new block after these steps only; the others may
+// legitimately leave the network stalled, or do not change it.
+func TestStepKinds_AwaitBlockProductionAfterStepsThatChangeTheNetwork(t *testing.T) {
+	want := []string{"advanceEpoch", "runApp", "startNode", "updateRules"}
+	var got []string
+	for _, kind := range stepKinds {
+		step := kind()
+		if s, ok := step.(steps.Stabilizing); ok && s.AwaitsBlockProduction() {
+			got = append(got, step.Name())
+		}
+	}
+	slices.Sort(got)
+	require.Equal(t, want, got)
 }
 
 func TestParseBytes_MinimalScenario(t *testing.T) {
