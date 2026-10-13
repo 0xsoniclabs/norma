@@ -14,18 +14,27 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Norma. If not, see <http://www.gnu.org/licenses/>.
 
-package parser
+package steps
 
-import (
-	"fmt"
-)
+import "context"
 
-// isTypeValid reports whether the given node type is one of the supported
-// values (observer, rpc, validator).
-func isTypeValid(t string) error {
-	switch t {
-	case "validator", "rpc", "observer":
-		return nil
+// StopSonic stops the client gracefully, keeping the container and the
+// tracked node so a later startNode restarts it in place.
+type StopSonic struct {
+	Node
+}
+
+func (*StopSonic) Name() string { return "stopSonic" }
+
+func (*StopSonic) Help() string {
+	return "Stop the sonicd process gracefully, keeping the node's container and data directory."
+}
+
+func (s *StopSonic) Run(ctx context.Context, env *Env) error {
+	opera, err := s.Opera(env)
+	if err != nil {
+		return err
 	}
-	return fmt.Errorf("type of node must be observer, rpc or validator, was set to %s", t)
+	env.Net.SuspendNode(opera)
+	return opera.StopSonicd(ctx)
 }

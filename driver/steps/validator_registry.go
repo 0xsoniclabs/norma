@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Norma. If not, see <http://www.gnu.org/licenses/>.
 
-package executor
+package steps
 
 import (
 	"context"
@@ -30,42 +30,47 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-//go:generate mockgen -source validator_registry.go -destination validator_registry_mock.go -package executor
+//go:generate mockgen -source validator_registry.go -destination validator_registry_mock.go -package steps
 
-// validatorActivationTimeout bounds how long ensureValidatorsActive waits for a
+// validatorActivationTimeout bounds how long EnsureValidatorsActive waits for a
 // sealed epoch to propagate to the node it queries. Var so tests can shorten it.
 var validatorActivationTimeout = 30 * time.Second
 
-// validatorRegistry abstracts how an executor registers, activates and
+// ValidatorRegistry abstracts how an executor registers, activates and
 // unregisters validator nodes with the network, and how it moves stake
 // between external delegator accounts and those validators.
-type validatorRegistry interface {
-	registerNewValidator(ctx context.Context, stake uint64) (int, error)
-	ensureValidatorsActive(ctx context.Context, validatorIds []int) error
-	unregisterValidator(ctx context.Context, validatorId int, stake uint64) error
-	// delegate delegates `stake` from the given external delegator key to
+type ValidatorRegistry interface {
+	RegisterNewValidator(ctx context.Context, stake uint64) (int, error)
+	EnsureValidatorsActive(ctx context.Context, validatorIds []int) error
+	UnregisterValidator(ctx context.Context, validatorId int, stake uint64) error
+	// Delegate delegates `stake` from the given external delegator key to
 	// the validator identified by validatorId.
-	delegate(ctx context.Context, validatorId int, stake uint64, delegator *ecdsa.PrivateKey) error
-	// undelegateAs undelegates `stake` from the validator, signing the
+	Delegate(ctx context.Context, validatorId int, stake uint64, delegator *ecdsa.PrivateKey) error
+	// UndelegateAs undelegates `stake` from the validator, signing the
 	// transaction with the given delegator key. If stake is 0, the full
 	// on-chain stake for the delegator on that validator is undelegated.
-	undelegateAs(ctx context.Context, validatorId int, stake uint64, delegator *ecdsa.PrivateKey) error
-	// fundDelegator transfers `amount` (in S) from the treasury account to
+	UndelegateAs(ctx context.Context, validatorId int, stake uint64, delegator *ecdsa.PrivateKey) error
+	// FundDelegator transfers `amount` (in S) from the treasury account to
 	// the given delegator address so it can pay for delegation + gas.
-	fundDelegator(ctx context.Context, delegator common.Address, amount uint64) error
-	// getDelegatorStake returns the current on-chain stake (in S) held by
+	FundDelegator(ctx context.Context, delegator common.Address, amount uint64) error
+	// GetDelegatorStake returns the current on-chain stake (in S) held by
 	// the given delegator on the given validator.
-	getDelegatorStake(delegator common.Address, validatorId int) (uint64, error)
+	GetDelegatorStake(delegator common.Address, validatorId int) (uint64, error)
 }
 
 // netBasedValidatorRegistry is the production implementation of
-// validatorRegistry: it registers and unregisters validators against a live
+// ValidatorRegistry: it registers and unregisters validators against a live
 // network via RPC.
 type netBasedValidatorRegistry struct {
 	net driver.Network
 }
 
-func (a netBasedValidatorRegistry) registerNewValidator(ctx context.Context, stake uint64) (int, error) {
+// NewValidatorRegistry returns the ValidatorRegistry acting on net.
+func NewValidatorRegistry(net driver.Network) ValidatorRegistry {
+	return netBasedValidatorRegistry{net: net}
+}
+
+func (a netBasedValidatorRegistry) RegisterNewValidator(ctx context.Context, stake uint64) (int, error) {
 	rpcClient, err := a.net.DialRandomRpc()
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect to RPC; %v", err)
@@ -78,7 +83,7 @@ func (a netBasedValidatorRegistry) registerNewValidator(ctx context.Context, sta
 	return id, nil
 }
 
-// ensureValidatorsActive makes the given validators take part in consensus. It
+// EnsureValidatorsActive makes the given validators take part in consensus. It
 // seals the current epoch when any of them is missing from the validator set,
 // and returns once all of them are reported in it.
 //
@@ -94,7 +99,7 @@ func (a netBasedValidatorRegistry) registerNewValidator(ctx context.Context, sta
 // more than that read, but one whose stake was undelegated, or one registered
 // by a step that was allowed to fail, is not — and is admitted here instead of
 // silently running as an observer.
-func (a netBasedValidatorRegistry) ensureValidatorsActive(ctx context.Context, validatorIds []int) error {
+func (a netBasedValidatorRegistry) EnsureValidatorsActive(ctx context.Context, validatorIds []int) error {
 	if len(validatorIds) == 0 {
 		return nil
 	}
@@ -118,7 +123,7 @@ func (a netBasedValidatorRegistry) ensureValidatorsActive(ctx context.Context, v
 	// producing blocks cannot do. Wait for a block first, as the advanceEpoch
 	// step does, so that a stalled network is reported as one rather than as a
 	// transaction that never got its receipt.
-	if err := waitForBlockProduction(ctx, a.net); err != nil {
+	if err := WaitForBlockProduction(ctx, a.net); err != nil {
 		return fmt.Errorf(
 			"no block produced to seal an epoch on for validators %v; %w",
 			validatorIds, err,
@@ -184,7 +189,7 @@ func missingValidators(want, active []int) []int {
 	return missing
 }
 
-func (a netBasedValidatorRegistry) unregisterValidator(ctx context.Context, validatorId int, stake uint64) error {
+func (a netBasedValidatorRegistry) UnregisterValidator(ctx context.Context, validatorId int, stake uint64) error {
 	rpcClient, err := a.net.DialRandomRpc()
 	if err != nil {
 		return fmt.Errorf("failed to connect to RPC; %v", err)
@@ -204,7 +209,7 @@ func treasuryKey() *ecdsa.PrivateKey {
 	return evmcore.FakeKey(1)
 }
 
-func (a netBasedValidatorRegistry) delegate(
+func (a netBasedValidatorRegistry) Delegate(
 	ctx context.Context, validatorId int, stake uint64, delegator *ecdsa.PrivateKey,
 ) error {
 	rpcClient, err := a.net.DialRandomRpc()
@@ -218,7 +223,7 @@ func (a netBasedValidatorRegistry) delegate(
 	return nil
 }
 
-func (a netBasedValidatorRegistry) undelegateAs(
+func (a netBasedValidatorRegistry) UndelegateAs(
 	ctx context.Context, validatorId int, stake uint64, delegator *ecdsa.PrivateKey,
 ) error {
 	rpcClient, err := a.net.DialRandomRpc()
@@ -232,7 +237,7 @@ func (a netBasedValidatorRegistry) undelegateAs(
 	return nil
 }
 
-func (a netBasedValidatorRegistry) fundDelegator(
+func (a netBasedValidatorRegistry) FundDelegator(
 	ctx context.Context, delegator common.Address, amount uint64,
 ) error {
 	// Funding is signed by the treasury, the shared system account, so it has
@@ -250,7 +255,7 @@ func (a netBasedValidatorRegistry) fundDelegator(
 	return nil
 }
 
-func (a netBasedValidatorRegistry) getDelegatorStake(
+func (a netBasedValidatorRegistry) GetDelegatorStake(
 	delegator common.Address, validatorId int,
 ) (uint64, error) {
 	rpcClient, err := a.net.DialRandomRpc()

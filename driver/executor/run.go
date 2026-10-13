@@ -18,23 +18,14 @@ package executor
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"errors"
 	"fmt"
 	"log/slog"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/checking"
-	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/0xsoniclabs/norma/driver/parser"
-	"github.com/0xsoniclabs/norma/driver/rpc"
-	"github.com/0xsoniclabs/norma/genesis"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"golang.org/x/sync/errgroup"
+	"github.com/0xsoniclabs/norma/driver/steps"
 )
 
 // Run executes a scenario on the given network.
@@ -51,7 +42,7 @@ func Run(
 		network,
 		scenario,
 		checks,
-		&netBasedValidatorRegistry{net: network},
+		steps.NewValidatorRegistry(network),
 		nil,
 		nil,
 	)
@@ -75,7 +66,7 @@ func RunAndCaptureEventExecution(
 		network,
 		scenario,
 		checks,
-		&netBasedValidatorRegistry{net: network},
+		steps.NewValidatorRegistry(network),
 		func(execution EventExecution) {
 			executions = append(executions, execution)
 		},
@@ -96,22 +87,14 @@ const (
 // without a deadline of its own; `norma run --timeout` sets one.
 const DefaultScenarioTimeout = 10 * time.Minute
 
-// clientExitTimeout caps the wait for a client that stops itself, which
-// happens no sooner than the epoch boundary it was told to stop at.
-const clientExitTimeout = 5 * time.Minute
-
-// sonicToolTimeout caps a single sonictool invocation. Each walks the whole
-// node state, so the bound is generous for slow CI hosts.
-const sonicToolTimeout = 3 * time.Minute
-
 // run is the internal implementation, allowing injection of
-// a validatorRegistry for testing.
+// a ValidatorRegistry for testing.
 func run(
 	ctx context.Context,
 	network driver.Network,
 	scenario *parser.Scenario,
 	checks checking.Checks,
-	registry validatorRegistry,
+	registry steps.ValidatorRegistry,
 ) error {
 	return runWithObserver(
 		ctx,
@@ -129,7 +112,7 @@ func runWithObserver(
 	network driver.Network,
 	scenario *parser.Scenario,
 	checks checking.Checks,
-	registry validatorRegistry,
+	registry steps.ValidatorRegistry,
 	onStepExecuted func(EventExecution),
 	genesisValidatorIds map[string]int,
 ) error {
@@ -145,38 +128,32 @@ func runWithObserver(
 		defer cancel()
 	}
 
-	state := &runState{
-		nodes:          make(map[string]driver.Node),
-		apps:           make(map[string]driver.Application),
-		nodeHistory:    make(map[string]bool),
-		validatorIds:   make(map[string]int),
-		delegators:     make(map[string]*delegatorAccount),
-		expectedStakes: make(map[stakeKey]uint64),
-	}
+	env := steps.NewEnv(network, checks, registry)
 	for label, id := range genesisValidatorIds {
-		state.validatorIds[label] = id
+		env.ValidatorIds[label] = id
 	}
 
 	for i, step := range scenario.Steps {
+		name, target := step.Name(), steps.TargetOf(step)
 		select {
 		case <-ctx.Done():
 			slog.Warn("scenario aborted", "step", i+1, "reason", ctx.Err())
-			return fmt.Errorf("scenario aborted at step %d (%s): %w", i+1, step.Function, ctx.Err())
+			return fmt.Errorf("scenario aborted at step %d (%s): %w", i+1, name, ctx.Err())
 		default:
 		}
 
-		slog.Info(string(step.Function),
+		slog.Info(name,
 			"step", i+1,
 			"phase", phaseStarted,
-			"identifier", step.Identifier,
+			"identifier", target,
 		)
 
 		start := time.Now()
-		err := executeStep(ctx, &step, network, checks, registry, state)
+		err := step.Run(ctx, env)
 		end := time.Now()
 		if onStepExecuted != nil {
 			onStepExecuted(EventExecution{
-				Name:  formatStepExecutionName(i+1, &step),
+				Name:  formatStepExecutionName(i+1, step),
 				Start: start,
 				End:   end,
 			})
@@ -185,27 +162,25 @@ func runWithObserver(
 		if err != nil {
 			slog.Error("step failed",
 				"step", i+1,
-				"function", step.Function,
-				"identifier", step.Identifier,
+				"function", name,
+				"identifier", target,
 				"error", err,
 				"duration", end.Sub(start),
 			)
-			return fmt.Errorf("step %d (%s %s) failed: %w", i+1, step.Function, step.Identifier, err)
+			return fmt.Errorf("step %d (%s %s) failed: %w", i+1, name, target, err)
 		}
 
-		slog.Info(string(step.Function),
+		slog.Info(name,
 			"step", i+1,
 			"phase", phaseCompleted,
 			"duration", end.Sub(start),
 		)
 
-		// Wait for block production after steps that actively modify the
-		// network and expect it to remain healthy. Skip for steps that can
-		// legitimately leave the network stalled (stopNode, failing startNode)
-		// or that don't affect network state (waitFor, checks).
-		if requiresBlockProductionCheck(step) {
-			if err := waitForBlockProduction(ctx, network); err != nil {
-				return fmt.Errorf("network unstable after step %d (%s %s): %w", i+1, step.Function, step.Identifier, err)
+		// Steps that leave the network expected to be healthy are confirmed
+		// to keep it producing blocks before the next one starts.
+		if stabilizing, ok := step.(steps.Stabilizing); ok && stabilizing.AwaitsBlockProduction() {
+			if err := steps.WaitForBlockProduction(ctx, network); err != nil {
+				return fmt.Errorf("network unstable after step %d (%s %s): %w", i+1, name, target, err)
 			}
 		}
 	}
@@ -214,1048 +189,10 @@ func runWithObserver(
 	return nil
 }
 
-func formatStepExecutionName(stepNum int, step *parser.Step) string {
-	if step.Identifier == "" {
-		return fmt.Sprintf("step %d: %s", stepNum, step.Function)
-	}
-	return fmt.Sprintf("step %d: %s %s", stepNum, step.Function, step.Identifier)
-}
-
-// runState tracks runtime state during execution.
-type runState struct {
-	// nodes maps node identifiers to active node instances.
-	nodes map[string]driver.Node
-	// apps maps app identifiers to active application instances.
-	apps map[string]driver.Application
-	// nodeHistory tracks names that have been started before (for rejoin detection).
-	nodeHistory map[string]bool
-	// validatorIds preserves validator IDs for nodes that were stopped,
-	// so they can be reused on rejoin.
-	validatorIds map[string]int
-	// delegators maps a scenario-scoped delegator name to a deterministically
-	// derived key/address pair. Accounts are created lazily on first
-	// reference in a delegate/undelegate step.
-	delegators map[string]*delegatorAccount
-	// expectedStakes tracks the running expected stake (in S) for every
-	// (delegator, validator) pair the executor has touched. Used by the
-	// verifyStakes step to compare against on-chain state. Fully
-	// undelegated pairs stay tracked with an expected stake of 0.
-	expectedStakes map[stakeKey]uint64
-}
-
-// stakeKey identifies a tracked (delegator, validator) stake pair.
-type stakeKey struct {
-	delegator   string
-	validatorId int
-}
-
-// delegatorAccount holds the private key and derived address for a named
-// external delegator used in a scenario.
-type delegatorAccount struct {
-	name       string
-	privateKey *ecdsa.PrivateKey
-	address    common.Address
-}
-
-// executeStep dispatches a single step to the appropriate handler.
-func executeStep(
-	ctx context.Context,
-	step *parser.Step,
-	net driver.Network,
-	checks checking.Checks,
-	registry validatorRegistry,
-	state *runState,
-) error {
-	switch step.Function {
-	case parser.FuncStartNode:
-		return execStartNode(ctx, step, net, registry, state)
-	case parser.FuncStopNode:
-		return execStopNode(ctx, step, net, state)
-	case parser.FuncKillSonic:
-		return execKillSonic(ctx, step, net, state)
-	case parser.FuncHealDb:
-		return execHealDb(ctx, step, state)
-	case parser.FuncWaitForSonicExit:
-		return execWaitForSonicExit(ctx, step, net, state)
-	case parser.FuncStopSonic:
-		return execStopSonic(ctx, step, net, state)
-	case parser.FuncExportGenesis:
-		return execExportGenesis(ctx, step, state)
-	case parser.FuncImportGenesis:
-		return execImportGenesis(ctx, step, state)
-	case parser.FuncExportEvents:
-		return execExportEvents(ctx, step, state)
-	case parser.FuncImportEvents:
-		return execImportEvents(ctx, step, state)
-	case parser.FuncCheckDb:
-		return execCheckDb(ctx, step, state)
-	case parser.FuncDelegate:
-		return execDelegate(ctx, step, registry, state)
-	case parser.FuncUndelegate:
-		return execUndelegate(ctx, step, registry, state)
-	case parser.FuncVerifyStakes:
-		return execVerifyStakes(step, registry, state)
-	case parser.FuncRunApp:
-		return execRunApp(ctx, step, net, state)
-	case parser.FuncStopApp:
-		return execStopApp(step, state)
-	case parser.FuncUpdateRules:
-		return execUpdateRules(ctx, step, net)
-	case parser.FuncAdvanceEpoch:
-		if err := waitForBlockProduction(ctx, net); err != nil {
-			return err
-		}
-		if err := net.AdvanceEpoch(ctx, 1); err != nil {
-			return err
-		}
-		return waitForBlockProduction(ctx, net)
-	case parser.FuncWaitForEpoch:
-		return net.WaitForEpochChange(ctx)
-	case parser.FuncWaitForBlocks:
-		client, err := net.DialRandomRpc()
-		if err != nil {
-			return fmt.Errorf("failed to connect to network: %w", err)
-		}
-		defer client.Close()
-		slog.Info("waiting for blocks", "count", step.Blocks)
-		return waitForBlocks(ctx, client, step.Blocks)
-	case parser.FuncChecks:
-		for i, spec := range step.SubChecks {
-			checkerName, ok := checkFunctionToCheckerName[spec.Function]
-			if !ok {
-				return fmt.Errorf("unknown check function: %q", spec.Function)
-			}
-			c := spec
-			if err := execCheck(ctx, checkerName, &c, checks); err != nil {
-				return fmt.Errorf("check %d (%s): %w", i+1, spec.Function, err)
-			}
-		}
-		return nil
-	case parser.FuncWaitFor:
-		slog.Info("waiting", "duration", step.Duration)
-		select {
-		case <-time.After(step.Duration):
-			return nil
-		case <-ctx.Done():
-			return fmt.Errorf("context cancelled during waitFor: %w", ctx.Err())
-		}
-	default:
-		return fmt.Errorf("unknown step function: %q", step.Function)
-	}
-}
-
-// restartNodeInPlace restarts the client process of a node whose container
-// is still alive, as is the case after killSonic followed by healDb. The
-// data directory is preserved, so the node rejoins with the history it
-// already had rather than syncing from genesis.
-func restartNodeInPlace(
-	ctx context.Context,
-	step *parser.Step,
-	net driver.Network,
-	existing driver.Node,
-) error {
-	name := step.Identifier
-	opera, ok := existing.(*node.OperaNode)
-	if !ok {
-		return fmt.Errorf("node %q is not an OperaNode", name)
-	}
-
-	// Capture the network's height before the node comes back, so we know
-	// how far it has to catch up.
-	targetBlock, err := getNetworkBlockHeight(ctx, net)
-	if err != nil {
-		if !errors.Is(err, driver.ErrEmptyNetwork) {
-			return fmt.Errorf(
-				"failed to determine sync target for restart of %s: %w", name, err)
-		}
-		targetBlock = 0
-	}
-	slog.Info("restarting node in place",
-		"node", name, "type", step.NodeType, "target_block", targetBlock)
-
-	// Restart with the role the step asks for. Silently demoting a
-	// validator to an observer would remove it from consensus for the rest
-	// of the scenario while still reporting success.
-	if step.NodeType == "validator" {
-		if err := opera.StartSonicd(ctx); err != nil {
-			return fmt.Errorf("failed to restart sonicd on %s: %w", name, err)
-		}
-	} else {
-		if err := opera.StartSonicdAsObserver(ctx); err != nil {
-			return fmt.Errorf("failed to restart sonicd on %s: %w", name, err)
-		}
-	}
-
-	if err := opera.WaitForSync(ctx); err != nil {
-		return fmt.Errorf("failed to sync restarted node %s: %w", name, err)
-	}
-
-	// Re-establish peer connections so other nodes discover the restarted
-	// client (the peer table does not survive the restart).
-	if err := net.ReconnectNode(ctx, existing); err != nil {
-		return fmt.Errorf("failed to reconnect node %s: %w", name, err)
-	}
-
-	// Announce availability before waiting for the node to catch up, so
-	// monitoring observes the blocks it processes while doing so.
-	net.ResumeNode(existing)
-
-	if targetBlock > 0 {
-		if err := waitForNodeSync(ctx, existing, targetBlock+1); err != nil {
-			return fmt.Errorf(
-				"restarted node %s did not reach block %d: %w",
-				name, targetBlock+1, err)
-		}
-	}
-
-	slog.Info("node restarted in place", "node", name)
-	return nil
-}
-
-// execStartNode creates a node. If the same name was previously started and
-// stopped, this is treated as a rejoin (no new validator registration).
-// If the node is still in state.nodes (e.g. after killSonic + healDb),
-// the existing container is reused instead of creating a new one.
-func execStartNode(
-	ctx context.Context,
-	step *parser.Step,
-	net driver.Network,
-	registry validatorRegistry,
-	state *runState,
-) error {
-	name := step.Identifier
-
-	// In-place restart: if the node is already tracked (e.g. after
-	// killSonic + healDb), restart sonicd inside the existing container
-	// instead of creating a new one.
-	if existing, ok := state.nodes[name]; ok {
-		return restartNodeInPlace(ctx, step, net, existing)
-	}
-
-	isRejoin := state.nodeHistory[name]
-	isValidator := step.NodeType == "validator"
-
-	image := driver.DefaultClientDockerImageName
-	if step.ImageName != "" {
-		image = step.ImageName
-	}
-
-	instances := 1
-	if step.Instances != nil {
-		instances = *step.Instances
-	}
-
-	// Get the current block height from an existing node before starting new ones.
-	// We'll wait for new nodes to reach this height before proceeding.
-	targetBlock, err := getNetworkBlockHeight(ctx, net)
-	if err != nil {
-		if !errors.Is(err, driver.ErrEmptyNetwork) {
-			slog.Warn("failed to get network block height; node sync target defaults to 0", "error", err)
-		} else {
-			targetBlock = 0
-		}
-	}
-
-	type nodeResult struct {
-		instanceName string
-		node         driver.Node
-		validatorId  *int
-	}
-	results := make([]nodeResult, instances)
-
-	// Pre-compute instance names and register validators sequentially.
-	// Registration involves on-chain reads (LastValidatorID) that are not
-	// safe for concurrent use, so we do this before the parallel fan-out.
-	instanceNames := make([]string, instances)
-	validatorIds := make([]*int, instances)
-	// Validators this step has to see in the validator set before it completes:
-	// the ones it creates in the SFC contract, which only join once the epoch is
-	// sealed, and the ones a rejoining node brings back, which are expected to
-	// be in it already. Genesis validators are left out — they are in the set
-	// from the first block on.
-	mustBeActive := make([]int, 0, instances)
-	for instance := range instances {
-		instanceName := name
-		if instances > 1 {
-			instanceName = fmt.Sprintf("%s-%d", name, instance)
-		}
-		instanceNames[instance] = instanceName
-
-		if isValidator {
-			var stakeAmount uint64
-			if step.Stake != nil {
-				stakeAmount = *step.Stake
-			}
-			if id, ok := state.validatorIds[instanceName]; ok {
-				// Reuse existing ID (genesis validator or rejoin).
-				validatorIds[instance] = &id
-				if isRejoin {
-					mustBeActive = append(mustBeActive, id)
-				}
-			} else if isRejoin {
-				return fmt.Errorf("validator %s is rejoining but has no preserved validator ID",
-					instanceName,
-				)
-			} else {
-				id, err := registry.registerNewValidator(ctx, stakeAmount)
-				if err != nil {
-					return fmt.Errorf("failed to register validator %s: %w",
-						instanceName, err,
-					)
-				}
-				validatorIds[instance] = &id
-				mustBeActive = append(mustBeActive, id)
-			}
-		}
-	}
-
-	// Create nodes in parallel — all on-chain state has been settled above.
-	g, _ := errgroup.WithContext(ctx)
-	for instance := range instances {
-		instance := instance
-		g.Go(func() error {
-			node, err := net.CreateNode(&driver.NodeConfig{
-				Name:           instanceNames[instance],
-				Failing:        step.Failing,
-				Image:          image,
-				Validator:      isValidator,
-				ValidatorId:    validatorIds[instance],
-				DataVolume:     dataVolumePtr(step.DataVolume),
-				ExtraArguments: step.ExtraArguments,
-			})
-			if err != nil {
-				return fmt.Errorf(
-					"failed to create node %s: %w",
-					instanceNames[instance], err,
-				)
-			}
-
-			results[instance] = nodeResult{
-				instanceNames[instance], node, validatorIds[instance],
-			}
-			return nil
-		})
-	}
-	if err := g.Wait(); err != nil {
-		return fmt.Errorf("failed to create nodes for %s: %w", name, err)
-	}
-
-	var newNodes []driver.Node
-	for _, r := range results {
-		state.nodes[r.instanceName] = r.node
-		state.nodeHistory[r.instanceName] = true
-		if r.validatorId != nil {
-			state.validatorIds[r.instanceName] = *r.validatorId
-		}
-		newNodes = append(newNodes, r.node)
-	}
-
-	// Also mark the base name in history for single-instance nodes.
-	state.nodeHistory[name] = true
-
-	// Wait for newly created nodes to sync to the network's block height.
-	// Skip sync wait for nodes expected to fail (they may never reach the target).
-	if !step.Failing {
-		for _, node := range newNodes {
-			slog.Info("waiting for node to sync", "node", node.GetLabel(), "target_block", targetBlock)
-			if err := waitForNodeSync(ctx, node, targetBlock+1); err != nil {
-				slog.Warn("node sync wait failed", "node", node.GetLabel(), "error", err)
-			}
-		}
-	}
-
-	// Activation happens only now that the nodes are up and synced: a validator
-	// gains stake weight the moment it joins the set, so admitting it earlier
-	// would deprive the network of that share of its online stake.
-	//
-	// Nodes expected to fail are left out, as they are for the sync wait above
-	// and the between-step block production wait: a node that may never come
-	// up must not be the subject of an assertion. They join at the next seal
-	// the scenario performs, as they did before activation existed.
-	if len(mustBeActive) > 0 && !step.Failing {
-		if err := registry.ensureValidatorsActive(ctx, mustBeActive); err != nil {
-			return fmt.Errorf("failed to activate validators for %s: %w", name, err)
-		}
-	}
-
-	return nil
-}
-
-// getNetworkBlockHeight returns the current block height from an existing network node.
-func getNetworkBlockHeight(ctx context.Context, net driver.Network) (uint64, error) {
-	client, err := net.DialRandomRpc()
-	if err != nil {
-		return 0, err
-	}
-	defer client.Close()
-	return client.BlockNumber(ctx)
-}
-
-// waitForNodeSync waits until the given node has synced to at least the target block height.
-func waitForNodeSync(ctx context.Context, node driver.Node, targetBlock uint64) error {
-	client, err := node.DialRpc(ctx)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-
-	const syncTimeout = 60 * time.Second
-	deadline := time.Now().Add(syncTimeout)
-
-	for time.Now().Before(deadline) {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		block, err := client.BlockNumber(ctx)
-		if err != nil {
-			time.Sleep(500 * time.Millisecond)
-			continue
-		}
-		if block >= targetBlock {
-			return nil
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
-	return fmt.Errorf("node did not sync to block %d within %s", targetBlock, syncTimeout)
-}
-
-// execStopNode stops a node.
-func execStopNode(
-	ctx context.Context,
-	step *parser.Step,
-	net driver.Network,
-	state *runState,
-) error {
-	base := step.Identifier
-	prefix := base + "-"
-
-	type stopTarget struct {
-		name string
-		node driver.Node
-	}
-	targets := make([]stopTarget, 0)
-	for name, node := range state.nodes {
-		if name == base {
-			targets = append(targets, stopTarget{name: name, node: node})
-		} else if strings.HasPrefix(name, prefix) {
-			// Only match instances with a numeric suffix (e.g. "base-0",
-			// "base-1"), not unrelated nodes that share the prefix
-			// (e.g. "base-extra").
-			suffix := name[len(prefix):]
-			if _, err := strconv.Atoi(suffix); err == nil {
-				targets = append(targets, stopTarget{
-					name: name, node: node,
-				})
-			}
-		}
-	}
-
-	if len(targets) == 0 {
-		return fmt.Errorf("node %q not found in active nodes", base)
-	}
-
-	g, gctx := errgroup.WithContext(ctx)
-	for _, target := range targets {
-		target := target
-		g.Go(func() error {
-			if err := net.RemoveNode(target.node); err != nil {
-				return fmt.Errorf("failed to remove node %s: %w", target.name, err)
-			}
-			if err := target.node.Stop(gctx); err != nil {
-				return fmt.Errorf("failed to stop node %s: %w", target.name, err)
-			}
-			if err := target.node.Cleanup(gctx); err != nil {
-				return fmt.Errorf("failed to cleanup node %s: %w", target.name, err)
-			}
-			return nil
-		})
-	}
-
-	if err := g.Wait(); err != nil {
-		return err
-	}
-
-	for _, target := range targets {
-		delete(state.nodes, target.name)
-	}
-
-	return nil
-}
-
-// execUndelegate undelegates stake from one or more validator nodes.
-// When a target specifies a delegator, the operation is performed as that
-// external delegator using its key. Otherwise the legacy validator
-// self-undelegation path is used.
-func execUndelegate(
-	ctx context.Context,
-	step *parser.Step,
-	registry validatorRegistry,
-	state *runState,
-) error {
-	for _, target := range step.UndelegateTargets {
-		id, err := resolveValidatorId(state, target.Node)
-		if err != nil {
-			return err
-		}
-		var stakeAmount uint64
-		if target.Stake != nil {
-			stakeAmount = *target.Stake
-		}
-
-		if target.Delegator == "" {
-			// Legacy self-undelegation using the validator key.
-			// stakeAmount=0 → UnregisterValidatorNode queries self-stake on-chain
-			if err := registry.unregisterValidator(ctx, id, stakeAmount); err != nil {
-				return fmt.Errorf("failed to unregister validator %s: %w", target.Node, err)
-			}
-			continue
-		}
-
-		// External-delegator undelegation.
-		delegator, ok := state.delegators[target.Delegator]
-		if !ok {
-			return fmt.Errorf(
-				"undelegate: delegator %q was never used in a prior delegate step",
-				target.Delegator,
-			)
-		}
-
-		// If no explicit amount, undelegate the full expected stake.
-		effectiveStake := stakeAmount
-		key := stakeKey{target.Delegator, id}
-		if effectiveStake == 0 {
-			effectiveStake = state.expectedStakes[key]
-		}
-
-		if err := registry.undelegateAs(
-			ctx, id, stakeAmount, delegator.privateKey,
-		); err != nil {
-			return fmt.Errorf(
-				"failed to undelegate from validator %s as %s: %w",
-				target.Node, target.Delegator, err,
-			)
-		}
-
-		// Bookkeeping: reduce expected stake, keeping fully undelegated
-		// pairs at 0 so verifyStakes asserts the stake is gone on-chain.
-		if remaining, ok := state.expectedStakes[key]; ok {
-			state.expectedStakes[key] = remaining - min(effectiveStake, remaining)
-		}
-	}
-	return nil
-}
-
-// execDelegate delegates stake from named external delegator accounts to
-// validator nodes. Delegator accounts are created lazily; every delegation
-// is funded from the treasury with its stake plus a gas budget.
-func execDelegate(
-	ctx context.Context,
-	step *parser.Step,
-	registry validatorRegistry,
-	state *runState,
-) error {
-	for _, target := range step.DelegateTargets {
-		id, err := resolveValidatorId(state, target.Node)
-		if err != nil {
-			return err
-		}
-		delegator, err := getOrCreateDelegator(state, target.Delegator)
-		if err != nil {
-			return fmt.Errorf("failed to derive delegator %q: %w", target.Delegator, err)
-		}
-
-		// Fund the delegator: stake + gas budget.
-		fundAmount := target.Stake + delegatorGasBudget
-		if err := registry.fundDelegator(ctx, delegator.address, fundAmount); err != nil {
-			return fmt.Errorf(
-				"failed to fund delegator %q: %w", target.Delegator, err,
-			)
-		}
-
-		if err := registry.delegate(ctx, id, target.Stake, delegator.privateKey); err != nil {
-			return fmt.Errorf(
-				"failed to delegate from %s to %s: %w",
-				target.Delegator, target.Node, err,
-			)
-		}
-
-		state.expectedStakes[stakeKey{target.Delegator, id}] += target.Stake
-	}
-	return nil
-}
-
-// execVerifyStakes queries the on-chain stake for every tracked
-// (delegator, validator) pair and asserts it matches the executor's
-// internal bookkeeping.
-func execVerifyStakes(
-	_ *parser.Step,
-	registry validatorRegistry,
-	state *runState,
-) error {
-	var errs []error
-	for key, expected := range state.expectedStakes {
-		delegator, ok := state.delegators[key.delegator]
-		if !ok {
-			errs = append(errs, fmt.Errorf(
-				"verifyStakes: unknown delegator %q in tracked state", key.delegator,
-			))
-			continue
-		}
-		actual, err := registry.getDelegatorStake(delegator.address, key.validatorId)
-		if err != nil {
-			errs = append(errs, fmt.Errorf(
-				"verifyStakes: query failed for %s@%d: %w", key.delegator, key.validatorId, err,
-			))
-			continue
-		}
-		if actual != expected {
-			errs = append(errs, fmt.Errorf(
-				"verifyStakes: mismatch for delegator %s on validator %d: expected %d S, got %d S",
-				key.delegator, key.validatorId, expected, actual,
-			))
-		}
-	}
-	return errors.Join(errs...)
-}
-
-// resolveValidatorId maps a scenario-level node name to its validator ID,
-// applying the same suffix-fallback logic used elsewhere for undelegate.
-func resolveValidatorId(state *runState, name string) (int, error) {
-	node, ok := state.nodes[name]
-	if !ok {
-		node, ok = state.nodes[name+"-0"]
-		if !ok {
-			return 0, fmt.Errorf("node %q not found in active nodes", name)
-		}
-		if hasMultipleInstances(state, name) {
-			return 0, fmt.Errorf(
-				"node %q has multiple instances; use an explicit instance name (e.g. %q)",
-				name, name+"-0",
-			)
-		}
-	}
-	id := node.GetValidatorId()
-	if id == nil {
-		return 0, fmt.Errorf("node %q is not a validator", name)
-	}
-	return *id, nil
-}
-
-// hasMultipleInstances reports whether state contains more than one
-// numbered instance for the given base name (e.g. "name-0", "name-1").
-func hasMultipleInstances(
-	state *runState,
-	baseName string,
-) bool {
-	prefix := baseName + "-"
-	count := 0
-	for key := range state.nodes {
-		if len(key) > len(prefix) &&
-			key[:len(prefix)] == prefix {
-			count++
-			if count > 1 {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// execRunApp creates and starts an application.
-func execRunApp(
-	ctx context.Context,
-	step *parser.Step,
-	net driver.Network,
-	state *runState,
-) error {
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	users := 1
-	if step.Users != nil {
-		users = *step.Users
-	}
-
-	app, err := net.CreateApplication(ctx, &driver.ApplicationConfig{
-		Name:  step.Identifier,
-		Type:  step.AppType,
-		Rate:  step.Rate,
-		Users: users,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create application %s: %w", step.Identifier, err)
-	}
-
-	if err := app.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start application %s: %w", step.Identifier, err)
-	}
-
-	state.apps[step.Identifier] = app
-	return nil
-}
-
-// execKillSonic sends SIGKILL to the sonicd process inside a running
-// node, leaving the database in a dirty state. The container stays
-// alive and the node remains in state.nodes so it can be healed and
-// restarted later.
-func execKillSonic(
-	ctx context.Context,
-	step *parser.Step,
-	net driver.Network,
-	state *runState,
-) error {
-	opera, err := operaNode(step, state)
-	if err != nil {
-		return err
-	}
-
-	// Notify monitoring that this node is going offline.
-	net.SuspendNode(opera)
-
-	return opera.ForceStopSonicd(ctx)
-}
-
-// execHealDb runs sonictool heal on a killed node, recovering the
-// database and transitioning the node back to ready.
-func execHealDb(
-	ctx context.Context,
-	step *parser.Step,
-	state *runState,
-) error {
-	opera, err := operaNode(step, state)
-	if err != nil {
-		return err
-	}
-
-	healCtx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
-	defer cancel()
-	return opera.HealSonicd(healCtx)
-}
-
-// execStopSonic stops the client gracefully, leaving the container and the
-// node's entry in state.nodes so a later startNode restarts it in place.
-func execStopSonic(
-	ctx context.Context,
-	step *parser.Step,
-	net driver.Network,
-	state *runState,
-) error {
-	opera, err := operaNode(step, state)
-	if err != nil {
-		return err
-	}
-
-	// Notify monitoring that this node is going offline.
-	net.SuspendNode(opera)
-
-	return opera.StopSonicd(ctx)
-}
-
-// execWaitForSonicExit waits for a client that stops itself and leaves the
-// node as stopSonic would. Suspended first, so nothing dials a vanishing RPC.
-func execWaitForSonicExit(
-	ctx context.Context,
-	step *parser.Step,
-	net driver.Network,
-	state *runState,
-) error {
-	opera, err := operaNode(step, state)
-	if err != nil {
-		return err
-	}
-	net.SuspendNode(opera)
-
-	waitCtx, cancel := context.WithTimeout(ctx, clientExitTimeout)
-	defer cancel()
-	return opera.AwaitSonicdExit(waitCtx)
-}
-
-// execExportGenesis exports a stopped node's chain to the shared directory.
-func execExportGenesis(
-	ctx context.Context,
-	step *parser.Step,
-	state *runState,
-) error {
-	opera, err := operaNode(step, state)
-	if err != nil {
-		return err
-	}
-
-	toolCtx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
-	defer cancel()
-	return opera.ExportGenesis(toolCtx, step.File)
-}
-
-// execImportGenesis replaces a stopped node's database from a g-file in the
-// shared directory.
-func execImportGenesis(
-	ctx context.Context,
-	step *parser.Step,
-	state *runState,
-) error {
-	opera, err := operaNode(step, state)
-	if err != nil {
-		return err
-	}
-
-	toolCtx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
-	defer cancel()
-	return opera.ImportGenesis(toolCtx, step.File)
-}
-
-// execExportEvents exports a stopped node's event DAG to the shared
-// directory.
-func execExportEvents(
-	ctx context.Context,
-	step *parser.Step,
-	state *runState,
-) error {
-	opera, err := operaNode(step, state)
-	if err != nil {
-		return err
-	}
-
-	toolCtx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
-	defer cancel()
-	return opera.ExportEvents(toolCtx, step.File)
-}
-
-// execImportEvents adds events from the shared directory to a stopped
-// node's database.
-func execImportEvents(
-	ctx context.Context,
-	step *parser.Step,
-	state *runState,
-) error {
-	opera, err := operaNode(step, state)
-	if err != nil {
-		return err
-	}
-
-	toolCtx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
-	defer cancel()
-	return opera.ImportEvents(toolCtx, step.File)
-}
-
-// execCheckDb verifies a stopped node's state database.
-func execCheckDb(
-	ctx context.Context,
-	step *parser.Step,
-	state *runState,
-) error {
-	opera, err := operaNode(step, state)
-	if err != nil {
-		return err
-	}
-
-	toolCtx, cancel := context.WithTimeout(ctx, sonicToolTimeout)
-	defer cancel()
-	return opera.CheckDatabase(toolCtx, step.DbMode)
-}
-
-// operaNode resolves an identifier to the tracked node it names, which must
-// be one norma drives through its container.
-func operaNode(step *parser.Step, state *runState) (*node.OperaNode, error) {
-	n, ok := state.nodes[step.Identifier]
-	if !ok {
-		return nil, fmt.Errorf("node %q not found in active nodes", step.Identifier)
-	}
-	opera, ok := n.(*node.OperaNode)
-	if !ok {
-		return nil, fmt.Errorf("node %q is not an OperaNode", step.Identifier)
-	}
-	return opera, nil
-}
-
-// execStopApp stops a running application.
-func execStopApp(step *parser.Step, state *runState) error {
-	app, ok := state.apps[step.Identifier]
-	if !ok {
-		return fmt.Errorf("application %q not found in active apps", step.Identifier)
-	}
-
-	if err := app.Stop(); err != nil {
-		return fmt.Errorf("failed to stop application %s: %w", step.Identifier, err)
-	}
-
-	delete(state.apps, step.Identifier)
-	return nil
-}
-
-// execUpdateRules applies network rule updates.
-func execUpdateRules(ctx context.Context, step *parser.Step, net driver.Network) error {
-	rules := driver.NetworkRules(step.Rules)
-	if err := net.ApplyNetworkRules(ctx, rules); err != nil {
-		return fmt.Errorf("failed to apply network rules: %w", err)
-	}
-
-	return nil
-}
-
-// checkFunctionToCheckerName maps check step functions to their checker names.
-var checkFunctionToCheckerName = map[parser.StepFunction]string{
-	parser.FuncCheckBlockGasRate:     "blockGasRate",
-	parser.FuncCheckBlockHashes:      "blocksHashes",
-	parser.FuncCheckBlockHeights:     "blockHeight",
-	parser.FuncCheckBlocksHalted:     "blocksHalted",
-	parser.FuncCheckBlocksProduced:   "blocksRolling",
-	parser.FuncCheckEventThrottled:   "eventThrottled",
-	parser.FuncCheckNetworkRules:     "networkRules",
-	parser.FuncCheckValidatorsActive: "validatorsActive",
-}
-
-// execCheck runs a named checker with configuration from the check spec.
-func execCheck(ctx context.Context, checkerName string, spec *parser.CheckSpec, checks checking.Checks) error {
-	if checks == nil {
-		slog.Warn("checks skipped (no checker configured)", "check", checkerName)
-		return nil
-	}
-
-	checker := checks.GetCheckerByName(checkerName)
-	if checker == nil {
-		return fmt.Errorf("checker %q not found", checkerName)
-	}
-
-	// Build configuration from step parameters.
-	config := checking.CheckerConfig{}
-	if spec.Failing {
-		config["failing"] = true
-	}
-	if spec.Tolerance != nil {
-		if spec.Function == parser.FuncCheckBlockHeights {
-			config["slack"] = *spec.Tolerance
-		} else {
-			config["tolerance"] = *spec.Tolerance
-		}
-	}
-	if spec.Duration != nil {
-		// Forward the observation duration (in nanoseconds) to the checker,
-		// which will actively wait for that long and then verify that block
-		// production progressed during the observation window.
-		config["duration"] = int64(*spec.Duration)
-	}
-	if spec.Ceiling != nil {
-		config["ceiling"] = int(*spec.Ceiling)
-	}
-	if spec.Rules != (genesis.NetworkRulesPatch{}) {
-		config["rules"] = spec.Rules
-	}
-	if len(spec.ThrottledNodes) > 0 {
-		config["throttledNodes"] = spec.ThrottledNodes
-	}
-
-	if len(config) > 0 {
-		checker = checking.NewFailingChecker(checker).Configure(config)
-	}
-
-	return checker.Check(ctx)
-}
-
-// dataVolumePtr returns a *string for a non-empty DataVolume, nil otherwise.
-func dataVolumePtr(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}
-
-// requiresBlockProductionCheck returns true for steps after which we should
-// verify the network is still producing blocks.
-func requiresBlockProductionCheck(step parser.Step) bool {
-	switch step.Function {
-	case parser.FuncStartNode:
-		return !step.Failing
-	case parser.FuncRunApp, parser.FuncUpdateRules, parser.FuncAdvanceEpoch:
-		return true
-	default:
-		// stopNode, undelegate, waitFor, waitForEpoch, waitForBlocks, stopApp, checks — skip
-		return false
-	}
-}
-
-// blockProductionTimeout bounds how long the chain may stand still while
-// waiting for blocks, as the random node polled may have stopped following it.
-var blockProductionTimeout = 2 * time.Minute
-
-// waitForBlockProduction waits until the network produces a new block,
-// confirming it is actively processing transactions after an epoch transition.
-func waitForBlockProduction(ctx context.Context, net driver.Network) error {
-	client, err := net.DialRandomRpc()
-	if err != nil {
-		// If we can't connect, log and proceed — the next step will fail
-		// with a more descriptive error if the network is truly down.
-		slog.Warn("skipping block production wait", "error", err)
-		return nil
-	}
-	defer client.Close()
-	return waitForBlocks(ctx, client, 1)
-}
-
-// waitForBlocks waits until the chain seen by client has grown by count
-// blocks, failing once it has not grown for blockProductionTimeout.
-func waitForBlocks(ctx context.Context, client rpc.Client, count uint64) error {
-	grownAt := time.Now()
-	blockNumber := func() (uint64, error) {
-		ctx, cancel := context.WithDeadline(ctx, grownAt.Add(blockProductionTimeout))
-		defer cancel()
-		return client.BlockNumber(ctx)
-	}
-
-	baseline, err := blockNumber()
-	if err != nil {
-		return fmt.Errorf("failed to get block number: %w", err)
-	}
-	for height := baseline; height-baseline < count; {
-		if time.Since(grownAt) > blockProductionTimeout {
-			return fmt.Errorf("no block produced for %v, at block %d of %d",
-				blockProductionTimeout, height-baseline, count)
-		}
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("context cancelled while waiting for block production: %w", ctx.Err())
-		case <-time.After(100 * time.Millisecond):
-		}
-		block, err := blockNumber()
-		if err != nil {
-			return fmt.Errorf("failed to get block number: %w", err)
-		}
-		if block > height {
-			height, grownAt = block, time.Now()
-		}
-	}
-	return nil
-}
-
-// delegatorGasBudget is the extra amount (in S) transferred to a delegator
-// account on top of the delegation stake. Delegate and undelegate
-// transactions reserve their fixed 1e6 gas limit times a fee cap derived
-// from the current base fee, a small fraction of 1 S at fakenet base fees,
-// so 1 S leaves headroom for repeated operations.
-const delegatorGasBudget uint64 = 1
-
-// getOrCreateDelegator returns the delegator account for the given name,
-// creating it deterministically on first use. The private key is derived
-// from keccak256("norma-delegator:" + name), which keeps accounts
-// reproducible across runs and avoids colliding with the fakenet validator
-// key range used by evmcore.FakeKey.
-func getOrCreateDelegator(state *runState, name string) (*delegatorAccount, error) {
-	if existing, ok := state.delegators[name]; ok {
-		return existing, nil
-	}
-	seed := crypto.Keccak256([]byte("norma-delegator:" + name))
-	key, err := crypto.ToECDSA(seed)
-	if err != nil {
-		return nil, fmt.Errorf("failed to derive delegator key: %w", err)
-	}
-	account := &delegatorAccount{
-		name:       name,
-		privateKey: key,
-		address:    crypto.PubkeyToAddress(key.PublicKey),
-	}
-	state.delegators[name] = account
-	return account, nil
+func formatStepExecutionName(stepNum int, step steps.Step) string {
+	target := steps.TargetOf(step)
+	if target == "" {
+		return fmt.Sprintf("step %d: %s", stepNum, step.Name())
+	}
+	return fmt.Sprintf("step %d: %s %s", stepNum, step.Name(), target)
 }

@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -64,7 +63,7 @@ func (h *operationColorHandler) Handle(ctx context.Context, r slog.Record) error
 	// the one line the reader most needs to notice.
 	color := ""
 	if r.Level < slog.LevelWarn {
-		color, _ = operationColor(parser.StepFunction(r.Message))
+		color, _ = operationColor(r.Message)
 	}
 
 	// An operation line also carries a "phase" attribute saying whether the step
