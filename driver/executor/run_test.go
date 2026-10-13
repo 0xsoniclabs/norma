@@ -1673,23 +1673,24 @@ func TestRun_CallerDeadlineOverridesDefaultTimeout(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
+	want := time.Now().Add(2 * DefaultScenarioTimeout)
+	ctx, cancel := context.WithDeadline(t.Context(), want)
 	defer cancel()
+
+	net.EXPECT().WaitForEpochChange(gomock.Any()).DoAndReturn(func(ctx context.Context) error {
+		if got, _ := ctx.Deadline(); !got.Equal(want) {
+			t.Errorf("step saw deadline %v, want the caller's %v", got, want)
+		}
+		return nil
+	})
 
 	scenario := parser.Scenario{
 		Name:        "Deadline",
 		Description: "Test scenario.",
-		Steps: []parser.Step{
-			{Function: parser.FuncWaitFor, Duration: time.Minute},
-		},
+		Steps:       []parser.Step{{Function: parser.FuncWaitForEpoch}},
 	}
 
-	start := time.Now()
-	err := run(ctx, net, &scenario, nil, nil)
-	if err == nil {
-		t.Fatal("expected the caller deadline to abort the scenario")
-	}
-	if elapsed := time.Since(start); elapsed > time.Second {
-		t.Errorf("scenario ran for %s, the caller deadline was not applied", elapsed)
+	if err := run(ctx, net, &scenario, nil, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

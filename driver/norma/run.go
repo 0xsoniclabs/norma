@@ -85,7 +85,7 @@ var (
 	}
 	scenarioTimeout = cli.DurationFlag{
 		Name:  "timeout",
-		Usage: "maximum time the scenario may run before being aborted, e.g. 25m; pass a large value to effectively remove the limit",
+		Usage: "maximum time the scenario may run before being aborted, e.g. 25m",
 		Value: executor.DefaultScenarioTimeout,
 	}
 )
@@ -101,6 +101,9 @@ func run(ctx *cli.Context) (err error) {
 	skipReportRendering := ctx.Bool(skipReportRendering.Name)
 	openReport := ctx.Bool(openReport.Name)
 	timeout := ctx.Duration(scenarioTimeout.Name)
+	if timeout <= 0 {
+		return fmt.Errorf("--%s must be positive, got %s", scenarioTimeout.Name, timeout)
+	}
 
 	path := args.First()
 
@@ -278,12 +281,8 @@ func runScenario(ctx context.Context, path, outputDir, label string, skipChecks,
 	defer logger.shutdown()
 	// The scenario runs under its own deadline so that the outer context stays
 	// usable for dumping node logs after a timeout.
-	runCtx := ctx
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		runCtx, cancel = context.WithTimeout(runCtx, timeout)
-		defer cancel()
-	}
+	runCtx, cancelRun := context.WithTimeout(ctx, timeout)
+	defer cancelRun()
 
 	stepExecutions, err = executor.RunAndCaptureEventExecution(
 		runCtx,
