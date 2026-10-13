@@ -57,14 +57,16 @@ func Decode[T Function](node *yaml.Node, kinds []func() T, what string) (T, erro
 				key.Line, what, fn.Name(), next.Name())
 		}
 		fn, found = next, true
-		if err := decodeValue(fn, value, what); err != nil {
+		nested, err := decodeValue(fn, value)
+		if err != nil {
 			return zero, err
 		}
+		params = append(params, nested...)
 	}
 	if !found {
 		return zero, fmt.Errorf("line %d: no known %s function found in mapping", node.Line, what)
 	}
-	return fn, decodeParams(fn, params, what)
+	return fn, decodeFields(reflect.ValueOf(fn).Elem(), params, what+" "+fn.Name())
 }
 
 // IsNull reports whether value is left empty, as in `- stopNode:`.
@@ -96,36 +98,52 @@ func lookup[T Function](kinds []func() T, name string) (T, bool) {
 	return zero, false
 }
 
-func decodeValue(fn Function, value *yaml.Node, what string) error {
+// decodeValue decodes the value under the function key, returning the
+// parameters it holds when it is a mapping of them.
+func decodeValue(fn Function, value *yaml.Node) ([]*yaml.Node, error) {
 	if decoder, ok := fn.(ValueDecoder); ok {
 		if err := decoder.DecodeValue(value); err != nil {
-			return fmt.Errorf("line %d: %w", value.Line, err)
+			return nil, fmt.Errorf("line %d: %w", value.Line, err)
 		}
-		return nil
+		return nil, nil
 	}
 	if value.Kind == yaml.MappingNode {
-		return decodeParams(fn, value.Content, what)
+		return value.Content, nil
 	}
 	if IsNull(value) {
-		return nil
+		return nil, nil
 	}
-	return fmt.Errorf("line %d: %s does not take a value, got %q", value.Line, fn.Name(), value.Value)
+	return nil, fmt.Errorf("line %d: %s does not take a value, got %q", value.Line, fn.Name(), value.Value)
 }
 
-// decodeParams decodes key/value pairs into the parameter fields of fn,
-// rejecting keys it does not declare.
-func decodeParams(fn Function, pairs []*yaml.Node, what string) error {
+// DecodeStrict decodes a mapping into the fields of out tagged `yaml`.
+// Unlike yaml.Node.Decode it rejects keys out does not declare and keys given
+// twice, as the rest of a scenario file does; owner names out in errors.
+func DecodeStrict(value *yaml.Node, out any, owner string) error {
+	if value.Kind != yaml.MappingNode {
+		return fmt.Errorf("line %d: %s must be a mapping", value.Line, owner)
+	}
+	return decodeFields(reflect.ValueOf(out).Elem(), value.Content, owner)
+}
+
+// decodeFields decodes key/value pairs into the fields of v tagged `yaml`,
+// rejecting keys v does not declare and keys given twice.
+func decodeFields(v reflect.Value, pairs []*yaml.Node, owner string) error {
 	fields := map[string]reflect.Value{}
-	visitParams(reflect.ValueOf(fn).Elem(), func(key, _ string, field reflect.Value) {
+	visitParams(v, func(key, _ string, field reflect.Value) {
 		fields[key] = field
 	})
+	seen := map[string]bool{}
 	for i := 0; i < len(pairs); i += 2 {
 		key, value := pairs[i], pairs[i+1]
 		field, ok := fields[key.Value]
 		if !ok {
-			return fmt.Errorf("line %d: parameter %q is not valid for %s %s",
-				key.Line, key.Value, what, fn.Name())
+			return fmt.Errorf("line %d: parameter %q is not valid for %s", key.Line, key.Value, owner)
 		}
+		if seen[key.Value] {
+			return fmt.Errorf("line %d: parameter %q is given twice", key.Line, key.Value)
+		}
+		seen[key.Value] = true
 		if err := value.Decode(field.Addr().Interface()); err != nil {
 			return fmt.Errorf("line %d: invalid %s value: %w", key.Line, key.Value, err)
 		}

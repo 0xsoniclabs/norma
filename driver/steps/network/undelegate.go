@@ -75,7 +75,7 @@ func (s *Undelegate) DecodeValue(value *yaml.Node) error {
 	case yaml.SequenceNode:
 		for i, item := range value.Content {
 			var target UndelegateTarget
-			if err := item.Decode(&target); err != nil {
+			if err := steps.DecodeStrict(item, &target, "an undelegate target"); err != nil {
 				return fmt.Errorf("undelegate target %d: %w", i+1, err)
 			}
 			s.Targets = append(s.Targets, target)

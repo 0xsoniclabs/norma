@@ -34,6 +34,7 @@ func decode(t *testing.T, input string) (steps.Step, error) {
 	require.NoError(t, yaml.Unmarshal([]byte(input), &node))
 	kinds := []func() steps.Step{
 		func() steps.Step { return &UpdateRules{} },
+		func() steps.Step { return &Delegate{} },
 		func() steps.Step { return &Undelegate{} },
 	}
 	return steps.Decode(node.Content[0], kinds, "step")
@@ -84,4 +85,27 @@ func TestAdvanceEpoch_ReportsAFailedSeal(t *testing.T) {
 
 	err := (&AdvanceEpoch{}).Run(t.Context(), steps.NewEnv(net, nil, nil))
 	require.ErrorContains(t, err, "seal reverted")
+}
+
+// A misspelled optional field must not be ignored: an undelegate target
+// without a stake withdraws everything, so `stkae: 100` would undelegate the
+// full stake instead of 100 S.
+func TestUndelegate_RejectsUnknownTargetFields(t *testing.T) {
+	_, err := decode(t, "undelegate:\n  - node: val-1\n    stkae: 100\n")
+	require.ErrorContains(t, err, `parameter "stkae" is not valid for an undelegate target`)
+
+	step, err := decode(t, "undelegate:\n  - node: val-1\n    stake: 100\n    delegator: alice\n")
+	require.NoError(t, err)
+	stake := uint64(100)
+	require.Equal(t, &Undelegate{Targets: []UndelegateTarget{
+		{Node: "val-1", Stake: &stake, Delegator: "alice"},
+	}}, step)
+}
+
+func TestDelegate_RejectsUnknownTargetFields(t *testing.T) {
+	_, err := decode(t, "delegate:\n  - node: val-1\n    delegator: alice\n    stake: 100\n    bogus: 1\n")
+	require.ErrorContains(t, err, `parameter "bogus" is not valid for a delegate target`)
+
+	_, err = decode(t, "delegate:\n  - node: val-1\n    node: val-2\n")
+	require.ErrorContains(t, err, `parameter "node" is given twice`)
 }

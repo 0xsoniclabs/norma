@@ -855,6 +855,18 @@ Scenario:
 	}
 }
 
+func TestParseBytes_RejectsAParameterGivenTwice(t *testing.T) {
+	input := `
+Name: Test
+Scenario:
+  - startNode: node-A
+    type: validator
+    type: observer
+`
+	_, err := ParseBytes([]byte(input))
+	require.ErrorContains(t, err, `line 6: parameter "type" is given twice`)
+}
+
 func TestParseBytes_NonScalarStringParam(t *testing.T) {
 	tests := []struct {
 		name  string

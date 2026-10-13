@@ -42,9 +42,20 @@ func (*bareStep) Help() string                    { return "A step without argum
 func (*bareStep) Validate() error                 { return nil }
 func (*bareStep) Run(context.Context, *Env) error { return nil }
 
+// paramStep takes no value, only parameters, flat or nested under its key.
+type paramStep struct {
+	Mode string `yaml:"mode" help:"A mode."`
+}
+
+func (*paramStep) Name() string                    { return "paramStep" }
+func (*paramStep) Help() string                    { return "A step with parameters only." }
+func (*paramStep) Validate() error                 { return nil }
+func (*paramStep) Run(context.Context, *Env) error { return nil }
+
 var testKinds = []func() Step{
 	func() Step { return &nodeStep{} },
 	func() Step { return &bareStep{} },
+	func() Step { return &paramStep{} },
 }
 
 func decodeStep(t *testing.T, input string) (Step, error) {
@@ -91,6 +102,8 @@ func TestDecode_ReportsInvalidInputWithItsLine(t *testing.T) {
 		"parameter of bad type":  {"nodeStep: a\nmode: [live]\n", "line 2: invalid mode value"},
 		"name that is not a str": {"nodeStep: [a, b]\n", "line 1: value must be a name"},
 		"sequence as a step":     {"- nodeStep\n", "line 1: step must be a string or mapping"},
+		"parameter given twice":  {"nodeStep: a\nmode: x\nmode: y\n", `line 3: parameter "mode" is given twice`},
+		"nested and flat":        {"paramStep: {mode: x}\nmode: y\n", `line 2: parameter "mode" is given twice`},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -103,4 +116,49 @@ func TestDecode_ReportsInvalidInputWithItsLine(t *testing.T) {
 func TestParams_ListsTaggedFieldsAndSkipsTheValue(t *testing.T) {
 	require.Equal(t, []Param{{Key: "mode", Help: "A mode."}}, Params(&nodeStep{}))
 	require.Empty(t, Params(&bareStep{}))
+}
+
+func TestDecode_ReadsParamsNestedUnderTheFunctionKey(t *testing.T) {
+	step, err := decodeStep(t, "paramStep:\n  mode: x\n")
+	require.NoError(t, err)
+	require.Equal(t, &paramStep{Mode: "x"}, step)
+}
+
+type target struct {
+	Node  string  `yaml:"node"`
+	Stake *uint64 `yaml:"stake,omitempty"`
+}
+
+func decodeTarget(t *testing.T, input string) (target, error) {
+	t.Helper()
+	var node yaml.Node
+	require.NoError(t, yaml.Unmarshal([]byte(input), &node))
+	var out target
+	err := DecodeStrict(node.Content[0], &out, "a target")
+	return out, err
+}
+
+func TestDecodeStrict_DecodesDeclaredFields(t *testing.T) {
+	got, err := decodeTarget(t, "node: val\nstake: 100\n")
+	require.NoError(t, err)
+	require.Equal(t, "val", got.Node)
+	require.Equal(t, uint64(100), *got.Stake)
+}
+
+func TestDecodeStrict_RejectsWhatYamlWouldIgnore(t *testing.T) {
+	tests := map[string]struct {
+		input     string
+		wantError string
+	}{
+		"misspelled key": {"node: val\nstkae: 100\n", `line 2: parameter "stkae" is not valid for a target`},
+		"key twice":      {"node: a\nnode: b\n", `line 2: parameter "node" is given twice`},
+		"not a mapping":  {"val\n", "line 1: a target must be a mapping"},
+		"bad value":      {"node: val\nstake: lots\n", "line 2: invalid stake value"},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := decodeTarget(t, test.input)
+			require.ErrorContains(t, err, test.wantError)
+		})
+	}
 }

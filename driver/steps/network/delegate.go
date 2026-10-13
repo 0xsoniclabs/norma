@@ -68,7 +68,7 @@ func (s *Delegate) DecodeValue(value *yaml.Node) error {
 	}
 	for i, item := range value.Content {
 		var target DelegateTarget
-		if err := item.Decode(&target); err != nil {
+		if err := steps.DecodeStrict(item, &target, "a delegate target"); err != nil {
 			return fmt.Errorf("delegate target %d: %w", i+1, err)
 		}
 		s.Targets = append(s.Targets, target)
