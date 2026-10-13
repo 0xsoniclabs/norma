@@ -40,6 +40,7 @@ import (
 	_ "github.com/0xsoniclabs/norma/driver/monitoring/user"
 	"github.com/0xsoniclabs/norma/driver/network/local"
 	"github.com/0xsoniclabs/norma/driver/parser"
+	"github.com/0xsoniclabs/norma/driver/steps/nodelifetime"
 	"github.com/urfave/cli/v2"
 )
 
@@ -315,18 +316,15 @@ func extractBootstrapValidators(scenario *parser.Scenario) (driver.Validators, m
 		return nil, nil, fmt.Errorf("scenario has no steps")
 	}
 
-	step := scenario.Steps[0]
-	if step.Function != parser.FuncStartNode {
-		return nil, nil, fmt.Errorf("first step must be %q, got %q", parser.FuncStartNode, step.Function)
+	step, ok := scenario.Steps[0].(*nodelifetime.StartNode)
+	if !ok {
+		return nil, nil, fmt.Errorf(`first step must be "startNode", got %q`, scenario.Steps[0].Name())
 	}
-	if step.NodeType != "validator" {
-		return nil, nil, fmt.Errorf("first startNode must be validator, got %q", step.NodeType)
+	if !step.IsValidator() {
+		return nil, nil, fmt.Errorf("first startNode must be validator, got %q", step.Type)
 	}
 
-	instances := 1
-	if step.Instances != nil {
-		instances = *step.Instances
-	}
+	instances := step.InstanceCount()
 	image := driver.ResolveClientImageName(step.ImageName)
 
 	var stake uint64
@@ -335,21 +333,17 @@ func extractBootstrapValidators(scenario *parser.Scenario) (driver.Validators, m
 	}
 
 	validators := driver.Validators{{
-		Name:      step.Identifier,
+		Name:      step.Target(),
 		Instances: instances,
 		ImageName: image,
 		Stake:     stake,
 	}}
 
-	// Build the genesis label→validatorId map using the same naming convention
-	// as execStartNode: no "-N" suffix for single-instance nodes.
+	// The genesis label→validatorId map uses the labels the step gives its
+	// instances when it starts them.
 	genesisIds := make(map[string]int)
 	for j := range instances {
-		label := step.Identifier
-		if instances > 1 {
-			label = fmt.Sprintf("%s-%d", step.Identifier, j)
-		}
-		genesisIds[label] = j + 1
+		genesisIds[step.InstanceName(j)] = j + 1
 	}
 
 	return validators, genesisIds, nil
@@ -362,10 +356,9 @@ func extractBootstrapValidators(scenario *parser.Scenario) (driver.Validators, m
 func collectClientImages(scenario *parser.Scenario) []string {
 	images := make([]string, 0, len(scenario.Steps))
 	for _, step := range scenario.Steps {
-		if step.Function != parser.FuncStartNode {
-			continue
+		if start, ok := step.(*nodelifetime.StartNode); ok {
+			images = append(images, driver.ResolveClientImageName(start.ImageName))
 		}
-		images = append(images, driver.ResolveClientImageName(step.ImageName))
 	}
 	return images
 }

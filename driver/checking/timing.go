@@ -45,11 +45,15 @@ func sleep(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// minObservationSamples is the smallest number of monitoring samples an
+// MinObservationSamples is the smallest number of monitoring samples an
 // observation window must be able to hold. Deciding whether a block height
 // changed takes two samples, so a shorter window could only ever report that
 // nothing was observed.
-const minObservationSamples = 2
+const MinObservationSamples = 2
+
+// MinObservationDuration is the shortest observation window a check may
+// request: MinObservationSamples at the monitor's sampling rate.
+const MinObservationDuration = MinObservationSamples * blockSampleInterval
 
 // observationWindow returns how long a checker should observe the network. An
 // explicit duration wins; otherwise the window is derived from a tolerance
@@ -68,11 +72,11 @@ func observationWindow(
 		window = time.Duration(toleranceSamples) * blockSampleInterval
 	}
 
-	if minimum := minObservationSamples * blockSampleInterval; window < minimum {
+	if minimum := MinObservationDuration; window < minimum {
 		return 0, fmt.Errorf(
 			"observation window of %s is shorter than the %s needed to "+
 				"collect %d monitoring samples",
-			window, minimum, minObservationSamples,
+			window, minimum, MinObservationSamples,
 		)
 	}
 	return window, nil

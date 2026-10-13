@@ -24,700 +24,37 @@ import (
 	"os"
 	"slices"
 	"strings"
-	"time"
 
+	"github.com/0xsoniclabs/norma/driver/steps"
+	"github.com/0xsoniclabs/norma/driver/steps/checks"
+	"github.com/0xsoniclabs/norma/driver/steps/network"
 	"github.com/0xsoniclabs/norma/genesis"
 	"gopkg.in/yaml.v3"
 )
 
-// StepFunction identifies the type of operation a step performs.
-type StepFunction string
-
-const (
-	FuncStartNode        StepFunction = "startNode"
-	FuncStopNode         StepFunction = "stopNode"
-	FuncDelegate         StepFunction = "delegate"
-	FuncUndelegate       StepFunction = "undelegate"
-	FuncVerifyStakes     StepFunction = "verifyStakes"
-	FuncUpdateRules      StepFunction = "updateRules"
-	FuncAdvanceEpoch     StepFunction = "advanceEpoch"
-	FuncWaitForEpoch     StepFunction = "waitForEpoch"
-	FuncRunApp           StepFunction = "runApp"
-	FuncStopApp          StepFunction = "stopApp"
-	FuncChecks           StepFunction = "checks"
-	FuncWaitFor          StepFunction = "waitFor"
-	FuncWaitForBlocks    StepFunction = "waitForBlocks"
-	FuncKillSonic        StepFunction = "killSonic"
-	FuncHealDb           StepFunction = "healDb"
-	FuncStopSonic        StepFunction = "stopSonic"
-	FuncWaitForSonicExit StepFunction = "waitForSonicExit"
-
-	// File management steps, operating on a node whose client is stopped.
-	FuncExportGenesis StepFunction = "exportGenesis"
-	FuncImportGenesis StepFunction = "importGenesis"
-	FuncExportEvents  StepFunction = "exportEvents"
-	FuncImportEvents  StepFunction = "importEvents"
-	FuncCheckDb       StepFunction = "checkDb"
-
-	// Check functions used as items inside a checks: step.
-	FuncCheckBlockGasRate     StepFunction = "blockGasRate"
-	FuncCheckBlockHashes      StepFunction = "blockHashes"
-	FuncCheckBlockHeights     StepFunction = "blockHeights"
-	FuncCheckBlocksHalted     StepFunction = "blocksHalted"
-	FuncCheckBlocksProduced   StepFunction = "blocksProduced"
-	FuncCheckEventThrottled   StepFunction = "eventThrottled"
-	FuncCheckNetworkRules     StepFunction = "networkRules"
-	FuncCheckValidatorsActive StepFunction = "validatorsActive"
-)
-
-// allStepFunctions lists every known top-level step function constant.
-var allStepFunctions = [...]StepFunction{
-	FuncStartNode,
-	FuncStopNode,
-	FuncDelegate,
-	FuncUndelegate,
-	FuncVerifyStakes,
-	FuncUpdateRules,
-	FuncAdvanceEpoch,
-	FuncWaitForEpoch,
-	FuncRunApp,
-	FuncStopApp,
-	FuncChecks,
-	FuncWaitFor,
-	FuncWaitForBlocks,
-	FuncKillSonic,
-	FuncHealDb,
-	FuncStopSonic,
-	FuncWaitForSonicExit,
-	FuncExportGenesis,
-	FuncImportGenesis,
-	FuncExportEvents,
-	FuncImportEvents,
-	FuncCheckDb,
-}
-
-// allCheckFunctions lists every check function valid as a sub-item of a checks: step.
-var allCheckFunctions = [...]StepFunction{
-	FuncCheckBlockGasRate,
-	FuncCheckBlockHashes,
-	FuncCheckBlockHeights,
-	FuncCheckBlocksHalted,
-	FuncCheckBlocksProduced,
-	FuncCheckEventThrottled,
-	FuncCheckNetworkRules,
-	FuncCheckValidatorsActive,
-}
-
-// AllStepFunctions returns every top-level step function a scenario may use.
-func AllStepFunctions() []StepFunction {
-	return slices.Clone(allStepFunctions[:])
-}
-
-// toStepFunction returns the StepFunction for a given string, or an error if not recognized.
-func toStepFunction(s string) (StepFunction, error) {
-	for _, fn := range allStepFunctions {
-		if string(fn) == s {
-			return fn, nil
-		}
-	}
-	return "", fmt.Errorf("unknown function: %q", s)
-}
-
-// toCheckFunction returns the StepFunction for a given check function string, or an error.
-func toCheckFunction(s string) (StepFunction, error) {
-	for _, fn := range allCheckFunctions {
-		if string(fn) == s {
-			return fn, nil
-		}
-	}
-	return "", fmt.Errorf("unknown check function: %q", s)
-}
-
-// CheckSpec represents a single check inside a checks: step.
-type CheckSpec struct {
-	Function       StepFunction
-	Ceiling        *float64
-	Tolerance      *int
-	Duration       *time.Duration
-	Failing        bool
-	Rules          genesis.NetworkRulesPatch
-	ThrottledNodes []string
-}
-
-// UnmarshalYAML implements custom YAML unmarshalling for CheckSpec.
-// A check can be either a plain function name string or a mapping with
-// the function name as key and optional parameters. Parameters may be
-// siblings of the function key (flat form) or nested under it (nested
-// form); both are accepted.
-func (c *CheckSpec) UnmarshalYAML(value *yaml.Node) error {
-	switch value.Kind {
-	case yaml.ScalarNode:
-		fn, err := toCheckFunction(value.Value)
-		if err != nil {
-			return fmt.Errorf("line %d: %w", value.Line, err)
-		}
-		c.Function = fn
-		return nil
-	case yaml.MappingNode:
-		return c.unmarshalCheckMapping(value)
-	default:
-		return fmt.Errorf(
-			"line %d: check must be a string or mapping", value.Line,
-		)
-	}
-}
-
-func (c *CheckSpec) unmarshalCheckMapping(node *yaml.Node) error {
-	// First pass: find the function key so that parameter validation
-	// (which depends on the check function) works regardless of key
-	// order in the mapping.
-	for i := 0; i < len(node.Content); i += 2 {
-		key := node.Content[i].Value
-		if fn, err := toCheckFunction(key); err == nil {
-			c.Function = fn
-			break
-		}
-	}
-	if c.Function == "" {
-		return fmt.Errorf(
-			"line %d: no known check function found in mapping",
-			node.Line,
-		)
-	}
-
-	// Second pass: parse the function value (nested-parameter form) and
-	// any sibling parameters (flat form).
-	for i := 0; i < len(node.Content); i += 2 {
-		keyNode := node.Content[i]
-		valNode := node.Content[i+1]
-
-		if _, err := toCheckFunction(keyNode.Value); err == nil {
-			// Nested-parameter form:
-			//   - eventThrottled:
-			//       throttledNodes: [a, b]
-			// The function's value is a mapping of params.
-			if valNode.Kind != yaml.MappingNode {
-				continue
-			}
-			for j := 0; j < len(valNode.Content); j += 2 {
-				if err := c.parseParam(
-					valNode.Content[j], valNode.Content[j+1],
-				); err != nil {
-					return err
-				}
-			}
-			continue
-		}
-
-		if err := c.parseParam(keyNode, valNode); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (c *CheckSpec) parseParam(keyNode, valNode *yaml.Node) error {
-	allowed, known := checkFunctionParams[c.Function]
-	if !known || !slices.Contains(allowed, keyNode.Value) {
-		return fmt.Errorf(
-			"line %d: parameter %q is not valid for check %s",
-			keyNode.Line, keyNode.Value, c.Function,
-		)
-	}
-	switch keyNode.Value {
-	case "tolerance":
-		var v int
-		if err := valNode.Decode(&v); err != nil {
-			return fmt.Errorf(
-				"line %d: invalid tolerance: %w", keyNode.Line, err,
-			)
-		}
-		c.Tolerance = &v
-	case "duration":
-		var s string
-		if err := valNode.Decode(&s); err != nil {
-			return fmt.Errorf("line %d: invalid duration: %w", keyNode.Line, err)
-		}
-		d, err := time.ParseDuration(s)
-		if err != nil {
-			return fmt.Errorf("line %d: invalid duration %q: %w", keyNode.Line, s, err)
-		}
-		if d < 0 {
-			return fmt.Errorf("line %d: duration must be non-negative, got %s", keyNode.Line, d)
-		}
-		c.Duration = &d
-	case "ceiling":
-		var v float64
-		if err := valNode.Decode(&v); err != nil {
-			return fmt.Errorf(
-				"line %d: invalid ceiling: %w", keyNode.Line, err,
-			)
-		}
-		c.Ceiling = &v
-	case "failing":
-		var v bool
-		if err := valNode.Decode(&v); err != nil {
-			return fmt.Errorf(
-				"line %d: invalid failing: %w", keyNode.Line, err,
-			)
-		}
-		c.Failing = v
-	case "rules":
-		var patch genesis.NetworkRulesPatch
-		if err := valNode.Decode(&patch); err != nil {
-			return fmt.Errorf(
-				"line %d: invalid rules: %w", keyNode.Line, err,
-			)
-		}
-		c.Rules = patch
-	case "throttledNodes":
-		var v []string
-		if err := valNode.Decode(&v); err != nil {
-			return fmt.Errorf(
-				"line %d: invalid throttledNodes: %w",
-				keyNode.Line, err,
-			)
-		}
-		c.ThrottledNodes = v
-	default:
-		return fmt.Errorf(
-			"line %d: unknown check parameter %q",
-			keyNode.Line, keyNode.Value,
-		)
-	}
-	return nil
-}
-
-// Scenario is the root element of a scenario description.
-// Unlike the time-based Scenario, it defines an ordered list of blocking steps.
+// Scenario is the root element of a scenario description: an ordered list of
+// blocking steps.
 type Scenario struct {
 	Name             string                    `yaml:"Name"`
 	Description      string                    `yaml:"Description"`
 	InitialRules     genesis.NetworkRulesPatch `yaml:"InitialNetworkRules"`
 	DisableEndChecks bool                      `yaml:"DisableEndChecks,omitempty"`
-	Steps            []Step                    `yaml:"Scenario"`
+	Steps            Steps                     `yaml:"Scenario"`
 }
 
-// Step is a single blocking operation in a scenario.
-type Step struct {
-	// Function identifies which operation this step performs.
-	Function StepFunction
+// Steps is the ordered list of steps of a scenario.
+type Steps []steps.Step
 
-	// Identifier is the main argument (node name, app name, check target).
-	Identifier string
-
-	// Node parameters
-	NodeType       string // "validator", "observer", "rpc"
-	ImageName      string
-	DataVolume     string
-	Stake          *uint64
-	Instances      *int
-	Failing        bool
-	ExtraArguments string
-
-	// App parameters
-	AppType string
-	Users   *int
-	Rate    *Rate
-
-	// Update rules parameters
-	Rules genesis.NetworkRulesPatch
-
-	// Checks step parameters
-	SubChecks []CheckSpec
-
-	// Delegate parameters
-	DelegateTargets []DelegateTarget
-
-	// Undelegate parameters
-	UndelegateTargets []UndelegateTarget
-
-	// WaitFor parameters
-	Duration time.Duration
-
-	// WaitForBlocks parameters
-	Blocks uint64
-
-	// File management parameters: a file in the network's shared directory
-	// and the state database checkDb verifies.
-	File   string
-	DbMode string
-}
-
-// DelegateTarget specifies a single delegation from a named external
-// delegator account to a validator node. Both Stake and Delegator are
-// required: unlike undelegate, delegate never derives values from
-// on-chain state.
-type DelegateTarget struct {
-	Node      string `yaml:"node"`
-	Stake     uint64 `yaml:"stake"`
-	Delegator string `yaml:"delegator"`
-}
-
-// UndelegateTarget specifies a single validator node to undelegate from.
-// Stake is optional; if omitted (nil), the full stake for the effective
-// delegator is queried on-chain.
-// Delegator is optional; when set, the undelegation is performed by that
-// named external delegator account (created by a prior delegate step).
-// When Delegator is empty, the operation is a validator self-undelegation
-// using the validator's own key (existing behavior).
-type UndelegateTarget struct {
-	Node      string  `yaml:"node"`
-	Stake     *uint64 `yaml:"stake,omitempty"`
-	Delegator string  `yaml:"delegator,omitempty"`
-}
-
-// UnmarshalYAML implements custom YAML unmarshalling for Step.
-// A step can be either:
-//   - A scalar string (e.g., "advanceEpoch")
-//   - A mapping where one key is the function name (e.g., "startNode: validator-A")
-func (s *Step) UnmarshalYAML(value *yaml.Node) error {
-	switch value.Kind {
-	case yaml.ScalarNode:
-		fn, err := toStepFunction(value.Value)
+func (s *Steps) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind != yaml.SequenceNode {
+		return fmt.Errorf("line %d: Scenario must be a list of steps", value.Line)
+	}
+	for _, item := range value.Content {
+		step, err := steps.Decode(item, stepKinds, "step")
 		if err != nil {
-			return fmt.Errorf("line %d: %w", value.Line, err)
+			return err
 		}
-		s.Function = fn
-		return nil
-	case yaml.MappingNode:
-		return s.unmarshalMapping(value)
-	default:
-		return fmt.Errorf("line %d: step must be a string or mapping, got kind %d", value.Line, value.Kind)
-	}
-}
-
-// unmarshalMapping parses a mapping node into a Step.
-// It identifies the function key and parses the remaining keys as parameters.
-func (s *Step) unmarshalMapping(node *yaml.Node) error {
-	// First pass: find the function key so that parameter parsing (e.g. "type")
-	// can depend on which function this step represents.
-	for i := 0; i < len(node.Content); i += 2 {
-		keyNode := node.Content[i]
-		valNode := node.Content[i+1]
-		key := keyNode.Value
-
-		if fn, err := toStepFunction(key); err == nil {
-			if s.Function != "" {
-				return fmt.Errorf("line %d: step contains multiple function keys: %q and %q", keyNode.Line, s.Function, fn)
-			}
-			s.Function = fn
-			if err := s.parseFunctionValue(fn, valNode); err != nil {
-				return fmt.Errorf("line %d: %w", valNode.Line, err)
-			}
-		}
-	}
-
-	if s.Function == "" {
-		return fmt.Errorf("line %d: no known function found in step mapping", node.Line)
-	}
-
-	// Second pass: parse parameters now that s.Function is known.
-	for i := 0; i < len(node.Content); i += 2 {
-		keyNode := node.Content[i]
-		valNode := node.Content[i+1]
-		key := keyNode.Value
-
-		// Skip function keys (already handled above).
-		if _, err := toStepFunction(key); err == nil {
-			continue
-		}
-
-		if err := s.parseParam(key, valNode); err != nil {
-			return fmt.Errorf("line %d: %w", keyNode.Line, err)
-		}
-	}
-
-	return nil
-}
-
-// parseFunctionValue parses the value associated with the function key.
-func (s *Step) parseFunctionValue(fn StepFunction, val *yaml.Node) error {
-	switch fn {
-	case FuncUpdateRules:
-		// Value is a NetworkRulesPatch mapping.
-		if val.Kind == yaml.MappingNode {
-			var patch genesis.NetworkRulesPatch
-			if err := val.Decode(&patch); err != nil {
-				return fmt.Errorf("invalid updateRules value: %w", err)
-			}
-			s.Rules = patch
-		} else if val.Tag != "!!null" && val.Value != "" {
-			return fmt.Errorf("updateRules value must be a mapping, got %q", val.Value)
-		}
-	case FuncUndelegate:
-		switch val.Kind {
-		case yaml.ScalarNode:
-			// Shorthand single-target form: `- undelegate: nodename`
-			if val.Tag == "!!null" || val.Value == "" {
-				return fmt.Errorf("undelegate requires at least one target")
-			}
-			s.UndelegateTargets = []UndelegateTarget{{Node: val.Value}}
-		case yaml.SequenceNode:
-			// List form: `- undelegate:\n  - node: foo\n    stake: 1000`
-			for i, item := range val.Content {
-				var target UndelegateTarget
-				if err := item.Decode(&target); err != nil {
-					return fmt.Errorf("undelegate target %d: %w", i+1, err)
-				}
-				s.UndelegateTargets = append(s.UndelegateTargets, target)
-			}
-		default:
-			return fmt.Errorf("undelegate value must be a node name or a list of targets")
-		}
-	case FuncKillSonic, FuncHealDb, FuncStopSonic,
-		FuncExportGenesis, FuncImportGenesis,
-		FuncExportEvents, FuncImportEvents, FuncCheckDb, FuncWaitForSonicExit:
-		// Value is a node name (same as stopNode).
-		if val.Kind == yaml.ScalarNode && val.Tag != "!!null" &&
-			val.Value != "" {
-			s.Identifier = val.Value
-		}
-	case FuncDelegate:
-		// Delegate always requires a list of targets. Unlike undelegate,
-		// there is no scalar shorthand because both stake and delegator
-		// must be specified explicitly.
-		if val.Kind != yaml.SequenceNode {
-			return fmt.Errorf("delegate value must be a list of targets")
-		}
-		for i, item := range val.Content {
-			var target DelegateTarget
-			if err := item.Decode(&target); err != nil {
-				return fmt.Errorf("delegate target %d: %w", i+1, err)
-			}
-			s.DelegateTargets = append(s.DelegateTargets, target)
-		}
-	case FuncVerifyStakes, FuncAdvanceEpoch, FuncWaitForEpoch:
-		// These take no value (or null).
-		if val.Kind != yaml.ScalarNode || (val.Tag != "!!null" && val.Value != "" && val.Value != "null") {
-			return fmt.Errorf("%s does not take a value, got %q", fn, val.Value)
-		}
-	case FuncWaitFor:
-		// Value is a duration string (e.g., "1s", "5m", "1h").
-		if val.Kind != yaml.ScalarNode || val.Value == "" {
-			return fmt.Errorf("waitFor requires a duration value (e.g., \"1s\", \"5m\")")
-		}
-		d, err := time.ParseDuration(val.Value)
-		if err != nil {
-			return fmt.Errorf("invalid duration %q: %w", val.Value, err)
-		}
-		if d <= 0 {
-			return fmt.Errorf("waitFor duration must be positive, got %s", d)
-		}
-		s.Duration = d
-	case FuncWaitForBlocks:
-		// Value is the number of blocks to wait for.
-		// The tag check rejects floats, which Decode would truncate.
-		if val.Kind != yaml.ScalarNode || val.Tag != "!!int" {
-			return fmt.Errorf("waitForBlocks requires a block count, got %q", val.Value)
-		}
-		if err := val.Decode(&s.Blocks); err != nil {
-			return fmt.Errorf("invalid block count %q: %w", val.Value, err)
-		}
-	case FuncChecks:
-		// Value is a sequence of check specifications.
-		if val.Kind == yaml.SequenceNode {
-			var specs []CheckSpec
-			if err := val.Decode(&specs); err != nil {
-				return fmt.Errorf("invalid checks list: %w", err)
-			}
-			s.SubChecks = specs
-		} else if val.Tag != "!!null" && val.Value != "" {
-			return fmt.Errorf("checks requires a list of check functions, got %q", val.Value)
-		}
-	default:
-		// Value is a string identifier (or null/empty for optional).
-		if val.Kind == yaml.ScalarNode && val.Tag != "!!null" && val.Value != "" {
-			s.Identifier = val.Value
-		}
-	}
-	return nil
-}
-
-// stepFunctionDescriptions provides a human-readable description for each step function.
-var stepFunctionDescriptions = map[StepFunction]string{
-	FuncStartNode: "Start a new network node (validator, observer, or rpc).",
-	FuncStopNode:  "Stop a running network node by name.",
-	FuncDelegate: `Delegate stake from one or more named external delegator accounts
-    to validator nodes.
-    Each target in the list has three required fields:
-      node:      name of the validator node receiving the delegation.
-      delegator: name of the delegator account (created on first use, funded
-                 automatically from the treasury).
-      stake:     amount in S to delegate.
-    Example:
-      - delegate:
-        - node: val-1
-          delegator: alice
-          stake: 2000000
-        - node: val-1
-          delegator: bob
-          stake: 1000000`,
-	FuncUndelegate: `Undelegate stake from one or more validator nodes.
-    Each target in the list has the fields:
-      node:      (required) name of the validator node to undelegate from.
-      delegator: (optional) name of the delegator account to undelegate as.
-                 When omitted, the validator's self-stake is undelegated
-                 using its own key (existing behavior).
-      stake:     (optional) amount in S to undelegate; if omitted, the full
-                 stake for the effective delegator is queried on-chain
-                 and undelegated.
-    Shorthand: a bare node name may be used instead of a list when
-    undelegating a single node with its full self-stake.
-    Example:
-      - undelegate:
-        - node: val-1
-        - node: val-2
-          stake: 1000000
-        - node: val-3
-          delegator: alice
-          stake: 500000`,
-	FuncVerifyStakes: `Verify that on-chain stake state matches the executor's
-    internal bookkeeping for every delegator that participated in the
-    scenario so far. Fails if any tracked (delegator, validator) pair
-    has an on-chain stake that differs from the expected value.`,
-	FuncUpdateRules:   "Update one or more network rules (key/value pairs).",
-	FuncAdvanceEpoch:  "Advance the network to the next epoch by sending transactions.",
-	FuncWaitForEpoch:  "Wait until the network reaches the next epoch boundary.",
-	FuncRunApp:        "Start a load-generating application.",
-	FuncStopApp:       "Stop a running load-generating application by name.",
-	FuncChecks:        "Run one or more checks (see 'Available checks' below).",
-	FuncWaitFor:       "Pause scenario execution for a fixed duration.",
-	FuncWaitForBlocks: "Wait until the network has produced the given number of new blocks.",
-	FuncKillSonic:     "Kill the sonicd process with SIGKILL, leaving the database dirty.",
-	FuncHealDb:        "Run sonictool heal on a killed node to recover its database.",
-	FuncStopSonic:     "Stop the sonicd process gracefully, keeping the node's container and data directory.",
-	FuncWaitForSonicExit: "Wait for a sonicd process that stops itself, such as one " +
-		"started with --exitwhensynced.epoch, then treat the node as stopped by stopSonic.",
-	FuncExportGenesis: "Export a stopped node's chain into a g-file in the shared directory.",
-	FuncImportGenesis: "Replace a stopped node's database from a g-file in the shared directory, " +
-		"keeping its keystore.",
-	FuncExportEvents: "Export a stopped node's event DAG into a file in the shared directory.",
-	FuncImportEvents: "Add the events in a file from the shared directory to a stopped node's database.",
-	FuncCheckDb:      "Verify a stopped node's state database with sonictool check.",
-}
-
-// paramDescriptions provides a human-readable description for each parameter key.
-var paramDescriptions = map[string]string{
-	"type":           "Node type (\"validator\", \"observer\", \"rpc\") for startNode; application type for runApp.",
-	"imageName":      "Docker image name to use for the node.",
-	"dataVolume":     "Docker volume name to mount as the node data directory.",
-	"stake":          "Stake in S (uint64). Defaults to 5,000,000 S during node start and the full self-stake when undelegating.",
-	"instances":      "Number of node instances to start.",
-	"failing":        "When true, the step is expected to fail; a passing result is treated as an error.",
-	"extraArguments": "Extra command line arguments for sonicd.",
-	"users":          "Number of concurrent user accounts the application should simulate.",
-	"rate":           "Transaction rate configuration for the application.",
-	"file":           "Required. Name of a file in the network's shared directory; a plain file name, no path.",
-	"mode":           "Which state database to check: \"live\" (the default) or \"archive\".",
-}
-
-// allowedParams defines which parameter keys are valid for each step function.
-var allowedParams = map[StepFunction][]string{
-	FuncStartNode:        {"type", "imageName", "dataVolume", "stake", "instances", "failing", "extraArguments"},
-	FuncStopNode:         {},
-	FuncRunApp:           {"type", "users", "rate"},
-	FuncStopApp:          {},
-	FuncUpdateRules:      {},
-	FuncDelegate:         {},
-	FuncUndelegate:       {},
-	FuncVerifyStakes:     {},
-	FuncAdvanceEpoch:     {},
-	FuncWaitForEpoch:     {},
-	FuncWaitFor:          {},
-	FuncWaitForBlocks:    {},
-	FuncChecks:           {},
-	FuncKillSonic:        {},
-	FuncHealDb:           {},
-	FuncStopSonic:        {},
-	FuncWaitForSonicExit: {},
-	FuncExportGenesis:    {"file"},
-	FuncImportGenesis:    {"file"},
-	FuncExportEvents:     {"file"},
-	FuncImportEvents:     {"file"},
-	FuncCheckDb:          {"mode"},
-}
-
-// parseParam parses a single parameter key-value pair.
-func (s *Step) parseParam(key string, val *yaml.Node) error {
-	// Validate that this parameter is allowed for the current step function.
-	allowed, known := allowedParams[s.Function]
-	if !known || !slices.Contains(allowed, key) {
-		return fmt.Errorf("parameter %q is not valid for %s", key, s.Function)
-	}
-
-	switch key {
-	case "type":
-		var v string
-		if err := val.Decode(&v); err != nil {
-			return fmt.Errorf("invalid type value: %w", err)
-		}
-		switch s.Function {
-		case FuncRunApp:
-			s.AppType = v
-		default:
-			s.NodeType = v
-		}
-	case "imageName":
-		var v string
-		if err := val.Decode(&v); err != nil {
-			return fmt.Errorf("invalid imageName value: %w", err)
-		}
-		s.ImageName = v
-	case "dataVolume":
-		var v string
-		if err := val.Decode(&v); err != nil {
-			return fmt.Errorf("invalid dataVolume value: %w", err)
-		}
-		s.DataVolume = v
-	case "stake":
-		var v uint64
-		if err := val.Decode(&v); err != nil {
-			return fmt.Errorf("invalid stake value: %w", err)
-		}
-		s.Stake = &v
-	case "instances":
-		var v int
-		if err := val.Decode(&v); err != nil {
-			return fmt.Errorf("invalid instances value: %w", err)
-		}
-		s.Instances = &v
-	case "failing":
-		var v bool
-		if err := val.Decode(&v); err != nil {
-			return fmt.Errorf("invalid failing value: %w", err)
-		}
-		s.Failing = v
-	case "extraArguments":
-		var v string
-		if err := val.Decode(&v); err != nil {
-			return fmt.Errorf("invalid extraArguments value: %w", err)
-		}
-		s.ExtraArguments = v
-	case "users":
-		var v int
-		if err := val.Decode(&v); err != nil {
-			return fmt.Errorf("invalid users value: %w", err)
-		}
-		s.Users = &v
-	case "rate":
-		var r Rate
-		if err := val.Decode(&r); err != nil {
-			return fmt.Errorf("invalid rate value: %w", err)
-		}
-		s.Rate = &r
-	case "file":
-		var v string
-		if err := val.Decode(&v); err != nil {
-			return fmt.Errorf("invalid file value: %w", err)
-		}
-		s.File = v
-	case "mode":
-		var v string
-		if err := val.Decode(&v); err != nil {
-			return fmt.Errorf("invalid mode value: %w", err)
-		}
-		s.DbMode = v
+		*s = append(*s, step)
 	}
 	return nil
 }
@@ -754,95 +91,56 @@ func ParseFile(path string) (scenario Scenario, err error) {
 func (s *Scenario) setDefaults() {
 	ensureDefaultEpochDuration(&s.InitialRules)
 
-	// if the scenario does not disable end checks, append the default end
-	// checks to the steps list
 	if !s.DisableEndChecks {
 		s.Steps = append(s.Steps,
-			Step{Function: FuncAdvanceEpoch},
-			Step{Function: FuncAdvanceEpoch},
-			Step{
-				Function: FuncChecks,
-				SubChecks: []CheckSpec{
-					{Function: FuncCheckBlockHashes},
-					{Function: FuncCheckBlockHeights},
-				},
-			},
+			&network.AdvanceEpoch{},
+			&network.AdvanceEpoch{},
+			&checks.Checks{Items: []checks.Check{
+				&checks.BlockHashes{},
+				&checks.BlockHeights{},
+			}},
 		)
 	}
-}
-
-// checkFunctionDescriptions provides a human-readable description for each sub-check function.
-var checkFunctionDescriptions = map[StepFunction]string{
-	FuncCheckBlockGasRate:   "Assert that every block produced during the observation window has a gas rate at or below a ceiling.",
-	FuncCheckBlockHashes:    "Assert that all nodes agree on the same block hashes.",
-	FuncCheckBlockHeights:   "Assert that all nodes are within tolerance of the same block height, waiting up to duration for them to agree.",
-	FuncCheckBlocksHalted:   "Assert that block production has halted, by observing the network for the given duration.",
-	FuncCheckBlocksProduced: "Assert that all nodes have produced blocks within tolerance.",
-	FuncCheckEventThrottled: "Assert that validators listed in throttledNodes emit events at a significantly lower rate than the rest.",
-	FuncCheckNetworkRules:   "Assert that the active network rules on all nodes match the expected rules patch.",
-
-	FuncCheckValidatorsActive: "Assert that every running validator node is in the current epoch's validator set.",
-}
-
-// checkFunctionParams lists the optional parameters accepted by each sub-check function.
-var checkFunctionParams = map[StepFunction][]string{
-	FuncCheckBlockGasRate:   {"ceiling", "tolerance", "duration", "failing"},
-	FuncCheckBlockHashes:    {"failing"},
-	FuncCheckBlockHeights:   {"tolerance", "duration", "failing"},
-	FuncCheckBlocksHalted:   {"tolerance", "duration", "failing"},
-	FuncCheckBlocksProduced: {"tolerance", "duration", "failing"},
-	FuncCheckEventThrottled: {"throttledNodes", "failing"},
-	FuncCheckNetworkRules:   {"rules", "duration", "failing"},
-
-	FuncCheckValidatorsActive: {"failing"},
-}
-
-// checkParamDescriptions provides a human-readable description for each sub-check parameter.
-var checkParamDescriptions = map[string]string{
-	"ceiling":        "Maximum allowed value (float64) for a gas rate check.",
-	"failing":        "When true, the check is expected to fail; a passing result is treated as an error.",
-	"rules":          "Expected network rules patch (NetworkRulesPatch field structure).",
-	"tolerance":      "For a height check, the allowed deviation (int, in blocks) between nodes. For a production, halt or gas rate check, the length of the observation window expressed in monitoring samples (one per second); duration overrides it.",
-	"throttledNodes": "List of node labels expected to be throttled.",
-	"duration":       "Duration (e.g. \"30s\"). For a production, halt or gas rate check, how long to actively observe the network; only data collected while waiting is judged, and the window must be at least 2s. For a height or rules check, how long the nodes are given to converge, with 0 meaning a single attempt.",
 }
 
 // PrintHelp writes a formatted summary of all available scenario step
 // functions, their descriptions, and accepted parameters to w. It returns
 // the first write error encountered, if any.
 func PrintHelp(w io.Writer) error {
-	stepFns := slices.SortedFunc(slices.Values(allStepFunctions[:]), func(a, b StepFunction) int {
-		return strings.Compare(string(a), string(b))
-	})
-	checkFns := slices.SortedFunc(slices.Values(allCheckFunctions[:]), func(a, b StepFunction) int {
-		return strings.Compare(string(a), string(b))
-	})
-
 	ew := &errWriter{w: w}
 	ew.printf("Scenario step functions:\n\n")
-	for _, fn := range stepFns {
-		desc := stepFunctionDescriptions[fn]
-		params := allowedParams[fn]
-		ew.printf("  %-26s %s\n", fn, desc)
+	for _, step := range sortedByName(stepKinds) {
+		params := steps.Params(step)
+		ew.printf("  %-26s %s\n", step.Name(), step.Help())
 		for _, p := range params {
-			ew.printf("      %-22s %s\n", p+":", paramDescriptions[p])
+			ew.printf("      %-22s %s\n", p.Key+":", p.Help)
 		}
-		if fn == FuncChecks {
+		_, isChecks := step.(*checks.Checks)
+		if isChecks {
 			ew.printf("\n    Available checks:\n")
-			for _, cfn := range checkFns {
-				cdesc := checkFunctionDescriptions[cfn]
-				cparams := checkFunctionParams[cfn]
-				ew.printf("      %-22s %s\n", cfn, cdesc)
-				for _, p := range cparams {
-					ew.printf("          %-18s %s\n", p+":", checkParamDescriptions[p])
+			for _, check := range sortedByName(checks.Kinds) {
+				ew.printf("      %-22s %s\n", check.Name(), check.Help())
+				for _, p := range steps.Params(check) {
+					ew.printf("          %-18s %s\n", p.Key+":", p.Help)
 				}
 			}
 		}
-		if len(params) > 0 || fn == FuncChecks {
+		if len(params) > 0 || isChecks {
 			ew.printf("\n")
 		}
 	}
 	return ew.err
+}
+
+func sortedByName[T steps.Function](kinds []func() T) []T {
+	fns := make([]T, 0, len(kinds))
+	for _, kind := range kinds {
+		fns = append(fns, kind())
+	}
+	slices.SortFunc(fns, func(a, b T) int {
+		return strings.Compare(a.Name(), b.Name())
+	})
+	return fns
 }
 
 // errWriter wraps an io.Writer and records the first write error so that

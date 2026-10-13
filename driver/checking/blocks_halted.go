@@ -76,7 +76,7 @@ func (c *blocksHaltedChecker) Check(ctx context.Context) error {
 		}
 
 		points := series.GetRange(observationStart, last.Position+1)
-		if len(points) < minObservationSamples {
+		if len(points) < MinObservationSamples {
 			// Too few samples to tell whether the height changed: the node is
 			// unreachable, was removed, or its reads kept failing. That is
 			// consistent with a halt, but it does not witness one.
@@ -109,7 +109,7 @@ func (c *blocksHaltedChecker) Check(ctx context.Context) error {
 				"observation window; the network is considered halted "+
 				"because no change could be observed",
 			"window", window,
-			"samples_needed", minObservationSamples,
+			"samples_needed", MinObservationSamples,
 		)
 	}
 

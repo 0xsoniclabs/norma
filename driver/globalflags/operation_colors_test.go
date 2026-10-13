@@ -17,7 +17,7 @@ import (
 func TestOperationColors_OperationColor_CoversEveryStepFunction(t *testing.T) {
 	require := require.New(t)
 
-	for _, op := range parser.AllStepFunctions() {
+	for _, op := range parser.StepNames() {
 		_, ok := operationColor(op)
 		require.True(ok, "operation %q has no colour assigned", op)
 	}
@@ -26,8 +26,8 @@ func TestOperationColors_OperationColor_CoversEveryStepFunction(t *testing.T) {
 func TestOperationColors_OperationColor_AssignsUniqueColorPerOperation(t *testing.T) {
 	require := require.New(t)
 
-	seen := map[string]parser.StepFunction{}
-	for _, op := range parser.AllStepFunctions() {
+	seen := map[string]string{}
+	for _, op := range parser.StepNames() {
 		color, ok := operationColor(op)
 		require.True(ok, "operation %q has no colour assigned", op)
 
@@ -43,7 +43,7 @@ func TestLogHandler_NewLogHandler_WritesPlainOutputWhenColorIsOff(t *testing.T) 
 	buf := &bytes.Buffer{}
 	logger := slog.New(newLogHandler(buf, false))
 
-	logger.Info(string(parser.FuncKillSonic), "step", 1)
+	logger.Info("killSonic", "step", 1)
 
 	require.NotContains(buf.String(), "\x1b[")
 }
@@ -52,9 +52,9 @@ func TestOperationColorHandler_Handle_ColorsTheMessage(t *testing.T) {
 	require := require.New(t)
 	logger, buf := newTestLogger(t)
 
-	logger.Info(string(parser.FuncHealDb), "step", 9, "identifier", "frail")
+	logger.Info("healDb", "step", 9, "identifier", "frail")
 
-	color, ok := operationColor(parser.FuncHealDb)
+	color, ok := operationColor("healDb")
 	require.True(ok)
 	require.Equal([]string{"healDb"}, coloredSpans(buf.String(), color))
 }
@@ -63,9 +63,9 @@ func TestOperationColorHandler_Handle_LeavesRestOfLineUntouched(t *testing.T) {
 	require := require.New(t)
 	logger, buf := newTestLogger(t)
 
-	logger.Info(string(parser.FuncHealDb), "step", 9, "identifier", "frail")
+	logger.Info("healDb", "step", 9, "identifier", "frail")
 
-	color, ok := operationColor(parser.FuncHealDb)
+	color, ok := operationColor("healDb")
 	require.True(ok)
 
 	head, rest, found := strings.Cut(buf.String(), color)
@@ -82,7 +82,7 @@ func TestOperationColorHandler_Handle_LeavesRestOfLineUntouched(t *testing.T) {
 }
 
 func TestOperationColorHandler_Handle_ColorsEveryOperation(t *testing.T) {
-	for _, op := range parser.AllStepFunctions() {
+	for _, op := range parser.StepNames() {
 		t.Run(string(op), func(t *testing.T) {
 			require := require.New(t)
 			logger, buf := newTestLogger(t)
@@ -112,7 +112,7 @@ func TestOperationColorHandler_Handle_ColorsThePhaseValueInThePhaseColor(t *test
 			require := require.New(t)
 			logger, buf := newTestLogger(t)
 
-			logger.Info(string(parser.FuncStartNode), "step", 1, "phase", phase, "identifier", "validator-1")
+			logger.Info("startNode", "step", 1, "phase", phase, "identifier", "validator-1")
 
 			color, ok := phaseColor(phase)
 			require.True(ok)
@@ -138,12 +138,12 @@ func TestOperationColorHandler_Handle_UsesDifferentColorPerOperation(t *testing.
 	require := require.New(t)
 	logger, buf := newTestLogger(t)
 
-	logger.Info(string(parser.FuncHealDb), "step", 1)
-	logger.Info(string(parser.FuncStartNode), "step", 2)
+	logger.Info("healDb", "step", 1)
+	logger.Info("startNode", "step", 2)
 
-	healColor, ok := operationColor(parser.FuncHealDb)
+	healColor, ok := operationColor("healDb")
 	require.True(ok)
-	startColor, ok := operationColor(parser.FuncStartNode)
+	startColor, ok := operationColor("startNode")
 	require.True(ok)
 
 	healLine, startLine, found := strings.Cut(buf.String(), "\n")
@@ -161,11 +161,11 @@ func TestOperationColorHandler_Handle_DoesNotColorLaterLines(t *testing.T) {
 	require := require.New(t)
 	logger, buf := newTestLogger(t)
 
-	logger.Info(string(parser.FuncHealDb), "step", 1)
+	logger.Info("healDb", "step", 1)
 	buf.Reset()
 	logger.Info("Stopping sonicd", "node", "frail")
 
-	color, ok := operationColor(parser.FuncHealDb)
+	color, ok := operationColor("healDb")
 	require.True(ok)
 	require.NotContains(buf.String(), color)
 }
@@ -198,8 +198,8 @@ func TestOperationColorHandler_Handle_LeavesWarningsAndErrorsToTheirLevel(t *tes
 	tests := map[string]struct {
 		emit func(l *slog.Logger)
 	}{
-		"warning": {emit: func(l *slog.Logger) { l.Warn(string(parser.FuncChecks), "step", 6) }},
-		"error":   {emit: func(l *slog.Logger) { l.Error(string(parser.FuncChecks), "step", 6) }},
+		"warning": {emit: func(l *slog.Logger) { l.Warn("checks", "step", 6) }},
+		"error":   {emit: func(l *slog.Logger) { l.Error("checks", "step", 6) }},
 	}
 
 	for name, test := range tests {
@@ -209,7 +209,7 @@ func TestOperationColorHandler_Handle_LeavesWarningsAndErrorsToTheirLevel(t *tes
 
 			test.emit(logger)
 
-			color, ok := operationColor(parser.FuncChecks)
+			color, ok := operationColor("checks")
 			require.True(ok)
 			require.NotContains(buf.String(), color)
 		})
@@ -221,7 +221,7 @@ func TestOperationColorHandler_Handle_IgnoresMessagesThatAreNotOperations(t *tes
 	require := require.New(t)
 	logger, buf := newTestLogger(t)
 
-	logger.Info(string(parser.FuncCheckBlockHashes), "step", 6)
+	logger.Info("blockHashes", "step", 6)
 
 	require.NotContains(buf.String(), "\x1b[38;5;")
 }
@@ -242,7 +242,7 @@ func TestOperationColorHandler_Handle_SerializesConcurrentWrites(t *testing.T) {
 
 			message := "concurrent"
 			if i%2 == 0 {
-				message = string(parser.FuncStartNode)
+				message = "startNode"
 			}
 			for range perGoroutine {
 				r := slog.NewRecord(stamp, slog.LevelInfo, message, 0)
@@ -261,9 +261,9 @@ func TestOperationColorHandler_WithAttrs_KeepsColoringOperationLines(t *testing.
 	require := require.New(t)
 	logger, buf := newTestLogger(t)
 
-	logger.With("node", "frail").Info(string(parser.FuncStartNode), "step", 1)
+	logger.With("node", "frail").Info("startNode", "step", 1)
 
-	color, ok := operationColor(parser.FuncStartNode)
+	color, ok := operationColor("startNode")
 	require.True(ok)
 	require.Equal([]string{"startNode"}, coloredSpans(buf.String(), color))
 }

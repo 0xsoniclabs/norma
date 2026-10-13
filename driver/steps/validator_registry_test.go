@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Norma. If not, see <http://www.gnu.org/licenses/>.
 
-package executor
+package steps
 
 import (
 	"context"
@@ -37,7 +37,7 @@ func TestEnsureValidatorsActive_DoesNothing_WhenNoValidatorIsGiven(t *testing.T)
 	net := driver.NewMockNetwork(ctrl)
 
 	registry := netBasedValidatorRegistry{net: net}
-	require.NoError(t, registry.ensureValidatorsActive(context.Background(), nil))
+	require.NoError(t, registry.EnsureValidatorsActive(context.Background(), nil))
 }
 
 func TestEnsureValidatorsActive_Fails_WhenNoNodeIsReachable(t *testing.T) {
@@ -47,7 +47,7 @@ func TestEnsureValidatorsActive_Fails_WhenNoNodeIsReachable(t *testing.T) {
 	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes"))
 
 	registry := netBasedValidatorRegistry{net: net}
-	err := registry.ensureValidatorsActive(context.Background(), []int{2})
+	err := registry.EnsureValidatorsActive(context.Background(), []int{2})
 	require.ErrorContains(t, err, "no nodes")
 }
 
@@ -63,7 +63,7 @@ func TestEnsureValidatorsActive_SealsNothing_WhenValidatorsAreAlreadyInTheSet(t 
 
 	registry := netBasedValidatorRegistry{net: net}
 	require.NoError(t,
-		registry.ensureValidatorsActive(context.Background(), []int{2, 3}))
+		registry.EnsureValidatorsActive(context.Background(), []int{2, 3}))
 }
 
 func TestEnsureValidatorsActive_SealsAnEpoch_WhenAValidatorIsMissing(t *testing.T) {
@@ -83,7 +83,7 @@ func TestEnsureValidatorsActive_SealsAnEpoch_WhenAValidatorIsMissing(t *testing.
 
 	registry := netBasedValidatorRegistry{net: net}
 	require.NoError(t,
-		registry.ensureValidatorsActive(context.Background(), []int{2, 3}))
+		registry.EnsureValidatorsActive(context.Background(), []int{2, 3}))
 }
 
 // Sealing an epoch means landing a transaction, so a network that is not
@@ -99,7 +99,7 @@ func TestEnsureValidatorsActive_Fails_WhenNoBlockIsProduced(t *testing.T) {
 	net.EXPECT().DialRandomRpc().Return(client, nil).AnyTimes()
 
 	registry := netBasedValidatorRegistry{net: net}
-	err := registry.ensureValidatorsActive(context.Background(), []int{2})
+	err := registry.EnsureValidatorsActive(context.Background(), []int{2})
 	require.ErrorContains(t, err, "no block produced to seal an epoch on")
 	require.ErrorContains(t, err, "[2]")
 	require.ErrorContains(t, err, "network is halted")
@@ -117,7 +117,7 @@ func TestEnsureValidatorsActive_Fails_WhenEpochCannotBeSealed(t *testing.T) {
 		Return(fmt.Errorf("epoch seal rejected"))
 
 	registry := netBasedValidatorRegistry{net: net}
-	err := registry.ensureValidatorsActive(context.Background(), []int{2, 3})
+	err := registry.EnsureValidatorsActive(context.Background(), []int{2, 3})
 	require.ErrorContains(t, err, "[2 3]")
 	require.ErrorContains(t, err, "epoch seal rejected")
 }
@@ -141,7 +141,7 @@ func TestEnsureValidatorsActive_Fails_WhenAValidatorNeverJoinsTheSet(t *testing.
 	t.Cleanup(func() { validatorActivationTimeout = original })
 
 	registry := netBasedValidatorRegistry{net: net}
-	err := registry.ensureValidatorsActive(context.Background(), []int{2, 3})
+	err := registry.EnsureValidatorsActive(context.Background(), []int{2, 3})
 	require.ErrorContains(t, err, "validators [3] did not join")
 	require.ErrorContains(t, err, "active validators are [1 2]")
 }
@@ -155,7 +155,7 @@ func TestFundDelegator_UsesSystemTransactionNode_WhenTreasuryFundsDelegator(t *t
 	net.EXPECT().DialSystemRpc().Return(nil, fmt.Errorf("no nodes"))
 
 	registry := netBasedValidatorRegistry{net: net}
-	err := registry.fundDelegator(context.Background(), common.Address{}, 1)
+	err := registry.FundDelegator(context.Background(), common.Address{}, 1)
 	require.ErrorContains(t, err, "no nodes")
 }
 
@@ -166,7 +166,7 @@ func TestMissingValidators_ReportsWhatTheSetDoesNotHold(t *testing.T) {
 }
 
 // growingBlockHeight answers BlockNumber with an ever-growing height, which is
-// what waitForBlockProduction waits for.
+// what WaitForBlockProduction waits for.
 func growingBlockHeight() func(context.Context) (uint64, error) {
 	height := uint64(0)
 	return func(context.Context) (uint64, error) {

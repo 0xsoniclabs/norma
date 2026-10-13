@@ -24,6 +24,9 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/parser"
+	"github.com/0xsoniclabs/norma/driver/steps"
+	"github.com/0xsoniclabs/norma/driver/steps/nodelifetime"
+	"github.com/0xsoniclabs/norma/driver/steps/wait"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -33,11 +36,11 @@ import (
 // have to be listed as well, since they read the same genesis file.
 func TestCollectClientImages_CoversEveryNodeOfTheScenario(t *testing.T) {
 	scenario := &parser.Scenario{
-		Steps: []parser.Step{
-			{Function: parser.FuncStartNode, Identifier: "validator-local"},
-			{Function: parser.FuncStartNode, Identifier: "validator-v216", ImageName: "sonic:v2.1.6"},
-			{Function: parser.FuncWaitFor},
-			{Function: parser.FuncStartNode, Identifier: "rpc-v220", ImageName: "sonic:v2.2.0"},
+		Steps: parser.Steps{
+			&nodelifetime.StartNode{Node: steps.Node{Node: "validator-local"}},
+			&nodelifetime.StartNode{Node: steps.Node{Node: "validator-v216"}, ImageName: "sonic:v2.1.6"},
+			&wait.WaitFor{},
+			&nodelifetime.StartNode{Node: steps.Node{Node: "rpc-v220"}, ImageName: "sonic:v2.2.0"},
 		},
 	}
 

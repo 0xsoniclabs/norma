@@ -27,7 +27,6 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver/docker"
 	"github.com/0xsoniclabs/norma/driver/network"
-	"github.com/0xsoniclabs/norma/driver/parser"
 )
 
 // Paths inside the container. Stage 2 of the Dockerfile copies the
@@ -721,13 +720,13 @@ func (n *OperaNode) ImportEvents(ctx context.Context, fileName string) error {
 }
 
 // CheckDatabase verifies the state database named by mode, one of
-// parser.DbCheckModeLive (the default) or parser.DbCheckModeArchive.
+// DbCheckModeLive (the default) or DbCheckModeArchive.
 // Requires a stopped client.
 func (n *OperaNode) CheckDatabase(ctx context.Context, mode string) error {
 	switch mode {
 	case "":
-		mode = parser.DbCheckModeLive
-	case parser.DbCheckModeLive, parser.DbCheckModeArchive:
+		mode = DbCheckModeLive
+	case DbCheckModeLive, DbCheckModeArchive:
 	default:
 		return fmt.Errorf("node %q: unknown database check mode %q",
 			n.GetLabel(), mode)
@@ -766,13 +765,13 @@ func (n *OperaNode) beginMaintenance(ctx context.Context, purpose string) error 
 }
 
 // sharedFilePath resolves name inside the container's shared directory. The
-// name reaches a command line, so the parser's file name rule is enforced.
+// name reaches a command line, so FilePattern is enforced.
 func (n *OperaNode) sharedFilePath(name string) (string, error) {
 	if n.config.SharedFilesDir == "" {
 		return "", fmt.Errorf(
 			"node %q has no shared files directory configured", n.GetLabel())
 	}
-	if !parser.FilePattern.MatchString(name) {
+	if !FilePattern.MatchString(name) {
 		return "", fmt.Errorf(
 			"node %q: %q is not a valid shared file name", n.GetLabel(), name)
 	}

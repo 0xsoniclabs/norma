@@ -19,8 +19,6 @@ package shaper
 import (
 	"fmt"
 	"time"
-
-	"github.com/0xsoniclabs/norma/driver/parser"
 )
 
 //go:generate mockgen -source shaper.go -destination shaper_mock.go -package shaper
@@ -43,8 +41,8 @@ type LoadInfoSource interface {
 	GetReceivedTransactions() (uint64, error)
 }
 
-// ParseRate parses rate from the parser.
-func ParseRate(rate *parser.Rate) (Shaper, error) {
+// ParseRate builds the shaper a scenario rate describes.
+func ParseRate(rate *Rate) (Shaper, error) {
 	// return default constant shaper if rate is not specified
 	if rate == nil {
 		return NewConstantShaper(0), nil

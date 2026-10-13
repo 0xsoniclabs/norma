@@ -12,7 +12,10 @@ temporarily inactive.
 
 Scenario files live under `scenarios/` and are consumed by the parser in
 [driver/parser/scenario.go](driver/parser/scenario.go) and executed by
-[driver/executor/run.go](driver/executor/run.go).
+[driver/executor/run.go](driver/executor/run.go). Each step function is a type
+in [driver/steps](driver/steps), one per file, owning its parameters,
+validation and execution; the checks inside a `checks` step live in
+[driver/steps/checks](driver/steps/checks).
 
 ---
 

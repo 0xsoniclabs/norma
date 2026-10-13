@@ -22,9 +22,9 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/carmen/go/common"
-	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/norma/genesis"
+	"github.com/0xsoniclabs/norma/load/shaper"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -218,7 +218,7 @@ type ApplicationConfig struct {
 	Type string
 
 	// Rate defines the Tx/s config the source should produce while active.
-	Rate *parser.Rate
+	Rate *shaper.Rate
 
 	// Users defines the number of users sending transactions to the app.
 	Users int

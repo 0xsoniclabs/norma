@@ -19,37 +19,69 @@ package parser
 import (
 	"math/big"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/0xsoniclabs/norma/driver/checking"
+	"github.com/0xsoniclabs/norma/driver/node"
+	"github.com/0xsoniclabs/norma/driver/steps"
+	"github.com/0xsoniclabs/norma/driver/steps/apps"
+	"github.com/0xsoniclabs/norma/driver/steps/checks"
+	"github.com/0xsoniclabs/norma/driver/steps/network"
+	"github.com/0xsoniclabs/norma/driver/steps/nodelifetime"
+	"github.com/0xsoniclabs/norma/driver/steps/sonictool"
+	"github.com/0xsoniclabs/norma/driver/steps/wait"
 	"github.com/0xsoniclabs/norma/genesis"
 	"github.com/stretchr/testify/require"
 )
 
-func TestAllStepFunctionsAreDocumented(t *testing.T) {
-	for _, fn := range allStepFunctions {
-		desc, ok := stepFunctionDescriptions[fn]
-		require.Truef(t, ok, "step function %q has no entry in stepFunctionDescriptions", fn)
-		require.NotEmptyf(t, strings.TrimSpace(desc), "step function %q has empty description", fn)
+// stepAs returns step as a T, failing the test when it is of another kind.
+func stepAs[T any](t *testing.T, step any) T {
+	t.Helper()
+	typed, ok := step.(T)
+	require.Truef(t, ok, "unexpected kind %T", step)
+	return typed
+}
 
-		_, ok = allowedParams[fn]
-		require.Truef(t, ok, "step function %q has no entry in allowedParams", fn)
+func durationOf(d time.Duration) *steps.Duration {
+	v := steps.Duration(d)
+	return &v
+}
+
+func TestAllFunctionsAndParamsAreDocumented(t *testing.T) {
+	var fns []steps.Function
+	for _, kind := range stepKinds {
+		fns = append(fns, kind())
+	}
+	for _, kind := range checks.Kinds {
+		fns = append(fns, kind())
+	}
+	names := map[string]bool{}
+	for _, fn := range fns {
+		require.Falsef(t, names[fn.Name()], "function %q is listed twice", fn.Name())
+		names[fn.Name()] = true
+		require.NotEmptyf(t, strings.TrimSpace(fn.Help()), "function %q has empty description", fn.Name())
+		for _, p := range steps.Params(fn) {
+			require.NotEmptyf(t, strings.TrimSpace(p.Help), "parameter %q of %q has empty description", p.Key, fn.Name())
+		}
 	}
 }
 
-func TestAllParamKeysAreDocumented(t *testing.T) {
-	seen := map[string]bool{}
-	for _, params := range allowedParams {
-		for _, p := range params {
-			seen[p] = true
+// The executor waits for a new block after these steps only; the others may
+// legitimately leave the network stalled, or do not change it.
+func TestStepKinds_AwaitBlockProductionAfterStepsThatChangeTheNetwork(t *testing.T) {
+	want := []string{"advanceEpoch", "runApp", "startNode", "updateRules"}
+	var got []string
+	for _, kind := range stepKinds {
+		step := kind()
+		if s, ok := step.(steps.Stabilizing); ok && s.AwaitsBlockProduction() {
+			got = append(got, step.Name())
 		}
 	}
-	for p := range seen {
-		desc, ok := paramDescriptions[p]
-		require.Truef(t, ok, "parameter %q has no entry in paramDescriptions", p)
-		require.NotEmptyf(t, strings.TrimSpace(desc), "parameter %q has empty description", p)
-	}
+	slices.Sort(got)
+	require.Equal(t, want, got)
 }
 
 func TestParseBytes_MinimalScenario(t *testing.T) {
@@ -72,36 +104,26 @@ Scenario:
 	require.Equal(t, "Minimal Test", scenario.Name)
 	require.Len(t, scenario.Steps, 8)
 
-	// Verify step 1: startNode
-	step := scenario.Steps[0]
-	require.Equal(t, FuncStartNode, step.Function)
-	require.Equal(t, "validator-A", step.Identifier)
-	require.Equal(t, "validator", step.NodeType)
+	start := stepAs[*nodelifetime.StartNode](t, scenario.Steps[0])
+	require.Equal(t, "validator-A", start.Target())
+	require.Equal(t, "validator", start.Type)
 
-	// Verify step 2: runApp
-	step = scenario.Steps[1]
-	require.Equal(t, FuncRunApp, step.Function)
-	require.Equal(t, "load", step.Identifier)
-	require.Equal(t, "counter", step.AppType)
-	require.NotNil(t, step.Users)
-	require.Equal(t, 10, *step.Users)
-	require.NotNil(t, step.Rate)
-	require.NotNil(t, step.Rate.Constant)
-	require.EqualValues(t, 5, *step.Rate.Constant)
+	runApp := stepAs[*apps.RunApp](t, scenario.Steps[1])
+	require.Equal(t, "load", runApp.Target())
+	require.Equal(t, "counter", runApp.Type)
+	require.NotNil(t, runApp.Users)
+	require.Equal(t, 10, *runApp.Users)
+	require.NotNil(t, runApp.Rate)
+	require.NotNil(t, runApp.Rate.Constant)
+	require.EqualValues(t, 5, *runApp.Rate.Constant)
 
-	// Verify step 3: advanceEpoch
-	step = scenario.Steps[2]
-	require.Equal(t, FuncAdvanceEpoch, step.Function)
+	stepAs[*network.AdvanceEpoch](t, scenario.Steps[2])
 
-	// Verify step 4: stopApp
-	step = scenario.Steps[3]
-	require.Equal(t, FuncStopApp, step.Function)
-	require.Equal(t, "load", step.Identifier)
+	stopApp := stepAs[*apps.StopApp](t, scenario.Steps[3])
+	require.Equal(t, "load", stopApp.Target())
 
-	// Verify step 5: stopNode
-	step = scenario.Steps[4]
-	require.Equal(t, FuncStopNode, step.Function)
-	require.Equal(t, "validator-A", step.Identifier)
+	stopNode := stepAs[*nodelifetime.StopNode](t, scenario.Steps[4])
+	require.Equal(t, "validator-A", stopNode.Target())
 }
 
 func TestParseBytes_InitialRules(t *testing.T) {
@@ -149,8 +171,7 @@ Scenario:
 	require.NoError(t, err)
 	require.Len(t, scenario.Steps, 5)
 
-	step := scenario.Steps[1]
-	require.Equal(t, FuncUpdateRules, step.Function)
+	step := stepAs[*network.UpdateRules](t, scenario.Steps[1])
 	require.NotNil(t, step.Rules.Economy)
 	require.NotNil(t, step.Rules.Economy.MinBaseFee)
 	if got := big.Int(*step.Rules.Economy.MinBaseFee); got.Cmp(big.NewInt(3000000000)) != 0 {
@@ -175,14 +196,14 @@ Scenario:
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
-	step := scenario.Steps[0]
-	require.Equal(t, "my-node", step.Identifier)
-	require.Equal(t, "validator", step.NodeType)
+	step := stepAs[*nodelifetime.StartNode](t, scenario.Steps[0])
+	require.Equal(t, "my-node", step.Target())
+	require.Equal(t, "validator", step.Type)
 	require.Equal(t, "sonic:v2.0.2", step.ImageName)
 	require.NotNil(t, step.Instances)
 	require.Equal(t, 3, *step.Instances)
 	require.Equal(t, "vol-A", step.DataVolume)
-	require.True(t, step.Failing)
+	require.True(t, step.Failing.Failing)
 }
 
 func TestParseBytes_Undelegate(t *testing.T) {
@@ -202,22 +223,19 @@ Scenario:
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
-	step := scenario.Steps[0]
-	require.Equal(t, FuncStartNode, step.Function)
-	require.Equal(t, "validator-A", step.Identifier)
+	start := stepAs[*nodelifetime.StartNode](t, scenario.Steps[0])
+	require.Equal(t, "validator-A", start.Target())
 
-	step = scenario.Steps[1]
-	require.Equal(t, FuncUndelegate, step.Function)
-	require.Len(t, step.UndelegateTargets, 1)
-	require.Equal(t, "validator-A", step.UndelegateTargets[0].Node)
-	require.Nil(t, step.UndelegateTargets[0].Stake)
+	step := stepAs[*network.Undelegate](t, scenario.Steps[1])
+	require.Len(t, step.Targets, 1)
+	require.Equal(t, "validator-A", step.Targets[0].Node)
+	require.Nil(t, step.Targets[0].Stake)
 
-	step = scenario.Steps[2]
-	require.Equal(t, FuncUndelegate, step.Function)
-	require.Len(t, step.UndelegateTargets, 1)
-	require.Equal(t, "validator-A", step.UndelegateTargets[0].Node)
-	require.NotNil(t, step.UndelegateTargets[0].Stake)
-	require.EqualValues(t, 2_000_000, *step.UndelegateTargets[0].Stake)
+	step = stepAs[*network.Undelegate](t, scenario.Steps[2])
+	require.Len(t, step.Targets, 1)
+	require.Equal(t, "validator-A", step.Targets[0].Node)
+	require.NotNil(t, step.Targets[0].Stake)
+	require.EqualValues(t, 2_000_000, *step.Targets[0].Stake)
 }
 
 func TestParseBytes_Delegate_ParsesAllTargetFields(t *testing.T) {
@@ -239,17 +257,16 @@ Scenario:
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
-	step := scenario.Steps[1]
-	require.Equal(t, FuncDelegate, step.Function)
-	require.Len(t, step.DelegateTargets, 2)
+	step := stepAs[*network.Delegate](t, scenario.Steps[1])
+	require.Len(t, step.Targets, 2)
 
-	require.Equal(t, "heavy", step.DelegateTargets[0].Node)
-	require.Equal(t, "alice", step.DelegateTargets[0].Delegator)
-	require.EqualValues(t, 2_000_000, step.DelegateTargets[0].Stake)
+	require.Equal(t, "heavy", step.Targets[0].Node)
+	require.Equal(t, "alice", step.Targets[0].Delegator)
+	require.EqualValues(t, 2_000_000, step.Targets[0].Stake)
 
-	require.Equal(t, "heavy", step.DelegateTargets[1].Node)
-	require.Equal(t, "bob", step.DelegateTargets[1].Delegator)
-	require.EqualValues(t, 1_000_000, step.DelegateTargets[1].Stake)
+	require.Equal(t, "heavy", step.Targets[1].Node)
+	require.Equal(t, "bob", step.Targets[1].Delegator)
+	require.EqualValues(t, 1_000_000, step.Targets[1].Stake)
 }
 
 func TestParseBytes_Delegate_RejectsScalarShorthand(t *testing.T) {
@@ -282,18 +299,17 @@ Scenario:
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
-	step := scenario.Steps[1]
-	require.Equal(t, FuncUndelegate, step.Function)
-	require.Len(t, step.UndelegateTargets, 2)
+	step := stepAs[*network.Undelegate](t, scenario.Steps[1])
+	require.Len(t, step.Targets, 2)
 
-	require.Equal(t, "heavy", step.UndelegateTargets[0].Node)
-	require.Equal(t, "alice", step.UndelegateTargets[0].Delegator)
-	require.Nil(t, step.UndelegateTargets[0].Stake)
+	require.Equal(t, "heavy", step.Targets[0].Node)
+	require.Equal(t, "alice", step.Targets[0].Delegator)
+	require.Nil(t, step.Targets[0].Stake)
 
-	require.Equal(t, "heavy", step.UndelegateTargets[1].Node)
-	require.Equal(t, "bob", step.UndelegateTargets[1].Delegator)
-	require.NotNil(t, step.UndelegateTargets[1].Stake)
-	require.EqualValues(t, 500_000, *step.UndelegateTargets[1].Stake)
+	require.Equal(t, "heavy", step.Targets[1].Node)
+	require.Equal(t, "bob", step.Targets[1].Delegator)
+	require.NotNil(t, step.Targets[1].Stake)
+	require.EqualValues(t, 500_000, *step.Targets[1].Stake)
 }
 
 func TestParseBytes_VerifyStakes_ParsesEmptyStep(t *testing.T) {
@@ -306,53 +322,38 @@ Scenario:
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
-	require.Equal(t, FuncVerifyStakes, scenario.Steps[0].Function)
+	stepAs[*network.VerifyStakes](t, scenario.Steps[0])
 }
 
 func TestStepCheck_Delegate_ReportsSemanticErrors(t *testing.T) {
 	cases := map[string]struct {
-		step      Step
+		targets   []network.DelegateTarget
 		errSubstr string
 	}{
 		"no targets": {
-			step: Step{
-				Function: FuncDelegate,
-			},
 			errSubstr: "at least one target",
 		},
 		"missing node": {
-			step: Step{
-				Function: FuncDelegate,
-				DelegateTargets: []DelegateTarget{
-					{Delegator: "alice", Stake: 100},
-				},
+			targets: []network.DelegateTarget{
+				{Delegator: "alice", Stake: 100},
 			},
 			errSubstr: "'node' field",
 		},
 		"missing delegator": {
-			step: Step{
-				Function: FuncDelegate,
-				DelegateTargets: []DelegateTarget{
-					{Node: "val", Stake: 100},
-				},
+			targets: []network.DelegateTarget{
+				{Node: "val", Stake: 100},
 			},
 			errSubstr: "'delegator' field",
 		},
 		"zero stake": {
-			step: Step{
-				Function: FuncDelegate,
-				DelegateTargets: []DelegateTarget{
-					{Node: "val", Delegator: "alice", Stake: 0},
-				},
+			targets: []network.DelegateTarget{
+				{Node: "val", Delegator: "alice", Stake: 0},
 			},
 			errSubstr: "stake must be greater than zero",
 		},
 		"invalid delegator name": {
-			step: Step{
-				Function: FuncDelegate,
-				DelegateTargets: []DelegateTarget{
-					{Node: "val", Delegator: "not a name", Stake: 100},
-				},
+			targets: []network.DelegateTarget{
+				{Node: "val", Delegator: "not a name", Stake: 100},
 			},
 			errSubstr: "delegator name must match",
 		},
@@ -360,7 +361,8 @@ func TestStepCheck_Delegate_ReportsSemanticErrors(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			err := tc.step.Check()
+			step := &network.Delegate{Targets: tc.targets}
+			err := step.Validate()
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tc.errSubstr)
 		})
@@ -368,13 +370,12 @@ func TestStepCheck_Delegate_ReportsSemanticErrors(t *testing.T) {
 }
 
 func TestStepCheck_UndelegateWithDelegator_RejectsInvalidDelegatorName(t *testing.T) {
-	step := Step{
-		Function: FuncUndelegate,
-		UndelegateTargets: []UndelegateTarget{
+	step := &network.Undelegate{
+		Targets: []network.UndelegateTarget{
 			{Node: "val", Delegator: "not a name"},
 		},
 	}
-	err := step.Check()
+	err := step.Validate()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delegator name must match")
 }
@@ -397,31 +398,22 @@ Scenario:
 	require.NoError(t, err)
 	require.Len(t, scenario.Steps, 4)
 
-	step := scenario.Steps[0]
-	require.Equal(t, FuncChecks, step.Function)
-	require.Len(t, step.SubChecks, 4)
+	step := stepAs[*checks.Checks](t, scenario.Steps[0])
+	require.Len(t, step.Items, 4)
 
-	// blocksHalted with failing
-	check := step.SubChecks[0]
-	require.Equal(t, FuncCheckBlocksHalted, check.Function)
-	require.True(t, check.Failing)
+	halted := stepAs[*checks.BlocksHalted](t, step.Items[0])
+	require.True(t, halted.Failing.Failing)
 
-	// blockHeights with tolerance
-	check = step.SubChecks[1]
-	require.Equal(t, FuncCheckBlockHeights, check.Function)
-	require.NotNil(t, check.Tolerance)
-	require.Equal(t, 5, *check.Tolerance)
+	heights := stepAs[*checks.BlockHeights](t, step.Items[1])
+	require.NotNil(t, heights.Tolerance)
+	require.Equal(t, 5, *heights.Tolerance)
 
-	// blockGasRate with ceiling + failing
-	check = step.SubChecks[2]
-	require.Equal(t, FuncCheckBlockGasRate, check.Function)
-	require.NotNil(t, check.Ceiling)
-	require.EqualValues(t, 16500000, *check.Ceiling)
-	require.True(t, check.Failing)
+	gasRate := stepAs[*checks.BlockGasRate](t, step.Items[2])
+	require.NotNil(t, gasRate.Ceiling)
+	require.EqualValues(t, 16500000, *gasRate.Ceiling)
+	require.True(t, gasRate.Failing.Failing)
 
-	// blockHashes
-	check = step.SubChecks[3]
-	require.Equal(t, FuncCheckBlockHashes, check.Function)
+	stepAs[*checks.BlockHashes](t, step.Items[3])
 }
 
 func TestParseBytes_CheckParams_NestedForm(t *testing.T) {
@@ -440,23 +432,20 @@ Scenario:
 `
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
-	step := scenario.Steps[0]
-	require.Equal(t, FuncChecks, step.Function)
-	require.Len(t, step.SubChecks, 2)
+	step := stepAs[*checks.Checks](t, scenario.Steps[0])
+	require.Len(t, step.Items, 2)
 
-	et := step.SubChecks[0]
-	require.Equal(t, FuncCheckEventThrottled, et.Function)
-	require.True(t, et.Failing)
+	et := stepAs[*checks.EventThrottled](t, step.Items[0])
+	require.True(t, et.Failing.Failing)
 	require.Equal(
 		t, []string{"validator-dominant", "validator-B"},
 		et.ThrottledNodes,
 	)
 
-	gr := step.SubChecks[1]
-	require.Equal(t, FuncCheckBlockGasRate, gr.Function)
+	gr := stepAs[*checks.BlockGasRate](t, step.Items[1])
 	require.NotNil(t, gr.Ceiling)
 	require.EqualValues(t, 1000, *gr.Ceiling)
-	require.True(t, gr.Failing)
+	require.True(t, gr.Failing.Failing)
 }
 
 func TestParseBytes_CheckParams_RejectsUnknown(t *testing.T) {
@@ -515,31 +504,6 @@ Scenario:
 	}
 }
 
-func TestAllCheckFunctionsAreDocumented(t *testing.T) {
-	for _, fn := range allCheckFunctions {
-		desc, ok := checkFunctionDescriptions[fn]
-		require.Truef(t, ok, "check function %q has no entry in checkFunctionDescriptions", fn)
-		require.NotEmptyf(t, strings.TrimSpace(desc), "check function %q has empty description", fn)
-
-		_, ok = checkFunctionParams[fn]
-		require.Truef(t, ok, "check function %q has no entry in checkFunctionParams", fn)
-	}
-}
-
-func TestAllCheckParamKeysAreDocumented(t *testing.T) {
-	seen := map[string]bool{}
-	for _, params := range checkFunctionParams {
-		for _, p := range params {
-			seen[p] = true
-		}
-	}
-	for p := range seen {
-		desc, ok := checkParamDescriptions[p]
-		require.Truef(t, ok, "check parameter %q has no entry in checkParamDescriptions", p)
-		require.NotEmptyf(t, strings.TrimSpace(desc), "check parameter %q has empty description", p)
-	}
-}
-
 func TestParseBytes_ThrottledNodes_FlatForm(t *testing.T) {
 	input := `
 Name: Flat Throttled Nodes Test
@@ -552,12 +516,10 @@ Scenario:
 `
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
-	step := scenario.Steps[0]
-	require.Equal(t, FuncChecks, step.Function)
-	require.Len(t, step.SubChecks, 1)
-	et := step.SubChecks[0]
-	require.Equal(t, FuncCheckEventThrottled, et.Function)
-	require.True(t, et.Failing)
+	step := stepAs[*checks.Checks](t, scenario.Steps[0])
+	require.Len(t, step.Items, 1)
+	et := stepAs[*checks.EventThrottled](t, step.Items[0])
+	require.True(t, et.Failing.Failing)
 	require.Equal(t, []string{"validator-A"}, et.ThrottledNodes)
 }
 
@@ -572,14 +534,14 @@ Scenario:
 `
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
-	require.Len(t, scenario.Steps[0].SubChecks, 1)
+	step := stepAs[*checks.Checks](t, scenario.Steps[0])
+	require.Len(t, step.Items, 1)
 
-	check := scenario.Steps[0].SubChecks[0]
-	require.Equal(t, FuncCheckBlocksProduced, check.Function)
+	check := stepAs[*checks.BlocksProduced](t, step.Items[0])
 	require.NotNil(t, check.Tolerance)
 	require.Equal(t, 10, *check.Tolerance)
 	require.NotNil(t, check.Duration)
-	require.Equal(t, 30*time.Second, *check.Duration)
+	require.Equal(t, 30*time.Second, time.Duration(*check.Duration))
 }
 
 func TestParseBytes_BlocksProduced_RejectsInvalidDuration(t *testing.T) {
@@ -622,7 +584,7 @@ Scenario:
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
-	step := scenario.Steps[0]
+	step := stepAs[*apps.RunApp](t, scenario.Steps[0])
 	require.NotNil(t, step.Rate)
 	require.NotNil(t, step.Rate.Slope)
 	require.EqualValues(t, 20, step.Rate.Slope.Start)
@@ -646,9 +608,12 @@ Scenario:
 	)
 
 	require.Len(t, scenario.Steps, 4)
-	require.Equal(t, FuncAdvanceEpoch, scenario.Steps[1].Function)
-	require.Equal(t, FuncAdvanceEpoch, scenario.Steps[2].Function)
-	require.Equal(t, FuncChecks, scenario.Steps[3].Function)
+	stepAs[*network.AdvanceEpoch](t, scenario.Steps[1])
+	stepAs[*network.AdvanceEpoch](t, scenario.Steps[2])
+	endChecks := stepAs[*checks.Checks](t, scenario.Steps[3])
+	require.Len(t, endChecks.Items, 2)
+	stepAs[*checks.BlockHashes](t, endChecks.Items[0])
+	stepAs[*checks.BlockHeights](t, endChecks.Items[1])
 }
 
 func TestParseBytes_DisableEndChecks(t *testing.T) {
@@ -677,7 +642,7 @@ func TestCheck_EmptyName(t *testing.T) {
 	scenario := Scenario{
 		Name:        "",
 		Description: "A test scenario.",
-		Steps:       []Step{{Function: FuncAdvanceEpoch}},
+		Steps:       Steps{&network.AdvanceEpoch{}},
 	}
 	err := scenario.Check()
 	require.Error(t, err)
@@ -687,7 +652,7 @@ func TestCheck_EmptyDescription(t *testing.T) {
 	scenario := Scenario{
 		Name:        "Test",
 		Description: "",
-		Steps:       []Step{{Function: FuncAdvanceEpoch}},
+		Steps:       Steps{&network.AdvanceEpoch{}},
 	}
 	err := scenario.Check()
 	require.Error(t, err)
@@ -697,10 +662,9 @@ func TestCheck_InvalidNodeName(t *testing.T) {
 	scenario := Scenario{
 		Name:        "Test",
 		Description: "A test scenario.",
-		Steps: []Step{{
-			Function:   FuncStartNode,
-			Identifier: "invalid name with spaces",
-			NodeType:   "validator",
+		Steps: Steps{&nodelifetime.StartNode{
+			Node: steps.Node{Node: "invalid name with spaces"},
+			Type: "validator",
 		}},
 	}
 	err := scenario.Check()
@@ -711,10 +675,9 @@ func TestCheck_RunAppMissingRate(t *testing.T) {
 	scenario := Scenario{
 		Name:        "Test",
 		Description: "A test scenario.",
-		Steps: []Step{{
-			Function:   FuncRunApp,
-			Identifier: "load",
-			AppType:    "counter",
+		Steps: Steps{&apps.RunApp{
+			App:  steps.App{App: "load"},
+			Type: "counter",
 		}},
 	}
 	err := scenario.Check()
@@ -725,9 +688,8 @@ func TestCheck_UpdateRulesEmpty(t *testing.T) {
 	scenario := Scenario{
 		Name:        "Test",
 		Description: "A test scenario.",
-		Steps: []Step{{
-			Function: FuncUpdateRules,
-			Rules:    genesis.NetworkRulesPatch{},
+		Steps: Steps{&network.UpdateRules{
+			Rules: genesis.NetworkRulesPatch{},
 		}},
 	}
 	err := scenario.Check()
@@ -784,7 +746,7 @@ Scenario:
 	// Verify the rejoin pattern: validator-before-1 is started, stopped, then started again
 	starts := 0
 	for _, step := range scenario.Steps {
-		if step.Function == FuncStartNode && step.Identifier == "validator-before-1" {
+		if start, ok := step.(*nodelifetime.StartNode); ok && start.Target() == "validator-before-1" {
 			starts++
 		}
 	}
@@ -893,6 +855,18 @@ Scenario:
 	}
 }
 
+func TestParseBytes_RejectsAParameterGivenTwice(t *testing.T) {
+	input := `
+Name: Test
+Scenario:
+  - startNode: node-A
+    type: validator
+    type: observer
+`
+	_, err := ParseBytes([]byte(input))
+	require.ErrorContains(t, err, `line 6: parameter "type" is given twice`)
+}
+
 func TestParseBytes_NonScalarStringParam(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -953,10 +927,9 @@ Scenario:
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
 
-	step := scenario.Steps[0]
-	require.Equal(t, FuncRunApp, step.Function)
-	require.Equal(t, "counter", step.AppType)
-	require.Empty(t, step.NodeType)
+	step := stepAs[*apps.RunApp](t, scenario.Steps[0])
+	require.Equal(t, "counter", step.Type)
+	require.Equal(t, "my-app", step.Target())
 }
 
 func TestParseBytes_RulesPatchAllCategories(t *testing.T) {
@@ -1029,8 +1002,7 @@ Scenario:
 	require.Nil(t, r.Emitter)
 
 	// Verify updateRules step
-	step := scenario.Steps[1]
-	require.Equal(t, FuncUpdateRules, step.Function)
+	step := stepAs[*network.UpdateRules](t, scenario.Steps[1])
 	require.NotNil(t, step.Rules.Blocks)
 	require.NotNil(t, step.Rules.Blocks.MaxBlockGas)
 	require.EqualValues(t, 30000000000, *step.Rules.Blocks.MaxBlockGas)
@@ -1047,10 +1019,7 @@ func TestCheck_EmptySubChecks(t *testing.T) {
 	scenario := Scenario{
 		Name:        "Test",
 		Description: "A test scenario.",
-		Steps: []Step{{
-			Function:  FuncChecks,
-			SubChecks: nil,
-		}},
+		Steps:       Steps{&checks.Checks{}},
 	}
 	err := scenario.Check()
 	require.Error(t, err)
@@ -1058,61 +1027,43 @@ func TestCheck_EmptySubChecks(t *testing.T) {
 }
 
 func TestCheck_ObservationWindowTooShort(t *testing.T) {
-	tooShort := MinObservationDuration - time.Millisecond
-	scenario := Scenario{
-		Name:        "Test",
-		Description: "A test scenario.",
-		Steps: []Step{{
-			Function: FuncChecks,
-			SubChecks: []CheckSpec{{
-				Function: FuncCheckBlocksProduced,
-				Duration: &tooShort,
-			}},
-		}},
-	}
-	err := scenario.Check()
+	tooShort := checking.MinObservationDuration - time.Millisecond
+	err := checkScenario(&checks.BlocksProduced{
+		Window: checks.Window{Duration: durationOf(tooShort)},
+	}).Check()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "duration must be at least")
 }
 
 func TestCheck_ObservationWindowAtTheMinimumIsAccepted(t *testing.T) {
-	minimum := MinObservationDuration
-	scenario := Scenario{
-		Name:        "Test",
-		Description: "A test scenario.",
-		Steps: []Step{{
-			Function: FuncChecks,
-			SubChecks: []CheckSpec{{
-				Function: FuncCheckBlocksProduced,
-				Duration: &minimum,
-			}},
-		}},
-	}
-	require.NoError(t, scenario.Check())
+	require.NoError(t, checkScenario(&checks.BlocksProduced{
+		Window: checks.Window{Duration: durationOf(checking.MinObservationDuration)},
+	}).Check())
 }
 
 // checkScenario wraps a single sub-check into an otherwise valid scenario.
-func checkScenario(spec CheckSpec) *Scenario {
+func checkScenario(check checks.Check) *Scenario {
 	return &Scenario{
 		Name:        "Test",
 		Description: "A test scenario.",
-		Steps:       []Step{{Function: FuncChecks, SubChecks: []CheckSpec{spec}}},
+		Steps:       Steps{&checks.Checks{Items: []checks.Check{check}}},
 	}
+}
+
+// windowChecks builds each check that observes the network over a window.
+var windowChecks = map[string]func(checks.Window) checks.Check{
+	"blocksProduced": func(w checks.Window) checks.Check { return &checks.BlocksProduced{Window: w} },
+	"blocksHalted":   func(w checks.Window) checks.Check { return &checks.BlocksHalted{Window: w} },
+	"blockGasRate":   func(w checks.Window) checks.Check { return &checks.BlockGasRate{Window: w} },
 }
 
 func TestCheck_ToleranceTooShortForAnObservationWindow(t *testing.T) {
 	// tolerance is the window most scenarios actually use, so it must be
 	// rejected here rather than minutes into the run, just like duration.
-	for _, function := range []StepFunction{
-		FuncCheckBlocksProduced, FuncCheckBlocksHalted, FuncCheckBlockGasRate,
-	} {
-		t.Run(string(function), func(t *testing.T) {
+	for name, newCheck := range windowChecks {
+		t.Run(name, func(t *testing.T) {
 			for _, tolerance := range []int{0, 1} {
-				tolerance := tolerance
-				err := checkScenario(CheckSpec{
-					Function:  function,
-					Tolerance: &tolerance,
-				}).Check()
+				err := checkScenario(newCheck(checks.Window{Tolerance: &tolerance})).Check()
 				require.Error(t, err, "tolerance %d", tolerance)
 				require.Contains(t, err.Error(), "tolerance is an observation window")
 			}
@@ -1121,10 +1072,9 @@ func TestCheck_ToleranceTooShortForAnObservationWindow(t *testing.T) {
 }
 
 func TestCheck_ToleranceAtTheMinimumIsAccepted(t *testing.T) {
-	minimum := MinObservationSamples
-	require.NoError(t, checkScenario(CheckSpec{
-		Function:  FuncCheckBlocksProduced,
-		Tolerance: &minimum,
+	minimum := checking.MinObservationSamples
+	require.NoError(t, checkScenario(&checks.BlocksProduced{
+		Window: checks.Window{Tolerance: &minimum},
 	}).Check())
 }
 
@@ -1132,11 +1082,11 @@ func TestCheck_ShortToleranceIsAcceptedWhenDurationOverridesIt(t *testing.T) {
 	// duration wins over tolerance at run time, so a small tolerance next to a
 	// usable duration never reaches the checker.
 	tolerance := 1
-	duration := MinObservationDuration
-	require.NoError(t, checkScenario(CheckSpec{
-		Function:  FuncCheckBlocksProduced,
-		Tolerance: &tolerance,
-		Duration:  &duration,
+	require.NoError(t, checkScenario(&checks.BlocksProduced{
+		Window: checks.Window{
+			Tolerance: &tolerance,
+			Duration:  durationOf(checking.MinObservationDuration),
+		},
 	}).Check())
 }
 
@@ -1144,10 +1094,7 @@ func TestCheck_ZeroToleranceIsAcceptedForAHeightCheck(t *testing.T) {
 	// For blockHeights, tolerance is a slack in blocks; demanding exact
 	// agreement is legitimate.
 	zero := 0
-	require.NoError(t, checkScenario(CheckSpec{
-		Function:  FuncCheckBlockHeights,
-		Tolerance: &zero,
-	}).Check())
+	require.NoError(t, checkScenario(&checks.BlockHeights{Tolerance: &zero}).Check())
 }
 
 func TestCheck_ShortDurationIsAcceptedAsAConvergenceBudget(t *testing.T) {
@@ -1156,17 +1103,18 @@ func TestCheck_ShortDurationIsAcceptedAsAConvergenceBudget(t *testing.T) {
 	// collect two monitoring samples, so a short budget - or none at all,
 	// meaning a single attempt - is a legitimate choice and must not be
 	// rejected by the observation-window floor.
-	for _, function := range []StepFunction{
-		FuncCheckBlockHeights, FuncCheckNetworkRules,
-	} {
-		t.Run(string(function), func(t *testing.T) {
+	convergenceChecks := map[string]func(checks.Convergence) checks.Check{
+		"blockHeights": func(c checks.Convergence) checks.Check { return &checks.BlockHeights{Convergence: c} },
+		"networkRules": func(c checks.Convergence) checks.Check { return &checks.NetworkRules{Convergence: c} },
+	}
+	for name, newCheck := range convergenceChecks {
+		t.Run(name, func(t *testing.T) {
 			for _, duration := range []time.Duration{
-				0, time.Millisecond, MinObservationDuration - time.Millisecond,
+				0, time.Millisecond, checking.MinObservationDuration - time.Millisecond,
 			} {
-				require.NoError(t, checkScenario(CheckSpec{
-					Function: function,
-					Duration: &duration,
-				}).Check(), "duration %s", duration)
+				require.NoError(t, checkScenario(newCheck(checks.Convergence{
+					Duration: durationOf(duration),
+				})).Check(), "duration %s", duration)
 			}
 		})
 	}
@@ -1175,15 +1123,10 @@ func TestCheck_ShortDurationIsAcceptedAsAConvergenceBudget(t *testing.T) {
 func TestCheck_ShortDurationIsRejectedForAnObservationWindow(t *testing.T) {
 	// The counterpart to the above: where duration really is the window, it
 	// still has to be long enough to hold two samples.
-	tooShort := MinObservationDuration - time.Millisecond
-	for _, function := range []StepFunction{
-		FuncCheckBlocksProduced, FuncCheckBlocksHalted, FuncCheckBlockGasRate,
-	} {
-		t.Run(string(function), func(t *testing.T) {
-			err := checkScenario(CheckSpec{
-				Function: function,
-				Duration: &tooShort,
-			}).Check()
+	tooShort := checking.MinObservationDuration - time.Millisecond
+	for name, newCheck := range windowChecks {
+		t.Run(name, func(t *testing.T) {
+			err := checkScenario(newCheck(checks.Window{Duration: durationOf(tooShort)})).Check()
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "duration must be at least")
 		})
@@ -1211,8 +1154,8 @@ Scenario:
 `
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
-	require.Equal(t, FuncWaitForBlocks, scenario.Steps[0].Function)
-	require.Equal(t, uint64(1100), scenario.Steps[0].Blocks)
+	step := stepAs[*wait.WaitForBlocks](t, scenario.Steps[0])
+	require.Equal(t, uint64(1100), step.Blocks)
 }
 
 func TestParseBytes_Fails_WhenTheBlockCountIsInvalid(t *testing.T) {
@@ -1236,7 +1179,7 @@ func TestCheck_Fails_WhenTheBlockCountIsZero(t *testing.T) {
 	scenario := Scenario{
 		Name:        "Test",
 		Description: "A test scenario.",
-		Steps:       []Step{{Function: FuncWaitForBlocks}},
+		Steps:       Steps{&wait.WaitForBlocks{}},
 	}
 	require.ErrorContains(t, scenario.Check(), "positive block count")
 }
@@ -1250,8 +1193,7 @@ Scenario:
 `))
 	require.NoError(t, err)
 	require.NoError(t, scenario.Check())
-	require.Equal(t, FuncStopSonic, scenario.Steps[0].Function)
-	require.Equal(t, "node-A", scenario.Steps[0].Identifier)
+	require.Equal(t, "node-A", stepAs[*nodelifetime.StopSonic](t, scenario.Steps[0]).Target())
 
 	scenario, err = ParseBytes([]byte(`
 Name: Test
@@ -1274,8 +1216,7 @@ Scenario:
 `))
 	require.NoError(t, err)
 	require.NoError(t, scenario.Check())
-	require.Equal(t, FuncWaitForSonicExit, scenario.Steps[1].Function)
-	require.Equal(t, "exporter", scenario.Steps[1].Identifier)
+	require.Equal(t, "exporter", stepAs[*wait.WaitForSonicExit](t, scenario.Steps[1]).Target())
 
 	scenario, err = ParseBytes([]byte(`
 Name: Test
@@ -1301,13 +1242,13 @@ Scenario:
 	require.NoError(t, err)
 	require.NoError(t, scenario.Check())
 
-	require.Equal(t, FuncExportEvents, scenario.Steps[0].Function)
-	require.Equal(t, "exporter", scenario.Steps[0].Identifier)
-	require.Equal(t, "from-old.events", scenario.Steps[0].File)
+	exported := stepAs[*sonictool.ExportEvents](t, scenario.Steps[0])
+	require.Equal(t, "exporter", exported.Target())
+	require.Equal(t, "from-old.events", exported.File)
 
-	require.Equal(t, FuncImportEvents, scenario.Steps[1].Function)
-	require.Equal(t, "fresh", scenario.Steps[1].Identifier)
-	require.Equal(t, "from-old.events", scenario.Steps[1].File)
+	imported := stepAs[*sonictool.ImportEvents](t, scenario.Steps[1])
+	require.Equal(t, "fresh", imported.Target())
+	require.Equal(t, "from-old.events", imported.File)
 }
 
 func TestParseBytes_FileManagementSteps(t *testing.T) {
@@ -1335,23 +1276,19 @@ Scenario:
 	require.NoError(t, err)
 	require.NoError(t, scenario.Check())
 
-	steps := scenario.Steps
-	require.Equal(t, FuncStopSonic, steps[1].Function)
-	require.Equal(t, "node-A", steps[1].Identifier)
+	all := scenario.Steps
+	require.Equal(t, "node-A", stepAs[*nodelifetime.StopSonic](t, all[1]).Target())
 
-	require.Equal(t, FuncExportGenesis, steps[2].Function)
-	require.Equal(t, "node-A", steps[2].Identifier)
-	require.Equal(t, "from-a.g", steps[2].File)
+	exported := stepAs[*sonictool.ExportGenesis](t, all[2])
+	require.Equal(t, "node-A", exported.Target())
+	require.Equal(t, "from-a.g", exported.File)
 
-	require.Equal(t, FuncImportGenesis, steps[3].Function)
-	require.Equal(t, "from-b.g", steps[3].File)
+	require.Equal(t, "from-b.g", stepAs[*sonictool.ImportGenesis](t, all[3]).File)
 
-	require.Equal(t, FuncCheckDb, steps[4].Function)
-	require.Equal(t, DbCheckModeArchive, steps[4].DbMode)
+	require.Equal(t, node.DbCheckModeArchive, stepAs[*checks.CheckDb](t, all[4]).Mode)
 
 	// An omitted mode is left to the node to default.
-	require.Equal(t, FuncCheckDb, steps[5].Function)
-	require.Empty(t, steps[5].DbMode)
+	require.Empty(t, stepAs[*checks.CheckDb](t, all[5]).Mode)
 }
 
 func TestParseBytes_FileManagementSteps_RejectInvalidInput(t *testing.T) {
@@ -1482,16 +1419,16 @@ Scenario:
 	}
 }
 
-// A step function that the help output does not describe exists only in the
-// parser's tables.
+// A step the help output does not describe cannot be discovered by scenario
+// authors.
 func TestPrintHelp_CoversTheFileManagementSteps(t *testing.T) {
 	var out strings.Builder
 	require.NoError(t, PrintHelp(&out))
 
-	for _, fn := range []StepFunction{
-		FuncStopSonic, FuncExportGenesis, FuncImportGenesis, FuncCheckDb,
+	for _, name := range []string{
+		"stopSonic", "exportGenesis", "importGenesis", "checkDb",
 	} {
-		require.Contains(t, out.String(), string(fn))
+		require.Contains(t, out.String(), name)
 	}
 	require.Contains(t, out.String(), "shared directory")
 }

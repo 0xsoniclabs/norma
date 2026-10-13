@@ -32,7 +32,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0xsoniclabs/norma/driver/parser"
 	rpcdriver "github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/norma/genesis"
 
@@ -236,7 +235,7 @@ func CreateOperaDockerNode(
 	// avoid slashes and underscores in labels
 	config.Label = strings.ReplaceAll(config.Label, "/", "-")
 	config.Label = strings.ReplaceAll(config.Label, "_", "-")
-	if !parser.NamePattern.MatchString(config.Label) {
+	if !NamePattern.MatchString(config.Label) {
 		return nil, fmt.Errorf("invalid label for node: '%v'", config.Label)
 	}
 
