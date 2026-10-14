@@ -40,6 +40,11 @@ type Function interface {
 // Step is one blocking operation of a scenario.
 type Step interface {
 	Function
+	// UpdateModel applies the step to a model of the network: it reports
+	// what would make the step fail, and records the state the step leaves.
+	// The executor applies it before Run, so a dry run and a real run reject
+	// the same scenarios.
+	UpdateModel(m *Model) error
 	Run(ctx context.Context, env *Env) error
 }
 

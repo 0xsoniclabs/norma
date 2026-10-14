@@ -65,6 +65,14 @@ func (s *RunApp) Validate() error {
 	return errors.Join(errs...)
 }
 
+func (s *RunApp) UpdateModel(m *steps.Model) error {
+	if m.Apps[s.App.App] {
+		return fmt.Errorf("application %q is already running", s.App.App)
+	}
+	m.Apps[s.App.App] = true
+	return nil
+}
+
 func (s *RunApp) Run(ctx context.Context, env *steps.Env) error {
 	if ctx.Err() != nil {
 		return ctx.Err()

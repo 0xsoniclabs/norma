@@ -34,6 +34,10 @@ func (*ExportEvents) Help() string {
 	return "Export a stopped node's event DAG into a file in the shared directory."
 }
 
+func (s *ExportEvents) UpdateModel(m *steps.Model) error {
+	return s.exportFile(m, "export events from")
+}
+
 func (s *ExportEvents) Run(ctx context.Context, env *steps.Env) error {
 	return Run(ctx, env, s.Node, func(opera *node.OperaNode, ctx context.Context) error {
 		return opera.ExportEvents(ctx, s.File)

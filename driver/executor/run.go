@@ -45,6 +45,7 @@ func Run(
 		steps.NewValidatorRegistry(network),
 		nil,
 		nil,
+		nil,
 	)
 }
 
@@ -71,6 +72,7 @@ func RunAndCaptureEventExecution(
 			executions = append(executions, execution)
 		},
 		genesisValidatorIds,
+		nil,
 	)
 	return executions, err
 }
@@ -104,9 +106,13 @@ func run(
 		registry,
 		nil,
 		nil,
+		nil,
 	)
 }
 
+// runWithObserver runs the scenario, reporting every executed step to
+// onStepExecuted and, for tests, handing the environment to afterStep after
+// every step that succeeded.
 func runWithObserver(
 	ctx context.Context,
 	network driver.Network,
@@ -115,6 +121,7 @@ func runWithObserver(
 	registry steps.ValidatorRegistry,
 	onStepExecuted func(EventExecution),
 	genesisValidatorIds map[string]int,
+	afterStep func(*steps.Env),
 ) error {
 	if err := scenario.Check(); err != nil {
 		return err
@@ -148,8 +155,13 @@ func runWithObserver(
 			"identifier", target,
 		)
 
+		// The model is applied first, so a step the dry run would reject fails
+		// here before it acts on the network.
 		start := time.Now()
-		err := step.Run(ctx, env)
+		err := step.UpdateModel(env.Model)
+		if err == nil {
+			err = step.Run(ctx, env)
+		}
 		end := time.Now()
 		if onStepExecuted != nil {
 			onStepExecuted(EventExecution{
@@ -175,6 +187,9 @@ func runWithObserver(
 			"phase", phaseCompleted,
 			"duration", end.Sub(start),
 		)
+		if afterStep != nil {
+			afterStep(env)
+		}
 
 		// Steps that leave the network expected to be healthy are confirmed
 		// to keep it producing blocks before the next one starts.

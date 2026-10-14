@@ -43,6 +43,7 @@ func TestCheckScenarios(t *testing.T) {
 			scenario, err := parser.ParseFile(file)
 			require.NoError(t, err, "failed to parse file", file)
 			require.NoError(t, scenario.Check(), "scenario check failed for file", file)
+			require.NoError(t, scenario.DryRun(), "dry run failed for file", file)
 		})
 	}
 }

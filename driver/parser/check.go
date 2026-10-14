@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/0xsoniclabs/norma/driver/steps"
+	"github.com/0xsoniclabs/norma/driver/steps/nodelifetime"
 	"github.com/0xsoniclabs/norma/genesis"
 )
 
@@ -47,4 +49,26 @@ func (s *Scenario) Check() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// DryRun applies the steps in order to a model of the network, the way a run
+// does before running each step, and reports the first that could not run:
+// stopping a node that is not running, healing one that was not killed,
+// importing a file no step exported, and the like. Anything that depends on
+// the network's behaviour, such as timing, is out of its reach.
+func (s *Scenario) DryRun() error {
+	if len(s.Steps) == 0 {
+		return errors.New("scenario has no steps")
+	}
+	// The first step starts the network, so it has to start validators.
+	if start, ok := s.Steps[0].(*nodelifetime.StartNode); !ok || !start.IsValidator() {
+		return fmt.Errorf("step 1 (%s): the first step must start a validator", s.Steps[0].Name())
+	}
+	model := steps.NewModel()
+	for i, step := range s.Steps {
+		if err := step.UpdateModel(model); err != nil {
+			return fmt.Errorf("step %d (%s): %w", i+1, strings.TrimSpace(step.Name()+" "+steps.TargetOf(step)), err)
+		}
+	}
+	return nil
 }

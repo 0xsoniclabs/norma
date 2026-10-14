@@ -87,6 +87,8 @@ func (s *Checks) Validate() error {
 	return errors.Join(errs...)
 }
 
+func (*Checks) UpdateModel(*steps.Model) error { return nil }
+
 func (s *Checks) Run(ctx context.Context, env *steps.Env) error {
 	for i, check := range s.Items {
 		if err := check.Run(ctx, env.Checks); err != nil {

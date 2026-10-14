@@ -42,6 +42,8 @@ type Env struct {
 	ValidatorIds map[string]int
 	// Stakes is the stake moved through named delegator accounts.
 	Stakes Ledger
+	// Model is what the steps run so far have done, as a dry run sees it.
+	Model *Model
 }
 
 // NewEnv returns an Env with no nodes, apps or stakes.
@@ -58,6 +60,7 @@ func NewEnv(net driver.Network, checks checking.Checks, validators ValidatorRegi
 			Delegators: map[string]*Delegator{},
 			Expected:   map[StakeKey]uint64{},
 		},
+		Model: NewModel(),
 	}
 }
 

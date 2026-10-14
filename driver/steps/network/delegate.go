@@ -107,6 +107,18 @@ func (s *Delegate) Validate() error {
 	return nil
 }
 
+func (s *Delegate) UpdateModel(m *steps.Model) error {
+	for _, target := range s.Targets {
+		label, err := m.Validator(target.Node)
+		if err != nil {
+			return err
+		}
+		m.Delegators[target.Delegator] = true
+		m.Delegations[steps.Delegation{Delegator: target.Delegator, Node: label}] += target.Stake
+	}
+	return nil
+}
+
 func (s *Delegate) Run(ctx context.Context, env *steps.Env) error {
 	for _, target := range s.Targets {
 		id, err := resolveValidatorId(env, target.Node)

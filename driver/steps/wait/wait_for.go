@@ -57,6 +57,8 @@ func (s *WaitFor) Validate() error {
 	return nil
 }
 
+func (*WaitFor) UpdateModel(*steps.Model) error { return nil }
+
 func (s *WaitFor) Run(ctx context.Context, _ *steps.Env) error {
 	slog.Info("waiting", "duration", s.Duration)
 	select {

@@ -34,6 +34,10 @@ func (*ExportGenesis) Help() string {
 	return "Export a stopped node's chain into a g-file in the shared directory."
 }
 
+func (s *ExportGenesis) UpdateModel(m *steps.Model) error {
+	return s.exportFile(m, "export a g-file from")
+}
+
 func (s *ExportGenesis) Run(ctx context.Context, env *steps.Env) error {
 	return Run(ctx, env, s.Node, func(opera *node.OperaNode, ctx context.Context) error {
 		return opera.ExportGenesis(ctx, s.File)

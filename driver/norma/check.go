@@ -49,6 +49,9 @@ func check(ctx *cli.Context) (err error) {
 	if err := scenario.Check(); err != nil {
 		return err
 	}
+	if err := scenario.DryRun(); err != nil {
+		return fmt.Errorf("dry run failed: %w", err)
+	}
 	slog.Info("all checks passed!", "path", path)
 	return nil
 }

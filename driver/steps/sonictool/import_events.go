@@ -35,6 +35,10 @@ func (*ImportEvents) Help() string {
 	return "Add the events in a file from the shared directory to a stopped node's database."
 }
 
+func (s *ImportEvents) UpdateModel(m *steps.Model) error {
+	return s.importFile(m, "import events into")
+}
+
 func (s *ImportEvents) Run(ctx context.Context, env *steps.Env) error {
 	return Run(ctx, env, s.Node, func(opera *node.OperaNode, ctx context.Context) error {
 		return opera.ImportEvents(ctx, s.File)

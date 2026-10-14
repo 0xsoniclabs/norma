@@ -106,6 +106,39 @@ func (s *Undelegate) Validate() error {
 	return nil
 }
 
+// UpdateModel undelegates from validators; a delegator can only take back
+// stake it delegated to that validator, all of it when no stake is given.
+// The self-stake of a validator is not modelled.
+func (s *Undelegate) UpdateModel(m *steps.Model) error {
+	for _, target := range s.Targets {
+		label, err := m.Validator(target.Node)
+		if err != nil {
+			return err
+		}
+		if target.Delegator == "" {
+			continue
+		}
+		if !m.Delegators[target.Delegator] {
+			return fmt.Errorf("undelegate: delegator %q was never used in a prior delegate step", target.Delegator)
+		}
+		key := steps.Delegation{Delegator: target.Delegator, Node: label}
+		delegated, ok := m.Delegations[key]
+		if !ok {
+			return fmt.Errorf("delegator %q has no stake on node %q", target.Delegator, target.Node)
+		}
+		stake := delegated
+		if target.Stake != nil {
+			stake = *target.Stake
+		}
+		if stake > delegated {
+			return fmt.Errorf("delegator %q has %d S on node %q, cannot undelegate %d S",
+				target.Delegator, delegated, target.Node, stake)
+		}
+		m.Delegations[key] = delegated - stake
+	}
+	return nil
+}
+
 func (s *Undelegate) Run(ctx context.Context, env *steps.Env) error {
 	for _, target := range s.Targets {
 		id, err := resolveValidatorId(env, target.Node)

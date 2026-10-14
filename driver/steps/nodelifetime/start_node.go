@@ -21,8 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/0xsoniclabs/norma/driver/steps"
 	"golang.org/x/sync/errgroup"
 )
@@ -92,6 +94,53 @@ func (s *StartNode) Validate() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// UpdateModel starts the node or its instances, or restarts the client of a
+// node that is still tracked. A restart keeps the node's role: an omitted type
+// means the role it was started with, and a different one is refused, since
+// the node's validator id is fixed when it is created.
+func (s *StartNode) UpdateModel(m *steps.Model) error {
+	name := s.Node.Node
+	if existing, ok := m.Nodes[name]; ok {
+		if s.Type != "" && s.IsValidator() != existing.Validator {
+			return fmt.Errorf("node %q was started as %s; restarting it in place as %s is not supported",
+				name, role(existing.Validator), role(s.IsValidator()))
+		}
+		return m.Apply(name, node.StartClient, "start")
+	}
+
+	isRejoin := m.Started[name]
+	for instance := range s.InstanceCount() {
+		label := s.InstanceName(instance)
+		if _, ok := m.Nodes[label]; ok {
+			return fmt.Errorf("node %q is already running", label)
+		}
+		if s.IsValidator() && !m.Validators[label] && isRejoin {
+			return fmt.Errorf("validator %s is rejoining but has no preserved validator ID", label)
+		}
+	}
+	for instance := range s.InstanceCount() {
+		label := s.InstanceName(instance)
+		m.Nodes[label] = &steps.ModelNode{
+			Validator:       s.IsValidator(),
+			Client:          node.NodeStateRunning,
+			ExitsWhenSynced: strings.Contains(s.ExtraArguments, "--exitwhensynced"),
+		}
+		m.Started[label] = true
+		if s.IsValidator() {
+			m.Validators[label] = true
+		}
+	}
+	m.Started[name] = true
+	return nil
+}
+
+func role(validator bool) string {
+	if validator {
+		return "a validator"
+	}
+	return "an observer"
 }
 
 func (s *StartNode) Run(ctx context.Context, env *steps.Env) error {

@@ -56,6 +56,25 @@ func (f NodeFile) Validate() error {
 	return errors.Join(f.Node.Validate(), f.SharedFile.Validate())
 }
 
+// exportFile runs sonictool on the stopped node and leaves the file in the
+// shared directory.
+func (f NodeFile) exportFile(m *steps.Model, action string) error {
+	if err := m.Apply(f.Node.Node, node.Maintenance, action); err != nil {
+		return err
+	}
+	m.SharedFiles[f.File] = true
+	return nil
+}
+
+// importFile runs sonictool on the stopped node, reading a file an earlier step
+// exported: the shared directory starts empty with every run.
+func (f NodeFile) importFile(m *steps.Model, action string) error {
+	if !m.SharedFiles[f.File] {
+		return fmt.Errorf("file %q is not in the shared directory; export it in an earlier step", f.File)
+	}
+	return m.Apply(f.Node.Node, node.Maintenance, action)
+}
+
 // sonicToolTimeout caps a single sonictool invocation. Each walks the whole
 // node state, so the bound is generous for slow CI hosts.
 const sonicToolTimeout = 3 * time.Minute

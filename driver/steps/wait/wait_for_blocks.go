@@ -56,6 +56,8 @@ func (s *WaitForBlocks) Validate() error {
 	return nil
 }
 
+func (*WaitForBlocks) UpdateModel(*steps.Model) error { return nil }
+
 func (s *WaitForBlocks) Run(ctx context.Context, env *steps.Env) error {
 	client, err := env.Net.DialRandomRpc()
 	if err != nil {

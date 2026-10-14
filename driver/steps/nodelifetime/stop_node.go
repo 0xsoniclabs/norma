@@ -38,6 +38,22 @@ func (*StopNode) Help() string {
 	return "Stop a running network node by name."
 }
 
+// UpdateModel removes the node, or every instance started under its name.
+func (s *StopNode) UpdateModel(m *steps.Model) error {
+	base := s.Node.Node
+	found := false
+	for label := range m.Nodes {
+		if label == base || steps.IsInstanceLabel(label, base) {
+			delete(m.Nodes, label)
+			found = true
+		}
+	}
+	if !found {
+		return fmt.Errorf("node %q not found in active nodes", base)
+	}
+	return nil
+}
+
 func (s *StopNode) Run(ctx context.Context, env *steps.Env) error {
 	base := s.Node.Node
 
