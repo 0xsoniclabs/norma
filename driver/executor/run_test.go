@@ -847,7 +847,7 @@ func TestRun_AbortsAtCallerDeadline_WhenStepBlocks(t *testing.T) {
 
 // A step the model rejects fails before it acts: undelegating more than was
 // delegated must not reach the chain.
-func TestRun_StepRejectedByTheModelDoesNotActOnTheNetwork(t *testing.T) {
+func TestRun_DoesNotActOnTheNetwork_WhenTheModelRejectsAStep(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	registry := steps.NewMockValidatorRegistry(ctrl)
@@ -883,7 +883,7 @@ func TestRun_StepRejectedByTheModelDoesNotActOnTheNetwork(t *testing.T) {
 
 // A validator's label may rejoin as an observer. The run keeps the stopped
 // validator's id for a later rejoin, so the role is that of the node running.
-func TestRun_ValidatorLabelRejoinsAsAnObserver(t *testing.T) {
+func TestRun_TracksTheObserverRole_WhenAValidatorLabelRejoinsAsAnObserver(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	registry := steps.NewMockValidatorRegistry(ctrl)

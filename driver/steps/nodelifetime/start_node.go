@@ -108,15 +108,23 @@ func (s *StartNode) UpdateModel(m *steps.Model) error {
 			return fmt.Errorf("node %q was started as %s; restarting it in place as %s is not supported",
 				name, role(existing.Validator), role(s.IsValidator()))
 		}
+		if s.InstanceCount() > 1 {
+			return fmt.Errorf("restarting node %q in place cannot start %d instances", name, s.InstanceCount())
+		}
 		return m.Apply(name, node.StartClient, "start")
 	}
 
+	// A name may only be started again once everything started under it was
+	// stopped; otherwise it would run next to its own instances.
+	for label := range m.Nodes {
+		if steps.IsInstanceLabel(label, name) {
+			return fmt.Errorf("node %q still has active instances, such as %q; stop it with stopNode first",
+				name, label)
+		}
+	}
 	isRejoin := m.Started[name]
 	for instance := range s.InstanceCount() {
 		label := s.InstanceName(instance)
-		if _, ok := m.Nodes[label]; ok {
-			return fmt.Errorf("node %q is already running", label)
-		}
 		if s.IsValidator() && !m.Validators[label] && isRejoin {
 			return fmt.Errorf("validator %s is rejoining but has no preserved validator ID", label)
 		}

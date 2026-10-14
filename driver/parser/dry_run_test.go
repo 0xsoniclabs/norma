@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDryRun_ReportsStepsThatCannotRun(t *testing.T) {
+func TestDryRun_ReportsTheStep_WhenItCannotRun(t *testing.T) {
 	tests := map[string]struct {
 		steps     string
 		wantError string
@@ -38,6 +38,14 @@ func TestDryRun_ReportsStepsThatCannotRun(t *testing.T) {
 		"start a running node": {
 			steps:     "  - startNode: val\n",
 			wantError: `cannot start node "val" while its client is running`,
+		},
+		"start a name next to its active instances": {
+			steps:     "  - startNode: obs\n    instances: 2\n  - startNode: obs\n",
+			wantError: `node "obs" still has active instances`,
+		},
+		"restart in place with several instances": {
+			steps:     "  - stopSonic: val\n  - startNode: val\n    instances: 2\n",
+			wantError: `restarting node "val" in place cannot start 2 instances`,
 		},
 		"stop a stopped client": {
 			steps:     "  - stopSonic: val\n  - stopSonic: val\n",
@@ -121,7 +129,7 @@ func TestDryRun_ReportsStepsThatCannotRun(t *testing.T) {
 	}
 }
 
-func TestDryRun_AcceptsWhatARunCanDo(t *testing.T) {
+func TestDryRun_Succeeds_WhenEveryStepCanRun(t *testing.T) {
 	tests := map[string]string{
 		"kill, heal and restart keeping the role": "  - killSonic: val\n  - healDb: val\n  - startNode: val\n",
 		"restart with the same role":              "  - stopSonic: val\n  - startNode: val\n    type: validator\n",
@@ -133,6 +141,8 @@ func TestDryRun_AcceptsWhatARunCanDo(t *testing.T) {
 		"drain a delegation": "  - delegate:\n    - node: val\n      delegator: alice\n      stake: 100\n" +
 			"  - undelegate:\n    - node: val\n      delegator: alice\n",
 		"stop the instances of a name": "  - startNode: obs\n    instances: 2\n  - stopNode: obs\n",
+		"start a name again once its instances stopped": "  - startNode: obs\n    instances: 2\n" +
+			"  - stopNode: obs\n  - startNode: obs\n",
 		"run and stop an app": "  - runApp: load\n    type: counter\n    rate:\n      constant: 1\n" +
 			"  - stopApp: load\n",
 	}
@@ -143,7 +153,7 @@ func TestDryRun_AcceptsWhatARunCanDo(t *testing.T) {
 	}
 }
 
-func TestDryRun_RequiresTheFirstStepToStartAValidator(t *testing.T) {
+func TestDryRun_Fails_WhenTheFirstStepDoesNotStartAValidator(t *testing.T) {
 	for name, input := range map[string]string{
 		"an observer":    "Name: T\nDescription: t\nScenario:\n  - startNode: obs\n",
 		"another step":   "Name: T\nDescription: t\nScenario:\n  - advanceEpoch\n",
