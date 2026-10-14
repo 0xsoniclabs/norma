@@ -154,21 +154,19 @@ func runScenario(
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// if not configured, default to /tmp/norma_data_<label>_<timestamp> else /configured/path/norma_data_<l>_<t>
-	outputDir, err := os.MkdirTemp(outputDir, fmt.Sprintf("norma_data_%s_", label))
-	if err != nil {
-		return fmt.Errorf("couldn't create temp dir for output; %w", err)
-	}
-
+	// A scenario that cannot run is refused before anything is created.
 	slog.Info("reading scenario file", "path", path)
-	parsed, err := parser.ParseFile(path)
+	parsed, err := parser.CheckFile(path)
 	if err != nil {
-		return fmt.Errorf("failed to parse scenario file: %w", err)
-	}
-	if err := parsed.Check(); err != nil {
 		return err
 	}
 	scenario := &parsed
+
+	// if not configured, default to /tmp/norma_data_<label>_<timestamp> else /configured/path/norma_data_<l>_<t>
+	outputDir, err = os.MkdirTemp(outputDir, fmt.Sprintf("norma_data_%s_", label))
+	if err != nil {
+		return fmt.Errorf("couldn't create temp dir for output; %w", err)
+	}
 
 	slog.Info("starting evaluation", "label", label)
 	slog.Info("running scenario", "path", path, "name", scenario.Name)

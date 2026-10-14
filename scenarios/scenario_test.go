@@ -40,10 +40,8 @@ func TestCheckScenarios(t *testing.T) {
 	require.NotEmpty(t, experiments, "failed to locate any experiment files")
 	for _, file := range append(files, experiments...) {
 		t.Run(file, func(t *testing.T) {
-			scenario, err := parser.ParseFile(file)
-			require.NoError(t, err, "failed to parse file", file)
-			require.NoError(t, scenario.Check(), "scenario check failed for file", file)
-			require.NoError(t, scenario.DryRun(), "dry run failed for file", file)
+			_, err := parser.CheckFile(file)
+			require.NoError(t, err, "scenario %s is not valid", file)
 		})
 	}
 }

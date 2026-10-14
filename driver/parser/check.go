@@ -51,6 +51,23 @@ func (s *Scenario) Check() error {
 	return errors.Join(errs...)
 }
 
+// CheckFile parses the scenario at path and checks it: each step on its own,
+// then all of them in order against a model of the network. It is what makes
+// a scenario valid for norma check, build and run, and for the scenario tests.
+func CheckFile(path string) (Scenario, error) {
+	scenario, err := ParseFile(path)
+	if err != nil {
+		return Scenario{}, fmt.Errorf("failed to parse scenario file: %w", err)
+	}
+	if err := scenario.Check(); err != nil {
+		return Scenario{}, err
+	}
+	if err := scenario.DryRun(); err != nil {
+		return Scenario{}, fmt.Errorf("dry run failed: %w", err)
+	}
+	return scenario, nil
+}
+
 // DryRun applies the steps in order to a model of the network, the way a run
 // does before running each step, and reports the first that could not run:
 // stopping a node that is not running, healing one that was not killed,
