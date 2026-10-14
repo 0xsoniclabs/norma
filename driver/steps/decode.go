@@ -160,7 +160,8 @@ func decodeFields(v reflect.Value, pairs []*yaml.Node, owner string) error {
 func DecodeKnown(value *yaml.Node, out any) error {
 	// The value is re-decoded apart from its document, so aliases to anchors
 	// defined elsewhere in it are resolved first.
-	expanded, err := expandAliases(value, map[*yaml.Node]bool{})
+	budget := maxExpandedNodes
+	expanded, err := expandAliases(value, &budget)
 	if err != nil {
 		return err
 	}
@@ -186,23 +187,27 @@ func DecodeKnown(value *yaml.Node, out any) error {
 
 var relativeLine = regexp.MustCompile(`^line \d+: `)
 
+// maxExpandedNodes bounds the nodes a value may expand to through aliases.
+// Aliases can nest so that each level doubles the size, which would exhaust
+// memory long before decoding; a scenario value is a few dozen nodes, so the
+// bound is generous. It also stops an alias that contains itself.
+const maxExpandedNodes = 10_000
+
 // expandAliases returns a copy of node in which every alias is replaced by the
-// node it refers to. expanding holds the alias targets being expanded, to
-// report an alias that contains itself instead of recursing forever.
-func expandAliases(node *yaml.Node, expanding map[*yaml.Node]bool) (*yaml.Node, error) {
+// node it refers to, copying at most budget nodes.
+func expandAliases(node *yaml.Node, budget *int) (*yaml.Node, error) {
+	if *budget--; *budget < 0 {
+		return nil, fmt.Errorf("line %d: value expands to more than %d nodes through aliases",
+			node.Line, maxExpandedNodes)
+	}
 	if node.Kind == yaml.AliasNode {
-		if expanding[node.Alias] {
-			return nil, fmt.Errorf("line %d: alias %q contains itself", node.Line, node.Value)
-		}
-		expanding[node.Alias] = true
-		defer delete(expanding, node.Alias)
-		return expandAliases(node.Alias, expanding)
+		return expandAliases(node.Alias, budget)
 	}
 	copied := *node
 	copied.Anchor = ""
 	copied.Content = make([]*yaml.Node, len(node.Content))
 	for i, child := range node.Content {
-		expanded, err := expandAliases(child, expanding)
+		expanded, err := expandAliases(child, budget)
 		if err != nil {
 			return nil, err
 		}

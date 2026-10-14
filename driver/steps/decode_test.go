@@ -18,6 +18,7 @@ package steps
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -227,5 +228,22 @@ func TestDecodeKnown_ReportsAnAliasThatContainsItself(t *testing.T) {
 	var doc yaml.Node
 	require.NoError(t, yaml.Unmarshal([]byte("loop: &loop [*loop]\n"), &doc))
 	var out any
-	require.ErrorContains(t, DecodeKnown(doc.Content[0].Content[1], &out), `alias "loop" contains itself`)
+	require.ErrorContains(t, DecodeKnown(doc.Content[0].Content[1], &out), "expands to more than")
+}
+
+// Each anchor refers twice to the previous one, so the last stands for 2^40
+// copies of the first. Expanding it must stop at the budget, not exhaust
+// memory.
+func TestDecodeKnown_StopsAliasesThatExpandExponentially(t *testing.T) {
+	input := "l0: &l0 [x, x]\n"
+	for i := 1; i <= 40; i++ {
+		input += fmt.Sprintf("l%d: &l%d [*l%d, *l%d]\n", i, i, i-1, i-1)
+	}
+	var doc yaml.Node
+	require.NoError(t, yaml.Unmarshal([]byte(input), &doc))
+	root := doc.Content[0]
+
+	var out any
+	err := DecodeKnown(root.Content[len(root.Content)-1], &out)
+	require.ErrorContains(t, err, "expands to more than 10000 nodes through aliases")
 }
