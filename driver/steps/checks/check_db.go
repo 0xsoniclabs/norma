@@ -52,6 +52,10 @@ func (s *CheckDb) Validate() error {
 	return errors.Join(errs...)
 }
 
+func (s *CheckDb) UpdateModel(m *steps.Model) error {
+	return m.Apply(s.Node.Node, node.Maintenance, "check the database of")
+}
+
 func (s *CheckDb) Run(ctx context.Context, env *steps.Env) error {
 	return sonictool.Run(ctx, env, s.Node, func(opera *node.OperaNode, ctx context.Context) error {
 		return opera.CheckDatabase(ctx, s.Mode)

@@ -34,6 +34,14 @@ func (*StopApp) Help() string {
 	return "Stop a running load-generating application by name."
 }
 
+func (s *StopApp) UpdateModel(m *steps.Model) error {
+	if !m.Apps[s.App.App] {
+		return fmt.Errorf("application %q not found in active apps", s.App.App)
+	}
+	delete(m.Apps, s.App.App)
+	return nil
+}
+
 func (s *StopApp) Run(_ context.Context, env *steps.Env) error {
 	name := s.App.App
 	application, ok := env.Apps[name]

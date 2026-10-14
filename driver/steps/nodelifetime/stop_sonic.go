@@ -19,6 +19,7 @@ package nodelifetime
 import (
 	"context"
 
+	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/0xsoniclabs/norma/driver/steps"
 )
 
@@ -32,6 +33,10 @@ func (*StopSonic) Name() string { return "stopSonic" }
 
 func (*StopSonic) Help() string {
 	return "Stop the sonicd process gracefully, keeping the node's container and data directory."
+}
+
+func (s *StopSonic) UpdateModel(m *steps.Model) error {
+	return m.Apply(s.Node.Node, node.StopClient, "stop the client of")
 }
 
 func (s *StopSonic) Run(ctx context.Context, env *steps.Env) error {

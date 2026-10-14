@@ -19,7 +19,9 @@ package executor
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math/big"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -49,7 +51,7 @@ func TestRun_EmptyScenario(t *testing.T) {
 		Steps:       parser.Steps{},
 	}
 
-	if err := run(t.Context(), net, &scenario, nil, nil); err != nil {
+	if err := runChecked(t, t.Context(), net, &scenario, nil, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -66,11 +68,11 @@ func TestRun_StartAndStopNode(t *testing.T) {
 	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 
 	validatorId := 2
+	node.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
 	gomock.InOrder(
 		registry.EXPECT().RegisterNewValidator(gomock.Any(), uint64(0)).Return(validatorId, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
 		registry.EXPECT().EnsureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil),
-		node.EXPECT().GetValidatorId().Return(&validatorId),
 		registry.EXPECT().UnregisterValidator(gomock.Any(), validatorId, gomock.Any()).Return(nil),
 		net.EXPECT().RemoveNode(node).Return(nil),
 		node.EXPECT().Stop(gomock.Any()).Return(nil),
@@ -89,7 +91,7 @@ func TestRun_StartAndStopNode(t *testing.T) {
 		},
 	}
 
-	if err := run(t.Context(), net, &scenario, nil, registry); err != nil {
+	if err := runChecked(t, t.Context(), net, &scenario, nil, registry); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -108,6 +110,7 @@ func TestRun_StartNode_ForwardsCustomStake(t *testing.T) {
 
 	customStake := uint64(10_000_000)
 	validatorId := 2
+	node.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
 
 	gomock.InOrder(
 		registry.EXPECT().
@@ -128,8 +131,8 @@ func TestRun_StartNode_ForwardsCustomStake(t *testing.T) {
 		},
 	}
 
-	if err := run(
-		t.Context(), net, &scenario, nil, registry,
+	if err := runChecked(
+		t, t.Context(), net, &scenario, nil, registry,
 	); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -148,13 +151,13 @@ func TestRun_UndelegateSingleInstanceWithSuffix(t *testing.T) {
 		Return(nil, fmt.Errorf("not ready")).AnyTimes()
 
 	validatorId := 2
+	node.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
 	gomock.InOrder(
 		registry.EXPECT().RegisterNewValidator(gomock.Any(), uint64(0)).
 			Return(validatorId, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
 		registry.EXPECT().
 			EnsureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil),
-		node.EXPECT().GetValidatorId().Return(&validatorId),
 		registry.EXPECT().
 			UnregisterValidator(gomock.Any(), validatorId, uint64(0)).Return(nil),
 	)
@@ -172,8 +175,8 @@ func TestRun_UndelegateSingleInstanceWithSuffix(t *testing.T) {
 		},
 	}
 
-	if err := run(
-		t.Context(), net, &scenario, nil, registry,
+	if err := runChecked(
+		t, t.Context(), net, &scenario, nil, registry,
 	); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -207,6 +210,9 @@ func TestRun_UndelegateMultiInstance(t *testing.T) {
 			node0.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 			node1.EXPECT().GetLabel().Return("validators-1").AnyTimes()
 			node1.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+			validatorId0, validatorId1 := 2, 3
+			node0.EXPECT().GetValidatorId().Return(&validatorId0).AnyTimes()
+			node1.EXPECT().GetValidatorId().Return(&validatorId1).AnyTimes()
 
 			instances := 2
 			registry.EXPECT().RegisterNewValidator(gomock.Any(), gomock.Any()).Return(2, nil)
@@ -221,8 +227,6 @@ func TestRun_UndelegateMultiInstance(t *testing.T) {
 			registry.EXPECT().EnsureValidatorsActive(gomock.Any(), []int{2, 3}).Return(nil)
 
 			if !tc.expectErr {
-				validatorId0 := 2
-				node0.EXPECT().GetValidatorId().Return(&validatorId0)
 				registry.EXPECT().UnregisterValidator(gomock.Any(), validatorId0, uint64(0)).Return(nil)
 			}
 
@@ -231,14 +235,18 @@ func TestRun_UndelegateMultiInstance(t *testing.T) {
 				Description:      "Test scenario.",
 				DisableEndChecks: true,
 				Steps: parser.Steps{
-					&nodelifetime.StartNode{Node: steps.Node{Node: "validators"}, Type: "validator", Instances: &instances},
+					&nodelifetime.StartNode{
+						Node:      steps.Node{Node: "validators"},
+						Type:      "validator",
+						Instances: &instances,
+					},
 					&network.Undelegate{
 						Targets: []network.UndelegateTarget{{Node: tc.target}},
 					},
 				},
 			}
 
-			err := run(t.Context(), net, &scenario, nil, registry)
+			err := runChecked(t, t.Context(), net, &scenario, nil, registry)
 			if tc.expectErr && err == nil {
 				t.Fatal("expected error, got nil")
 			}
@@ -260,6 +268,7 @@ func TestRun_StopNodeWithoutUndelegate(t *testing.T) {
 	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 
 	validatorId := 2
+	node.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
 	gomock.InOrder(
 		registry.EXPECT().RegisterNewValidator(gomock.Any(), gomock.Any()).Return(validatorId, nil),
 		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
@@ -280,7 +289,7 @@ func TestRun_StopNodeWithoutUndelegate(t *testing.T) {
 		},
 	}
 
-	if err := run(t.Context(), net, &scenario, nil, registry); err != nil {
+	if err := runChecked(t, t.Context(), net, &scenario, nil, registry); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -299,6 +308,8 @@ func TestRun_RejoinNode(t *testing.T) {
 	node2.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 
 	validatorId := 2
+	node1.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
+	node2.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
 	gomock.InOrder(
 		// First start: registers as new validator
 		registry.EXPECT().RegisterNewValidator(gomock.Any(), gomock.Any()).Return(validatorId, nil),
@@ -334,7 +345,7 @@ func TestRun_RejoinNode(t *testing.T) {
 		},
 	}
 
-	if err := run(t.Context(), net, &scenario, nil, registry); err != nil {
+	if err := runChecked(t, t.Context(), net, &scenario, nil, registry); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -367,7 +378,7 @@ func TestRun_RunAndStopApp(t *testing.T) {
 		},
 	}
 
-	if err := run(t.Context(), net, &scenario, nil, nil); err != nil {
+	if err := runChecked(t, t.Context(), net, &scenario, nil, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -398,7 +409,7 @@ func TestRun_UpdateRules(t *testing.T) {
 		},
 	}
 
-	if err := run(t.Context(), net, &scenario, nil, nil); err != nil {
+	if err := runChecked(t, t.Context(), net, &scenario, nil, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -419,7 +430,7 @@ func TestRun_AdvanceEpoch(t *testing.T) {
 		},
 	}
 
-	if err := run(t.Context(), net, &scenario, nil, nil); err != nil {
+	if err := runChecked(t, t.Context(), net, &scenario, nil, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -442,7 +453,7 @@ func TestRun_Check(t *testing.T) {
 		},
 	}
 
-	if err := run(t.Context(), net, &scenario, checkers, nil); err != nil {
+	if err := runChecked(t, t.Context(), net, &scenario, checkers, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -462,7 +473,7 @@ func TestRun_ContextCancellation(t *testing.T) {
 		},
 	}
 
-	err := run(ctx, net, &scenario, nil, nil)
+	err := runChecked(t, ctx, net, &scenario, nil, nil)
 	if err == nil {
 		t.Fatal("expected error from cancelled context")
 	}
@@ -480,12 +491,17 @@ func TestRun_MultiInstanceNode(t *testing.T) {
 	node1.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 	node2.EXPECT().GetLabel().Return("validators-1").AnyTimes()
 	node2.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+	firstId, secondId := 2, 3
+	node1.EXPECT().GetValidatorId().Return(&firstId).AnyTimes()
+	node2.EXPECT().GetValidatorId().Return(&secondId).AnyTimes()
 
 	// Validators are registered sequentially, then nodes created in parallel.
 	ids := make(chan int, 2)
 	ids <- 2
 	ids <- 3
-	registry.EXPECT().RegisterNewValidator(gomock.Any(), uint64(0)).DoAndReturn(func(ctx context.Context, stake uint64) (int, error) {
+	registry.EXPECT().RegisterNewValidator(gomock.Any(), uint64(0)).DoAndReturn(func(
+		ctx context.Context, stake uint64,
+	) (int, error) {
 		return <-ids, nil
 	}).Times(2)
 
@@ -511,7 +527,7 @@ func TestRun_MultiInstanceNode(t *testing.T) {
 		},
 	}
 
-	if err := run(t.Context(), net, &scenario, nil, registry); err != nil {
+	if err := runChecked(t, t.Context(), net, &scenario, nil, registry); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -597,8 +613,8 @@ func TestRun_UndelegateWithDelegator_UsesDelegatorKey(t *testing.T) {
 		},
 	}
 
-	if err := run(
-		t.Context(), net, &scenario, nil, registry,
+	if err := runChecked(
+		t, t.Context(), net, &scenario, nil, registry,
 	); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -635,7 +651,7 @@ func TestRun_UndelegateWithUnknownDelegator_ReturnsError(t *testing.T) {
 		},
 	}
 
-	err := run(t.Context(), net, &scenario, nil, registry)
+	err := runChecked(t, t.Context(), net, &scenario, nil, registry)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -683,8 +699,8 @@ func TestRun_VerifyStakes_PassesWhenAllStakesMatch(t *testing.T) {
 		},
 	}
 
-	if err := run(
-		t.Context(), net, &scenario, nil, registry,
+	if err := runChecked(
+		t, t.Context(), net, &scenario, nil, registry,
 	); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -729,7 +745,7 @@ func TestRun_VerifyStakes_FailsOnMismatch(t *testing.T) {
 		},
 	}
 
-	err := run(t.Context(), net, &scenario, nil, registry)
+	err := runChecked(t, t.Context(), net, &scenario, nil, registry)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -780,8 +796,8 @@ func TestRun_VerifyStakes_ChecksFullyUndelegatedPairIsZero(t *testing.T) {
 		},
 	}
 
-	if err := run(
-		t.Context(), net, &scenario, nil, registry,
+	if err := runChecked(
+		t, t.Context(), net, &scenario, nil, registry,
 	); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -807,7 +823,7 @@ func TestRun_KeepsCallerDeadline_WhenLongerThanDefault(t *testing.T) {
 		Steps:       parser.Steps{&wait.WaitForEpoch{}},
 	}
 
-	require.NoError(t, run(ctx, net, &scenario, nil, nil))
+	require.NoError(t, runChecked(t, ctx, net, &scenario, nil, nil))
 }
 
 func TestRun_AbortsAtCallerDeadline_WhenStepBlocks(t *testing.T) {
@@ -824,9 +840,122 @@ func TestRun_AbortsAtCallerDeadline_WhenStepBlocks(t *testing.T) {
 	}
 
 	start := time.Now()
-	err := run(ctx, net, &scenario, nil, nil)
+	err := runChecked(t, ctx, net, &scenario, nil, nil)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 	require.Less(t, time.Since(start), time.Second)
+}
+
+// A step the model rejects fails before it acts: undelegating more than was
+// delegated must not reach the chain.
+func TestRun_DoesNotActOnTheNetwork_WhenTheModelRejectsAStep(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := steps.NewMockValidatorRegistry(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	node.EXPECT().GetLabel().Return("heavy").AnyTimes()
+	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+	node.EXPECT().GetValidatorId().Return(new(2)).AnyTimes()
+	registry.EXPECT().RegisterNewValidator(gomock.Any(), gomock.Any()).Return(2, nil)
+	net.EXPECT().CreateNode(gomock.Any()).Return(node, nil)
+	registry.EXPECT().EnsureValidatorsActive(gomock.Any(), []int{2}).Return(nil)
+	registry.EXPECT().FundDelegator(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	registry.EXPECT().Delegate(gomock.Any(), 2, uint64(100), gomock.Any()).Return(nil)
+	// No UndelegateAs: the mock fails the test if the undelegation is sent.
+
+	tooMuch := uint64(500)
+	scenario := parser.Scenario{
+		Name:             "Rejected",
+		Description:      "Test scenario.",
+		DisableEndChecks: true,
+		Steps: parser.Steps{
+			startValidator("heavy"),
+			&network.Delegate{Targets: []network.DelegateTarget{{Node: "heavy", Delegator: "alice", Stake: 100}}},
+			&network.Undelegate{Targets: []network.UndelegateTarget{
+				{Node: "heavy", Delegator: "alice", Stake: &tooMuch},
+			}},
+		},
+	}
+	err := runChecked(t, t.Context(), net, &scenario, nil, registry)
+	require.ErrorContains(t, err, "cannot undelegate 500 S")
+}
+
+// A validator's label may rejoin as an observer. The run keeps the stopped
+// validator's id for a later rejoin, so the role is that of the node running.
+func TestRun_TracksTheObserverRole_WhenAValidatorLabelRejoinsAsAnObserver(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	registry := steps.NewMockValidatorRegistry(ctrl)
+	validator := driver.NewMockNode(ctrl)
+	observer := driver.NewMockNode(ctrl)
+
+	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	for _, node := range []*driver.MockNode{validator, observer} {
+		node.EXPECT().GetLabel().Return("flex").AnyTimes()
+		node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
+	}
+	validatorId := 2
+	validator.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
+	observer.EXPECT().GetValidatorId().Return(nil).AnyTimes()
+	gomock.InOrder(
+		registry.EXPECT().RegisterNewValidator(gomock.Any(), uint64(0)).Return(validatorId, nil),
+		net.EXPECT().CreateNode(gomock.Any()).Return(validator, nil),
+		registry.EXPECT().EnsureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil),
+		net.EXPECT().RemoveNode(validator).Return(nil),
+		validator.EXPECT().Stop(gomock.Any()).Return(nil),
+		validator.EXPECT().Cleanup(gomock.Any()).Return(nil),
+		net.EXPECT().CreateNode(gomock.Any()).Return(observer, nil),
+	)
+
+	scenario := parser.Scenario{
+		Name:             "Rejoin as observer",
+		Description:      "Test scenario.",
+		DisableEndChecks: true,
+		Steps: parser.Steps{
+			startValidator("flex"),
+			&nodelifetime.StopNode{Node: steps.Node{Node: "flex"}},
+			&nodelifetime.StartNode{Node: steps.Node{Node: "flex"}},
+		},
+	}
+	require.NoError(t, runChecked(t, t.Context(), net, &scenario, nil, registry))
+}
+
+// runChecked runs the scenario like Run, and after every step asserts that the
+// environment the steps built agrees with the model the executor applied
+// before them, so the model cannot drift from what the steps do.
+func runChecked(
+	t *testing.T,
+	ctx context.Context,
+	network driver.Network,
+	scenario *parser.Scenario,
+	checks checking.Checks,
+	registry steps.ValidatorRegistry,
+) error {
+	t.Helper()
+	return runWithObserver(ctx, network, scenario, checks, registry, nil, nil, func(env *steps.Env) {
+		requireModelMatches(t, env)
+	})
+}
+
+func requireModelMatches(t *testing.T, env *steps.Env) {
+	t.Helper()
+	require.ElementsMatch(t, slices.Collect(maps.Keys(env.Nodes)), slices.Collect(maps.Keys(env.Model.Nodes)),
+		"the model tracks other nodes than the run")
+	// The role of the node running now: ValidatorIds also keeps the ids of
+	// stopped validators, whose label may rejoin as an observer.
+	for label, node := range env.Model.Nodes {
+		isValidator := env.Nodes[label].GetValidatorId() != nil
+		require.Equalf(t, isValidator, node.Validator, "the model has another role for %s than the run", label)
+	}
+	require.ElementsMatch(t, slices.Collect(maps.Keys(env.Apps)), slices.Collect(maps.Keys(env.Model.Apps)),
+		"the model runs other apps than the run")
+	stakes := map[steps.StakeKey]uint64{}
+	for delegation, stake := range env.Model.Delegations {
+		key := steps.StakeKey{Delegator: delegation.Delegator, ValidatorId: env.ValidatorIds[delegation.Node]}
+		stakes[key] = stake
+	}
+	require.Equal(t, env.Stakes.Expected, stakes, "the model tracks other stakes than the run")
 }
 
 func startValidator(name string) *nodelifetime.StartNode {

@@ -184,6 +184,22 @@ func TestDelegation_UnrelatedPrefixedNodeDoesNotMakeANameAmbiguous(t *testing.T)
 	}
 }
 
+// Once the other instances stopped, the base name means the remaining one,
+// whatever its number.
+func TestDelegate_ReachesTheOnlyRemainingInstance_WhenOthersStopped(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	registry := steps.NewMockValidatorRegistry(ctrl)
+	registry.EXPECT().FundDelegator(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	registry.EXPECT().Delegate(gomock.Any(), 3, uint64(1_000), gomock.Any()).Return(nil)
+
+	env := newTestEnv(registry, map[string]driver.Node{
+		"heavy-1": validatorNode(ctrl, 3),
+	})
+	if err := delegateStep("heavy", "alice", 1_000).Run(t.Context(), env); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 // Funding precedes delegation; when the treasury transfer fails the delegation
 // must not be attempted, because the account cannot pay for it.
 func TestDelegate_FundingFailureSkipsTheDelegation(t *testing.T) {

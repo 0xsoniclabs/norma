@@ -57,36 +57,15 @@ func getOrCreateDelegator(ledger *steps.Ledger, name string) (*steps.Delegator, 
 // resolveValidatorId maps a scenario-level node name to its validator ID,
 // falling back to the single numbered instance "<name>-0".
 func resolveValidatorId(env *steps.Env, name string) (int, error) {
-	tracked, ok := env.Nodes[name]
-	if !ok {
-		tracked, ok = env.Nodes[steps.InstanceLabel(name, 0)]
-		if !ok {
-			return 0, fmt.Errorf("node %q not found in active nodes", name)
-		}
-		if hasMultipleInstances(env, name) {
-			return 0, fmt.Errorf(
-				"node %q has multiple instances; use an explicit instance name (e.g. %q)",
-				name, steps.InstanceLabel(name, 0),
-			)
-		}
+	label, err := steps.ResolveLabel(env.Nodes, name)
+	if err != nil {
+		return 0, err
 	}
-	id := tracked.GetValidatorId()
+	id := env.Nodes[label].GetValidatorId()
 	if id == nil {
 		return 0, fmt.Errorf("node %q is not a validator", name)
 	}
 	return *id, nil
-}
-
-// hasMultipleInstances reports whether env tracks more than one numbered
-// instance for the given base name (e.g. "name-0", "name-1").
-func hasMultipleInstances(env *steps.Env, baseName string) bool {
-	count := 0
-	for label := range env.Nodes {
-		if steps.IsInstanceLabel(label, baseName) {
-			count++
-		}
-	}
-	return count > 1
 }
 
 func matchName(field, name string) error {

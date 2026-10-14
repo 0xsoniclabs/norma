@@ -34,6 +34,10 @@ func (*HealDb) Help() string {
 	return "Run sonictool heal on a killed node to recover its database."
 }
 
+func (s *HealDb) UpdateModel(m *steps.Model) error {
+	return m.Apply(s.Node.Node, node.HealDatabase, "heal")
+}
+
 func (s *HealDb) Run(ctx context.Context, env *steps.Env) error {
 	return Run(ctx, env, s.Node, (*node.OperaNode).HealSonicd)
 }

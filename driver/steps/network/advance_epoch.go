@@ -35,6 +35,8 @@ func (*AdvanceEpoch) AwaitsBlockProduction() bool { return true }
 
 func (*AdvanceEpoch) Validate() error { return nil }
 
+func (*AdvanceEpoch) UpdateModel(*steps.Model) error { return nil }
+
 func (*AdvanceEpoch) Run(ctx context.Context, env *steps.Env) error {
 	if err := steps.WaitForBlockProduction(ctx, env.Net); err != nil {
 		return err

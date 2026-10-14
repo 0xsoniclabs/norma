@@ -61,6 +61,8 @@ func (s *UpdateRules) Validate() error {
 	return nil
 }
 
+func (*UpdateRules) UpdateModel(*steps.Model) error { return nil }
+
 func (s *UpdateRules) Run(ctx context.Context, env *steps.Env) error {
 	if err := env.Net.ApplyNetworkRules(ctx, driver.NetworkRules(s.Rules)); err != nil {
 		return fmt.Errorf("failed to apply network rules: %w", err)

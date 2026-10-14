@@ -27,13 +27,23 @@ import (
 	"github.com/0xsoniclabs/norma/driver/steps"
 )
 
+// restartable is what a restart in place needs from a node.
+type restartable interface {
+	driver.Node
+	StartSonicd(ctx context.Context) error
+	StartSonicdAsObserver(ctx context.Context) error
+	WaitForSync(ctx context.Context) error
+}
+
+var _ restartable = (*node.OperaNode)(nil)
+
 // restartInPlace restarts the client process of a node whose container is
 // still alive, as is the case after killSonic followed by healDb. The data
 // directory is preserved, so the node rejoins with the history it already
 // had rather than syncing from genesis.
 func (s *StartNode) restartInPlace(ctx context.Context, env *steps.Env, existing driver.Node) error {
 	name := s.Node.Node
-	opera, ok := existing.(*node.OperaNode)
+	opera, ok := existing.(restartable)
 	if !ok {
 		return fmt.Errorf("node %q is not an OperaNode", name)
 	}
@@ -48,13 +58,13 @@ func (s *StartNode) restartInPlace(ctx context.Context, env *steps.Env, existing
 		}
 		targetBlock = 0
 	}
+	// The node keeps the role it was started with; UpdateModel refuses a step
+	// asking for another, and an omitted type means that role.
+	validator := opera.GetValidatorId() != nil
 	slog.Info("restarting node in place",
-		"node", name, "type", s.Type, "target_block", targetBlock)
+		"node", name, "validator", validator, "target_block", targetBlock)
 
-	// Restart with the role the step asks for. Silently demoting a
-	// validator to an observer would remove it from consensus for the rest
-	// of the scenario while still reporting success.
-	if s.IsValidator() {
+	if validator {
 		if err := opera.StartSonicd(ctx); err != nil {
 			return fmt.Errorf("failed to restart sonicd on %s: %w", name, err)
 		}

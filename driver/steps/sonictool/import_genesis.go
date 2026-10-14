@@ -36,6 +36,10 @@ func (*ImportGenesis) Help() string {
 		"keeping its keystore."
 }
 
+func (s *ImportGenesis) UpdateModel(m *steps.Model) error {
+	return s.importFile(m, "import a g-file into")
+}
+
 func (s *ImportGenesis) Run(ctx context.Context, env *steps.Env) error {
 	return Run(ctx, env, s.Node, func(opera *node.OperaNode, ctx context.Context) error {
 		return opera.ImportGenesis(ctx, s.File)

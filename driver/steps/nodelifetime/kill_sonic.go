@@ -19,6 +19,7 @@ package nodelifetime
 import (
 	"context"
 
+	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/0xsoniclabs/norma/driver/steps"
 )
 
@@ -33,6 +34,10 @@ func (*KillSonic) Name() string { return "killSonic" }
 
 func (*KillSonic) Help() string {
 	return "Kill the sonicd process with SIGKILL, leaving the database dirty."
+}
+
+func (s *KillSonic) UpdateModel(m *steps.Model) error {
+	return m.Apply(s.Node.Node, node.KillClient, "kill the client of")
 }
 
 func (s *KillSonic) Run(ctx context.Context, env *steps.Env) error {

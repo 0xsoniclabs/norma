@@ -33,6 +33,7 @@ type nodeStep struct {
 
 func (*nodeStep) Name() string                    { return "nodeStep" }
 func (*nodeStep) Help() string                    { return "A step on a node." }
+func (*nodeStep) UpdateModel(*Model) error        { return nil }
 func (*nodeStep) Run(context.Context, *Env) error { return nil }
 
 // bareStep takes no value and no parameters.
@@ -41,6 +42,7 @@ type bareStep struct{}
 func (*bareStep) Name() string                    { return "bareStep" }
 func (*bareStep) Help() string                    { return "A step without arguments." }
 func (*bareStep) Validate() error                 { return nil }
+func (*bareStep) UpdateModel(*Model) error        { return nil }
 func (*bareStep) Run(context.Context, *Env) error { return nil }
 
 // paramStep takes no value, only parameters, flat or nested under its key.
@@ -51,6 +53,7 @@ type paramStep struct {
 func (*paramStep) Name() string                    { return "paramStep" }
 func (*paramStep) Help() string                    { return "A step with parameters only." }
 func (*paramStep) Validate() error                 { return nil }
+func (*paramStep) UpdateModel(*Model) error        { return nil }
 func (*paramStep) Run(context.Context, *Env) error { return nil }
 
 var testKinds = []func() Step{

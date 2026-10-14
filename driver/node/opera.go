@@ -864,10 +864,10 @@ func (n *OperaNode) clientHandle() *docker.ExecHandle {
 func (n *OperaNode) beginClientStart() (uint64, error) {
 	n.stateMutex.Lock()
 	defer n.stateMutex.Unlock()
-	if n.state != NodeStateReady {
+	if !StartClient.Accepts(n.state) {
 		return 0, fmt.Errorf(
 			"node %q: cannot transition %s\u2192%s (currently %s)",
-			n.GetLabel(), NodeStateReady, NodeStateSyncing, n.state)
+			n.GetLabel(), formatStates(StartClient.From), NodeStateSyncing, n.state)
 	}
 	n.state = NodeStateSyncing
 	n.clientGen++

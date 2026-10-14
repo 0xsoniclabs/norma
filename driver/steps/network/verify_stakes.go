@@ -39,6 +39,8 @@ func (*VerifyStakes) Help() string {
 
 func (*VerifyStakes) Validate() error { return nil }
 
+func (*VerifyStakes) UpdateModel(*steps.Model) error { return nil }
+
 func (*VerifyStakes) Run(_ context.Context, env *steps.Env) error {
 	var errs []error
 	for key, expected := range env.Stakes.Expected {

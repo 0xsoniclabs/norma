@@ -42,6 +42,38 @@ func TestIsInstanceLabel_AcceptsOnlyLabelsStartNodeGives(t *testing.T) {
 	}
 }
 
+func TestResolveLabel_FindsTheNodeAStepMeans_WhenItIsUnambiguous(t *testing.T) {
+	tests := map[string]struct {
+		nodes     []string
+		want      string
+		wantError string
+	}{
+		"the name itself":             {nodes: []string{"val", "val-0"}, want: "val"},
+		"the only instance":           {nodes: []string{"val-0"}, want: "val-0"},
+		"the only remaining instance": {nodes: []string{"val-1", "val-extra"}, want: "val-1"},
+		"no node":                     {nodes: []string{"val-extra", "other-0"}, wantError: `node "val" not found`},
+		"several instances": {
+			nodes:     []string{"val-2", "val-1"},
+			wantError: `node "val" has multiple instances; use an explicit instance name (e.g. "val-1")`,
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			nodes := map[string]bool{}
+			for _, label := range test.nodes {
+				nodes[label] = true
+			}
+			got, err := ResolveLabel(nodes, "val")
+			if test.wantError != "" {
+				require.ErrorContains(t, err, test.wantError)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, test.want, got)
+		})
+	}
+}
+
 func TestInstanceLabel_IsRecognisedAsAnInstanceOfItsBase(t *testing.T) {
 	for _, instance := range []int{0, 1, 9, 10, 100} {
 		label := InstanceLabel("val", instance)

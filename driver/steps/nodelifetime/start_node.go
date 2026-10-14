@@ -21,8 +21,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
+	"strings"
 
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/0xsoniclabs/norma/driver/steps"
 	"golang.org/x/sync/errgroup"
 )
@@ -92,6 +95,69 @@ func (s *StartNode) Validate() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// UpdateModel starts the node or its instances, or restarts the client of a
+// node that is still tracked. A restart keeps the node's role: an omitted type
+// means the role it was started with, and a different one is refused, since
+// the node's validator id is fixed when it is created.
+func (s *StartNode) UpdateModel(m *steps.Model) error {
+	name := s.Node.Node
+	if existing, ok := m.Nodes[name]; ok {
+		if s.Type != "" && s.IsValidator() != existing.Validator {
+			return fmt.Errorf("node %q was started as %s; restarting it in place as %s is not supported",
+				name, role(existing.Validator), role(s.IsValidator()))
+		}
+		if s.InstanceCount() > 1 {
+			return fmt.Errorf("restarting node %q in place cannot start %d instances", name, s.InstanceCount())
+		}
+		return m.Apply(name, node.StartClient, "start")
+	}
+
+	// A name may only be started again once everything started under it was
+	// stopped; otherwise it would run next to its own instances.
+	for label := range m.Nodes {
+		if steps.IsInstanceLabel(label, name) {
+			return fmt.Errorf("node %q still has active instances, such as %q; stop it with stopNode first",
+				name, label)
+		}
+	}
+	isRejoin := m.Started[name]
+	for instance := range s.InstanceCount() {
+		label := s.InstanceName(instance)
+		if s.IsValidator() && !m.Validators[label] && isRejoin {
+			return fmt.Errorf("validator %s is rejoining but has no preserved validator ID", label)
+		}
+	}
+	for instance := range s.InstanceCount() {
+		label := s.InstanceName(instance)
+		m.Nodes[label] = &steps.ModelNode{
+			Validator:       s.IsValidator(),
+			Client:          node.NodeStateRunning,
+			ExitsWhenSynced: exitsWhenSynced(s.ExtraArguments),
+		}
+		m.Started[label] = true
+		if s.IsValidator() {
+			m.Validators[label] = true
+		}
+	}
+	m.Started[name] = true
+	return nil
+}
+
+// exitsWhenSynced reports whether the extra arguments, split the way the node
+// passes them to sonicd, hold an --exitwhensynced.* option.
+func exitsWhenSynced(extraArguments string) bool {
+	return slices.ContainsFunc(strings.Fields(extraArguments), func(argument string) bool {
+		return strings.HasPrefix(argument, "--exitwhensynced.")
+	})
+}
+
+func role(validator bool) string {
+	if validator {
+		return "a validator"
+	}
+	return "an observer"
 }
 
 func (s *StartNode) Run(ctx context.Context, env *steps.Env) error {
