@@ -89,27 +89,6 @@ const (
 // without a deadline of its own; `norma run --timeout` sets one.
 const DefaultScenarioTimeout = 10 * time.Minute
 
-// run is the internal implementation, allowing injection of
-// a ValidatorRegistry for testing.
-func run(
-	ctx context.Context,
-	network driver.Network,
-	scenario *parser.Scenario,
-	checks checking.Checks,
-	registry steps.ValidatorRegistry,
-) error {
-	return runWithObserver(
-		ctx,
-		network,
-		scenario,
-		checks,
-		registry,
-		nil,
-		nil,
-		nil,
-	)
-}
-
 // runWithObserver runs the scenario, reporting every executed step to
 // onStepExecuted and, for tests, handing the environment to afterStep after
 // every step that succeeded.
