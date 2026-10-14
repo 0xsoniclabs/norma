@@ -18,6 +18,7 @@ package steps
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/0xsoniclabs/norma/driver/node"
 )
@@ -124,24 +125,24 @@ func clientState(state node.NodeState) string {
 }
 
 // ResolveLabel maps a node name used by a step to the label of the node it
-// means: the name itself, or the only instance started under it.
+// means: the name itself, or the only active instance started under it.
 func ResolveLabel[V any](nodes map[string]V, name string) (string, error) {
 	if _, ok := nodes[name]; ok {
 		return name, nil
 	}
-	first := InstanceLabel(name, 0)
-	if _, ok := nodes[first]; !ok {
-		return "", fmt.Errorf("node %q not found in active nodes", name)
-	}
-	instances := 0
+	var instances []string
 	for label := range nodes {
 		if IsInstanceLabel(label, name) {
-			instances++
+			instances = append(instances, label)
 		}
 	}
-	if instances > 1 {
-		return "", fmt.Errorf(
-			"node %q has multiple instances; use an explicit instance name (e.g. %q)", name, first)
+	switch len(instances) {
+	case 0:
+		return "", fmt.Errorf("node %q not found in active nodes", name)
+	case 1:
+		return instances[0], nil
 	}
-	return first, nil
+	slices.Sort(instances)
+	return "", fmt.Errorf(
+		"node %q has multiple instances; use an explicit instance name (e.g. %q)", name, instances[0])
 }

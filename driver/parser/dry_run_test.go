@@ -141,6 +141,8 @@ func TestDryRun_Succeeds_WhenEveryStepCanRun(t *testing.T) {
 		"drain a delegation": "  - delegate:\n    - node: val\n      delegator: alice\n      stake: 100\n" +
 			"  - undelegate:\n    - node: val\n      delegator: alice\n",
 		"stop the instances of a name": "  - startNode: obs\n    instances: 2\n  - stopNode: obs\n",
+		"delegate to the only remaining instance": "  - startNode: heavy\n    type: validator\n    instances: 2\n" +
+			"  - stopNode: heavy-0\n  - delegate:\n    - node: heavy\n      delegator: alice\n      stake: 100\n",
 		"start a name again once its instances stopped": "  - startNode: obs\n    instances: 2\n" +
 			"  - stopNode: obs\n  - startNode: obs\n",
 		"run and stop an app": "  - runApp: load\n    type: counter\n    rate:\n      constant: 1\n" +
