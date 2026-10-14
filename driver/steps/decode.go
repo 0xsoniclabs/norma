@@ -17,8 +17,11 @@
 package steps
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -144,11 +147,73 @@ func decodeFields(v reflect.Value, pairs []*yaml.Node, owner string) error {
 			return fmt.Errorf("line %d: parameter %q is given twice", key.Line, key.Value)
 		}
 		seen[key.Value] = true
-		if err := value.Decode(field.Addr().Interface()); err != nil {
+		if err := DecodeKnown(value, field.Addr().Interface()); err != nil {
 			return fmt.Errorf("line %d: invalid %s value: %w", key.Line, key.Value, err)
 		}
 	}
 	return nil
+}
+
+// DecodeKnown decodes value into out like yaml.Node.Decode, but rejects
+// mapping keys out does not declare at any depth, which yaml.Node.Decode
+// silently ignores.
+func DecodeKnown(value *yaml.Node, out any) error {
+	// The value is re-decoded apart from its document, so aliases to anchors
+	// defined elsewhere in it are resolved first.
+	budget := maxExpandedNodes
+	expanded, err := expandAliases(value, &budget)
+	if err != nil {
+		return err
+	}
+	data, err := yaml.Marshal(expanded)
+	if err != nil {
+		return err
+	}
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	err = decoder.Decode(out)
+	// The lines yaml reports are relative to value, so they are dropped in
+	// favour of the caller's.
+	var typeErr *yaml.TypeError
+	if errors.As(err, &typeErr) {
+		messages := make([]string, len(typeErr.Errors))
+		for i, message := range typeErr.Errors {
+			messages[i] = relativeLine.ReplaceAllString(message, "")
+		}
+		return errors.New(strings.Join(messages, "; "))
+	}
+	return err
+}
+
+var relativeLine = regexp.MustCompile(`^line \d+: `)
+
+// maxExpandedNodes bounds the nodes a value may expand to through aliases.
+// Aliases can nest so that each level doubles the size, which would exhaust
+// memory long before decoding; a scenario value is a few dozen nodes, so the
+// bound is generous. It also stops an alias that contains itself.
+const maxExpandedNodes = 10_000
+
+// expandAliases returns a copy of node in which every alias is replaced by the
+// node it refers to, copying at most budget nodes.
+func expandAliases(node *yaml.Node, budget *int) (*yaml.Node, error) {
+	if *budget--; *budget < 0 {
+		return nil, fmt.Errorf("line %d: value expands to more than %d nodes through aliases",
+			node.Line, maxExpandedNodes)
+	}
+	if node.Kind == yaml.AliasNode {
+		return expandAliases(node.Alias, budget)
+	}
+	copied := *node
+	copied.Anchor = ""
+	copied.Content = make([]*yaml.Node, len(node.Content))
+	for i, child := range node.Content {
+		expanded, err := expandAliases(child, budget)
+		if err != nil {
+			return nil, err
+		}
+		copied.Content[i] = expanded
+	}
+	return &copied, nil
 }
 
 // visitParams calls visit for every field of v tagged `yaml`, descending into

@@ -78,7 +78,9 @@ func TestWaitFor_StopsWaiting_WhenTheScenarioIsCancelled(t *testing.T) {
 }
 
 func TestWaitForBlocks_RejectsANonCount(t *testing.T) {
-	for _, input := range []string{"waitForBlocks:\n", "waitForBlocks: 1.5\n", "waitForBlocks: -1\n", "waitForBlocks: [3]\n"} {
+	for _, input := range []string{
+		"waitForBlocks:\n", "waitForBlocks: 1.5\n", "waitForBlocks: -1\n", "waitForBlocks: [3]\n",
+	} {
 		_, err := decode(t, input)
 		require.Error(t, err, input)
 	}

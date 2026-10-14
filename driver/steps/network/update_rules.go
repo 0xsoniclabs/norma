@@ -43,7 +43,7 @@ func (*UpdateRules) AwaitsBlockProduction() bool { return true }
 
 func (s *UpdateRules) DecodeValue(value *yaml.Node) error {
 	if value.Kind == yaml.MappingNode {
-		if err := value.Decode(&s.Rules); err != nil {
+		if err := steps.DecodeKnown(value, &s.Rules); err != nil {
 			return fmt.Errorf("invalid updateRules value: %w", err)
 		}
 		return nil

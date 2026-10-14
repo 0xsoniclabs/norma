@@ -38,7 +38,9 @@ type StartNode struct {
 	DataVolume string  `yaml:"dataVolume" help:"Docker volume name to mount as the node data directory."`
 	Stake      *uint64 `yaml:"stake" help:"Validator stake in S (uint64). Defaults to 5,000,000 S."`
 	Instances  *int    `yaml:"instances" help:"Number of node instances to start."`
-	steps.Failing
+	// Failing marks a node expected to diverge from the network: the hash,
+	// height and rules checks expect it to fall behind or disagree.
+	Failing        bool   `yaml:"failing" help:"When true, the node is expected to diverge; it is not waited on."`
 	ExtraArguments string `yaml:"extraArguments" help:"Extra command line arguments for sonicd."`
 }
 
@@ -50,7 +52,7 @@ func (*StartNode) Help() string {
 
 // AwaitsBlockProduction leaves out nodes expected to fail, which may leave
 // the network stalled.
-func (s *StartNode) AwaitsBlockProduction() bool { return !s.Failing.Failing }
+func (s *StartNode) AwaitsBlockProduction() bool { return !s.Failing }
 
 // IsValidator reports whether the node joins the validator set.
 func (s *StartNode) IsValidator() bool { return s.Type == "validator" }
@@ -173,7 +175,7 @@ func (s *StartNode) Run(ctx context.Context, env *steps.Env) error {
 		g.Go(func() error {
 			node, err := env.Net.CreateNode(&driver.NodeConfig{
 				Name:           instanceNames[instance],
-				Failing:        s.Failing.Failing,
+				Failing:        s.Failing,
 				Image:          image,
 				Validator:      s.IsValidator(),
 				ValidatorId:    validatorIds[instance],
@@ -211,7 +213,7 @@ func (s *StartNode) Run(ctx context.Context, env *steps.Env) error {
 	env.NodeHistory[name] = true
 
 	// Skip sync wait for nodes expected to fail (they may never reach the target).
-	if !s.Failing.Failing {
+	if !s.Failing {
 		for _, node := range newNodes {
 			slog.Info("waiting for node to sync", "node", node.GetLabel(), "target_block", targetBlock)
 			if err := steps.WaitForNodeSync(ctx, node, targetBlock+1); err != nil {
@@ -228,7 +230,7 @@ func (s *StartNode) Run(ctx context.Context, env *steps.Env) error {
 	// and the between-step block production wait: a node that may never come
 	// up must not be the subject of an assertion. They join at the next seal
 	// the scenario performs, as they did before activation existed.
-	if len(mustBeActive) > 0 && !s.Failing.Failing {
+	if len(mustBeActive) > 0 && !s.Failing {
 		if err := env.Validators.EnsureValidatorsActive(ctx, mustBeActive); err != nil {
 			return fmt.Errorf("failed to activate validators for %s: %w", name, err)
 		}

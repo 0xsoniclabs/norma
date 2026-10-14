@@ -18,6 +18,7 @@ package checks
 
 import (
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -58,7 +59,7 @@ func TestChecks_RunTheirCheckerWithTheParametersOfTheScenario(t *testing.T) {
 			config:  checking.CheckerConfig{"tolerance": 5, "duration": int64(30 * time.Second)},
 		},
 		"blocksHalted expected to fail": {
-			check:   &BlocksHalted{Failing: steps.Failing{Failing: true}},
+			check:   &BlocksHalted{Failing: Failing{Failing: true}},
 			checker: "blocksHalted",
 			config:  checking.CheckerConfig{"failing": true},
 		},
@@ -73,7 +74,7 @@ func TestChecks_RunTheirCheckerWithTheParametersOfTheScenario(t *testing.T) {
 			config:  checking.CheckerConfig{"slack": 5, "duration": int64(0)},
 		},
 		"blockHashes expected to fail": {
-			check:   &BlockHashes{Failing: steps.Failing{Failing: true}},
+			check:   &BlockHashes{Failing: Failing{Failing: true}},
 			checker: "blocksHashes",
 			config:  checking.CheckerConfig{"failing": true},
 		},
@@ -128,7 +129,7 @@ func TestChecks_FailingCheckFails_WhenItsCheckerPasses(t *testing.T) {
 	registered.EXPECT().Configure(gomock.Any()).Return(configured)
 	configured.EXPECT().Check(gomock.Any()).Return(nil)
 
-	check := &BlocksHalted{Failing: steps.Failing{Failing: true}}
+	check := &BlocksHalted{Failing: Failing{Failing: true}}
 	err := check.Run(t.Context(), checking.Checks{"blocksHalted": registered})
 	require.ErrorContains(t, err, "failure expected")
 }
@@ -166,10 +167,16 @@ func TestNetworkRules_RejectsRulesTheNetworkWouldRefuse(t *testing.T) {
 	require.NoError(t, (&NetworkRules{}).Validate())
 }
 
-func TestBlockGasRate_RejectsANegativeCeiling(t *testing.T) {
-	negative, zero := -1.0, 0.0
-	require.ErrorContains(t, (&BlockGasRate{Ceiling: &negative}).Validate(), "ceiling must be non-negative")
+func TestBlockGasRate_RejectsACeilingTheCheckerCannotHold(t *testing.T) {
+	// The checker compares against an int: anything it cannot hold exactly
+	// would be truncated or overflow.
+	for _, ceiling := range []float64{-1, 0.9, 1e20, math.MaxInt, math.Inf(1), math.NaN()} {
+		err := (&BlockGasRate{Ceiling: &ceiling}).Validate()
+		require.ErrorContains(t, err, "ceiling must be a non-negative whole number", "ceiling %v", ceiling)
+	}
+	zero, large := 0.0, 1e18
 	require.NoError(t, (&BlockGasRate{Ceiling: &zero}).Validate())
+	require.NoError(t, (&BlockGasRate{Ceiling: &large}).Validate())
 	require.NoError(t, (&BlockGasRate{}).Validate())
 
 	// The window floor still applies alongside it.

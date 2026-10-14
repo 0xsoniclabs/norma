@@ -21,15 +21,14 @@ import (
 	"fmt"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
-	"github.com/0xsoniclabs/norma/driver/steps"
 	"github.com/0xsoniclabs/norma/genesis"
 )
 
 // NetworkRules asserts that every node converges on the expected rules.
 type NetworkRules struct {
-	Rules genesis.NetworkRulesPatch `yaml:"rules" help:"Expected network rules patch (NetworkRulesPatch field structure)."`
+	Rules genesis.NetworkRulesPatch `yaml:"rules" help:"Expected network rules, as a NetworkRulesPatch."`
 	Convergence
-	steps.Failing
+	Failing
 }
 
 func (*NetworkRules) Name() string { return "networkRules" }

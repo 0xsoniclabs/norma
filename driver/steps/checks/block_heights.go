@@ -21,20 +21,20 @@ import (
 	"fmt"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
-	"github.com/0xsoniclabs/norma/driver/steps"
 )
 
 // BlockHeights asserts that all nodes converge on the same block height.
 type BlockHeights struct {
 	Tolerance *int `yaml:"tolerance" help:"Allowed deviation (int, in blocks) between the heights of the nodes."`
 	Convergence
-	steps.Failing
+	Failing
 }
 
 func (*BlockHeights) Name() string { return "blockHeights" }
 
 func (*BlockHeights) Help() string {
-	return "Assert that all nodes are within tolerance of the same block height, waiting up to duration for them to agree."
+	return "Assert that all nodes are within tolerance of the same block height, " +
+		"waiting up to duration for them to agree."
 }
 
 // Validate rejects only a negative tolerance: demanding exact agreement is

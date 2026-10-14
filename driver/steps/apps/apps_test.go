@@ -48,9 +48,15 @@ func TestRunApp_Validate(t *testing.T) {
 		"missing type":     {edit: func(s *RunApp) { s.Type = "" }, wantError: "requires a type"},
 		"unknown type":     {edit: func(s *RunApp) { s.Type = "bogus" }, wantError: "unknown application type"},
 		"missing rate":     {edit: func(s *RunApp) { s.Rate = nil }, wantError: "requires a rate"},
-		"negative rate":    {edit: func(s *RunApp) { s.Rate = &shaper.Rate{Constant: &negative} }, wantError: "must be >= 0"},
-		"two load shapes":  {edit: func(s *RunApp) { s.Rate.Wave = &shaper.Wave{Max: rate, Period: 1} }, wantError: "exactly one load shape"},
-		"no users":         {edit: func(s *RunApp) { s.Users = &zero }, wantError: "number of users must be >= 1"},
+		"negative rate": {
+			edit:      func(s *RunApp) { s.Rate = &shaper.Rate{Constant: &negative} },
+			wantError: "must be >= 0",
+		},
+		"two load shapes": {
+			edit:      func(s *RunApp) { s.Rate.Wave = &shaper.Wave{Max: rate, Period: 1} },
+			wantError: "exactly one load shape",
+		},
+		"no users": {edit: func(s *RunApp) { s.Users = &zero }, wantError: "number of users must be >= 1"},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {

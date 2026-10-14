@@ -20,13 +20,12 @@ import (
 	"context"
 
 	"github.com/0xsoniclabs/norma/driver/checking"
-	"github.com/0xsoniclabs/norma/driver/steps"
 )
 
 // BlocksHalted asserts that block production has stopped.
 type BlocksHalted struct {
 	Window
-	steps.Failing
+	Failing
 }
 
 func (*BlocksHalted) Name() string { return "blocksHalted" }

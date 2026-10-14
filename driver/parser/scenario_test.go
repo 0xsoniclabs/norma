@@ -64,7 +64,8 @@ func TestAllFunctionsAndParamsAreDocumented(t *testing.T) {
 		names[fn.Name()] = true
 		require.NotEmptyf(t, strings.TrimSpace(fn.Help()), "function %q has empty description", fn.Name())
 		for _, p := range steps.Params(fn) {
-			require.NotEmptyf(t, strings.TrimSpace(p.Help), "parameter %q of %q has empty description", p.Key, fn.Name())
+			require.NotEmptyf(t, strings.TrimSpace(p.Help),
+				"parameter %q of %q has empty description", p.Key, fn.Name())
 		}
 	}
 }
@@ -203,7 +204,7 @@ Scenario:
 	require.NotNil(t, step.Instances)
 	require.Equal(t, 3, *step.Instances)
 	require.Equal(t, "vol-A", step.DataVolume)
-	require.True(t, step.Failing.Failing)
+	require.True(t, step.Failing)
 }
 
 func TestParseBytes_Undelegate(t *testing.T) {
@@ -865,6 +866,83 @@ Scenario:
 `
 	_, err := ParseBytes([]byte(input))
 	require.ErrorContains(t, err, `line 6: parameter "type" is given twice`)
+}
+
+func TestParseBytes_RejectsUnknownKeysInsideParameterValues(t *testing.T) {
+	input := `
+Name: Test
+Scenario:
+  - runApp: load
+    type: counter
+    rate:
+      constant: 5
+      constnat: 50
+`
+	_, err := ParseBytes([]byte(input))
+	require.ErrorContains(t, err, "line 6: invalid rate value: field constnat not found")
+}
+
+// The checker compares against a whole number; a fraction would be truncated.
+func TestParseBytes_RejectsAFractionalGasRateCeiling(t *testing.T) {
+	input := `
+Name: Test
+Scenario:
+  - checks:
+      - blockGasRate:
+          ceiling: 0.9
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+	err = scenario.Check()
+	require.ErrorContains(t, err, "ceiling must be a non-negative whole number")
+	require.ErrorContains(t, err, "got 0.9")
+}
+
+// startNode's failing marks a diverging node; only for checks does it turn a
+// pass into a failure.
+func TestParams_DescribeFailingForWhatItMeansToEachFunction(t *testing.T) {
+	helpOf := func(fn steps.Function) string {
+		for _, p := range steps.Params(fn) {
+			if p.Key == "failing" {
+				return p.Help
+			}
+		}
+		t.Fatalf("%s has no failing parameter", fn.Name())
+		return ""
+	}
+	require.Contains(t, helpOf(&nodelifetime.StartNode{}), "diverge")
+	require.NotContains(t, helpOf(&nodelifetime.StartNode{}), "treated as an error")
+	require.Contains(t, helpOf(&checks.BlockHashes{}), "treated as an error")
+}
+
+func TestParseBytes_RejectsUnknownInitialNetworkRules(t *testing.T) {
+	input := `
+Name: Test
+InitialNetworkRules:
+  Blocks:
+    MaxBlokGas: 1
+Scenario:
+  - advanceEpoch
+`
+	_, err := ParseBytes([]byte(input))
+	require.ErrorContains(t, err, "field MaxBlokGas not found")
+}
+
+// Parameter values are decoded strictly apart from the document; an alias to
+// an anchor in an earlier step still resolves.
+func TestParseBytes_ResolvesAliasesAcrossSteps(t *testing.T) {
+	input := `
+Name: Test
+Scenario:
+  - startNode: val
+    type: validator
+    imageName: &image "sonic:v2.1.6"
+  - startNode: obs
+    imageName: *image
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+	require.Equal(t, "sonic:v2.1.6", stepAs[*nodelifetime.StartNode](t, scenario.Steps[1]).ImageName)
 }
 
 func TestParseBytes_NonScalarStringParam(t *testing.T) {
