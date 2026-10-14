@@ -158,7 +158,13 @@ func decodeFields(v reflect.Value, pairs []*yaml.Node, owner string) error {
 // mapping keys out does not declare at any depth, which yaml.Node.Decode
 // silently ignores.
 func DecodeKnown(value *yaml.Node, out any) error {
-	data, err := yaml.Marshal(value)
+	// The value is re-decoded apart from its document, so aliases to anchors
+	// defined elsewhere in it are resolved first.
+	expanded, err := expandAliases(value, map[*yaml.Node]bool{})
+	if err != nil {
+		return err
+	}
+	data, err := yaml.Marshal(expanded)
 	if err != nil {
 		return err
 	}
@@ -179,6 +185,31 @@ func DecodeKnown(value *yaml.Node, out any) error {
 }
 
 var relativeLine = regexp.MustCompile(`^line \d+: `)
+
+// expandAliases returns a copy of node in which every alias is replaced by the
+// node it refers to. expanding holds the alias targets being expanded, to
+// report an alias that contains itself instead of recursing forever.
+func expandAliases(node *yaml.Node, expanding map[*yaml.Node]bool) (*yaml.Node, error) {
+	if node.Kind == yaml.AliasNode {
+		if expanding[node.Alias] {
+			return nil, fmt.Errorf("line %d: alias %q contains itself", node.Line, node.Value)
+		}
+		expanding[node.Alias] = true
+		defer delete(expanding, node.Alias)
+		return expandAliases(node.Alias, expanding)
+	}
+	copied := *node
+	copied.Anchor = ""
+	copied.Content = make([]*yaml.Node, len(node.Content))
+	for i, child := range node.Content {
+		expanded, err := expandAliases(child, expanding)
+		if err != nil {
+			return nil, err
+		}
+		copied.Content[i] = expanded
+	}
+	return &copied, nil
+}
 
 // visitParams calls visit for every field of v tagged `yaml`, descending into
 // embedded structs.

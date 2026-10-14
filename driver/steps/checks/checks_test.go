@@ -18,6 +18,7 @@ package checks
 
 import (
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -166,11 +167,16 @@ func TestNetworkRules_RejectsRulesTheNetworkWouldRefuse(t *testing.T) {
 	require.NoError(t, (&NetworkRules{}).Validate())
 }
 
-func TestBlockGasRate_RejectsANegativeCeiling(t *testing.T) {
-	negative, fraction, zero := -1.0, 0.9, 0.0
-	require.ErrorContains(t, (&BlockGasRate{Ceiling: &negative}).Validate(), "ceiling must be a non-negative whole number")
-	require.ErrorContains(t, (&BlockGasRate{Ceiling: &fraction}).Validate(), "ceiling must be a non-negative whole number")
+func TestBlockGasRate_RejectsACeilingTheCheckerCannotHold(t *testing.T) {
+	// The checker compares against an int: anything it cannot hold exactly
+	// would be truncated or overflow.
+	for _, ceiling := range []float64{-1, 0.9, 1e20, math.MaxInt, math.Inf(1), math.NaN()} {
+		err := (&BlockGasRate{Ceiling: &ceiling}).Validate()
+		require.ErrorContains(t, err, "ceiling must be a non-negative whole number", "ceiling %v", ceiling)
+	}
+	zero, large := 0.0, 1e18
 	require.NoError(t, (&BlockGasRate{Ceiling: &zero}).Validate())
+	require.NoError(t, (&BlockGasRate{Ceiling: &large}).Validate())
 	require.NoError(t, (&BlockGasRate{}).Validate())
 
 	// The window floor still applies alongside it.

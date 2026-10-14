@@ -40,8 +40,14 @@ func TestStartNode_Validate(t *testing.T) {
 		"rpc":                 {step: StartNode{Node: steps.Node{Node: "a"}, Type: "rpc"}},
 		"missing name":        {step: StartNode{}, wantError: "requires a node identifier"},
 		"name with spaces":    {step: StartNode{Node: steps.Node{Node: "a b"}}, wantError: "node name must match"},
-		"unknown type":        {step: StartNode{Node: steps.Node{Node: "a"}, Type: "miner"}, wantError: "type of node must be"},
-		"no instances":        {step: StartNode{Node: steps.Node{Node: "a"}, Instances: &zero}, wantError: "instances must be >= 1"},
+		"unknown type": {
+			step:      StartNode{Node: steps.Node{Node: "a"}, Type: "miner"},
+			wantError: "type of node must be",
+		},
+		"no instances": {
+			step:      StartNode{Node: steps.Node{Node: "a"}, Instances: &zero},
+			wantError: "instances must be >= 1",
+		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {

@@ -100,7 +100,8 @@ func (s *Delegate) Validate() error {
 		// The account is funded with the stake plus a gas budget, which must
 		// not wrap around.
 		if t.Stake > math.MaxUint64-delegatorGasBudget {
-			return fmt.Errorf("delegate target %d: stake must be at most %d", i+1, uint64(math.MaxUint64)-delegatorGasBudget)
+			return fmt.Errorf("delegate target %d: stake must be at most %d",
+				i+1, uint64(math.MaxUint64)-delegatorGasBudget)
 		}
 	}
 	return nil

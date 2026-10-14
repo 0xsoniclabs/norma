@@ -94,10 +94,16 @@ func TestDecode_ReportsInvalidInputWithItsLine(t *testing.T) {
 		input     string
 		wantError string
 	}{
-		"unknown name":           {"bogus\n", `line 1: unknown step function: "bogus"`},
-		"no function key":        {"mode: live\n", "line 1: no known step function"},
-		"two function keys":      {"nodeStep: a\nbareStep:\n", `line 2: step contains multiple function keys: "nodeStep" and "bareStep"`},
-		"unknown parameter":      {"nodeStep: a\n\nfile: x\n", `line 3: parameter "file" is not valid for step nodeStep`},
+		"unknown name":    {"bogus\n", `line 1: unknown step function: "bogus"`},
+		"no function key": {"mode: live\n", "line 1: no known step function"},
+		"two function keys": {
+			"nodeStep: a\nbareStep:\n",
+			`line 2: step contains multiple function keys: "nodeStep" and "bareStep"`,
+		},
+		"unknown parameter": {
+			"nodeStep: a\n\nfile: x\n",
+			`line 3: parameter "file" is not valid for step nodeStep`,
+		},
 		"value on a bare step":   {"bareStep: now\n", `line 1: bareStep does not take a value, got "now"`},
 		"parameter of bad type":  {"nodeStep: a\nmode: [live]\n", "line 2: invalid mode value"},
 		"name that is not a str": {"nodeStep: [a, b]\n", "line 1: value must be a name"},
@@ -193,4 +199,33 @@ func TestDecodeKnown_KeepsYamlScalars(t *testing.T) {
 	var ptr *int
 	require.NoError(t, DecodeKnown(node.Content[0], &ptr))
 	require.Nil(t, ptr)
+}
+
+// DecodeKnown re-decodes the value apart from its document; aliases to anchors
+// defined elsewhere in the document must still resolve.
+func TestDecodeKnown_ResolvesAliasesToAnchorsOutsideTheValue(t *testing.T) {
+	var doc yaml.Node
+	input := "image: &image sonic:v2\n" +
+		"defaults: &defaults {value: 7}\n" +
+		"alias: *image\n" +
+		"merged: {<<: *defaults}\n"
+	require.NoError(t, yaml.Unmarshal([]byte(input), &doc))
+	root := doc.Content[0]
+
+	var image string
+	require.NoError(t, DecodeKnown(root.Content[5], &image))
+	require.Equal(t, "sonic:v2", image)
+
+	var merged struct {
+		Value int `yaml:"value"`
+	}
+	require.NoError(t, DecodeKnown(root.Content[7], &merged))
+	require.Equal(t, 7, merged.Value)
+}
+
+func TestDecodeKnown_ReportsAnAliasThatContainsItself(t *testing.T) {
+	var doc yaml.Node
+	require.NoError(t, yaml.Unmarshal([]byte("loop: &loop [*loop]\n"), &doc))
+	var out any
+	require.ErrorContains(t, DecodeKnown(doc.Content[0].Content[1], &out), `alias "loop" contains itself`)
 }

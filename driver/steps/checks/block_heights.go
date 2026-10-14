@@ -33,7 +33,8 @@ type BlockHeights struct {
 func (*BlockHeights) Name() string { return "blockHeights" }
 
 func (*BlockHeights) Help() string {
-	return "Assert that all nodes are within tolerance of the same block height, waiting up to duration for them to agree."
+	return "Assert that all nodes are within tolerance of the same block height, " +
+		"waiting up to duration for them to agree."
 }
 
 // Validate rejects only a negative tolerance: demanding exact agreement is

@@ -33,13 +33,15 @@ import (
 // killSonic and healDb, is restarted in its existing container.
 type StartNode struct {
 	steps.Node
-	Type           string  `yaml:"type" help:"Node type: \"validator\", \"observer\" (the default) or \"rpc\"."`
-	ImageName      string  `yaml:"imageName" help:"Docker image name to use for the node."`
-	DataVolume     string  `yaml:"dataVolume" help:"Docker volume name to mount as the node data directory."`
-	Stake          *uint64 `yaml:"stake" help:"Validator stake in S (uint64). Defaults to 5,000,000 S."`
-	Instances      *int    `yaml:"instances" help:"Number of node instances to start."`
-	Failing        bool    `yaml:"failing" help:"When true, the node is expected to diverge from the network: the hash, height and rules checks expect it to fall behind or disagree, and the step does not wait for it to sync or join the validator set."`
-	ExtraArguments string  `yaml:"extraArguments" help:"Extra command line arguments for sonicd."`
+	Type       string  `yaml:"type" help:"Node type: \"validator\", \"observer\" (the default) or \"rpc\"."`
+	ImageName  string  `yaml:"imageName" help:"Docker image name to use for the node."`
+	DataVolume string  `yaml:"dataVolume" help:"Docker volume name to mount as the node data directory."`
+	Stake      *uint64 `yaml:"stake" help:"Validator stake in S (uint64). Defaults to 5,000,000 S."`
+	Instances  *int    `yaml:"instances" help:"Number of node instances to start."`
+	// Failing marks a node expected to diverge from the network: the hash,
+	// height and rules checks expect it to fall behind or disagree.
+	Failing        bool   `yaml:"failing" help:"When true, the node is expected to diverge; it is not waited on."`
+	ExtraArguments string `yaml:"extraArguments" help:"Extra command line arguments for sonicd."`
 }
 
 func (*StartNode) Name() string { return "startNode" }

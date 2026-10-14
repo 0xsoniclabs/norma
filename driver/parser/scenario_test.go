@@ -64,7 +64,8 @@ func TestAllFunctionsAndParamsAreDocumented(t *testing.T) {
 		names[fn.Name()] = true
 		require.NotEmptyf(t, strings.TrimSpace(fn.Help()), "function %q has empty description", fn.Name())
 		for _, p := range steps.Params(fn) {
-			require.NotEmptyf(t, strings.TrimSpace(p.Help), "parameter %q of %q has empty description", p.Key, fn.Name())
+			require.NotEmptyf(t, strings.TrimSpace(p.Help),
+				"parameter %q of %q has empty description", p.Key, fn.Name())
 		}
 	}
 }
@@ -892,7 +893,9 @@ Scenario:
 `
 	scenario, err := ParseBytes([]byte(input))
 	require.NoError(t, err)
-	require.ErrorContains(t, scenario.Check(), "ceiling must be a non-negative whole number, got 0.9")
+	err = scenario.Check()
+	require.ErrorContains(t, err, "ceiling must be a non-negative whole number")
+	require.ErrorContains(t, err, "got 0.9")
 }
 
 // startNode's failing marks a diverging node; only for checks does it turn a
@@ -923,6 +926,23 @@ Scenario:
 `
 	_, err := ParseBytes([]byte(input))
 	require.ErrorContains(t, err, "field MaxBlokGas not found")
+}
+
+// Parameter values are decoded strictly apart from the document; an alias to
+// an anchor in an earlier step still resolves.
+func TestParseBytes_ResolvesAliasesAcrossSteps(t *testing.T) {
+	input := `
+Name: Test
+Scenario:
+  - startNode: val
+    type: validator
+    imageName: &image "sonic:v2.1.6"
+  - startNode: obs
+    imageName: *image
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+	require.Equal(t, "sonic:v2.1.6", stepAs[*nodelifetime.StartNode](t, scenario.Steps[1]).ImageName)
 }
 
 func TestParseBytes_NonScalarStringParam(t *testing.T) {

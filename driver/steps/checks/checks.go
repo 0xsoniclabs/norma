@@ -99,8 +99,11 @@ func (s *Checks) Run(ctx context.Context, env *steps.Env) error {
 // Window is the base of checks observing the network forward in time, whose
 // window is given either as a duration or as a number of monitoring samples.
 type Window struct {
-	Tolerance *int            `yaml:"tolerance" help:"Length of the observation window in monitoring samples (one per second); duration overrides it."`
-	Duration  *steps.Duration `yaml:"duration" help:"Duration (e.g. \"30s\") to actively observe the network; only data collected while waiting is judged, and the window must be at least 2s."`
+	// Tolerance is the window in monitoring samples, taken one per second.
+	Tolerance *int `yaml:"tolerance" help:"Observation window in monitoring samples; duration overrides it."`
+	// Duration is how long to actively observe the network; only data
+	// collected while waiting is judged.
+	Duration *steps.Duration `yaml:"duration" help:"How long to observe the network, e.g. \"30s\"; at least 2s."`
 }
 
 // Validate rejects windows too short to hold two samples, here rather than
@@ -130,7 +133,7 @@ func (w Window) configure(config checking.CheckerConfig) {
 // Convergence is the base of checks retrying until the nodes agree. Unlike an
 // observation window, a short budget, or none at all, is a legitimate choice.
 type Convergence struct {
-	Duration *steps.Duration `yaml:"duration" help:"Duration (e.g. \"30s\") the nodes are given to converge, with 0 meaning a single attempt."`
+	Duration *steps.Duration `yaml:"duration" help:"How long the nodes get to converge, e.g. \"30s\"; 0 tries once."`
 }
 
 func (c Convergence) configure(config checking.CheckerConfig) {
@@ -139,7 +142,7 @@ func (c Convergence) configure(config checking.CheckerConfig) {
 
 // Failing is the parameter marking a check as expected to fail.
 type Failing struct {
-	Failing bool `yaml:"failing" help:"When true, the check is expected to fail; a passing result is treated as an error."`
+	Failing bool `yaml:"failing" help:"When true, the check must fail; a pass is treated as an error."`
 }
 
 // newConfig returns the checker configuration every check starts from.

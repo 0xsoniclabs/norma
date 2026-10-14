@@ -26,7 +26,7 @@ import (
 
 // NetworkRules asserts that every node converges on the expected rules.
 type NetworkRules struct {
-	Rules genesis.NetworkRulesPatch `yaml:"rules" help:"Expected network rules patch (NetworkRulesPatch field structure)."`
+	Rules genesis.NetworkRulesPatch `yaml:"rules" help:"Expected network rules, as a NetworkRulesPatch."`
 	Convergence
 	Failing
 }

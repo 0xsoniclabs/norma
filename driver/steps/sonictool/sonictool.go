@@ -32,7 +32,7 @@ import (
 // SharedFile is the parameter naming a file in the network's shared
 // directory.
 type SharedFile struct {
-	File string `yaml:"file" help:"Required. Name of a file in the network's shared directory; a plain file name, no path."`
+	File string `yaml:"file" help:"Required. Plain name of a file in the network's shared directory."`
 }
 
 func (f SharedFile) Validate() error {
