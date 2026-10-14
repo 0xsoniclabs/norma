@@ -46,8 +46,9 @@ func newNodeInState(t *testing.T, state NodeState) *OperaNode {
 	}
 }
 
-// Each action must reject every state it does not accept as a starting
-// point, so a scenario cannot, say, heal a running node or start a killed one.
+// Each action must reject every state its transition does not accept as a
+// starting point, so a scenario cannot, say, heal a running node or start a
+// killed one. The scenario dry run relies on the same transitions.
 func TestOperaNode_Actions_RejectUnexpectedStates(t *testing.T) {
 	actions := map[string]struct {
 		accepts []NodeState
@@ -58,11 +59,11 @@ func TestOperaNode_Actions_RejectUnexpectedStates(t *testing.T) {
 			invoke:  func(n *OperaNode) error { return n.Initialize(t.Context()) },
 		},
 		"StartSonicd": {
-			accepts: []NodeState{NodeStateReady},
+			accepts: StartClient.From,
 			invoke:  func(n *OperaNode) error { return n.StartSonicd(t.Context()) },
 		},
 		"StartSonicdAsObserver": {
-			accepts: []NodeState{NodeStateReady},
+			accepts: StartClient.From,
 			invoke: func(n *OperaNode) error {
 				return n.StartSonicdAsObserver(t.Context())
 			},
@@ -72,51 +73,47 @@ func TestOperaNode_Actions_RejectUnexpectedStates(t *testing.T) {
 			invoke:  func(n *OperaNode) error { return n.WaitForSync(t.Context()) },
 		},
 		"StopSonicd": {
-			accepts: []NodeState{NodeStateRunning},
+			accepts: StopClient.From,
 			invoke:  func(n *OperaNode) error { return n.StopSonicd(t.Context()) },
 		},
-		// Also accepted from Stopping, to escalate a graceful stop that
-		// did not complete.
 		"ForceStopSonicd": {
-			accepts: []NodeState{NodeStateRunning, NodeStateStopping},
+			accepts: KillClient.From,
 			invoke:  func(n *OperaNode) error { return n.ForceStopSonicd(t.Context()) },
 		},
-		// Killed is accepted too: the exit watcher may have recorded the
-		// self-exit before the step got to wait for it.
 		"AwaitSonicdExit": {
-			accepts: []NodeState{NodeStateRunning, NodeStateKilled},
+			accepts: AwaitClientExit.From,
 			invoke:  func(n *OperaNode) error { return n.AwaitSonicdExit(t.Context()) },
 		},
 		"HealSonicd": {
-			accepts: []NodeState{NodeStateKilled},
+			accepts: HealDatabase.From,
 			invoke:  func(n *OperaNode) error { return n.HealSonicd(t.Context()) },
 		},
 		"ExportEvents": {
-			accepts: []NodeState{NodeStateReady},
+			accepts: Maintenance.From,
 			invoke: func(n *OperaNode) error {
 				return n.ExportEvents(t.Context(), "exported.events")
 			},
 		},
 		"ImportEvents": {
-			accepts: []NodeState{NodeStateReady},
+			accepts: Maintenance.From,
 			invoke: func(n *OperaNode) error {
 				return n.ImportEvents(t.Context(), "exported.events")
 			},
 		},
 		"ExportGenesis": {
-			accepts: []NodeState{NodeStateReady},
+			accepts: Maintenance.From,
 			invoke: func(n *OperaNode) error {
 				return n.ExportGenesis(t.Context(), "some.g")
 			},
 		},
 		"ImportGenesis": {
-			accepts: []NodeState{NodeStateReady},
+			accepts: Maintenance.From,
 			invoke: func(n *OperaNode) error {
 				return n.ImportGenesis(t.Context(), "some.g")
 			},
 		},
 		"CheckDatabase": {
-			accepts: []NodeState{NodeStateReady},
+			accepts: Maintenance.From,
 			invoke: func(n *OperaNode) error {
 				return n.CheckDatabase(t.Context(), DbCheckModeLive)
 			},

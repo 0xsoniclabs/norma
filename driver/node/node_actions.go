@@ -384,7 +384,7 @@ func (n *OperaNode) ClientExitWasUnexpected() bool {
 // starting a second client on it has to be refused. ForceStopSonicd is
 // accepted from there to escalate.
 func (n *OperaNode) StopSonicd(ctx context.Context) error {
-	if err := n.transition(NodeStateRunning, NodeStateStopping); err != nil {
+	if err := n.transitionFromAny(NodeStateStopping, StopClient.From...); err != nil {
 		return err
 	}
 	slog.Info("Stopping sonicd", "node", n.config.Label)
@@ -415,8 +415,7 @@ func (n *OperaNode) StopSonicd(ctx context.Context) error {
 // exit code Killed. Accepts Running, or Killed when the watcher recorded the
 // exit first: the exit code, not the timing, says whether the DB was flushed.
 func (n *OperaNode) AwaitSonicdExit(ctx context.Context) error {
-	if err := n.transitionFromAny(NodeStateStopping,
-		NodeStateRunning, NodeStateKilled); err != nil {
+	if err := n.transitionFromAny(NodeStateStopping, AwaitClientExit.From...); err != nil {
 		return err
 	}
 	handle := n.clientHandle()
@@ -443,8 +442,7 @@ func (n *OperaNode) AwaitSonicdExit(ctx context.Context) error {
 // or NodeStateStopping to escalate a graceful stop that did not complete,
 // and transitions to NodeStateKilled.
 func (n *OperaNode) ForceStopSonicd(ctx context.Context) error {
-	if err := n.transitionFromAny(NodeStateKilled,
-		NodeStateRunning, NodeStateStopping); err != nil {
+	if err := n.transitionFromAny(NodeStateKilled, KillClient.From...); err != nil {
 		return err
 	}
 	slog.Info("Force stopping sonicd", "node", n.config.Label)
@@ -466,7 +464,7 @@ func (n *OperaNode) ForceStopSonicd(ctx context.Context) error {
 // NodeStateHealing, and ends in NodeStateReady. A failed heal returns the
 // node to NodeStateKilled so healing can be retried.
 func (n *OperaNode) HealSonicd(ctx context.Context) error {
-	if err := n.transition(NodeStateKilled, NodeStateHealing); err != nil {
+	if err := n.transitionFromAny(NodeStateHealing, HealDatabase.From...); err != nil {
 		return err
 	}
 	slog.Info("Healing database", "node", n.config.Label,
@@ -753,7 +751,7 @@ func (n *OperaNode) CheckDatabase(ctx context.Context, mode string) error {
 // beginMaintenance claims the node for a sonictool command, confirming no
 // client process is holding the data directory. purpose names the operation.
 func (n *OperaNode) beginMaintenance(ctx context.Context, purpose string) error {
-	if err := n.transition(NodeStateReady, NodeStateMaintenance); err != nil {
+	if err := n.transitionFromAny(NodeStateMaintenance, Maintenance.From...); err != nil {
 		return err
 	}
 	// Check /proc rather than trusting the state we just left.
