@@ -22,23 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// dryRun parses a scenario whose first step starts the validator val, followed
-// by the given steps, and dry-runs it.
-func dryRun(t *testing.T, steps string) error {
-	t.Helper()
-	scenario, err := ParseBytes([]byte(`
-Name: Test
-Description: Test
-DisableEndChecks: true
-Scenario:
-  - startNode: val
-    type: validator
-` + steps))
-	require.NoError(t, err)
-	require.NoError(t, scenario.Check())
-	return scenario.DryRun()
-}
-
 func TestDryRun_ReportsStepsThatCannotRun(t *testing.T) {
 	tests := map[string]struct {
 		steps     string
@@ -100,6 +83,31 @@ func TestDryRun_ReportsStepsThatCannotRun(t *testing.T) {
 			steps:     "  - undelegate:\n    - node: val\n      delegator: alice\n",
 			wantError: `delegator "alice" was never used in a prior delegate step`,
 		},
+		"undelegate a drained delegation": {
+			steps: "  - delegate:\n    - node: val\n      delegator: alice\n      stake: 100\n" +
+				"  - undelegate:\n    - node: val\n      delegator: alice\n" +
+				"  - undelegate:\n    - node: val\n      delegator: alice\n",
+			wantError: `step 4 (undelegate): delegator "alice" has no stake on node "val"`,
+		},
+		// As in a run, an explicit stake of 0 undelegates all of it.
+		"undelegate after a zero stake drained it": {
+			steps: "  - delegate:\n    - node: val\n      delegator: alice\n      stake: 100\n" +
+				"  - undelegate:\n    - node: val\n      delegator: alice\n      stake: 0\n" +
+				"  - undelegate:\n    - node: val\n      delegator: alice\n      stake: 1\n",
+			wantError: `step 4 (undelegate): delegator "alice" has no stake on node "val"`,
+		},
+		"wait for a client whose exit flag is only part of another argument": {
+			steps: "  - startNode: obs\n    extraArguments: \"--datadir /tmp/--exitwhensynced.epoch\"\n" +
+				"  - waitForSonicExit: obs\n",
+			wantError: "was not started with --exitwhensynced",
+		},
+		// The node itself accepts a killed client only for a self-exit seen
+		// first; a scenario's killed client was killed and must be healed.
+		"wait for the exit of a killed client": {
+			steps: "  - startNode: obs\n    extraArguments: \"--exitwhensynced.epoch 3\"\n" +
+				"  - killSonic: obs\n  - waitForSonicExit: obs\n",
+			wantError: `cannot wait for the exit of node "obs" while its client is killed`,
+		},
 		"undelegate more than was delegated": {
 			steps: "  - delegate:\n    - node: val\n      delegator: alice\n      stake: 100\n" +
 				"  - undelegate:\n    - node: val\n      delegator: alice\n      stake: 500\n",
@@ -147,4 +155,21 @@ func TestDryRun_RequiresTheFirstStepToStartAValidator(t *testing.T) {
 			require.Error(t, scenario.DryRun())
 		})
 	}
+}
+
+// dryRun parses a scenario whose first step starts the validator val, followed
+// by the given steps, and dry-runs it.
+func dryRun(t *testing.T, steps string) error {
+	t.Helper()
+	scenario, err := ParseBytes([]byte(`
+Name: Test
+Description: Test
+DisableEndChecks: true
+Scenario:
+  - startNode: val
+    type: validator
+` + steps))
+	require.NoError(t, err)
+	require.NoError(t, scenario.Check())
+	return scenario.DryRun()
 }

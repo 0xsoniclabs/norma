@@ -121,13 +121,15 @@ func (s *Undelegate) UpdateModel(m *steps.Model) error {
 		if !m.Delegators[target.Delegator] {
 			return fmt.Errorf("undelegate: delegator %q was never used in a prior delegate step", target.Delegator)
 		}
+		// A drained pair stays at 0; undelegating from it fails on chain.
 		key := steps.Delegation{Delegator: target.Delegator, Node: label}
-		delegated, ok := m.Delegations[key]
-		if !ok {
+		delegated := m.Delegations[key]
+		if delegated == 0 {
 			return fmt.Errorf("delegator %q has no stake on node %q", target.Delegator, target.Node)
 		}
+		// As in Run, a stake of 0 means all of it.
 		stake := delegated
-		if target.Stake != nil {
+		if target.Stake != nil && *target.Stake != 0 {
 			stake = *target.Stake
 		}
 		if stake > delegated {

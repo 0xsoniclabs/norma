@@ -49,6 +49,11 @@ func (s *WaitForSonicExit) UpdateModel(m *steps.Model) error {
 	if err != nil {
 		return err
 	}
+	// The node accepts a killed client only for a self-exit its watcher saw
+	// first; in a scenario, a killed client was killed, and must be healed.
+	if n.Client == node.NodeStateKilled {
+		return fmt.Errorf("cannot wait for the exit of node %q while its client is killed", s.Node.Node)
+	}
 	if !n.ExitsWhenSynced {
 		return fmt.Errorf("node %q was not started with --exitwhensynced, so its client will not stop by itself",
 			s.Node.Node)

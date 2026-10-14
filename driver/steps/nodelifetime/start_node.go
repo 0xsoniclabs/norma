@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -125,7 +126,7 @@ func (s *StartNode) UpdateModel(m *steps.Model) error {
 		m.Nodes[label] = &steps.ModelNode{
 			Validator:       s.IsValidator(),
 			Client:          node.NodeStateRunning,
-			ExitsWhenSynced: strings.Contains(s.ExtraArguments, "--exitwhensynced"),
+			ExitsWhenSynced: exitsWhenSynced(s.ExtraArguments),
 		}
 		m.Started[label] = true
 		if s.IsValidator() {
@@ -134,6 +135,14 @@ func (s *StartNode) UpdateModel(m *steps.Model) error {
 	}
 	m.Started[name] = true
 	return nil
+}
+
+// exitsWhenSynced reports whether the extra arguments, split the way the node
+// passes them to sonicd, hold an --exitwhensynced.* option.
+func exitsWhenSynced(extraArguments string) bool {
+	return slices.ContainsFunc(strings.Fields(extraArguments), func(argument string) bool {
+		return strings.HasPrefix(argument, "--exitwhensynced.")
+	})
 }
 
 func role(validator bool) string {
