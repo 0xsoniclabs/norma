@@ -45,23 +45,28 @@ Scenario:
     stake: 1_000_000
     extraArguments: "--statedb.checkpointinterval 1"
 
+  # The bundles are submitted through the stable node only, so none are sent
+  # to the frail one while it is down.
   - runApp: all-of
     type: allofbundle
     users: 10
     rate:
       constant: 5
+    nodes: [stable]
 
   - runApp: one-of
     type: oneofbundle
     users: 10
     rate:
       constant: 5
+    nodes: [stable]
 
   - runApp: subsidized
     type: subsidizedbundle
     users: 10
     rate:
       constant: 5
+    nodes: [stable]
 
   # Heal restores the last sealed epoch and refuses it unless the epoch before
   # ends at least 1024 blocks past the genesis, so the chain is grown past
