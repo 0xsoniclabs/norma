@@ -252,9 +252,10 @@ Starts a load-generating application. The value is the application’s
 
 **`nodes`** — Restricts which nodes the application's transactions are
 submitted through. Each name selects the node with that name and every
-instance started under it (as for `stopNode`); all named nodes must be active
-when the app starts. When omitted, any node may be used. A transaction sent
-while none of the selected nodes is active is reported as a failed submission.
+instance started under it (as for `stopNode`); each name must select at least
+one node whose client is running when the app starts. When omitted, any node
+may be used. Transactions go through the selected nodes whose client is
+running; one sent while there is none is reported as a failed submission.
 
 **Supported application types** (case-insensitive): `counter`, `erc20`,
 `store`, `uniswap`, `smartaccount`, `subsidies`, `transient`,

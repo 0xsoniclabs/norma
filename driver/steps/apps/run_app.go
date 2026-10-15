@@ -20,8 +20,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/0xsoniclabs/norma/driver/steps"
 	"github.com/0xsoniclabs/norma/load/app"
 	"github.com/0xsoniclabs/norma/load/shaper"
@@ -75,8 +77,14 @@ func (s *RunApp) UpdateModel(m *steps.Model) error {
 		return fmt.Errorf("application %q is already running", s.App.App)
 	}
 	for _, name := range s.Nodes {
-		if len(steps.SelectLabels(m.Nodes, name)) == 0 {
+		labels := steps.SelectLabels(m.Nodes, name)
+		if len(labels) == 0 {
 			return fmt.Errorf("node %q not found in active nodes", name)
+		}
+		if !slices.ContainsFunc(labels, func(label string) bool {
+			return m.Nodes[label].Client == node.NodeStateRunning
+		}) {
+			return fmt.Errorf("node %q has no running client to submit through", name)
 		}
 	}
 	m.Apps[s.App.App] = true

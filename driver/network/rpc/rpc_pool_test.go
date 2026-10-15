@@ -20,6 +20,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -128,4 +129,31 @@ func TestSendTransaction_ReportsARestrictedAppWithoutActiveNodes(t *testing.T) {
 	source := driver.TransactionSource{App: "restricted"}
 	observer.EXPECT().OnTransactionSubmitted(source, &tx, gomock.Any(), errNoNode)
 	pool.SendTransaction(&tx, source)
+}
+
+func TestSendTransaction_MovesToAnotherNode_WhenTheChosenOneIsRemoved(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		pool := NewRpcWorkerPool(t.Context())
+		a := &nodeWorkers{txs: make(chan transactionWithSource), closed: make(chan struct{})}
+		b := &nodeWorkers{txs: make(chan transactionWithSource, 1), closed: make(chan struct{})}
+		pool.nodes = map[string]*nodeWorkers{"a": a}
+		pool.RestrictApp("restricted", []string{"a", "b"})
+
+		go func() {
+			var tx types.Transaction
+			pool.SendTransaction(&tx, driver.TransactionSource{App: "restricted"})
+		}()
+		synctest.Wait() // the sender waits for a worker of node a
+
+		pool.mu.Lock()
+		pool.nodes["b"] = b
+		pool.mu.Unlock()
+		node := driver.NewMockNode(gomock.NewController(t))
+		node.EXPECT().GetLabel().Return("a").AnyTimes()
+		pool.BeforeNodeRemoval(node)
+
+		if got := (<-b.txs).source.App; got != "restricted" {
+			t.Errorf("node b got a transaction of %q", got)
+		}
+	})
 }

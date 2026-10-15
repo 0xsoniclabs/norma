@@ -83,6 +83,10 @@ func TestDryRun_ReportsTheStep_WhenItCannotRun(t *testing.T) {
 			steps:     "  - runApp: load\n    type: counter\n    rate:\n      constant: 1\n    nodes: [ghost]\n",
 			wantError: `step 2 (runApp load): node "ghost" not found in active nodes`,
 		},
+		"run an app through a killed node": {
+			steps:     "  - startNode: obs\n  - killSonic: obs\n  - runApp: load\n    type: counter\n    rate:\n      constant: 1\n    nodes: [obs]\n",
+			wantError: `step 4 (runApp load): node "obs" has no running client to submit through`,
+		},
 		"stop an app that is not running": {
 			steps:     "  - stopApp: load\n",
 			wantError: `application "load" not found in active apps`,

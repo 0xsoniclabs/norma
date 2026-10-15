@@ -80,34 +80,43 @@ func (p *RpcWorkerPool) RestrictApp(app string, nodes []string) {
 	}
 }
 
+// SendTransaction hands the transaction to a worker of a node its application
+// may submit through. When the chosen node is removed first, it tries another.
 func (p *RpcWorkerPool) SendTransaction(tx *types.Transaction, source driver.TransactionSource) {
 	t := transactionWithSource{tx: tx, source: source}
+	for {
+		targets, restricted := p.targets(source.App)
+		if !restricted {
+			p.txs <- t
+			return
+		}
+		if len(targets) == 0 {
+			p.observers.notify(source, tx, time.Now(), errNoNode)
+			return
+		}
+		// ponytail: random node, not the least busy one; balance on load if a slow node starts holding up the app.
+		target := targets[rand.IntN(len(targets))]
+		select {
+		case target.txs <- t:
+			return
+		case <-target.closed:
+		}
+	}
+}
 
+// targets returns the active nodes the given application is restricted to,
+// and whether it is restricted at all.
+func (p *RpcWorkerPool) targets(app string) ([]*nodeWorkers, bool) {
 	p.mu.Lock()
-	labels, restricted := p.appNodes[source.App]
+	defer p.mu.Unlock()
+	labels, restricted := p.appNodes[app]
 	var targets []*nodeWorkers
 	for _, label := range labels {
 		if n, ok := p.nodes[label]; ok {
 			targets = append(targets, n)
 		}
 	}
-	p.mu.Unlock()
-
-	if !restricted {
-		p.txs <- t
-		return
-	}
-	if len(targets) == 0 {
-		p.observers.notify(source, tx, time.Now(), errNoNode)
-		return
-	}
-	// ponytail: random node, not the least busy one; balance on load if a slow node starts holding up the app.
-	target := targets[rand.IntN(len(targets))]
-	select {
-	case target.txs <- t:
-	case <-target.closed:
-		p.observers.notify(source, tx, time.Now(), errNoNode)
-	}
+	return targets, restricted
 }
 
 // RegisterObserver adds an observer to be notified about every transaction this
