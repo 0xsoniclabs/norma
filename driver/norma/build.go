@@ -191,13 +191,9 @@ func ensureClientImages(
 func collectBuildableImages(paths []string) ([]string, error) {
 	images := map[string]struct{}{}
 	for _, path := range paths {
-		scenario, err := parser.ParseFile(path)
+		scenario, err := parser.CheckFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse scenario %q: %w", path, err)
-		}
-
-		if err := scenario.Check(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid scenario %q: %w", path, err)
 		}
 
 		for _, image := range collectClientImages(&scenario) {

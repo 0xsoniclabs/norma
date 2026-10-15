@@ -42,15 +42,8 @@ func check(ctx *cli.Context) (err error) {
 	path := args.First()
 	slog.Info("trying to parse", "path", path)
 
-	scenario, err := parser.ParseFile(path)
-	if err != nil {
-		return fmt.Errorf("failed to parse scenario file: %w", err)
-	}
-	if err := scenario.Check(); err != nil {
+	if _, err := parser.CheckFile(path); err != nil {
 		return err
-	}
-	if err := scenario.DryRun(); err != nil {
-		return fmt.Errorf("dry run failed: %w", err)
 	}
 	slog.Info("all checks passed!", "path", path)
 	return nil
