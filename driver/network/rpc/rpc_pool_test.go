@@ -20,10 +20,12 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/ethereum/go-ethereum/core/types"
+	"go.uber.org/mock/gomock"
 )
 
 func TestRetryRpcReturnGracefully(t *testing.T) {
@@ -31,7 +33,7 @@ func TestRetryRpcReturnGracefully(t *testing.T) {
 
 	start := time.Now()
 	txs := make(chan transactionWithSource)
-	w := newWorker("test", "wrong", txs, &observers{})
+	w := newWorker("test", "wrong", txs, nil, &observers{})
 
 	time.Sleep(6 * time.Second)
 	w.close()
@@ -82,7 +84,7 @@ func TestClosePool(t *testing.T) {
 
 func TestCloseWorkerStartStop(t *testing.T) {
 	txs := make(chan transactionWithSource)
-	w := newWorker("test", "wrong", txs, &observers{})
+	w := newWorker("test", "wrong", txs, nil, &observers{})
 	w.close()
 }
 
@@ -90,7 +92,89 @@ func TestCloseWorkerGroupStartStop(t *testing.T) {
 	txs := make(chan transactionWithSource)
 	wg := workerGroup{}
 	for i := 0; i < 150; i++ {
-		wg.add("test", "wrong", txs, &observers{})
+		wg.add("test", "wrong", txs, nil, &observers{})
 	}
 	wg.close()
+}
+
+func TestSendTransaction_RoutesARestrictedAppThroughItsNodesOnly(t *testing.T) {
+	pool := NewRpcWorkerPool(t.Context())
+	a := &nodeWorkers{txs: make(chan transactionWithSource, 1), closed: make(chan struct{})}
+	b := &nodeWorkers{txs: make(chan transactionWithSource, 1), closed: make(chan struct{})}
+	pool.nodes = map[string]*nodeWorkers{"a": a, "b": b}
+	pool.RestrictApp("restricted", []string{"a"})
+
+	var tx types.Transaction
+	pool.SendTransaction(&tx, driver.TransactionSource{App: "restricted"})
+	pool.SendTransaction(&tx, driver.TransactionSource{App: "free"})
+
+	if got := (<-a.txs).source.App; got != "restricted" {
+		t.Errorf("node a got a transaction of %q", got)
+	}
+	if got := (<-pool.txs).source.App; got != "free" {
+		t.Errorf("shared queue got a transaction of %q", got)
+	}
+	if len(b.txs) != 0 {
+		t.Errorf("node b got a transaction")
+	}
+}
+
+func TestSendTransaction_ReportsARestrictedAppWithoutActiveNodes(t *testing.T) {
+	observer := driver.NewMockTransactionObserver(gomock.NewController(t))
+	pool := NewRpcWorkerPool(t.Context())
+	pool.RegisterObserver(observer)
+	pool.RestrictApp("restricted", []string{"gone"})
+
+	var tx types.Transaction
+	source := driver.TransactionSource{App: "restricted"}
+	observer.EXPECT().OnTransactionSubmitted(source, &tx, gomock.Any(), errNoNode)
+	pool.SendTransaction(&tx, source)
+}
+
+func TestSendTransaction_MovesToAnotherNode_WhenTheChosenOneIsRemoved(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		pool := NewRpcWorkerPool(t.Context())
+		a := &nodeWorkers{txs: make(chan transactionWithSource), closed: make(chan struct{})}
+		b := &nodeWorkers{txs: make(chan transactionWithSource, 1), closed: make(chan struct{})}
+		pool.nodes = map[string]*nodeWorkers{"a": a}
+		pool.RestrictApp("restricted", []string{"a", "b"})
+
+		go func() {
+			var tx types.Transaction
+			pool.SendTransaction(&tx, driver.TransactionSource{App: "restricted"})
+		}()
+		synctest.Wait() // the sender waits for a worker of node a
+
+		pool.mu.Lock()
+		pool.nodes["b"] = b
+		pool.mu.Unlock()
+		node := driver.NewMockNode(gomock.NewController(t))
+		node.EXPECT().GetLabel().Return("a").AnyTimes()
+		pool.BeforeNodeRemoval(node)
+
+		if got := (<-b.txs).source.App; got != "restricted" {
+			t.Errorf("node b got a transaction of %q", got)
+		}
+	})
+}
+
+func TestSendTransaction_ReportsAFailure_WhenTheWorkersOfItsOnlyNodeCannotConnect(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		node := driver.NewMockNode(ctrl)
+		node.EXPECT().GetLabel().Return("a").AnyTimes()
+		url := driver.URL("wrong")
+		node.EXPECT().GetServiceUrl(gomock.Any()).Return(&url, nil)
+		observer := driver.NewMockTransactionObserver(ctrl)
+
+		pool := NewRpcWorkerPool(t.Context())
+		pool.RegisterObserver(observer)
+		pool.AfterNodeCreation(node)
+		pool.RestrictApp("restricted", []string{"a"})
+
+		var tx types.Transaction
+		source := driver.TransactionSource{App: "restricted"}
+		observer.EXPECT().OnTransactionSubmitted(source, &tx, gomock.Any(), errNoNode)
+		pool.SendTransaction(&tx, source)
+	})
 }

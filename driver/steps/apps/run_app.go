@@ -20,8 +20,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/0xsoniclabs/norma/driver/steps"
 	"github.com/0xsoniclabs/norma/load/app"
 	"github.com/0xsoniclabs/norma/load/shaper"
@@ -33,6 +35,7 @@ type RunApp struct {
 	Type  string       `yaml:"type" help:"Application type."`
 	Users *int         `yaml:"users" help:"Number of concurrent user accounts the application should simulate."`
 	Rate  *shaper.Rate `yaml:"rate" help:"Transaction rate configuration for the application."`
+	Nodes []string     `yaml:"nodes" help:"Nodes the application submits its transactions through, each selecting the node with that name and every instance started under it. All nodes when omitted."`
 }
 
 func (*RunApp) Name() string { return "runApp" }
@@ -62,12 +65,27 @@ func (s *RunApp) Validate() error {
 		errs = append(errs, fmt.Errorf("number of users must be >= 1, got %d", *s.Users))
 	}
 
+	for _, name := range s.Nodes {
+		errs = append(errs, steps.Node{Node: name}.Validate())
+	}
+
 	return errors.Join(errs...)
 }
 
 func (s *RunApp) UpdateModel(m *steps.Model) error {
 	if m.Apps[s.App.App] {
 		return fmt.Errorf("application %q is already running", s.App.App)
+	}
+	for _, name := range s.Nodes {
+		labels := steps.SelectLabels(m.Nodes, name)
+		if len(labels) == 0 {
+			return fmt.Errorf("node %q not found in active nodes", name)
+		}
+		if !slices.ContainsFunc(labels, func(label string) bool {
+			return m.Nodes[label].Client == node.NodeStateRunning
+		}) {
+			return fmt.Errorf("node %q has no running client to submit through", name)
+		}
 	}
 	m.Apps[s.App.App] = true
 	return nil
@@ -83,11 +101,17 @@ func (s *RunApp) Run(ctx context.Context, env *steps.Env) error {
 		users = *s.Users
 	}
 
+	var nodes []string
+	for _, name := range s.Nodes {
+		nodes = append(nodes, steps.SelectLabels(env.Nodes, name)...)
+	}
+
 	application, err := env.Net.CreateApplication(ctx, &driver.ApplicationConfig{
 		Name:  s.App.App,
 		Type:  s.Type,
 		Rate:  s.Rate,
 		Users: users,
+		Nodes: nodes,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create application %s: %w", s.App.App, err)

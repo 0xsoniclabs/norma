@@ -79,6 +79,14 @@ func TestDryRun_ReportsTheStep_WhenItCannotRun(t *testing.T) {
 			steps:     "  - startNode: obs\n  - stopNode: obs\n  - startNode: obs\n    type: validator\n",
 			wantError: "validator obs is rejoining but has no preserved validator ID",
 		},
+		"run an app through an unknown node": {
+			steps:     "  - runApp: load\n    type: counter\n    rate:\n      constant: 1\n    nodes: [ghost]\n",
+			wantError: `step 2 (runApp load): node "ghost" not found in active nodes`,
+		},
+		"run an app through a killed node": {
+			steps:     "  - startNode: obs\n  - killSonic: obs\n  - runApp: load\n    type: counter\n    rate:\n      constant: 1\n    nodes: [obs]\n",
+			wantError: `step 4 (runApp load): node "obs" has no running client to submit through`,
+		},
 		"stop an app that is not running": {
 			steps:     "  - stopApp: load\n",
 			wantError: `application "load" not found in active apps`,
@@ -147,6 +155,8 @@ func TestDryRun_Succeeds_WhenEveryStepCanRun(t *testing.T) {
 			"  - stopNode: obs\n  - startNode: obs\n",
 		"run and stop an app": "  - runApp: load\n    type: counter\n    rate:\n      constant: 1\n" +
 			"  - stopApp: load\n",
+		"run an app through the instances of a name": "  - startNode: rpc\n    instances: 2\n" +
+			"  - runApp: load\n    type: counter\n    rate:\n      constant: 1\n    nodes: [val, rpc]\n",
 	}
 	for name, steps := range tests {
 		t.Run(name, func(t *testing.T) {

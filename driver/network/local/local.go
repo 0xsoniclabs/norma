@@ -630,6 +630,8 @@ func (n *LocalNetwork) CreateApplication(ctx context.Context, config *driver.App
 	}
 	defer rpcClient.Close()
 
+	n.rpcWorkerPool.RestrictApp(config.Name, config.Nodes)
+
 	appId := n.nextAppId.Add(1)
 	application, err := app.NewApplication(config.Type, n.appContext, 0, appId)
 	if err != nil {

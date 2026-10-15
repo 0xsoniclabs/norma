@@ -27,7 +27,10 @@ import (
 )
 
 var gasFeeCap = big.NewInt(1e12)
-var gasTipCap = big.NewInt(0)
+
+// gasTipCap meets the pool's default minimum tip, which a node waives only for
+// transactions submitted to it, so peers would drop a lower one it gossips.
+var gasTipCap = big.NewInt(1)
 
 func createTx(from *Account, toAddress common.Address, value *big.Int, data []byte, gasLimit uint64) (*types.Transaction, error) {
 	tx := types.NewTx(&types.DynamicFeeTx{
@@ -45,8 +48,8 @@ func createTx(from *Account, toAddress common.Address, value *big.Int, data []by
 func createDeployTx(from *Account, value *big.Int, data []byte, gasLimit uint64) (*types.Transaction, error) {
 	tx := types.NewTx(&types.DynamicFeeTx{
 		Nonce:     from.getNextNonce(),
-		GasFeeCap: big.NewInt(1e12),
-		GasTipCap: big.NewInt(0),
+		GasFeeCap: gasFeeCap,
+		GasTipCap: gasTipCap,
 		Gas:       gasLimit,
 		To:        nil,
 		Value:     value,
@@ -72,8 +75,8 @@ func createSetCodeTx(from *Account, toAddress common.Address, value *uint256.Int
 
 	tx := types.NewTx(&types.SetCodeTx{
 		Nonce:     from.getNextNonce(),
-		GasFeeCap: uint256.NewInt(1e12),
-		GasTipCap: uint256.NewInt(0),
+		GasFeeCap: uint256.MustFromBig(gasFeeCap),
+		GasTipCap: uint256.MustFromBig(gasTipCap),
 		Gas:       gasLimit,
 		To:        toAddress,
 		Value:     value,

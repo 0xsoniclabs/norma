@@ -1,0 +1,47 @@
+Name: App Submission Nodes
+Description: >-
+  Runs load-generating applications that submit their
+  transactions only through selected nodes, next to one
+  that may use any node.
+
+Scenario:
+  - startNode: validator
+    type: validator
+
+  - startNode: observer
+    type: observer
+    instances: 2
+
+  # A name selects the node and every instance started under it,
+  # so this app submits through observer-0 and observer-1 only.
+  - runApp: through-observers
+    type: counter
+    users: 10
+    rate:
+      constant: 10
+    nodes: [observer]
+
+  - runApp: through-validator
+    type: erc20
+    users: 10
+    rate:
+      constant: 10
+    nodes: [validator]
+
+  # Without nodes, an app submits through any node.
+  - runApp: anywhere
+    type: counter
+    users: 10
+    rate:
+      constant: 10
+
+  - waitFor: 15s
+
+  # The observer app keeps going through the instance that remains.
+  - stopNode: observer-0
+
+  - waitFor: 15s
+
+  - stopApp: through-observers
+  - stopApp: through-validator
+  - stopApp: anywhere

@@ -124,6 +124,18 @@ func clientState(state node.NodeState) string {
 	return state.String()
 }
 
+// SelectLabels returns the labels of the node with the given name and of every
+// instance started under it.
+func SelectLabels[V any](nodes map[string]V, name string) []string {
+	var labels []string
+	for label := range nodes {
+		if label == name || IsInstanceLabel(label, name) {
+			labels = append(labels, label)
+		}
+	}
+	return labels
+}
+
 // ResolveLabel maps a node name used by a step to the label of the node it
 // means: the name itself, or the only active instance started under it.
 func ResolveLabel[V any](nodes map[string]V, name string) (string, error) {
