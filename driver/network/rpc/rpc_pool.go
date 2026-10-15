@@ -18,7 +18,9 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -31,26 +33,81 @@ import (
 
 type RpcWorkerPool struct {
 	txs       chan transactionWithSource
-	workers   map[driver.Node]*workerGroup
 	ctx       context.Context
 	cancel    context.CancelFunc
 	observers *observers
+
+	mu sync.Mutex
+	// nodes holds the workers of each node, by label.
+	nodes map[string]*nodeWorkers
+	// appNodes holds the labels of the nodes an application is restricted to.
+	appNodes map[string][]string
 }
+
+// nodeWorkers are the workers of one node. Besides the transactions any node
+// may submit, they take those only this node may submit from txs.
+type nodeWorkers struct {
+	group  workerGroup
+	txs    chan transactionWithSource
+	closed chan struct{}
+}
+
+var errNoNode = errors.New("none of the nodes the application is restricted to is active")
 
 func NewRpcWorkerPool(ctx context.Context) *RpcWorkerPool {
 	ctx, cancel := context.WithCancel(ctx)
 
 	return &RpcWorkerPool{
 		txs:       make(chan transactionWithSource, 100),
-		workers:   make(map[driver.Node]*workerGroup, 10),
 		ctx:       ctx,
 		cancel:    cancel,
 		observers: &observers{},
+		nodes:     make(map[string]*nodeWorkers, 10),
+		appNodes:  map[string][]string{},
+	}
+}
+
+// RestrictApp makes the pool submit the transactions of the given application
+// only through the nodes with the given labels, or through any node when there
+// are none.
+func (p *RpcWorkerPool) RestrictApp(app string, nodes []string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(nodes) == 0 {
+		delete(p.appNodes, app)
+	} else {
+		p.appNodes[app] = nodes
 	}
 }
 
 func (p *RpcWorkerPool) SendTransaction(tx *types.Transaction, source driver.TransactionSource) {
-	p.txs <- transactionWithSource{tx: tx, source: source}
+	t := transactionWithSource{tx: tx, source: source}
+
+	p.mu.Lock()
+	labels, restricted := p.appNodes[source.App]
+	var targets []*nodeWorkers
+	for _, label := range labels {
+		if n, ok := p.nodes[label]; ok {
+			targets = append(targets, n)
+		}
+	}
+	p.mu.Unlock()
+
+	if !restricted {
+		p.txs <- t
+		return
+	}
+	if len(targets) == 0 {
+		p.observers.notify(source, tx, time.Now(), errNoNode)
+		return
+	}
+	// ponytail: random node, not the least busy one; balance on load if a slow node starts holding up the app.
+	target := targets[rand.IntN(len(targets))]
+	select {
+	case target.txs <- t:
+	case <-target.closed:
+		p.observers.notify(source, tx, time.Now(), errNoNode)
+	}
 }
 
 // RegisterObserver adds an observer to be notified about every transaction this
@@ -98,15 +155,31 @@ func (p *RpcWorkerPool) AfterNodeCreation(newNode driver.Node) {
 		return
 	}
 
-	wg := workerGroup{}
-	p.workers[newNode] = &wg
-	for i := 0; i < 150; i++ {
-		wg.add(newNode.GetLabel(), *rpcUrl, p.txs, p.observers)
+	n := &nodeWorkers{
+		txs:    make(chan transactionWithSource),
+		closed: make(chan struct{}),
 	}
+	for i := 0; i < 150; i++ {
+		n.group.add(newNode.GetLabel(), *rpcUrl, p.txs, n.txs, p.observers)
+	}
+	p.mu.Lock()
+	p.nodes[newNode.GetLabel()] = n
+	p.mu.Unlock()
 }
 
 func (p *RpcWorkerPool) BeforeNodeRemoval(node driver.Node) {
-	p.workers[node].close()
+	p.mu.Lock()
+	n, ok := p.nodes[node.GetLabel()]
+	delete(p.nodes, node.GetLabel())
+	p.mu.Unlock()
+	if ok {
+		n.close()
+	}
+}
+
+func (n *nodeWorkers) close() {
+	close(n.closed)
+	n.group.close()
 }
 
 func (p *RpcWorkerPool) AfterApplicationCreation(application driver.Application) {
@@ -119,8 +192,12 @@ func (p *RpcWorkerPool) Close() error {
 	}
 	p.cancel()
 	slog.Info("waiting for worker pool to close")
-	for _, wg := range p.workers {
-		wg.close()
+	p.mu.Lock()
+	nodes := p.nodes
+	p.nodes = map[string]*nodeWorkers{}
+	p.mu.Unlock()
+	for _, n := range nodes {
+		n.close()
 	}
 	slog.Info("worker pool has closed")
 	close(p.txs)
@@ -133,8 +210,8 @@ func (p *RpcWorkerPool) Close() error {
 // When the group is closed, it should not be re-used and should be forgotten.
 type workerGroup []*worker
 
-func (wg *workerGroup) add(nodeName string, rpcUrl driver.URL, txs chan transactionWithSource, observers *observers) {
-	w := newWorker(nodeName, rpcUrl, txs, observers)
+func (wg *workerGroup) add(nodeName string, rpcUrl driver.URL, txs, own chan transactionWithSource, observers *observers) {
+	w := newWorker(nodeName, rpcUrl, txs, own, observers)
 	*wg = append(*wg, w)
 }
 
@@ -162,12 +239,15 @@ type worker struct {
 	rpcUrl    driver.URL
 	done      chan bool
 	txs       chan transactionWithSource
+	own       chan transactionWithSource
 	ctx       context.Context
 	cancel    context.CancelFunc
 	observers *observers
 }
 
-func newWorker(nodeName string, rpcUrl driver.URL, txs chan transactionWithSource, observers *observers) *worker {
+// newWorker starts a worker submitting the transactions it takes from txs, which
+// any node may submit, and from own, which only its node may.
+func newWorker(nodeName string, rpcUrl driver.URL, txs, own chan transactionWithSource, observers *observers) *worker {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	w := &worker{
@@ -175,6 +255,7 @@ func newWorker(nodeName string, rpcUrl driver.URL, txs chan transactionWithSourc
 		rpcUrl:    rpcUrl,
 		done:      make(chan bool),
 		txs:       txs,
+		own:       own,
 		ctx:       ctx,
 		cancel:    cancel,
 		observers: observers,
@@ -214,17 +295,19 @@ func (p *worker) runRpcSenderLoop() error {
 
 	defer rpcClient.Close()
 	for {
+		var tx transactionWithSource
 		select {
-		case tx := <-p.txs:
-			err := rpcClient.SendTransaction(context.Background(), tx.tx)
-			// The submission is reported before any logging, keeping the
-			// measured moment as close to the actual submission as possible.
-			p.observers.notify(tx.source, tx.tx, time.Now(), err)
-			if err != nil {
-				slog.Warn("failed to send tx", "node", p.nodeName, "source", tx.source, "error", err)
-			}
+		case tx = <-p.txs:
+		case tx = <-p.own:
 		case <-p.ctx.Done():
 			return nil
+		}
+		err := rpcClient.SendTransaction(context.Background(), tx.tx)
+		// The submission is reported before any logging, keeping the
+		// measured moment as close to the actual submission as possible.
+		p.observers.notify(tx.source, tx.tx, time.Now(), err)
+		if err != nil {
+			slog.Warn("failed to send tx", "node", p.nodeName, "source", tx.source, "error", err)
 		}
 	}
 }

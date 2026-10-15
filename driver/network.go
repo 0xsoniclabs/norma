@@ -223,6 +223,10 @@ type ApplicationConfig struct {
 	// Users defines the number of users sending transactions to the app.
 	Users int
 
+	// Nodes holds the labels of the nodes the application submits its
+	// transactions through. When empty, any node may be used.
+	Nodes []string
+
 	// TODO: add other parameters as needed
 	//  - application type
 }

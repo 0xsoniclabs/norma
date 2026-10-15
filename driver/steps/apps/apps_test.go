@@ -17,6 +17,7 @@
 package apps
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -56,7 +57,8 @@ func TestRunApp_Validate(t *testing.T) {
 			edit:      func(s *RunApp) { s.Rate.Wave = &shaper.Wave{Max: rate, Period: 1} },
 			wantError: "exactly one load shape",
 		},
-		"no users": {edit: func(s *RunApp) { s.Users = &zero }, wantError: "number of users must be >= 1"},
+		"no users":      {edit: func(s *RunApp) { s.Users = &zero }, wantError: "number of users must be >= 1"},
+		"bad node name": {edit: func(s *RunApp) { s.Nodes = []string{"my node"} }, wantError: "node name must match"},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -95,6 +97,27 @@ func TestRunApp_StartsAndTracksTheApplication(t *testing.T) {
 
 // An application that did not start is not tracked, so a later stopApp
 // reports it as unknown instead of stopping something that never ran.
+func TestRunApp_SubmitsThroughTheSelectedNodesAndTheirInstances(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	app := driver.NewMockApplication(ctrl)
+	step := validRunApp()
+	step.Nodes = []string{"val", "rpc"}
+
+	net.EXPECT().CreateApplication(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, config *driver.ApplicationConfig) (driver.Application, error) {
+			require.ElementsMatch(t, []string{"val", "rpc-0", "rpc-1"}, config.Nodes)
+			return app, nil
+		})
+	app.EXPECT().Start(gomock.Any()).Return(nil)
+
+	env := steps.NewEnv(net, nil, nil)
+	for _, label := range []string{"val", "rpc-0", "rpc-1", "other"} {
+		env.Nodes[label] = nil
+	}
+	require.NoError(t, step.Run(t.Context(), env))
+}
+
 func TestRunApp_DoesNotTrackAnApplicationThatFailedToStart(t *testing.T) {
 	tests := map[string]func(*driver.MockNetwork, *driver.MockApplication){
 		"creation fails": func(net *driver.MockNetwork, _ *driver.MockApplication) {

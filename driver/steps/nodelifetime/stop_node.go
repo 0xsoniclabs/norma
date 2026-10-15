@@ -40,16 +40,12 @@ func (*StopNode) Help() string {
 
 // UpdateModel removes the node, or every instance started under its name.
 func (s *StopNode) UpdateModel(m *steps.Model) error {
-	base := s.Node.Node
-	found := false
-	for label := range m.Nodes {
-		if label == base || steps.IsInstanceLabel(label, base) {
-			delete(m.Nodes, label)
-			found = true
-		}
+	labels := steps.SelectLabels(m.Nodes, s.Node.Node)
+	if len(labels) == 0 {
+		return fmt.Errorf("node %q not found in active nodes", s.Node.Node)
 	}
-	if !found {
-		return fmt.Errorf("node %q not found in active nodes", base)
+	for _, label := range labels {
+		delete(m.Nodes, label)
 	}
 	return nil
 }
@@ -62,10 +58,8 @@ func (s *StopNode) Run(ctx context.Context, env *steps.Env) error {
 		node driver.Node
 	}
 	targets := make([]stopTarget, 0)
-	for name, node := range env.Nodes {
-		if name == base || steps.IsInstanceLabel(name, base) {
-			targets = append(targets, stopTarget{name: name, node: node})
-		}
+	for _, name := range steps.SelectLabels(env.Nodes, base) {
+		targets = append(targets, stopTarget{name: name, node: env.Nodes[name]})
 	}
 
 	if len(targets) == 0 {

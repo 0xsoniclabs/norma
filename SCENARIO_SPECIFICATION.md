@@ -247,7 +247,14 @@ Starts a load-generating application. The value is the application’s
   users: 50                # optional; number of concurrent user accounts
   rate:                    # required
     constant: 20           # Tx/s
+  nodes: [rpc, val-1]      # optional; nodes to submit transactions through
 ```
+
+**`nodes`** — Restricts which nodes the application's transactions are
+submitted through. Each name selects the node with that name and every
+instance started under it (as for `stopNode`); all named nodes must be active
+when the app starts. When omitted, any node may be used. A transaction sent
+while none of the selected nodes is active is reported as a failed submission.
 
 **Supported application types** (case-insensitive): `counter`, `erc20`,
 `store`, `uniswap`, `smartaccount`, `subsidies`, `transient`,
