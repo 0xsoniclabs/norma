@@ -47,9 +47,10 @@ type RpcWorkerPool struct {
 // nodeWorkers are the workers of one node. Besides the transactions any node
 // may submit, they take those only this node may submit from txs.
 type nodeWorkers struct {
-	group  workerGroup
-	txs    chan transactionWithSource
-	closed chan struct{}
+	group     workerGroup
+	txs       chan transactionWithSource
+	closed    chan struct{}
+	closeOnce sync.Once
 }
 
 var errNoNode = errors.New("none of the nodes the application is restricted to is active")
@@ -174,6 +175,23 @@ func (p *RpcWorkerPool) AfterNodeCreation(newNode driver.Node) {
 	p.mu.Lock()
 	p.nodes[newNode.GetLabel()] = n
 	p.mu.Unlock()
+	go p.retireWhenWorkersExit(newNode.GetLabel(), n)
+}
+
+// retireWhenWorkersExit stops offering the node to restricted applications once
+// all its workers have exited, which they also do after failing to connect.
+// Transactions waiting for one of them then move on to another node.
+func (p *RpcWorkerPool) retireWhenWorkersExit(label string, n *nodeWorkers) {
+	for _, w := range n.group {
+		<-w.done
+	}
+	p.mu.Lock()
+	if p.nodes[label] == n {
+		delete(p.nodes, label)
+		slog.Warn("all RPC workers of node exited, no longer submitting through it", "node", label)
+	}
+	p.mu.Unlock()
+	n.signalClosed()
 }
 
 func (p *RpcWorkerPool) BeforeNodeRemoval(node driver.Node) {
@@ -187,8 +205,12 @@ func (p *RpcWorkerPool) BeforeNodeRemoval(node driver.Node) {
 }
 
 func (n *nodeWorkers) close() {
-	close(n.closed)
+	n.signalClosed()
 	n.group.close()
+}
+
+func (n *nodeWorkers) signalClosed() {
+	n.closeOnce.Do(func() { close(n.closed) })
 }
 
 func (p *RpcWorkerPool) AfterApplicationCreation(application driver.Application) {

@@ -157,3 +157,24 @@ func TestSendTransaction_MovesToAnotherNode_WhenTheChosenOneIsRemoved(t *testing
 		}
 	})
 }
+
+func TestSendTransaction_ReportsAFailure_WhenTheWorkersOfItsOnlyNodeCannotConnect(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		node := driver.NewMockNode(ctrl)
+		node.EXPECT().GetLabel().Return("a").AnyTimes()
+		url := driver.URL("wrong")
+		node.EXPECT().GetServiceUrl(gomock.Any()).Return(&url, nil)
+		observer := driver.NewMockTransactionObserver(ctrl)
+
+		pool := NewRpcWorkerPool(t.Context())
+		pool.RegisterObserver(observer)
+		pool.AfterNodeCreation(node)
+		pool.RestrictApp("restricted", []string{"a"})
+
+		var tx types.Transaction
+		source := driver.TransactionSource{App: "restricted"}
+		observer.EXPECT().OnTransactionSubmitted(source, &tx, gomock.Any(), errNoNode)
+		pool.SendTransaction(&tx, source)
+	})
+}
