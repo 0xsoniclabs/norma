@@ -69,8 +69,9 @@ Scenario:
     nodes: [stable]
 
   # Heal restores the last sealed epoch and refuses it unless the epoch before
-  # ends at least 1024 blocks past the genesis, so the chain is grown past
-  # that window and two more epochs are sealed on top of it.
+  # ends at least 1024 blocks past the first block with a bundle, where the
+  # bundle history starts, so the chain is grown past that window and two
+  # more epochs are sealed on top of it.
   - waitForBlocks: 1_100
   - advanceEpoch
   - advanceEpoch
