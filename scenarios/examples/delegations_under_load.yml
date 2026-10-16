@@ -1,0 +1,58 @@
+# This scenario stakes and unstakes from an external account while heavy load
+# keeps running. Delegations and epoch advances are priced above the load, so
+# each step should land in seconds instead of queueing behind user traffic.
+
+Name: Delegations Under Load
+Description: >-
+  Delegate, undelegate and advance epochs while a heavy load application
+  is running, verifying the aggregated stake after every change.
+
+# The validator's gas power is set to the lowest rate Sonic accepts, about 375
+# counter transactions per second, well below the load, so a backlog builds
+# and transactions compete on price to get in. The load is spread over
+# many users because the emitter takes one transaction per sender at a time; a
+# few busy senders would queue behind themselves instead of filling the blocks.
+InitialNetworkRules:
+  Economy:
+    ShortGasPower:
+      AllocPerSec: 10_000_000
+    LongGasPower:
+      AllocPerSec: 10_000_000
+
+Scenario:
+  - startNode: validator
+    type: validator
+
+  - runApp: heavy-load
+    type: counter
+    users: 3000
+    rate:
+      constant: 600
+
+  - waitFor: 20s
+
+  - delegate:
+    - node: validator
+      delegator: busy
+      stake: 1_000_000
+
+  - advanceEpoch
+  - verifyStakes
+
+  - undelegate:
+    - node: validator
+      delegator: busy
+      stake: 400_000
+
+  - advanceEpoch
+  - verifyStakes
+
+  # Drain the remaining stake by omitting the amount.
+  - undelegate:
+    - node: validator
+      delegator: busy
+
+  - advanceEpoch
+  - verifyStakes
+
+  - stopApp: heavy-load
