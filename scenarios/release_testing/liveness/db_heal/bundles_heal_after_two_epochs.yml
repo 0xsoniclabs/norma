@@ -35,14 +35,14 @@ Scenario:
     type: validator
     stake: 5_000_000
 
-  # frail node will have a complete bundle history when attempting heal
+  # Healed past the 1024-block bundle replay window.
   - startNode: frail
     type: validator
     stake: 1_000_000
     extraArguments: "--statedb.checkpointinterval 1"
 
-  # frail node will have an incomplete bundle history when attempting heal
-  - startNode: frail-incomplete
+  # Healed inside the window, which then reaches back before the first bundle.
+  - startNode: frail-in-window
     type: validator
     stake: 1_000_000
     extraArguments: "--statedb.checkpointinterval 1"
@@ -76,7 +76,7 @@ Scenario:
   - advanceEpoch
   - waitFor: 15s
 
-  - killSonic: frail-incomplete
+  - killSonic: frail-in-window
 
   - checks:
       - blocksProduced
@@ -84,8 +84,8 @@ Scenario:
   - waitForEpoch
   - waitForEpoch
 
-  - healDb: frail-incomplete
-  - startNode: frail-incomplete
+  - healDb: frail-in-window
+  - startNode: frail-in-window
     type: validator
 
   # Grown past the 1024-block bundle replay window, so the second node is
