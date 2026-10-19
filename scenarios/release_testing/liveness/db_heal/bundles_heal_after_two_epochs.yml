@@ -1,12 +1,13 @@
 Name: Liveness DB Heal Bundles After Two Epochs
 
 Description: >-
-  Runs transaction bundles across two local validators until the chain is
-  past the 1024-block bundle replay window, then SIGKILLs a low-stake one so
-  its database is left dirty and keeps it down for two epochs while the
-  remaining quorum keeps processing bundles. The database is healed and the
-  node restarted in place, and it must sync back through the bundle-bearing
-  blocks and epoch seals it missed.
+  Runs transaction bundles across three local validators and SIGKILLs a
+  low-stake one twice: first while the chain is inside the 1024-block bundle
+  replay window, then another once it is past it. Each killed node's database
+  is left dirty and it is kept down for two epochs while the remaining quorum
+  keeps processing bundles. The database is healed and the node restarted in
+  place, and it must sync back through the bundle-bearing blocks and epoch
+  seals it missed.
 
 InitialNetworkRules:
   Upgrades:
@@ -28,25 +29,26 @@ InitialNetworkRules:
     MaxEpochDuration: 20s
 
 Scenario:
-  # Quorum holder: 75% of the stake stays online throughout, above the 2/3
-  # needed, so block production never depends on the node under test.
+  # Quorum holder: 71% of the stake stays online throughout, above the 2/3
+  # needed, so block production never depends on the nodes under test.
   - startNode: stable
     type: validator
-    stake: 3_000_000
+    stake: 5_000_000
 
-  # The bundle apps query nonces and block numbers through the node the driver
-  # pins for system transactions, picked on first use and kept while it
-  # answers. Using it now, with only the stable node up, pins that one; pinned
-  # to the frail node, the apps would send nothing during the outage.
-  - advanceEpoch
-
+  # frail node will have a complete bundle history when attempting heal
   - startNode: frail
     type: validator
     stake: 1_000_000
     extraArguments: "--statedb.checkpointinterval 1"
 
+  # frail node will have an incomplete bundle history when attempting heal
+  - startNode: frail-incomplete
+    type: validator
+    stake: 1_000_000
+    extraArguments: "--statedb.checkpointinterval 1"
+
   # The bundles are submitted through the stable node only, so none are sent
-  # to the frail one while it is down.
+  # to a frail one while it is down.
   - runApp: all-of
     type: allofbundle
     users: 10
@@ -68,11 +70,28 @@ Scenario:
       constant: 5
     nodes: [stable]
 
-  # Heal restores the last sealed epoch and refuses it unless the epoch before
-  # ends at least 1024 blocks past the first block with a bundle, where the
-  # bundle history starts, so the chain is grown past that window and two
-  # more epochs are sealed on top of it.
-  - waitForBlocks: 1_100
+  # First heal inside the 1024-block bundle replay window: the window of the
+  # restored seal reaches back before the first bundle.
+  - waitForBlocks: 500
+  - advanceEpoch
+  - waitFor: 15s
+
+  - killSonic: frail-incomplete
+
+  - checks:
+      - blocksProduced
+
+  - waitForEpoch
+  - waitForEpoch
+
+  - healDb: frail-incomplete
+  - startNode: frail-incomplete
+    type: validator
+
+  # Grown past the 1024-block bundle replay window, so the second node is
+  # killed with a full window of bundle history behind it; two more epochs are
+  # sealed on top of it.
+  - waitForBlocks: 600
   - advanceEpoch
   - advanceEpoch
 
