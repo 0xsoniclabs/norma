@@ -320,8 +320,17 @@ func (t *Tracker) OnTransactionSubmitted(
 		// transaction that never makes it into a block.
 		if txBundle, err := bundle.OpenEnvelope(signer, tx); err == nil {
 			for _, bundledTx := range txBundle.Transactions {
+				// Every transaction of a bundle is marked with the hash of its
+				// execution plan, so only an envelope delivering the same plan
+				// shares it - the same bundle submitted twice, of which at most
+				// one is executed.
+				if _, exists := t.bundled[bundledTx.Hash()]; exists {
+					return
+				}
 				entry.bundled = append(entry.bundled, bundledTx.Hash())
-				t.bundled[bundledTx.Hash()] = bundledTransaction{envelope: hash, app: source.App}
+			}
+			for _, bundledHash := range entry.bundled {
+				t.bundled[bundledHash] = bundledTransaction{envelope: hash, app: source.App}
 			}
 		}
 	}
