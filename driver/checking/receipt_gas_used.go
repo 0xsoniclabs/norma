@@ -84,6 +84,10 @@ func (c *receiptGasUsedChecker) Check(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		if len(want) != len(got) {
+			return fmt.Errorf("block %d has %d receipts on %v but %d on %v",
+				block, len(want), c.amended, len(got), c.leaked)
+		}
 		differ = differ || !slices.Equal(want, got)
 	}
 	if !differ {

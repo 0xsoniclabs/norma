@@ -18,7 +18,6 @@ package checking
 
 import (
 	"encoding/json"
-	"fmt"
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -29,8 +28,8 @@ import (
 )
 
 // receiptsNetwork mocks a network of nodes at block 2, each reporting the
-// given GasUsed for the single receipt of every block.
-func receiptsNetwork(t *testing.T, gasUsed map[string]uint64) driver.Network {
+// given GasUsed for the receipts of every block, or no receipts for nil.
+func receiptsNetwork(t *testing.T, gasUsed map[string][]uint64) driver.Network {
 	ctrl := gomock.NewController(t)
 	nodes := []driver.Node{}
 	for label, gas := range gasUsed {
@@ -39,8 +38,18 @@ func receiptsNetwork(t *testing.T, gasUsed map[string]uint64) driver.Network {
 		client.EXPECT().BlockNumber(gomock.Any()).AnyTimes().Return(uint64(2), nil)
 		client.EXPECT().Call(gomock.Any(), "eth_getBlockReceipts", gomock.Any()).AnyTimes().
 			DoAndReturn(func(result any, _ string, _ ...any) error {
-				receipts := fmt.Sprintf(`[{"gasUsed":%q}]`, hexutil.EncodeUint64(gas))
-				return json.Unmarshal([]byte(receipts), result)
+				if gas == nil {
+					return json.Unmarshal([]byte("null"), result)
+				}
+				receipts := []map[string]string{}
+				for _, g := range gas {
+					receipts = append(receipts, map[string]string{"gasUsed": hexutil.EncodeUint64(g)})
+				}
+				encoded, err := json.Marshal(receipts)
+				if err != nil {
+					return err
+				}
+				return json.Unmarshal(encoded, result)
 			})
 
 		node := driver.NewMockNode(ctrl)
@@ -55,22 +64,30 @@ func receiptsNetwork(t *testing.T, gasUsed map[string]uint64) driver.Network {
 
 func TestReceiptGasUsed_Check(t *testing.T) {
 	tests := map[string]struct {
-		gasUsed   map[string]uint64
+		gasUsed   map[string][]uint64
 		wantError string
 	}{
 		"amended corrects the leak": {
-			gasUsed: map[string]uint64{"a1": 21_000, "a2": 21_000, "l1": 50_090},
+			gasUsed: map[string][]uint64{"a1": {21_000}, "a2": {21_000}, "l1": {50_090}},
 		},
 		"amended nodes disagree": {
-			gasUsed:   map[string]uint64{"a1": 21_000, "a2": 50_090, "l1": 50_090},
+			gasUsed:   map[string][]uint64{"a1": {21_000}, "a2": {50_090}, "l1": {50_090}},
 			wantError: "receipts of block 1 report GasUsed",
 		},
 		"no leak corrected": {
-			gasUsed:   map[string]uint64{"a1": 21_000, "a2": 21_000, "l1": 21_000},
+			gasUsed:   map[string][]uint64{"a1": {21_000}, "a2": {21_000}, "l1": {21_000}},
 			wantError: "no receipt up to block 2",
 		},
+		"leaked receipts missing": {
+			gasUsed:   map[string][]uint64{"a1": {21_000}, "a2": {21_000}, "l1": nil},
+			wantError: "block 1 has 1 receipts on [a1 a2] but 0 on [l1]",
+		},
+		"receipt counts differ": {
+			gasUsed:   map[string][]uint64{"a1": {21_000}, "a2": {21_000}, "l1": {50_090, 21_000}},
+			wantError: "block 1 has 1 receipts on [a1 a2] but 2 on [l1]",
+		},
 		"node not active": {
-			gasUsed:   map[string]uint64{"a1": 21_000, "l1": 50_090},
+			gasUsed:   map[string][]uint64{"a1": {21_000}, "l1": {50_090}},
 			wantError: "node a2 is not active",
 		},
 	}
