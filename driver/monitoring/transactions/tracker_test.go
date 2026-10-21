@@ -376,8 +376,12 @@ func TestTracker_BundleIsIncludedOnceWithTheTransactionsItDelivers(t *testing.T)
 	tracker := NewTracker()
 	approver, spender := newAccount(t, 1), newAccount(t, 2)
 
-	allOfEnvelope, allOfBundle, _ := bundle.NewBuilder().WithSigner(signer).AllOf(approver.step(0, 0x42), spender.step(0, 0x42)).BuildEnvelopeBundleAndPlan()
-	oneOfEnvelope, oneOfBundle, _ := bundle.NewBuilder().WithSigner(signer).OneOf(approver.step(1, 0x42), spender.step(1, 0x42)).BuildEnvelopeBundleAndPlan()
+	allOfEnvelope, allOfBundle, _ := bundle.NewBuilder().WithSigner(signer).
+		AllOf(approver.step(0, 0x42), spender.step(0, 0x42)).
+		BuildEnvelopeBundleAndPlan()
+	oneOfEnvelope, oneOfBundle, _ := bundle.NewBuilder().WithSigner(signer).
+		OneOf(approver.step(1, 0x42), spender.step(1, 0x42)).
+		BuildEnvelopeBundleAndPlan()
 	tracker.OnTransactionSubmitted(source("all-of", 0), allOfEnvelope, epoch, nil)
 	tracker.OnTransactionSubmitted(source("one-of", 0), oneOfEnvelope, epoch, nil)
 	require.Equal(Counts{Pending: 1}, tracker.Counts("all-of"))
@@ -390,7 +394,8 @@ func TestTracker_BundleIsIncludedOnceWithTheTransactionsItDelivers(t *testing.T)
 	for _, tx := range allOfBundle.GetTransactionsInReferencedOrder() {
 		included = append(included, IncludedTransaction{Hash: tx.Hash(), GasUsed: 30_000})
 	}
-	included = append(included, IncludedTransaction{Hash: oneOfBundle.GetTransactionsInReferencedOrder()[0].Hash(), GasUsed: 30_000})
+	oneOfExecuted := oneOfBundle.GetTransactionsInReferencedOrder()[0]
+	included = append(included, IncludedTransaction{Hash: oneOfExecuted.Hash(), GasUsed: 30_000})
 	tracker.MarkBlock(7, epoch.Add(time.Second), included)
 
 	require.Equal(Counts{Included: 1}, tracker.Counts("all-of"))
@@ -422,8 +427,12 @@ func TestTracker_ABundleSubmittedTwiceIsFollowedFromItsFirstSubmission(t *testin
 
 	// Each envelope is signed with a key of its own, but both deliver the same
 	// transactions, of which the network executes one.
-	first, firstBundle, _ := bundle.NewBuilder().WithSigner(signer).AllOf(user.step(0, 0x42)).BuildEnvelopeBundleAndPlan()
-	second, secondBundle, _ := bundle.NewBuilder().WithSigner(signer).AllOf(user.step(0, 0x42)).BuildEnvelopeBundleAndPlan()
+	first, firstBundle, _ := bundle.NewBuilder().WithSigner(signer).
+		AllOf(user.step(0, 0x42)).
+		BuildEnvelopeBundleAndPlan()
+	second, secondBundle, _ := bundle.NewBuilder().WithSigner(signer).
+		AllOf(user.step(0, 0x42)).
+		BuildEnvelopeBundleAndPlan()
 	require.NotEqual(first.Hash(), second.Hash())
 	delivered := firstBundle.GetTransactionsInReferencedOrder()[0]
 	require.Equal(delivered.Hash(), secondBundle.GetTransactionsInReferencedOrder()[0].Hash())
@@ -451,8 +460,12 @@ func TestTracker_BundlesSharingNoncesAreFollowedApart(t *testing.T) {
 	// does; the transactions of a bundle carry the hash of its plan, so the two
 	// share none.
 	failing, succeeding := byte(0x01), byte(0x02)
-	executed, executedBundle, _ := bundle.NewBuilder().WithSigner(signer).OneOf(user.step(0, failing), user.step(1, succeeding)).BuildEnvelopeBundleAndPlan()
-	other, _, _ := bundle.NewBuilder().WithSigner(signer).OneOf(user.step(0, succeeding), user.step(0, failing)).BuildEnvelopeBundleAndPlan()
+	executed, executedBundle, _ := bundle.NewBuilder().WithSigner(signer).
+		OneOf(user.step(0, failing), user.step(1, succeeding)).
+		BuildEnvelopeBundleAndPlan()
+	other, _, _ := bundle.NewBuilder().WithSigner(signer).
+		OneOf(user.step(0, succeeding), user.step(0, failing)).
+		BuildEnvelopeBundleAndPlan()
 	tracker.OnTransactionSubmitted(source("app", 0), executed, epoch, nil)
 	tracker.OnTransactionSubmitted(source("app", 0), other, epoch, nil)
 	require.Equal(Counts{Pending: 2}, tracker.Counts("app"))
