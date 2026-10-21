@@ -8,6 +8,8 @@ Description: >-
   seal to a g-file carrying them. The g-file is imported by a v2.2.4 node,
   which predates the amendments section, and by a candidate node, and both
   must sync back with the network and follow it across further epoch seals.
+  The candidate importer must report the receipt gas the amendments correct,
+  and v2.2.4 the leaked one.
 
 InitialNetworkRules:
   Upgrades:
@@ -85,3 +87,10 @@ Scenario:
   - checks:
       - blocksProduced
       - blockHashes
+      # The candidate validator processed every block itself, while the
+      # candidate importer took the blocks up to the export from the g-file:
+      # agreeing with it shows the amendments were carried through, and
+      # v2.2.4, which ignores them, shows there was a leak to correct.
+      - receiptGasUsed:
+          amended: [validator-local, importer-local]
+          leaked: [importer-v224]

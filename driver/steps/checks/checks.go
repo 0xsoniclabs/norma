@@ -43,6 +43,7 @@ var Kinds = []func() Check{
 	func() Check { return &BlocksProduced{} },
 	func() Check { return &EventThrottled{} },
 	func() Check { return &NetworkRules{} },
+	func() Check { return &ReceiptGasUsed{} },
 	func() Check { return &ValidatorsActive{} },
 }
 

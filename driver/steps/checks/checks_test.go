@@ -88,6 +88,11 @@ func TestChecks_RunTheirCheckerWithTheParametersOfTheScenario(t *testing.T) {
 			checker: "eventThrottled",
 			config:  checking.CheckerConfig{"throttledNodes": []string{"a", "b"}},
 		},
+		"receiptGasUsed with its nodes": {
+			check:   &ReceiptGasUsed{Amended: []string{"a"}, Leaked: []string{"b"}},
+			checker: "receiptGasUsed",
+			config:  checking.CheckerConfig{"amended": []string{"a"}, "leaked": []string{"b"}},
+		},
 		"validatorsActive": {
 			check:   &ValidatorsActive{},
 			checker: "validatorsActive",
