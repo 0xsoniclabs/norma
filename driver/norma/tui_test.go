@@ -42,6 +42,7 @@ func TestPlotTab_LinesOfLateSubjectsStartWithGaps(t *testing.T) {
 
 func TestRate_IsIncreasePerSecondOverWindow(t *testing.T) {
 	series := &monitoring.SyncedSeries[monitoring.Time, float64]{}
+	rate := rate(func(v float64) float64 { return v })
 	_, ok := rate(series)
 	require.False(t, ok)
 

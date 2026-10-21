@@ -9,13 +9,15 @@ import (
 	"math"
 	"os"
 	"slices"
-	"strconv"
+	"sync"
 	"time"
 
+	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/globalflags"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
-	netmon "github.com/0xsoniclabs/norma/driver/monitoring/network"
 	nodemon "github.com/0xsoniclabs/norma/driver/monitoring/node"
+	txmon "github.com/0xsoniclabs/norma/driver/monitoring/transactions"
+	usermon "github.com/0xsoniclabs/norma/driver/monitoring/user"
 	"github.com/0xsoniclabs/norma/driver/parser"
 	"github.com/0xsoniclabs/norma/driver/steps"
 	"github.com/gdamore/tcell/v2"
@@ -26,7 +28,7 @@ import (
 
 var tuiFlag = cli.BoolFlag{
 	Name:  "tui",
-	Usage: "shows the scenario steps, live plots and the log in a terminal UI",
+	Usage: "shows the scenario steps, live plots and the logs in a terminal UI",
 }
 
 // stdout receives the multi-line output of a run that is not logged; the TUI
@@ -38,13 +40,17 @@ var lineColors = []tcell.Color{
 	tcell.ColorAqua, tcell.ColorOrange, tcell.ColorRed, tcell.ColorWhite,
 }
 
-// tui shows the steps of the running scenario, plots of its metrics and the log.
+// tui shows the steps of the running scenario, plots of its metrics, the log
+// and the log of every node in a tab.
 type tui struct {
-	app   *tview.Application
-	steps *tview.List
-	nodes *tview.Table
-	plots []*plotTab
-	log   *tview.TextView
+	app      *tview.Application
+	steps    *tview.List
+	nodes    *tview.Table
+	plots    []*plotTab
+	tabs     *tview.TextView
+	pages    *tview.Pages
+	tabNames []string
+	current  int
 }
 
 // runWithTUI runs the scenarios while the TUI shows their progress. Quitting
@@ -58,45 +64,44 @@ func runWithTUI(cliCtx *cli.Context, runAll func(context.Context, *tui) error) e
 		steps: tview.NewList().ShowSecondaryText(false),
 		nodes: tview.NewTable().SetFixed(1, 0),
 		plots: []*plotTab{
-			newPlotTab("Block height", func(m *monitoring.Monitor) map[string]float64 {
-				return perNode(m, nodemon.NodeBlockStatus, latest(func(s monitoring.BlockStatus) float64 { return float64(s.BlockHeight) }))
+			newPlotTab("Blocks/s", func(m *monitoring.Monitor) map[string]float64 {
+				return perNode(m, nodemon.NodeBlockStatus, rate(func(s monitoring.BlockStatus) float64 { return float64(s.BlockHeight) }))
 			}),
-			newPlotTab("Epoch", func(m *monitoring.Monitor) map[string]float64 {
-				return perNode(m, nodemon.NodeBlockStatus, latest(func(s monitoring.BlockStatus) float64 { return float64(s.Epoch) }))
-			}),
-			newPlotTab("Txs committed/s", func(m *monitoring.Monitor) map[string]float64 {
-				return perNode(m, txsCommitted, rate)
-			}),
-			newPlotTab("Stake (S)", func(m *monitoring.Monitor) map[string]float64 {
-				return perNode(m, netmon.ValidatorStake, latest(weiToS))
+			newPlotTab("Txs/s", func(m *monitoring.Monitor) map[string]float64 {
+				res := map[string]float64{}
+				if v, ok := total(m, usermon.SentTransactions, rate(intToFloat)); ok {
+					res["sent"] = v
+				}
+				if v, ok := total(m, txmon.TransactionsIncluded, rate(intToFloat)); ok {
+					res["committed"] = v
+				}
+				return res
 			}),
 		},
-		log: tview.NewTextView().SetDynamicColors(true).SetMaxLines(10_000).ScrollToEnd(),
+		tabs:  tview.NewTextView().SetRegions(true).SetDynamicColors(true),
+		pages: tview.NewPages(),
 	}
 	t.steps.SetBorder(true).SetTitle(" Steps ")
 	t.nodes.SetBorder(true).SetTitle(" Nodes ")
-	t.log.SetBorder(true).SetTitle(" Log ")
-	t.log.SetChangedFunc(func() { t.app.Draw() })
+	log := newLogView()
+	log.SetChangedFunc(func() { t.app.Draw() })
+	t.addTab("Norma", log)
 
-	tabs := tview.NewTextView().SetRegions(true).SetDynamicColors(true)
-	pages := tview.NewPages()
-	for i, plot := range t.plots {
-		id := fmt.Sprint(i + 1)
+	logs := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(t.tabs, 1, 0, false).
+		AddItem(t.pages, 0, 1, true)
+	logs.SetBorder(true).SetTitle(" Logs ")
+	plots := tview.NewFlex()
+	for _, plot := range t.plots {
 		view := tview.NewFlex().SetDirection(tview.FlexRow).
 			AddItem(plot, 0, 1, false).
 			AddItem(plot.legend, 1, 0, false)
-		pages.AddPage(id, view, true, i == 0)
-		fmt.Fprintf(tabs, `["%s"] %s: %s [""] `, id, id, plot.name)
+		view.SetBorder(true).SetTitle(" " + plot.name + " ")
+		plots.AddItem(view, 0, 1, false)
 	}
-	tabs.Highlight("1")
-	plots := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(tabs, 1, 0, false).
-		AddItem(pages, 0, 1, false)
-	plots.SetBorder(true).SetTitle(" Plots ")
-
 	right := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(plots, 0, 1, false).
-		AddItem(t.log, 0, 1, true)
+		AddItem(logs, 0, 3, true).
+		AddItem(plots, 0, 1, false)
 	root := tview.NewFlex().
 		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
 			AddItem(t.steps, 0, 3, false).
@@ -115,15 +120,20 @@ func runWithTUI(cliCtx *cli.Context, runAll func(context.Context, *tui) error) e
 				cancel()
 			}
 			return nil
-		case pages.HasPage(string(ev.Rune())):
-			tabs.Highlight(string(ev.Rune()))
-			pages.SwitchToPage(string(ev.Rune()))
+		case ev.Key() == tcell.KeyTab:
+			t.selectTab((t.current + 1) % len(t.tabNames))
+			return nil
+		case ev.Key() == tcell.KeyBacktab:
+			t.selectTab((t.current + len(t.tabNames) - 1) % len(t.tabNames))
+			return nil
+		case ev.Rune() >= '1' && ev.Rune() <= '9' && int(ev.Rune()-'1') < len(t.tabNames):
+			t.selectTab(int(ev.Rune() - '1'))
 			return nil
 		}
 		return ev
 	})
 
-	logOutput := escapeWriter{tview.ANSIWriter(t.log)}
+	logOutput := escapeWriter{tview.ANSIWriter(log)}
 	if err := globalflags.SetupLoggerWithOutput(cliCtx, logOutput, true); err != nil {
 		return err
 	}
@@ -151,8 +161,9 @@ func runWithTUI(cliCtx *cli.Context, runAll func(context.Context, *tui) error) e
 	return err
 }
 
-// show lists the steps of scenario and plots the metrics monitor collects until
-// the returned function is called.
+// show lists the steps of scenario, plots the metrics monitor collects and
+// shows the log of every node of its network until the returned function is
+// called.
 func (t *tui) show(scenario *parser.Scenario, monitor *monitoring.Monitor) (stop func()) {
 	t.app.QueueUpdateDraw(func() {
 		t.steps.Clear().SetTitle(" " + scenario.Name + " ")
@@ -162,7 +173,20 @@ func (t *tui) show(scenario *parser.Scenario, monitor *monitoring.Monitor) (stop
 		for _, plot := range t.plots {
 			plot.subjects, plot.lines = nil, nil
 		}
+		for _, name := range t.tabNames[1:] {
+			t.pages.RemovePage(name)
+		}
+		t.tabNames = t.tabNames[:1]
+		t.selectTab(0)
 	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	logs := &nodeLogs{t: t, ctx: ctx, views: map[string]*tview.TextView{}, streamed: map[string]driver.Node{}}
+	net := monitor.Network()
+	net.RegisterListener(logs)
+	for _, node := range net.GetActiveNodes() {
+		logs.AfterNodeCreation(node)
+	}
 
 	done := make(chan struct{})
 	stopped := make(chan struct{})
@@ -185,10 +209,86 @@ func (t *tui) show(scenario *parser.Scenario, monitor *monitoring.Monitor) (stop
 		}
 	}()
 	return func() {
+		net.UnregisterListener(logs)
+		cancel()
 		close(done)
 		<-stopped
 	}
 }
+
+// addTab adds a tab showing view after the existing ones.
+func (t *tui) addTab(name string, view tview.Primitive) {
+	t.pages.AddPage(name, view, true, len(t.tabNames) == 0)
+	t.tabNames = append(t.tabNames, name)
+	t.showTabs()
+}
+
+func (t *tui) selectTab(i int) {
+	t.current = i
+	t.pages.SwitchToPage(t.tabNames[i])
+	t.showTabs()
+}
+
+func (t *tui) showTabs() {
+	t.tabs.Clear()
+	for i, name := range t.tabNames {
+		fmt.Fprintf(t.tabs, `["%d"] %d: %s [""] `, i, i+1, tview.Escape(name))
+	}
+	t.tabs.Highlight(fmt.Sprint(t.current))
+}
+
+func newLogView() *tview.TextView {
+	return tview.NewTextView().SetDynamicColors(true).SetMaxLines(10_000).ScrollToEnd()
+}
+
+// nodeLogs streams the log of every node of a network into a tab of the TUI. A
+// node restarted under the same label continues the log of its tab.
+// ponytail: node tabs redraw only with the plots, once a second; redraw on
+// every write if that lags behind.
+type nodeLogs struct {
+	t        *tui
+	ctx      context.Context
+	lock     sync.Mutex
+	views    map[string]*tview.TextView
+	streamed map[string]driver.Node
+}
+
+func (l *nodeLogs) AfterNodeCreation(node driver.Node) {
+	label := node.GetLabel()
+	l.lock.Lock()
+	defer l.lock.Unlock()
+	// The stream of a node restarted in place stays open.
+	if l.streamed[label] == node {
+		return
+	}
+	l.streamed[label] = node
+	view, ok := l.views[label]
+	if !ok {
+		view = newLogView()
+		l.views[label] = view
+		l.t.app.QueueUpdateDraw(func() { l.t.addTab(label, view) })
+	}
+	go func() {
+		defer func() {
+			l.lock.Lock()
+			if l.streamed[label] == node {
+				delete(l.streamed, label)
+			}
+			l.lock.Unlock()
+		}()
+		stream, err := node.StreamLog(l.ctx)
+		if err != nil {
+			fmt.Fprintf(view, "failed to stream log: %v\n", err)
+			return
+		}
+		defer func() { _ = stream.Close() }()
+		_, _ = io.Copy(escapeWriter{tview.ANSIWriter(view)}, stream)
+	}()
+}
+
+func (l *nodeLogs) BeforeNodeRemoval(driver.Node) {}
+
+func (l *nodeLogs) AfterApplicationCreation(driver.Application) {}
 
 // showNodes lists the running nodes with their latest block and epoch.
 func (t *tui) showNodes(monitor *monitoring.Monitor) {
@@ -240,7 +340,7 @@ func newPlotTab(name string, sample func(*monitoring.Monitor) map[string]float64
 		legend: tview.NewTextView().SetDynamicColors(true),
 	}
 	p.SetMarker(tvxwidgets.PlotMarkerBraille)
-	p.SetYAxisLabelDataType(tvxwidgets.PlotYAxisLabelDataInt)
+	p.SetYAxisLabelDataType(tvxwidgets.PlotYAxisLabelDataFloat)
 	p.SetYAxisAutoScaleMin(true)
 	p.SetDrawXAxisLabel(false)
 	return p
@@ -280,16 +380,12 @@ func (p *plotTab) Draw(screen tcell.Screen) {
 	colors := make([]tcell.Color, len(p.lines))
 	for i, line := range p.lines {
 		data[i] = line[max(0, len(line)-keep):]
-		colors[i] = lineColors[i%len(lineColors)]
+		colors[i] = lineColors[i%len(lineColors)].TrueColor()
 	}
 	p.SetLineColor(colors)
 	p.SetData(data)
 	p.Plot.Draw(screen)
 }
-
-// txsCommitted counts the transactions in the blocks a node committed, read
-// from its Prometheus metrics.
-var txsCommitted = monitoring.Metric[monitoring.Node, monitoring.Series[monitoring.Time, float64]]{Name: "chain_txs_processed"}
 
 // rateWindow is the time over which rate averages the increase of a counter.
 const rateWindow = 5 * time.Second
@@ -314,40 +410,46 @@ func perNode[T any](
 	return res
 }
 
-// latest converts the latest value of a series with toFloat.
-func latest[T any](toFloat func(T) float64) func(monitoring.Series[monitoring.Time, T]) (float64, bool) {
+// total sums the values of the series of metric of every subject, having none
+// if no subject has one.
+func total[S, T any](
+	monitor *monitoring.Monitor,
+	metric monitoring.Metric[S, monitoring.Series[monitoring.Time, T]],
+	value func(monitoring.Series[monitoring.Time, T]) (float64, bool),
+) (float64, bool) {
+	sum, found := 0.0, false
+	for _, subject := range monitoring.GetSubjects(monitor, metric) {
+		series, ok := monitoring.GetData(monitor, subject, metric)
+		if !ok || series == nil {
+			continue
+		}
+		if v, ok := value(series); ok {
+			sum, found = sum+v, true
+		}
+	}
+	return sum, found
+}
+
+// rate is the per-second increase over the last rateWindow of a counter, read
+// from a series with toFloat. It has no value once the counter is no longer
+// collected, as for a stopped node, and while the window spans a reset of the
+// counter.
+func rate[T any](toFloat func(T) float64) func(monitoring.Series[monitoring.Time, T]) (float64, bool) {
 	return func(series monitoring.Series[monitoring.Time, T]) (float64, bool) {
-		point := series.GetLatest()
-		if point == nil {
+		last := series.GetLatest()
+		if last == nil || time.Since(last.Position.Time()) > rateWindow {
 			return 0, false
 		}
-		return toFloat(point.Value), true
+		points := series.GetRange(last.Position-monitoring.Time(rateWindow), last.Position+1)
+		if len(points) < 2 || toFloat(points[0].Value) > toFloat(last.Value) {
+			return 0, false
+		}
+		first := points[0]
+		return (toFloat(last.Value) - toFloat(first.Value)) / last.Position.Time().Sub(first.Position.Time()).Seconds(), true
 	}
 }
 
-// rate is the per-second increase of a counter over the last rateWindow. It
-// has no value once the counter is no longer collected, as for a stopped node,
-// and while the window spans a reset of the counter.
-func rate(series monitoring.Series[monitoring.Time, float64]) (float64, bool) {
-	last := series.GetLatest()
-	if last == nil || time.Since(last.Position.Time()) > rateWindow {
-		return 0, false
-	}
-	points := series.GetRange(last.Position-monitoring.Time(rateWindow), last.Position+1)
-	if len(points) < 2 || points[0].Value > last.Value {
-		return 0, false
-	}
-	first := points[0]
-	return (last.Value - first.Value) / last.Position.Time().Sub(first.Position.Time()).Seconds(), true
-}
-
-func weiToS(wei string) float64 {
-	value, err := strconv.ParseFloat(wei, 64)
-	if err != nil {
-		return math.NaN()
-	}
-	return value / 1e18
-}
+func intToFloat(v int) float64 { return float64(v) }
 
 // stepHandler reports the start of every scenario step, read from the record
 // the executor logs for it.
