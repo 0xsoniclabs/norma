@@ -26,10 +26,11 @@ import (
 
 // delegatorGasBudget is the extra amount (in S) transferred to a delegator
 // account on top of the delegation stake. Delegate and undelegate
-// transactions reserve their fixed 1e6 gas limit times a fee cap derived
-// from the current base fee, a small fraction of 1 S at fakenet base fees,
-// so 1 S leaves headroom for repeated operations.
-const delegatorGasBudget uint64 = 1
+// transactions carry the system transaction tip so they are not delayed by
+// load, and reserve their fixed 1e6 gas limit times a fee cap of that tip plus
+// twice the base fee: just over 1 S per transaction. 10 S covers that
+// reservation plus the fees of several undelegations without a refund.
+const delegatorGasBudget uint64 = 10
 
 // getOrCreateDelegator returns the delegator account for the given name,
 // creating it deterministically on first use. The private key is derived
