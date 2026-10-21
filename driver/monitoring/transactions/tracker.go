@@ -40,6 +40,11 @@
 // observed transactions rather than read from the pools, which would mean
 // transferring their entire contents on every sample.
 //
+// A bundle is followed as one transaction, its envelope: that is what a load
+// generator submits and what validators put into events. A block carries the
+// transactions of the bundle instead, and the first of them to be included
+// includes the bundle.
+//
 // Only transactions of load generators are followed. The transactions Norma
 // sends to set a scenario up - funding accounts, deploying contracts, changing
 // rules - do not pass through the observed submission path.
@@ -53,6 +58,7 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/sonic/gossip/blockproc/bundle"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -172,6 +178,8 @@ type Tracker struct {
 	txs     map[common.Hash]*transaction
 	senders map[common.Address]*sender
 	apps    map[string]*application
+	// bundled maps the transactions of the bundles in flight to their envelope.
+	bundled map[common.Hash]bundledTransaction
 	// blocks holds, per block, what each application contributed to it - the
 	// composition of the block.
 	blocks map[int]map[string]*BlockContribution
@@ -193,8 +201,15 @@ type transaction struct {
 	sender      common.Address
 	nonce       uint64
 	submittedAt time.Time
-	emittedAt   time.Time // zero until the transaction is seen in an event
-	blocked     bool      // counted as Stalled rather than Pending
+	emittedAt   time.Time     // zero until the transaction is seen in an event
+	blocked     bool          // counted as Stalled rather than Pending
+	bundled     []common.Hash // the transactions of the bundle this envelope delivers
+}
+
+// bundledTransaction is a transaction delivered by the envelope of a bundle.
+type bundledTransaction struct {
+	envelope common.Hash
+	app      string
 }
 
 // sender is the nonce bookkeeping of one account, which is what decides whether
@@ -252,6 +267,7 @@ func NewTracker() *Tracker {
 		txs:     map[common.Hash]*transaction{},
 		senders: map[common.Address]*sender{},
 		apps:    map[string]*application{},
+		bundled: map[common.Hash]bundledTransaction{},
 		blocks:  map[int]map[string]*BlockContribution{},
 		limits:  map[int]BlockLimit{},
 	}
@@ -287,7 +303,8 @@ func (t *Tracker) OnTransactionSubmitted(
 		return
 	}
 
-	from, senderErr := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+	signer := types.LatestSignerForChainID(tx.ChainId())
+	from, senderErr := types.Sender(signer, tx)
 	if senderErr != nil {
 		t.unknownSender++
 	}
@@ -297,6 +314,25 @@ func (t *Tracker) OnTransactionSubmitted(
 		sender:      from,
 		nonce:       tx.Nonce(),
 		submittedAt: at,
+	}
+	if bundle.IsEnvelope(tx) {
+		// A malformed envelope is never executed, so it is followed like any
+		// transaction that never makes it into a block.
+		if txBundle, err := bundle.OpenEnvelope(signer, tx); err == nil {
+			for _, bundledTx := range txBundle.Transactions {
+				// Every transaction of a bundle is marked with the hash of its
+				// execution plan, so only an envelope delivering the same plan
+				// shares it - the same bundle submitted twice, of which at most
+				// one is executed.
+				if _, exists := t.bundled[bundledTx.Hash()]; exists {
+					return
+				}
+				entry.bundled = append(entry.bundled, bundledTx.Hash())
+			}
+			for _, bundledHash := range entry.bundled {
+				t.bundled[bundledHash] = bundledTransaction{envelope: hash, app: source.App}
+			}
+		}
 	}
 
 	account, found := t.senders[from]
@@ -383,8 +419,20 @@ func (t *Tracker) MarkBlock(height int, at time.Time, txs []IncludedTransaction)
 	defer t.mu.Unlock()
 
 	composition := map[string]*BlockContribution{}
+	var landed []*transaction
 	for _, tx := range txs {
-		app, tracked := t.markIncluded(tx.Hash, at)
+		hash := tx.Hash
+		bundled, isBundled := t.bundled[hash]
+		if isBundled {
+			hash = bundled.envelope
+			if envelope, found := t.txs[hash]; found {
+				landed = append(landed, envelope)
+			}
+		}
+		app, tracked := t.markIncluded(hash, at)
+		if isBundled {
+			app, tracked = bundled.app, true
+		}
 		if !tracked {
 			// A transaction of no application: Norma sends those itself, to fund
 			// accounts, deploy contracts or change the rules of the network.
@@ -397,6 +445,11 @@ func (t *Tracker) MarkBlock(height int, at time.Time, txs []IncludedTransaction)
 		}
 		contribution.Transactions++
 		contribution.Gas += tx.GasUsed
+	}
+	// A bundle is executed within one block, so whatever of it did not land
+	// with it never will, as the alternatives of a one-of bundle.
+	for _, envelope := range landed {
+		t.releaseBundle(envelope)
 	}
 	if len(composition) > 0 {
 		t.blocks[height] = composition
@@ -459,6 +512,18 @@ func (t *Tracker) markIncluded(hash common.Hash, at time.Time) (string, bool) {
 	delete(t.txs, hash)
 	t.releaseNonce(entry)
 	return entry.app, true
+}
+
+// releaseBundle forgets the transactions of the bundle an included envelope
+// delivered, and its sender: an envelope is signed with a key of its own, and
+// its nonce is never executed. The caller must hold the lock.
+func (t *Tracker) releaseBundle(entry *transaction) {
+	for _, hash := range entry.bundled {
+		delete(t.bundled, hash)
+	}
+	if account, found := t.senders[entry.sender]; found && len(account.inFlight) == 0 {
+		delete(t.senders, entry.sender)
+	}
 }
 
 // releaseNonce advances the sender's next nonce past the included transaction.

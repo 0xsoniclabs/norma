@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/sonic/gossip/blockproc/bundle"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -32,6 +33,7 @@ import (
 
 var (
 	chainID = big.NewInt(0xfa3)
+	signer  = types.LatestSignerForChainID(chainID)
 	epoch   = time.Unix(1_700_000_000, 0)
 )
 
@@ -304,6 +306,14 @@ func newAccount(t *testing.T, seed int64) account {
 	return account{key: key}
 }
 
+// step creates a step of a bundle sending a transaction with the given nonce to
+// the address starting with to.
+func (a account) step(nonce uint64, to byte) bundle.BuilderStep {
+	return bundle.Step(a.key, &types.DynamicFeeTx{
+		ChainID: chainID, Nonce: nonce, GasFeeCap: big.NewInt(1e12), Gas: 50_000, To: &common.Address{to},
+	})
+}
+
 // transaction creates a signed transaction with the given nonce, matching the
 // shape the load generators produce.
 func (a account) transaction(t *testing.T, nonce uint64) *types.Transaction {
@@ -359,6 +369,116 @@ func TestTracker_BlockCompositionCountsTheTransactionsAndGasOfEachApplication(t 
 	// The transactions were included, which is what the block reported.
 	require.Equal(Counts{Included: 1}, tracker.Counts("fast"))
 	require.Equal(Counts{Included: 1}, tracker.Counts("ordinary"))
+}
+
+func TestTracker_BundleIsIncludedOnceWithTheTransactionsItDelivers(t *testing.T) {
+	require := require.New(t)
+	tracker := NewTracker()
+	approver, spender := newAccount(t, 1), newAccount(t, 2)
+
+	allOfEnvelope, allOfBundle, _ := bundle.NewBuilder().WithSigner(signer).
+		AllOf(approver.step(0, 0x42), spender.step(0, 0x42)).
+		BuildEnvelopeBundleAndPlan()
+	oneOfEnvelope, oneOfBundle, _ := bundle.NewBuilder().WithSigner(signer).
+		OneOf(approver.step(1, 0x42), spender.step(1, 0x42)).
+		BuildEnvelopeBundleAndPlan()
+	tracker.OnTransactionSubmitted(source("all-of", 0), allOfEnvelope, epoch, nil)
+	tracker.OnTransactionSubmitted(source("one-of", 0), oneOfEnvelope, epoch, nil)
+	require.Equal(Counts{Pending: 1}, tracker.Counts("all-of"))
+
+	// Validators carry the envelope in their events, blocks carry what it
+	// delivers: all transactions of an all-of bundle, one of a one-of bundle.
+	tracker.MarkEmitted(allOfEnvelope.Hash(), epoch.Add(300*time.Millisecond))
+	require.Equal(Counts{Emitted: 1}, tracker.Counts("all-of"))
+	var included []IncludedTransaction
+	for _, tx := range allOfBundle.GetTransactionsInReferencedOrder() {
+		included = append(included, IncludedTransaction{Hash: tx.Hash(), GasUsed: 30_000})
+	}
+	oneOfExecuted := oneOfBundle.GetTransactionsInReferencedOrder()[0]
+	included = append(included, IncludedTransaction{Hash: oneOfExecuted.Hash(), GasUsed: 30_000})
+	tracker.MarkBlock(7, epoch.Add(time.Second), included)
+
+	require.Equal(Counts{Included: 1}, tracker.Counts("all-of"))
+	require.Equal(Counts{Included: 1}, tracker.Counts("one-of"))
+	require.Equal(
+		[]Sample{{At: epoch, Duration: time.Second}},
+		tracker.Samples("all-of", TimeToInclude),
+	)
+	require.Equal(
+		[]BlockContribution{{Block: 7, Transactions: 2, Gas: 60_000}},
+		tracker.BlockContributions("all-of"),
+	)
+	require.Equal(
+		[]BlockContribution{{Block: 7, Transactions: 1, Gas: 30_000}},
+		tracker.BlockContributions("one-of"),
+	)
+
+	// Nothing of either bundle is retained, including the one-of alternative
+	// that was not executed.
+	require.Empty(tracker.txs)
+	require.Empty(tracker.bundled)
+	require.Empty(tracker.senders)
+}
+
+func TestTracker_ABundleSubmittedTwiceIsFollowedFromItsFirstSubmission(t *testing.T) {
+	require := require.New(t)
+	tracker := NewTracker()
+	user := newAccount(t, 1)
+
+	// Each envelope is signed with a key of its own, but both deliver the same
+	// transactions, of which the network executes one.
+	first, firstBundle, _ := bundle.NewBuilder().WithSigner(signer).
+		AllOf(user.step(0, 0x42)).
+		BuildEnvelopeBundleAndPlan()
+	second, secondBundle, _ := bundle.NewBuilder().WithSigner(signer).
+		AllOf(user.step(0, 0x42)).
+		BuildEnvelopeBundleAndPlan()
+	require.NotEqual(first.Hash(), second.Hash())
+	delivered := firstBundle.GetTransactionsInReferencedOrder()[0]
+	require.Equal(delivered.Hash(), secondBundle.GetTransactionsInReferencedOrder()[0].Hash())
+
+	tracker.OnTransactionSubmitted(source("app", 0), first, epoch, nil)
+	tracker.OnTransactionSubmitted(source("app", 0), second, epoch.Add(time.Second), nil)
+	require.Equal(Counts{Pending: 1}, tracker.Counts("app"))
+
+	tracker.MarkBlock(7, epoch.Add(2*time.Second), []IncludedTransaction{{Hash: delivered.Hash(), GasUsed: 30_000}})
+	require.Equal(Counts{Included: 1}, tracker.Counts("app"))
+	require.Equal(
+		[]Sample{{At: epoch, Duration: 2 * time.Second}},
+		tracker.Samples("app", TimeToInclude),
+	)
+	require.Empty(tracker.txs)
+	require.Empty(tracker.bundled)
+}
+
+func TestTracker_BundlesSharingNoncesAreFollowedApart(t *testing.T) {
+	require := require.New(t)
+	tracker := NewTracker()
+	user := newAccount(t, 1)
+
+	// Built from the same nonce before it advanced, as a one-of bundle user
+	// does; the transactions of a bundle carry the hash of its plan, so the two
+	// share none.
+	failing, succeeding := byte(0x01), byte(0x02)
+	executed, executedBundle, _ := bundle.NewBuilder().WithSigner(signer).
+		OneOf(user.step(0, failing), user.step(1, succeeding)).
+		BuildEnvelopeBundleAndPlan()
+	other, _, _ := bundle.NewBuilder().WithSigner(signer).
+		OneOf(user.step(0, succeeding), user.step(0, failing)).
+		BuildEnvelopeBundleAndPlan()
+	tracker.OnTransactionSubmitted(source("app", 0), executed, epoch, nil)
+	tracker.OnTransactionSubmitted(source("app", 0), other, epoch, nil)
+	require.Equal(Counts{Pending: 2}, tracker.Counts("app"))
+
+	var included []IncludedTransaction
+	for _, tx := range executedBundle.GetTransactionsInReferencedOrder() {
+		included = append(included, IncludedTransaction{Hash: tx.Hash(), GasUsed: 30_000})
+	}
+	tracker.MarkBlock(7, epoch.Add(time.Second), included)
+
+	require.Equal(Counts{Pending: 1, Included: 1}, tracker.Counts("app"))
+	require.Contains(tracker.txs, other.Hash())
+	require.Len(tracker.bundled, 2, "the transactions of the bundle still in flight")
 }
 
 func TestTracker_BlockCompositionIsOrderedByBlockHeight(t *testing.T) {
