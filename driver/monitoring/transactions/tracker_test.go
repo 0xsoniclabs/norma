@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/sonic/gossip/blockproc/bundle"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -359,6 +360,58 @@ func TestTracker_BlockCompositionCountsTheTransactionsAndGasOfEachApplication(t 
 	// The transactions were included, which is what the block reported.
 	require.Equal(Counts{Included: 1}, tracker.Counts("fast"))
 	require.Equal(Counts{Included: 1}, tracker.Counts("ordinary"))
+}
+
+func TestTracker_BundleIsIncludedOnceWithTheTransactionsItDelivers(t *testing.T) {
+	require := require.New(t)
+	tracker := NewTracker()
+	approver, spender := newAccount(t, 1), newAccount(t, 2)
+	signer := types.LatestSignerForChainID(chainID)
+	step := func(a account, nonce uint64) bundle.BuilderStep {
+		return bundle.Step(a.key, &types.DynamicFeeTx{
+			ChainID: chainID, Nonce: nonce, GasFeeCap: big.NewInt(1e12), Gas: 50_000, To: &common.Address{0x42},
+		})
+	}
+
+	allOf := bundle.NewBuilder().WithSigner(signer).AllOf(step(approver, 0), step(spender, 0))
+	allOfEnvelope, allOfBundle, _ := allOf.BuildEnvelopeBundleAndPlan()
+	oneOf := bundle.NewBuilder().WithSigner(signer).OneOf(step(approver, 1), step(spender, 1))
+	oneOfEnvelope, oneOfBundle, _ := oneOf.BuildEnvelopeBundleAndPlan()
+	tracker.OnTransactionSubmitted(source("all-of", 0), allOfEnvelope, epoch, nil)
+	tracker.OnTransactionSubmitted(source("one-of", 0), oneOfEnvelope, epoch, nil)
+	require.Equal(Counts{Pending: 1}, tracker.Counts("all-of"))
+
+	// Validators carry the envelope in their events, blocks carry what it
+	// delivers: all transactions of an all-of bundle, one of a one-of bundle.
+	tracker.MarkEmitted(allOfEnvelope.Hash(), epoch.Add(300*time.Millisecond))
+	require.Equal(Counts{Emitted: 1}, tracker.Counts("all-of"))
+	var included []IncludedTransaction
+	for _, tx := range allOfBundle.GetTransactionsInReferencedOrder() {
+		included = append(included, IncludedTransaction{Hash: tx.Hash(), GasUsed: 30_000})
+	}
+	included = append(included, IncludedTransaction{Hash: oneOfBundle.GetTransactionsInReferencedOrder()[0].Hash(), GasUsed: 30_000})
+	tracker.MarkBlock(7, epoch.Add(time.Second), included)
+
+	require.Equal(Counts{Included: 1}, tracker.Counts("all-of"))
+	require.Equal(Counts{Included: 1}, tracker.Counts("one-of"))
+	require.Equal(
+		[]Sample{{At: epoch, Duration: time.Second}},
+		tracker.Samples("all-of", TimeToInclude),
+	)
+	require.Equal(
+		[]BlockContribution{{Block: 7, Transactions: 2, Gas: 60_000}},
+		tracker.BlockContributions("all-of"),
+	)
+	require.Equal(
+		[]BlockContribution{{Block: 7, Transactions: 1, Gas: 30_000}},
+		tracker.BlockContributions("one-of"),
+	)
+
+	// Nothing of either bundle is retained, including the one-of alternative
+	// that was not executed.
+	require.Empty(tracker.txs)
+	require.Empty(tracker.bundled)
+	require.Empty(tracker.senders)
 }
 
 func TestTracker_BlockCompositionIsOrderedByBlockHeight(t *testing.T) {
