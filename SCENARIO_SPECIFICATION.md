@@ -262,7 +262,7 @@ running; one sent while there is none is reported as a failed submission.
 `store`, `uniswap`, `smartaccount`, `subsidies`, `transient`,
 `selfdestructoldcontract`, `selfdestructnewcontract`, `ecdsa`,
 `largecontract`, `allofbundle`, `oneofbundle`, `subsidizedbundle`,
-`failingbundle`, `duplicatedbundle`, `bls12add`, `mix`.
+`failingbundle`, `failingrootbundle`, `duplicatedbundle`, `bls12add`, `mix`.
 
 **Rate shapes** — exactly one of the following must be set on `rate`:
 
