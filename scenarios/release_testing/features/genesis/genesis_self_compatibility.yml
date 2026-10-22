@@ -1,16 +1,18 @@
 Name: Genesis Self Compatibility
 
 Description: >-
-  The candidate exports a g-file on an epoch boundary, and a fresh
-  candidate node bootstraps from it, joins the network and follows the
-  chain.
+  The candidate stops itself cleanly on an epoch boundary under load,
+  bundles included, and exports a g-file, and a fresh candidate node
+  bootstraps from it, joins the network while the load is still running and
+  follows the chain.
 
 InitialNetworkRules:
   Upgrades:
     Sonic: true
     Allegro: true
     GasSubsidies: false
-    Brio: false
+    Brio: true
+    TransactionBundles: true
   Epochs:
     # Short epochs, so the g-file carries many sealed epochs of history.
     MaxEpochDuration: 10s
@@ -20,10 +22,17 @@ Scenario:
     type: validator
     stake: 50_000_000
 
-  # Checkpoints every block let healDb roll back to the latest sealed epoch.
+  # Exits on its own, with its database flushed, at the start of epoch 15:
+  # about 150 seconds in, well into the load. Unlike the kill and heal of the
+  # other genesis scenarios, this fixes the export on a known boundary, as an
+  # operator producing a g-file would.
   - startNode: exporter-local
     type: observer
-    extraArguments: "--statedb.checkpointinterval 1"
+    failing: true
+    extraArguments: "--exitwhensynced.epoch 15"
+
+  # Every app submits through the validator, as the exporter goes away
+  # while they run.
 
   # Transaction volume and account churn.
   - runApp: counter
@@ -31,18 +40,21 @@ Scenario:
     users: 20
     rate:
       constant: 20
+    nodes: [validator]
 
   - runApp: tokens
     type: erc20
     users: 10
     rate:
       constant: 10
+    nodes: [validator]
 
   - runApp: swaps
     type: uniswap
     users: 5
     rate:
       constant: 5
+    nodes: [validator]
 
   # Storage growth: each transaction allocates 260 fresh slots for ~6.5 MGas,
   # so 0.5/s keeps the total well under the network's gas target.
@@ -51,20 +63,25 @@ Scenario:
     users: 5
     rate:
       constant: 0.5
+    nodes: [validator]
 
-  - waitForBlocks: 100
+  # Bundles fill the g-file's processed bundles history, which feeds the
+  # epoch hash a bootstrapped node has to reproduce.
+  - runApp: all-of
+    type: allofbundle
+    users: 10
+    rate:
+      constant: 5
+    nodes: [validator]
 
-  - stopApp: counter
-  - stopApp: tokens
-  - stopApp: swaps
-  - stopApp: bulk
+  - runApp: one-of
+    type: oneofbundle
+    users: 10
+    rate:
+      constant: 5
+    nodes: [validator]
 
-  # healDb reverts to the start of the epoch the database last flushed in
-  # (SCENARIO_SPECIFICATION.md 3.12). Flushes follow write volume, so the last
-  # one falls near the end of the load, and short epochs keep the boundary
-  # close to it: the g-file holds nearly all of the load.
-  - killSonic: exporter-local
-  - healDb: exporter-local
+  - waitForSonicExit: exporter-local
 
   - exportGenesis: exporter-local
     file: from-local.g
@@ -78,3 +95,13 @@ Scenario:
     mode: archive
   - startNode: fresh-local
     type: observer
+
+  # The fresh node follows the chain under load, bundles included.
+  - waitForBlocks: 30
+
+  - stopApp: counter
+  - stopApp: tokens
+  - stopApp: swaps
+  - stopApp: bulk
+  - stopApp: all-of
+  - stopApp: one-of
