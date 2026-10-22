@@ -262,7 +262,7 @@ running; one sent while there is none is reported as a failed submission.
 `store`, `uniswap`, `smartaccount`, `subsidies`, `transient`,
 `selfdestructoldcontract`, `selfdestructnewcontract`, `ecdsa`,
 `largecontract`, `allofbundle`, `oneofbundle`, `subsidizedbundle`,
-`failingbundle`, `duplicatedbundle`, `bls12add`, `mix`.
+`failingbundle`, `failingrootbundle`, `duplicatedbundle`, `bls12add`, `mix`.
 
 **Rate shapes** — exactly one of the following must be set on `rate`:
 
@@ -480,6 +480,7 @@ function name or a mapping.
 | `blocksProduced`   | Assert the network produces blocks over an observation window.   | `tolerance`, `duration`, `failing`            |
 | `eventThrottled`   | Assert the listed validators emit events far slower than others. | `throttledNodes`, `failing`                   |
 | `networkRules`     | Assert the active rules on all nodes match the given patch.      | `rules`, `duration`, `failing`                |
+| `receiptGasUsed`   | Assert the amended nodes correct receipt gas the leaked report.  | `amended`, `leaked`, `exportEpoch`, `failing` |
 | `validatorsActive` | Assert every running validator is in the epoch's validator set.  | `failing`                                     |
 
 ### 5.1 Windows of time
@@ -495,6 +496,7 @@ recorded before that instant. There are four shapes.
 | `blockHeights`   | Convergence budget     | now + budget, at entry       | Live heights, re-read until they agree |
 | `networkRules`   | Convergence budget     | now + budget, at entry       | Live rules, re-read until they agree   |
 | `blockHashes`    | Fixed block range      | lowest head of healthy nodes | Blocks 0…that head, settled everywhere |
+| `receiptGasUsed` | Fixed block range      | lowest head of listed nodes  | Receipts of blocks 1…that head         |
 | `eventThrottled` | Two measured snapshots | each DAG head query          | Event delta ÷ the interval measured    |
 
 **Forward observation.** The check notes the current instant, waits for its
@@ -539,6 +541,8 @@ heads are queried, since the heads fix which events get counted.
 | `duration`       | duration string     | Observation window (minimum **2s**), or convergence budget — see below.         |
 | `rules`          | `NetworkRulesPatch` | Expected rule set; every field set must equal the value reported by every node. |
 | `throttledNodes` | list of strings     | Node labels expected to be throttled. Required; every label must resolve.       |
+| `amended`        | list of strings     | Node labels correcting the receipt gas leaked by failed bare-root bundles.      |
+| `leaked`         | list of strings     | Node labels still reporting that leaked receipt gas.                            |
 | `failing`        | bool                | When `true` the check is **expected to fail**; a passing result is an error.    |
 
 `tolerance` and `duration` are deliberately overloaded; this is what they mean
@@ -553,6 +557,7 @@ per check, with the value used when the parameter is omitted:
 | `networkRules`   | —                                 | convergence budget — **30s** | `rules` — required          |
 | `blockHashes`    | —                                 | —                            | —                           |
 | `eventThrottled` | —                                 | —                            | `throttledNodes` — required |
+| `receiptGasUsed` | —                                 | —                            | `amended`, `leaked`, `exportEpoch` — required |
 
 Two things to keep in mind:
 
@@ -596,7 +601,7 @@ and the cost of a check.
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
 | `blocksProduced`, `blocksHalted`, `blockGasRate` | Always the full window (10s by default).                                                                                     |
 | `blockHeights`, `networkRules`                   | Nothing when the network is already in the expected state; up to the budget (30s) otherwise, including when `failing: true`. |
-| `blockHashes`                                    | No waiting; RPC-bound, roughly one call per block per node.                                                                  |
+| `blockHashes`, `receiptGasUsed`                  | No waiting; RPC-bound, roughly one call per block per node.                                                                  |
 | `eventThrottled`                                 | 5s plus DAG walking time per attempt, up to 5 attempts with 2s pauses.                                                       |
 
 The scenario deadline is 10 minutes, so budget the observing checks accordingly.

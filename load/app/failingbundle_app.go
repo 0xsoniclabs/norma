@@ -34,8 +34,9 @@ import (
 )
 
 const (
-	allOfFailureProbability uint8 = 5  // probability of bundle success: 0.95*0.95 = 90%
-	oneOfFailureProbability uint8 = 30 // probability of bundle success: 1-(0.3*0.3) = 91%
+	allOfFailureProbability    uint8 = 5  // probability of bundle success: 0.95*0.95 = 90%
+	oneOfFailureProbability    uint8 = 30 // probability of bundle success: 1-(0.3*0.3) = 91%
+	bareRootFailureProbability uint8 = 30 // probability of bundle success: 70%
 )
 
 // FailingBundleApplication generates bundle transactions using the ProbabilisticFailing
@@ -50,6 +51,21 @@ type FailingBundleApplication struct {
 	contractAddress common.Address
 	contractAbi     *abi.ABI
 	accountFactory  *AccountFactory
+	bareRoot        bool
+}
+
+// NewFailingRootBundleApplication is a FailingBundleApplication sending bundles
+// whose root is a single incrementCounter call instead of a group. A failing
+// bare root leaks its gas into the cumulative gas of the receipts after it.
+// Clients from v2.2.4 on reject such bundles at pool admission, so they have
+// to be submitted through an older one, such as v2.2.3.
+func NewFailingRootBundleApplication(appContext AppContext, feederId, appId uint32) (Application, error) {
+	application, err := NewFailingBundleApplication(appContext, feederId, appId)
+	if err != nil {
+		return nil, err
+	}
+	application.(*FailingBundleApplication).bareRoot = true
+	return application, nil
 }
 
 func NewFailingBundleApplication(appContext AppContext, feederId, appId uint32) (Application, error) {
@@ -107,6 +123,7 @@ func (a *FailingBundleApplication) CreateUsers(appContext AppContext, numUsers i
 			contractAbi:     a.contractAbi,
 			senderA:         senderA,
 			senderB:         senderB,
+			bareRoot:        a.bareRoot,
 			signer:          types.LatestSignerForChainID(senderA.chainID),
 			client:          appContext.GetClient(),
 		}
@@ -144,12 +161,15 @@ func (a *FailingBundleApplication) GetReceivedTransactions(rpcClient rpc.Client)
 //  1. AllOf: senderA.incrementCounter(10), senderB.incrementCounter(10)
 //  2. OneOf: senderA.incrementCounter(40), senderB.incrementCounter(40)
 //
+// or, with bareRoot, a bare senderA.incrementCounter(30).
+//
 // Nonces are fetched from the RPC on every call.
 type FailingBundleUser struct {
 	contractAddress common.Address
 	contractAbi     *abi.ABI
 	senderA         *Account
 	senderB         *Account
+	bareRoot        bool
 	signer          types.Signer
 	client          rpc.Client
 	sentTxs         atomic.Uint64
@@ -159,9 +179,12 @@ func (u *FailingBundleUser) GenerateTx() (*types.Transaction, error) {
 	ctx := context.Background()
 	useAllOf := rand.Intn(2) == 0
 	var failureProbability uint8
-	if useAllOf {
+	switch {
+	case u.bareRoot:
+		failureProbability = bareRootFailureProbability
+	case useAllOf:
 		failureProbability = allOfFailureProbability
-	} else {
+	default:
 		failureProbability = oneOfFailureProbability
 	}
 
@@ -202,9 +225,12 @@ func (u *FailingBundleUser) GenerateTx() (*types.Transaction, error) {
 	})
 
 	builder := bundle.NewBuilder().WithSigner(u.signer).SetEarliest(currentBlock)
-	if useAllOf {
+	switch {
+	case u.bareRoot:
+		builder = builder.With(stepA)
+	case useAllOf:
 		builder = builder.AllOf(stepA, stepB)
-	} else {
+	default:
 		builder = builder.OneOf(stepA, stepB)
 	}
 
