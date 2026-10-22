@@ -88,7 +88,8 @@ func (s *StartNode) restartInPlace(ctx context.Context, env *steps.Env, existing
 	// monitoring observes the blocks it processes while doing so.
 	env.Net.ResumeNode(existing)
 
-	if targetBlock > 0 {
+	// A node expected to fail may never catch up, as with a fresh start.
+	if targetBlock > 0 && !s.Failing && !existing.IsExpectedFailure() {
 		if err := steps.WaitForNodeSync(ctx, existing, targetBlock+1); err != nil {
 			return fmt.Errorf(
 				"restarted node %s did not reach block %d: %w",

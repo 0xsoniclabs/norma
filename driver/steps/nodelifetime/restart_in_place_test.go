@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/norma/driver/steps"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -55,6 +56,39 @@ func TestStartNode_RestartsWithTheNodesRole_WhenTheTypeIsOmitted(t *testing.T) {
 			step := &StartNode{Node: steps.Node{Node: "frail"}}
 			require.NoError(t, step.Run(t.Context(), env))
 			require.Equal(t, test.wantStart, client.started)
+		})
+	}
+}
+
+// A node expected to fail may never catch up with the network, so a restart
+// in place does not wait for it to, whether the step or the node says so. A
+// DialRpc call to wait on the node would be unexpected on this mock.
+func TestStartNode_RestartInPlace_DoesNotWaitForCatchUp_WhenTheNodeIsExpectedToFail(t *testing.T) {
+	tests := map[string]struct {
+		stepFailing, nodeFailing bool
+	}{
+		"step": {stepFailing: true},
+		"node": {nodeFailing: true},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			client := &recordingClient{MockNode: driver.NewMockNode(ctrl)}
+			client.EXPECT().GetValidatorId().Return(nil).AnyTimes()
+			client.EXPECT().IsExpectedFailure().Return(test.nodeFailing).AnyTimes()
+
+			head := rpc.NewMockClient(ctrl)
+			head.EXPECT().BlockNumber(gomock.Any()).Return(uint64(10), nil)
+			head.EXPECT().Close()
+			net := driver.NewMockNetwork(ctrl)
+			net.EXPECT().DialRandomRpc().Return(head, nil)
+			net.EXPECT().ReconnectNode(gomock.Any(), client).Return(nil)
+			net.EXPECT().ResumeNode(client)
+
+			env := steps.NewEnv(net, nil, nil)
+			env.Nodes["frail"] = client
+			step := &StartNode{Node: steps.Node{Node: "frail"}, Failing: test.stepFailing}
+			require.NoError(t, step.Run(t.Context(), env))
 		})
 	}
 }
