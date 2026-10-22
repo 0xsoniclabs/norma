@@ -1305,7 +1305,7 @@ Scenario:
 	require.ErrorContains(t, scenario.Check(), "requires a node identifier")
 }
 
-func TestParseBytes_PrepareNodeStep(t *testing.T) {
+func TestParseBytes_DecodesEveryParameter_OfAPrepareNodeStep(t *testing.T) {
 	input := `
 Name: Bootstrap Test
 Description: Bootstraps a fresh node from a g-file.

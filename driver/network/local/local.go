@@ -393,18 +393,27 @@ func (n *LocalNetwork) RemoveNode(node driver.Node) error {
 
 	n.nodesMutex.Lock()
 	defer n.nodesMutex.Unlock()
-	id, err := node.GetNodeID()
-	if err != nil {
-		return fmt.Errorf("failed to get node id; %v", err)
+	// Looked up by pointer rather than GetNodeID, which needs a running client:
+	// a node whose client is stopped, killed or was never started is removable.
+	var id driver.NodeID
+	for key, existing := range n.nodes {
+		if driver.Node(existing) == node {
+			id = key
+			break
+		}
 	}
 
 	delete(n.nodes, id)
 	delete(n.suspended, node)
+	// A prepared node is still keyed by its label: it never had peers.
+	if id == "" || id == driver.NodeID(node.GetLabel()) {
+		return nil
+	}
 	for _, other := range n.nodes {
 		if n.suspended[other] {
 			continue
 		}
-		if err = other.RemovePeer(n.ctx, id); err != nil {
+		if err := other.RemovePeer(n.ctx, id); err != nil {
 			return fmt.Errorf("failed to remove peer; %v", err)
 		}
 	}
