@@ -194,6 +194,9 @@ func getGasUsed(client rpc.Client, block uint64) ([]uint64, error) {
 	if err := client.Call(&receipts, "eth_getBlockReceipts", hexutil.EncodeUint64(block)); err != nil {
 		return nil, err
 	}
+	if receipts == nil {
+		return nil, fmt.Errorf("block not found")
+	}
 	gasUsed := make([]uint64, len(receipts))
 	for i, r := range receipts {
 		gasUsed[i] = uint64(r.GasUsed)

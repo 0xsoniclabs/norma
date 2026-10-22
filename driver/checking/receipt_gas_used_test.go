@@ -94,7 +94,11 @@ func TestReceiptGasUsed_Check(t *testing.T) {
 		},
 		"leaked receipts missing": {
 			gasUsed:   map[string][]uint64{"a1": {21_000}, "a2": {21_000}, "l1": nil},
-			wantError: "block 1 has 1 receipts on [a1 a2] but 0 on [l1]",
+			wantError: "failed to get receipts of block 1 from node l1; block not found",
+		},
+		"blocks without receipts": {
+			gasUsed:   map[string][]uint64{"a1": {}, "a2": {}, "l1": {}},
+			wantError: "no receipt in a block before epoch 2, up to block 2",
 		},
 		"receipt counts differ": {
 			gasUsed:   map[string][]uint64{"a1": {21_000}, "a2": {21_000}, "l1": {50_090, 21_000}},
