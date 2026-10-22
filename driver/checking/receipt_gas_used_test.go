@@ -28,48 +28,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-// receiptsNetwork mocks a network of nodes at block 2, each reporting the
-// given GasUsed for the receipts of every block, or no receipts for nil. Each
-// block is of the epoch of its number.
-func receiptsNetwork(t *testing.T, gasUsed map[string][]uint64) driver.Network {
-	ctrl := gomock.NewController(t)
-	nodes := []driver.Node{}
-	for label, gas := range gasUsed {
-		client := rpc.NewMockClient(ctrl)
-		client.EXPECT().Close().AnyTimes()
-		client.EXPECT().BlockNumber(gomock.Any()).AnyTimes().Return(uint64(2), nil)
-		client.EXPECT().Call(gomock.Any(), "eth_getBlockReceipts", gomock.Any()).AnyTimes().
-			DoAndReturn(func(result any, _ string, _ ...any) error {
-				if gas == nil {
-					return json.Unmarshal([]byte("null"), result)
-				}
-				receipts := []map[string]string{}
-				for _, g := range gas {
-					receipts = append(receipts, map[string]string{"gasUsed": hexutil.EncodeUint64(g)})
-				}
-				encoded, err := json.Marshal(receipts)
-				if err != nil {
-					return err
-				}
-				return json.Unmarshal(encoded, result)
-			})
-		client.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any()).AnyTimes().
-			DoAndReturn(func(result any, _ string, args ...any) error {
-				header := fmt.Sprintf(`{"epoch":%q}`, args[0])
-				return json.Unmarshal([]byte(header), result)
-			})
-
-		node := driver.NewMockNode(ctrl)
-		node.EXPECT().GetLabel().AnyTimes().Return(label)
-		node.EXPECT().DialRpc(gomock.Any()).AnyTimes().Return(client, nil)
-		nodes = append(nodes, node)
-	}
-	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().GetActiveNodes().AnyTimes().Return(nodes)
-	return net
-}
-
-func TestReceiptGasUsed_Check(t *testing.T) {
+func TestReceiptGasUsed_PassesOnlyOnAnExportedCorrection_WhenComparingNodeGroups(t *testing.T) {
 	tests := map[string]struct {
 		gasUsed map[string][]uint64
 		// exportEpoch is 2 unless set, so the export holds block 1.
@@ -126,4 +85,45 @@ func TestReceiptGasUsed_Check(t *testing.T) {
 			require.ErrorContains(t, err, test.wantError)
 		})
 	}
+}
+
+// receiptsNetwork mocks a network of nodes at block 2, each reporting the
+// given GasUsed for the receipts of every block, or no receipts for nil. Each
+// block is of the epoch of its number.
+func receiptsNetwork(t *testing.T, gasUsed map[string][]uint64) driver.Network {
+	ctrl := gomock.NewController(t)
+	nodes := []driver.Node{}
+	for label, gas := range gasUsed {
+		client := rpc.NewMockClient(ctrl)
+		client.EXPECT().Close().AnyTimes()
+		client.EXPECT().BlockNumber(gomock.Any()).AnyTimes().Return(uint64(2), nil)
+		client.EXPECT().Call(gomock.Any(), "eth_getBlockReceipts", gomock.Any()).AnyTimes().
+			DoAndReturn(func(result any, _ string, _ ...any) error {
+				if gas == nil {
+					return json.Unmarshal([]byte("null"), result)
+				}
+				receipts := []map[string]string{}
+				for _, g := range gas {
+					receipts = append(receipts, map[string]string{"gasUsed": hexutil.EncodeUint64(g)})
+				}
+				encoded, err := json.Marshal(receipts)
+				if err != nil {
+					return err
+				}
+				return json.Unmarshal(encoded, result)
+			})
+		client.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any()).AnyTimes().
+			DoAndReturn(func(result any, _ string, args ...any) error {
+				header := fmt.Sprintf(`{"epoch":%q}`, args[0])
+				return json.Unmarshal([]byte(header), result)
+			})
+
+		node := driver.NewMockNode(ctrl)
+		node.EXPECT().GetLabel().AnyTimes().Return(label)
+		node.EXPECT().DialRpc(gomock.Any()).AnyTimes().Return(client, nil)
+		nodes = append(nodes, node)
+	}
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().AnyTimes().Return(nodes)
+	return net
 }

@@ -100,8 +100,8 @@ func (c *receiptGasUsedChecker) Check(ctx context.Context) error {
 		}
 	}
 	if !differ {
-		return fmt.Errorf("no receipt in a block before epoch %d, up to block %d, reports a different GasUsed on %v than on %v",
-			c.exportEpoch, limit, c.amended, c.leaked)
+		return fmt.Errorf("no receipt in a block before epoch %d, up to block %d, "+
+			"reports a different GasUsed on %v than on %v", c.exportEpoch, limit, c.amended, c.leaked)
 	}
 	return nil
 }

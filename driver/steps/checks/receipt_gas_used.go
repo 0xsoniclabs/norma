@@ -28,7 +28,7 @@ import (
 type ReceiptGasUsed struct {
 	Amended     []string `yaml:"amended" help:"Required. Labels of the nodes correcting the leaked receipt gas."`
 	Leaked      []string `yaml:"leaked" help:"Required. Labels of the nodes reporting the leaked receipt gas."`
-	ExportEpoch uint64   `yaml:"exportEpoch" help:"Required. Epoch the exporter of the g-file stopped at; the groups must differ on a block of an earlier one."`
+	ExportEpoch uint64   `yaml:"exportEpoch" help:"Required. Epoch of the g-file export; groups must differ before it."`
 	Failing
 }
 
