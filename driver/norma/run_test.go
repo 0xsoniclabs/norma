@@ -41,6 +41,7 @@ func TestCollectClientImages_CoversEveryNodeOfTheScenario(t *testing.T) {
 			&nodelifetime.StartNode{Node: steps.Node{Node: "validator-v216"}, ImageName: "sonic:v2.1.6"},
 			&wait.WaitFor{},
 			&nodelifetime.StartNode{Node: steps.Node{Node: "rpc-v220"}, ImageName: "sonic:v2.2.0"},
+			&nodelifetime.PrepareNode{Node: steps.Node{Node: "fresh-v215"}, ImageName: "sonic:v2.1.5"},
 		},
 	}
 
@@ -48,6 +49,7 @@ func TestCollectClientImages_CoversEveryNodeOfTheScenario(t *testing.T) {
 		driver.DefaultClientDockerImageName,
 		"sonic:v2.1.6",
 		"sonic:v2.2.0",
+		"sonic:v2.1.5",
 	}, collectClientImages(scenario))
 }
 

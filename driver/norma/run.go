@@ -348,14 +348,17 @@ func extractBootstrapValidators(scenario *parser.Scenario) (driver.Validators, m
 }
 
 // collectClientImages returns the client image of every node the scenario
-// starts, resolved the way node startup resolves it. The genesis file is
-// generated before the first node runs, and its version-dependent parts have to
-// suit every client that reads it, including the ones started later.
+// starts or prepares, resolved the way node startup resolves it. The genesis
+// file is generated before the first node runs, and its version-dependent parts
+// have to suit every client that reads it, including the ones started later.
 func collectClientImages(scenario *parser.Scenario) []string {
 	images := make([]string, 0, len(scenario.Steps))
 	for _, step := range scenario.Steps {
-		if start, ok := step.(*nodelifetime.StartNode); ok {
-			images = append(images, driver.ResolveClientImageName(start.ImageName))
+		switch node := step.(type) {
+		case *nodelifetime.StartNode:
+			images = append(images, driver.ResolveClientImageName(node.ImageName))
+		case *nodelifetime.PrepareNode:
+			images = append(images, driver.ResolveClientImageName(node.ImageName))
 		}
 	}
 	return images
