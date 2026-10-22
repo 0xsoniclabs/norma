@@ -129,7 +129,7 @@ func run(ctx *cli.Context) (err error) {
 			if printFolders {
 				if folder := filepath.Dir(file); folder != lastFolder {
 					lastFolder = folder
-					fmt.Fprintf(stdout, "=== scenarios in %s ===\n", folder)
+					_, _ = fmt.Fprintf(stdout, "=== scenarios in %s ===\n", folder)
 				}
 			}
 			label := ctx.String(evalLabel.Name)
@@ -209,7 +209,7 @@ func runScenario(
 	}
 
 	// Log initial rules.
-	fmt.Fprintln(stdout, scenario.InitialRules.PrettyPrint()) // multi line print
+	_, _ = fmt.Fprintln(stdout, scenario.InitialRules.PrettyPrint()) // multi line print
 
 	// Startup network. Genesis is configured from the first startNode step,
 	// which must be a validator. The step is NOT removed — nodes are started

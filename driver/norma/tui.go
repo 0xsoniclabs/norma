@@ -232,7 +232,7 @@ func (t *tui) selectTab(i int) {
 func (t *tui) showTabs() {
 	t.tabs.Clear()
 	for i, name := range t.tabNames {
-		fmt.Fprintf(t.tabs, `["%d"] %d: %s [""] `, i, i+1, tview.Escape(name))
+		_, _ = fmt.Fprintf(t.tabs, `["%d"] %d: %s [""] `, i, i+1, tview.Escape(name))
 	}
 	t.tabs.Highlight(fmt.Sprint(t.current))
 }
@@ -278,7 +278,7 @@ func (l *nodeLogs) AfterNodeCreation(node driver.Node) {
 		}()
 		stream, err := node.StreamLog(l.ctx)
 		if err != nil {
-			fmt.Fprintf(view, "failed to stream log: %v\n", err)
+			_, _ = fmt.Fprintf(view, "failed to stream log: %v\n", err)
 			return
 		}
 		defer func() { _ = stream.Close() }()
