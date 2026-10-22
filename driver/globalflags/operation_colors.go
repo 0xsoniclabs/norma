@@ -61,6 +61,7 @@ var operationColors = map[string]string{
 	"waitForBlocks": "\x1b[38;5;248m", // light grey — waiting on the chain
 
 	// Client lifecycle and file management.
+	"prepareNode":      "\x1b[38;5;84m",  // light green -- a node exists but does not run
 	"exportEvents":     "\x1b[38;5;116m", // teal
 	"importEvents":     "\x1b[38;5;110m", // slate
 	"checkDb":          "\x1b[38;5;187m", // sand -- a database is verified

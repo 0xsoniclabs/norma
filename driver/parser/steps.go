@@ -29,6 +29,7 @@ import (
 // stepKinds lists every step a scenario may use.
 var stepKinds = []func() steps.Step{
 	func() steps.Step { return &nodelifetime.StartNode{} },
+	func() steps.Step { return &nodelifetime.PrepareNode{} },
 	func() steps.Step { return &nodelifetime.StopNode{} },
 	func() steps.Step { return &nodelifetime.StopSonic{} },
 	func() steps.Step { return &nodelifetime.KillSonic{} },

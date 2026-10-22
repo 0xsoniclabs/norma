@@ -124,6 +124,19 @@ func TestDryRun_ReportsTheStep_WhenItCannotRun(t *testing.T) {
 				"  - killSonic: obs\n  - waitForSonicExit: obs\n",
 			wantError: `cannot wait for the exit of node "obs" while its client is killed`,
 		},
+		"prepare an existing node": {
+			steps:     "  - prepareNode: val\n    file: a.g\n",
+			wantError: `node "val" already exists`,
+		},
+		"prepare from a file never exported": {
+			steps:     "  - prepareNode: fresh\n    file: a.g\n",
+			wantError: `file "a.g" is not in the shared directory`,
+		},
+		"prepare a name next to its active instances": {
+			steps: "  - startNode: obs\n    instances: 2\n  - stopSonic: val\n" +
+				"  - exportGenesis: val\n    file: a.g\n  - prepareNode: obs\n    file: a.g\n",
+			wantError: `node "obs" still has active instances`,
+		},
 		"undelegate more than was delegated": {
 			steps: "  - delegate:\n    - node: val\n      delegator: alice\n      stake: 100\n" +
 				"  - undelegate:\n    - node: val\n      delegator: alice\n      stake: 500\n",
@@ -145,6 +158,8 @@ func TestDryRun_Succeeds_WhenEveryStepCanRun(t *testing.T) {
 			"  - exportEvents: val\n    file: a.events\n  - importEvents: obs\n    file: a.events\n",
 		"wait for a client told to stop": "  - startNode: obs\n    extraArguments: \"--exitwhensynced.epoch 3\"\n" +
 			"  - waitForSonicExit: obs\n  - checkDb: obs\n",
+		"bootstrap a node from a g-file": "  - stopSonic: val\n  - exportGenesis: val\n    file: a.g\n" +
+			"  - prepareNode: fresh\n    file: a.g\n  - checkDb: fresh\n  - startNode: fresh\n",
 		"rejoin a validator": "  - stopNode: val\n  - startNode: val\n    type: validator\n",
 		"drain a delegation": "  - delegate:\n    - node: val\n      delegator: alice\n      stake: 100\n" +
 			"  - undelegate:\n    - node: val\n      delegator: alice\n",

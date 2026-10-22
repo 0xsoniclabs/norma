@@ -261,15 +261,24 @@ func (n *LocalNetwork) ReconnectNode(
 
 	n.nodesMutex.Lock()
 	// Remove any stale entry for this OperaNode (old enode ID).
+	var stale driver.NodeID
 	for id, existing := range n.nodes {
 		if existing == opera {
+			stale = id
 			delete(n.nodes, id)
 			break
 		}
 	}
 	n.nodesMutex.Unlock()
 
-	return n.addNodeIntoNetwork(ctx, opera)
+	err := n.addNodeIntoNetwork(ctx, opera)
+	if err != nil && stale != "" {
+		// Restored so that Shutdown still stops and cleans up the container.
+		n.nodesMutex.Lock()
+		n.nodes[stale] = opera
+		n.nodesMutex.Unlock()
+	}
+	return err
 }
 
 // createNode is an internal version of CreateNode enabling the creation
@@ -285,6 +294,21 @@ func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNod
 	if n.config.OutputDir != "" {
 		nodeConfig.SharedFilesDir = filepath.Join(n.config.OutputDir, "shared")
 	}
+	// A node bootstrapped from a g-file is left stopped and suspended;
+	// starting its client later peers it and announces it to monitoring.
+	if nodeConfig.GenesisFile != "" {
+		prepared, err := node.CreateOperaDockerNode(ctx, n.docker, n.network, nodeConfig)
+		if err != nil {
+			return nil, err
+		}
+		// Keyed by label until ReconnectNode re-keys it by enode ID.
+		n.nodesMutex.Lock()
+		n.nodes[driver.NodeID(nodeConfig.Label)] = prepared
+		n.suspended[prepared] = true
+		n.nodesMutex.Unlock()
+		return prepared, nil
+	}
+
 	node, err := node.StartOperaDockerNode(ctx, n.docker, n.network, nodeConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start opera docker; %v", err)
@@ -331,6 +355,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 		GenesisJsonPath: &n.genesisJsonPath,
 		MountDataDir:    datadir,
 		ExtraArguments:  config.ExtraArguments,
+		GenesisFile:     config.GenesisFile,
 	})
 }
 
@@ -369,26 +394,41 @@ func (n *LocalNetwork) prepareGenesis(ctx context.Context) error {
 	return nil
 }
 func (n *LocalNetwork) RemoveNode(node driver.Node) error {
-	n.listenerMutex.Lock()
-	for listener := range n.listeners {
-		listener.BeforeNodeRemoval(node)
+	// Listeners already saw a suspended node go, or, if prepared, never saw it.
+	n.nodesMutex.Lock()
+	announced := !n.suspended[node]
+	n.nodesMutex.Unlock()
+	if announced {
+		n.listenerMutex.Lock()
+		for listener := range n.listeners {
+			listener.BeforeNodeRemoval(node)
+		}
+		n.listenerMutex.Unlock()
 	}
-	n.listenerMutex.Unlock()
 
 	n.nodesMutex.Lock()
 	defer n.nodesMutex.Unlock()
-	id, err := node.GetNodeID()
-	if err != nil {
-		return fmt.Errorf("failed to get node id; %v", err)
+	// Looked up by pointer rather than GetNodeID, which needs a running client:
+	// a node whose client is stopped, killed or was never started is removable.
+	var id driver.NodeID
+	for key, existing := range n.nodes {
+		if driver.Node(existing) == node {
+			id = key
+			break
+		}
 	}
 
 	delete(n.nodes, id)
 	delete(n.suspended, node)
+	// A prepared node is still keyed by its label: it never had peers.
+	if id == "" || id == driver.NodeID(node.GetLabel()) {
+		return nil
+	}
 	for _, other := range n.nodes {
 		if n.suspended[other] {
 			continue
 		}
-		if err = other.RemovePeer(n.ctx, id); err != nil {
+		if err := other.RemovePeer(n.ctx, id); err != nil {
 			return fmt.Errorf("failed to remove peer; %v", err)
 		}
 	}

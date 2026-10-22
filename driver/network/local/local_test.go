@@ -376,6 +376,25 @@ func TestLocalNetwork_NotifiesListenersOnNodeStartup(t *testing.T) {
 
 }
 
+// A suspended node was already announced as gone, and a prepared one was
+// never announced; announcing its removal again panics the Prometheus
+// log dispatcher, which closes the channel it no longer has.
+func TestLocalNetwork_RemoveNode_NotifiesListeners_OnlyWhenTheNodeIsNotSuspended(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	listener := driver.NewMockNetworkListener(ctrl)
+	running := driver.NewMockNode(ctrl)
+	suspended := driver.NewMockNode(ctrl)
+	net := &LocalNetwork{
+		nodes:     map[driver.NodeID]*node.OperaNode{},
+		suspended: map[driver.Node]bool{suspended: true},
+		listeners: map[driver.NetworkListener]bool{listener: true},
+	}
+
+	listener.EXPECT().BeforeNodeRemoval(running)
+	require.NoError(t, net.RemoveNode(running))
+	require.NoError(t, net.RemoveNode(suspended))
+}
+
 func TestLocalNetwork_NotifiesListenersOnAppStartup(t *testing.T) {
 	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.NewDefaultTestValidators(t.Name(), 1)}
@@ -501,6 +520,50 @@ func TestReconnectNodeAndRemoveNode_Succeed_WhenOnlyOtherNodeIsSuspended(t *test
 
 	require.NoError(observer.Stop(t.Context()), "failed to stop node")
 	require.NoError(observer.Cleanup(context.Background()), "failed to cleanup node")
+}
+
+// RemoveNode cannot ask a node without a running client for its enode ID, so
+// it has to find it anyway: one whose client was stopped, and one prepared
+// from a g-file whose client never ran and that is still keyed by its label.
+func TestLocalNetwork_RemoveNode_Succeeds_WhenTheNodesClientIsNotRunning(t *testing.T) {
+	t.Parallel()
+	require := require.New(t)
+	config := driver.NetworkConfig{
+		Validators: driver.DefaultValidators(t.Name()),
+		OutputDir:  t.TempDir(),
+	}
+	net, err := NewLocalLegacyNetwork(t.Context(), &config)
+	require.NoError(err, "failed to create new local network")
+	t.Cleanup(func() {
+		require.NoError(net.Shutdown())
+	})
+
+	stopped, err := net.CreateNode(&driver.NodeConfig{
+		Name:  "stopped-" + t.Name(),
+		Image: driver.DefaultClientDockerImageName,
+	})
+	require.NoError(err, "failed to create node")
+	opera, ok := stopped.(*node.OperaNode)
+	require.True(ok, "node is not an OperaNode")
+	net.SuspendNode(stopped)
+	require.NoError(opera.StopSonicd(t.Context()), "failed to stop client")
+	require.NoError(opera.ExportGenesis(t.Context(), "removal.g"), "failed to export g-file")
+
+	prepared, err := net.CreateNode(&driver.NodeConfig{
+		Name:        "prepared-" + t.Name(),
+		Image:       driver.DefaultClientDockerImageName,
+		GenesisFile: "removal.g",
+	})
+	require.NoError(err, "failed to prepare node")
+
+	for _, removed := range []driver.Node{stopped, prepared} {
+		require.NoError(net.RemoveNode(removed), "failed to remove %s", removed.GetLabel())
+		for _, remaining := range net.nodes {
+			require.NotSame(removed, remaining, "%s was not removed", removed.GetLabel())
+		}
+		require.NoError(removed.Stop(t.Context()), "failed to stop node")
+		require.NoError(removed.Cleanup(context.Background()), "failed to cleanup node")
+	}
 }
 
 // A suspended node's client is down, so every check that enumerates the
