@@ -480,7 +480,7 @@ function name or a mapping.
 | `blocksProduced`   | Assert the network produces blocks over an observation window.   | `tolerance`, `duration`, `failing`            |
 | `eventThrottled`   | Assert the listed validators emit events far slower than others. | `throttledNodes`, `failing`                   |
 | `networkRules`     | Assert the active rules on all nodes match the given patch.      | `rules`, `duration`, `failing`                |
-| `receiptGasUsed`   | Assert the amended nodes correct receipt gas the leaked report.  | `amended`, `leaked`, `failing`                |
+| `receiptGasUsed`   | Assert the amended nodes correct receipt gas the leaked report.  | `amended`, `leaked`, `exportEpoch`, `failing` |
 | `validatorsActive` | Assert every running validator is in the epoch's validator set.  | `failing`                                     |
 
 ### 5.1 Windows of time
@@ -557,7 +557,7 @@ per check, with the value used when the parameter is omitted:
 | `networkRules`   | —                                 | convergence budget — **30s** | `rules` — required          |
 | `blockHashes`    | —                                 | —                            | —                           |
 | `eventThrottled` | —                                 | —                            | `throttledNodes` — required |
-| `receiptGasUsed` | —                                 | —                            | `amended`, `leaked` — required |
+| `receiptGasUsed` | —                                 | —                            | `amended`, `leaked`, `exportEpoch` — required |
 
 Two things to keep in mind:
 

@@ -38,17 +38,21 @@ func init() {
 // failed bare-root bundle, whose gas leaks into their cumulative gas. The
 // amended nodes, which correct the leak, must agree on every receipt, as must
 // the leaked nodes, which do not; and the two groups must disagree on at least
-// one, so a leak happened and was corrected. Blocks are compared up to the
-// lowest head of all of them.
+// one in a block before the export epoch, the epoch the exporter of a g-file
+// stopped at, so a leak was corrected in the g-file rather than in blocks the
+// importers executed themselves. Blocks are compared up to the lowest head of
+// all of them.
 type receiptGasUsedChecker struct {
 	net             driver.Network
 	amended, leaked []string
+	exportEpoch     uint64
 }
 
 func (c *receiptGasUsedChecker) Configure(config CheckerConfig) Checker {
 	amended, _ := config["amended"].([]string)
 	leaked, _ := config["leaked"].([]string)
-	return &receiptGasUsedChecker{net: c.net, amended: amended, leaked: leaked}
+	exportEpoch, _ := config["exportEpoch"].(uint64)
+	return &receiptGasUsedChecker{net: c.net, amended: amended, leaked: leaked, exportEpoch: exportEpoch}
 }
 
 // labeledClient is the RPC client of the node with the given label.
@@ -88,11 +92,16 @@ func (c *receiptGasUsedChecker) Check(ctx context.Context) error {
 			return fmt.Errorf("block %d has %d receipts on %v but %d on %v",
 				block, len(want), c.amended, len(got), c.leaked)
 		}
-		differ = differ || !slices.Equal(want, got)
+		if !differ && !slices.Equal(want, got) {
+			differ, err = c.exported(amended[0], block)
+			if err != nil {
+				return err
+			}
+		}
 	}
 	if !differ {
-		return fmt.Errorf("no receipt up to block %d reports a different GasUsed on %v than on %v",
-			limit, c.amended, c.leaked)
+		return fmt.Errorf("no receipt in a block before epoch %d, up to block %d, reports a different GasUsed on %v than on %v",
+			c.exportEpoch, limit, c.amended, c.leaked)
 	}
 	return nil
 }
@@ -161,6 +170,21 @@ func commonGasUsed(clients []labeledClient, block uint64) ([]uint64, error) {
 		}
 	}
 	return common, nil
+}
+
+// exported reports whether the block is of an epoch before the export epoch.
+func (c *receiptGasUsedChecker) exported(node labeledClient, block uint64) (bool, error) {
+	var header *struct {
+		Epoch hexutil.Uint64 `json:"epoch"`
+	}
+	err := node.client.Call(&header, "eth_getBlockByNumber", hexutil.EncodeUint64(block), false)
+	if err == nil && header == nil {
+		err = fmt.Errorf("block not found")
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to get block %d from node %s; %w", block, node.label, err)
+	}
+	return uint64(header.Epoch) < c.exportEpoch, nil
 }
 
 func getGasUsed(client rpc.Client, block uint64) ([]uint64, error) {

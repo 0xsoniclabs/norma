@@ -18,6 +18,7 @@ package checking
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -28,7 +29,8 @@ import (
 )
 
 // receiptsNetwork mocks a network of nodes at block 2, each reporting the
-// given GasUsed for the receipts of every block, or no receipts for nil.
+// given GasUsed for the receipts of every block, or no receipts for nil. Each
+// block is of the epoch of its number.
 func receiptsNetwork(t *testing.T, gasUsed map[string][]uint64) driver.Network {
 	ctrl := gomock.NewController(t)
 	nodes := []driver.Node{}
@@ -51,6 +53,11 @@ func receiptsNetwork(t *testing.T, gasUsed map[string][]uint64) driver.Network {
 				}
 				return json.Unmarshal(encoded, result)
 			})
+		client.EXPECT().Call(gomock.Any(), "eth_getBlockByNumber", gomock.Any()).AnyTimes().
+			DoAndReturn(func(result any, _ string, args ...any) error {
+				header := fmt.Sprintf(`{"epoch":%q}`, args[0])
+				return json.Unmarshal([]byte(header), result)
+			})
 
 		node := driver.NewMockNode(ctrl)
 		node.EXPECT().GetLabel().AnyTimes().Return(label)
@@ -64,8 +71,10 @@ func receiptsNetwork(t *testing.T, gasUsed map[string][]uint64) driver.Network {
 
 func TestReceiptGasUsed_Check(t *testing.T) {
 	tests := map[string]struct {
-		gasUsed   map[string][]uint64
-		wantError string
+		gasUsed map[string][]uint64
+		// exportEpoch is 2 unless set, so the export holds block 1.
+		exportEpoch uint64
+		wantError   string
 	}{
 		"amended corrects the leak": {
 			gasUsed: map[string][]uint64{"a1": {21_000}, "a2": {21_000}, "l1": {50_090}},
@@ -76,7 +85,12 @@ func TestReceiptGasUsed_Check(t *testing.T) {
 		},
 		"no leak corrected": {
 			gasUsed:   map[string][]uint64{"a1": {21_000}, "a2": {21_000}, "l1": {21_000}},
-			wantError: "no receipt up to block 2",
+			wantError: "no receipt in a block before epoch 2, up to block 2",
+		},
+		"leak corrected only from the export epoch on": {
+			gasUsed:     map[string][]uint64{"a1": {21_000}, "a2": {21_000}, "l1": {50_090}},
+			exportEpoch: 1,
+			wantError:   "no receipt in a block before epoch 1, up to block 2",
 		},
 		"leaked receipts missing": {
 			gasUsed:   map[string][]uint64{"a1": {21_000}, "a2": {21_000}, "l1": nil},
@@ -94,8 +108,12 @@ func TestReceiptGasUsed_Check(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			exportEpoch := test.exportEpoch
+			if exportEpoch == 0 {
+				exportEpoch = 2
+			}
 			checker := (&receiptGasUsedChecker{net: receiptsNetwork(t, test.gasUsed)}).
-				Configure(CheckerConfig{"amended": []string{"a1", "a2"}, "leaked": []string{"l1"}})
+				Configure(CheckerConfig{"amended": []string{"a1", "a2"}, "leaked": []string{"l1"}, "exportEpoch": exportEpoch})
 			err := checker.Check(t.Context())
 			if test.wantError == "" {
 				require.NoError(t, err)

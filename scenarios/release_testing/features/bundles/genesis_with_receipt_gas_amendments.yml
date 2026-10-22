@@ -90,7 +90,11 @@ Scenario:
       # The candidate validator processed every block itself, while the
       # candidate importer took the blocks up to the export from the g-file:
       # agreeing with it shows the amendments were carried through, and
-      # v2.2.4, which ignores them, shows there was a leak to correct.
+      # v2.2.4, which ignores them, shows there was a leak to correct. The
+      # leak must be in a block before the exporter's exit epoch, as the load
+      # keeps running after the export and the importers correct later leaks
+      # themselves.
       - receiptGasUsed:
           amended: [validator-local, importer-local]
           leaked: [importer-v224]
+          exportEpoch: 20

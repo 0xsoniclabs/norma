@@ -26,8 +26,9 @@ import (
 // ReceiptGasUsed asserts that the amended nodes correct the receipt gas leaked
 // by failed bare-root bundles, which the leaked nodes still report.
 type ReceiptGasUsed struct {
-	Amended []string `yaml:"amended" help:"Required. Labels of the nodes correcting the leaked receipt gas."`
-	Leaked  []string `yaml:"leaked" help:"Required. Labels of the nodes reporting the leaked receipt gas."`
+	Amended     []string `yaml:"amended" help:"Required. Labels of the nodes correcting the leaked receipt gas."`
+	Leaked      []string `yaml:"leaked" help:"Required. Labels of the nodes reporting the leaked receipt gas."`
+	ExportEpoch uint64   `yaml:"exportEpoch" help:"Required. Epoch the exporter of the g-file stopped at; the groups must differ on a block of an earlier one."`
 	Failing
 }
 
@@ -35,12 +36,15 @@ func (*ReceiptGasUsed) Name() string { return "receiptGasUsed" }
 
 func (*ReceiptGasUsed) Help() string {
 	return "Assert that the amended nodes agree on the GasUsed of all receipts, the leaked nodes too, " +
-		"and that the two groups differ on at least one."
+		"and that the two groups differ on at least one in a block before the export epoch."
 }
 
 func (c *ReceiptGasUsed) Validate() error {
 	if len(c.Amended) == 0 || len(c.Leaked) == 0 {
 		return errors.New("requires 'amended' and 'leaked' node lists")
+	}
+	if c.ExportEpoch == 0 {
+		return errors.New("requires a positive 'exportEpoch'")
 	}
 	return nil
 }
@@ -49,5 +53,6 @@ func (c *ReceiptGasUsed) Run(ctx context.Context, checks checking.Checks) error 
 	config := newConfig(c.Failing)
 	config["amended"] = c.Amended
 	config["leaked"] = c.Leaked
+	config["exportEpoch"] = c.ExportEpoch
 	return runChecker(ctx, checks, "receiptGasUsed", config)
 }
