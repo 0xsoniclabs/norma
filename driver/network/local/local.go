@@ -261,15 +261,24 @@ func (n *LocalNetwork) ReconnectNode(
 
 	n.nodesMutex.Lock()
 	// Remove any stale entry for this OperaNode (old enode ID).
+	var stale driver.NodeID
 	for id, existing := range n.nodes {
 		if existing == opera {
+			stale = id
 			delete(n.nodes, id)
 			break
 		}
 	}
 	n.nodesMutex.Unlock()
 
-	return n.addNodeIntoNetwork(ctx, opera)
+	err := n.addNodeIntoNetwork(ctx, opera)
+	if err != nil && stale != "" {
+		// Restored so that Shutdown still stops and cleans up the container.
+		n.nodesMutex.Lock()
+		n.nodes[stale] = opera
+		n.nodesMutex.Unlock()
+	}
+	return err
 }
 
 // createNode is an internal version of CreateNode enabling the creation
