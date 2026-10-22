@@ -385,11 +385,17 @@ func (n *LocalNetwork) prepareGenesis(ctx context.Context) error {
 	return nil
 }
 func (n *LocalNetwork) RemoveNode(node driver.Node) error {
-	n.listenerMutex.Lock()
-	for listener := range n.listeners {
-		listener.BeforeNodeRemoval(node)
+	// Listeners already saw a suspended node go, or, if prepared, never saw it.
+	n.nodesMutex.Lock()
+	announced := !n.suspended[node]
+	n.nodesMutex.Unlock()
+	if announced {
+		n.listenerMutex.Lock()
+		for listener := range n.listeners {
+			listener.BeforeNodeRemoval(node)
+		}
+		n.listenerMutex.Unlock()
 	}
-	n.listenerMutex.Unlock()
 
 	n.nodesMutex.Lock()
 	defer n.nodesMutex.Unlock()

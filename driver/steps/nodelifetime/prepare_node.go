@@ -68,6 +68,12 @@ func (s *PrepareNode) UpdateModel(m *steps.Model) error {
 	if _, exists := m.Nodes[name]; exists {
 		return fmt.Errorf("node %q already exists", name)
 	}
+	for label := range m.Nodes {
+		if steps.IsInstanceLabel(label, name) {
+			return fmt.Errorf("node %q still has active instances, such as %q; stop it with stopNode first",
+				name, label)
+		}
+	}
 	if !m.SharedFiles[s.File] {
 		return fmt.Errorf("file %q is not in the shared directory; export it in an earlier step", s.File)
 	}

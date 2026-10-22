@@ -132,6 +132,11 @@ func TestDryRun_ReportsTheStep_WhenItCannotRun(t *testing.T) {
 			steps:     "  - prepareNode: fresh\n    file: a.g\n",
 			wantError: `file "a.g" is not in the shared directory`,
 		},
+		"prepare a name next to its active instances": {
+			steps: "  - startNode: obs\n    instances: 2\n  - stopSonic: val\n" +
+				"  - exportGenesis: val\n    file: a.g\n  - prepareNode: obs\n    file: a.g\n",
+			wantError: `node "obs" still has active instances`,
+		},
 		"undelegate more than was delegated": {
 			steps: "  - delegate:\n    - node: val\n      delegator: alice\n      stake: 100\n" +
 				"  - undelegate:\n    - node: val\n      delegator: alice\n      stake: 500\n",

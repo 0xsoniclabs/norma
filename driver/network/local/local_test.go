@@ -376,6 +376,25 @@ func TestLocalNetwork_NotifiesListenersOnNodeStartup(t *testing.T) {
 
 }
 
+// A suspended node was already announced as gone, and a prepared one was
+// never announced; announcing its removal again panics the Prometheus
+// log dispatcher, which closes the channel it no longer has.
+func TestLocalNetwork_RemoveNode_NotifiesListeners_OnlyWhenTheNodeIsNotSuspended(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	listener := driver.NewMockNetworkListener(ctrl)
+	running := driver.NewMockNode(ctrl)
+	suspended := driver.NewMockNode(ctrl)
+	net := &LocalNetwork{
+		nodes:     map[driver.NodeID]*node.OperaNode{},
+		suspended: map[driver.Node]bool{suspended: true},
+		listeners: map[driver.NetworkListener]bool{listener: true},
+	}
+
+	listener.EXPECT().BeforeNodeRemoval(running)
+	require.NoError(t, net.RemoveNode(running))
+	require.NoError(t, net.RemoveNode(suspended))
+}
+
 func TestLocalNetwork_NotifiesListenersOnAppStartup(t *testing.T) {
 	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.NewDefaultTestValidators(t.Name(), 1)}
