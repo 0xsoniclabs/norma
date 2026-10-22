@@ -12,6 +12,9 @@ InitialNetworkRules:
     Allegro: true
     GasSubsidies: false
     Brio: false
+  Epochs:
+    # Short epochs, so the g-file carries many sealed epochs of history.
+    MaxEpochDuration: 10s
 
 Scenario:
   - startNode: validator
@@ -24,18 +27,44 @@ Scenario:
     imageName: "sonic:v2.1.6"
     extraArguments: "--statedb.checkpointinterval 1"
 
-  - runApp: load
+  # Transaction volume and account churn.
+  - runApp: counter
     type: counter
-    users: 5
+    users: 20
+    rate:
+      constant: 20
+
+  - runApp: tokens
+    type: erc20
+    users: 10
     rate:
       constant: 10
 
-  - waitFor: 20s
+  - runApp: swaps
+    type: uniswap
+    users: 5
+    rate:
+      constant: 5
 
-  - stopApp: load
+  # Storage growth: each transaction allocates 260 fresh slots for ~6.5 MGas,
+  # so 0.5/s keeps the total well under the network's gas target.
+  - runApp: bulk
+    type: store
+    users: 5
+    rate:
+      constant: 0.5
 
-  # healDb restores the state of the last completed epoch, so the export is
-  # taken on an epoch boundary (SCENARIO_SPECIFICATION.md 3.12).
+  - waitForBlocks: 100
+
+  - stopApp: counter
+  - stopApp: tokens
+  - stopApp: swaps
+  - stopApp: bulk
+
+  # healDb reverts to the start of the epoch the database last flushed in
+  # (SCENARIO_SPECIFICATION.md 3.12). Flushes follow write volume, so the last
+  # one falls near the end of the load, and short epochs keep the boundary
+  # close to it: the g-file holds nearly all of the load.
   - killSonic: exporter-v216
   - healDb: exporter-v216
 

@@ -383,7 +383,10 @@ include them, seals the epoch differently and is rejected with `wrong event
 epoch hash`. The export tool only warns (`not in a beginning of an epoch`).
 `killSonic`, `healDb`, `exportGenesis` on an exporter started with
 `--statedb.checkpointinterval 1` yields a boundary export, since heal
-reverts the node to the start of its latest sealed epoch. Alternatively an
+reverts the node to the start of the latest epoch its database flushed.
+The client flushes by write volume, so that epoch is close to the head
+under load but can be far behind it on an idle chain; short epochs keep it
+close. Alternatively an
 exporter started with `--exitwhensynced.epoch N` and marked `failing` stops
 itself at the boundary, and `waitForSonicExit` waits for it.
 
