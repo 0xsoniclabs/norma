@@ -217,7 +217,7 @@ func TestBlocksHalted_FailsWhenASingleNodeStillProduces(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected an error, got nil")
 		}
-		if !strings.Contains(err.Error(), "alive") || strings.Contains(err.Error(), "halted,") {
+		if !strings.HasSuffix(err.Error(), ": alive") {
 			t.Errorf("error does not name exactly the producing node: %v", err)
 		}
 	})
@@ -255,6 +255,41 @@ func TestBlocksHalted_FailsWhenANodeIsCatchingUp(t *testing.T) {
 			t.Errorf("expected the syncing node to be reported, got %v", err)
 		}
 	})
+}
+
+func TestBlocksHalted_FailsOnARiseHiddenByALaterDrop(t *testing.T) {
+	// The height rises and then falls back below where the window started, as
+	// when a node restarts on an older database; the endpoints alone would
+	// look like a halt.
+	heights := map[string][]uint64{
+		"rises then returns":  {100, 101, 100},
+		"drops then recovers": {100, 1, 2},
+	}
+	for name, sequence := range heights {
+		t.Run(name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				net := newSimulation(t, 1)
+				start := simulationEpoch.Add(10 * time.Second)
+				net.addNode("A", nodeBehavior{
+					height: func(at time.Time) uint64 {
+						i := int(at.Sub(start) / (3 * time.Second))
+						return sequence[max(0, min(i, len(sequence)-1))]
+					},
+					interval: time.Second,
+				})
+
+				net.run(10 * time.Second)
+
+				c := &blocksHaltedChecker{
+					net: activeNetwork(t, net.GetNodes()...), monitor: net,
+					duration: haltedWindow,
+				}
+				if err := c.Check(t.Context()); !errors.Is(err, ErrAssertion) {
+					t.Errorf("expected the rise to be reported, got %v", err)
+				}
+			})
+		})
+	}
 }
 
 func TestBlocksHalted_IgnoresNodesExpectedToFail(t *testing.T) {
