@@ -132,7 +132,9 @@ const (
 	unobservedProgress
 )
 
-// progress classifies the block heights the series recorded from start on.
+// progress classifies the block heights the series recorded from start on. A
+// rise between any two consecutive samples counts as advancing, so a height
+// that drops back, as after a restart, does not hide the blocks seen before.
 func progress(
 	series monitoring.Series[monitoring.Time, monitoring.BlockStatus],
 	start monitoring.Time,
@@ -148,8 +150,10 @@ func progress(
 	if len(items) < MinObservationSamples {
 		return unobservedProgress
 	}
-	if items[0].Value.BlockHeight < items[len(items)-1].Value.BlockHeight {
-		return advancedProgress
+	for i := 1; i < len(items); i++ {
+		if items[i-1].Value.BlockHeight < items[i].Value.BlockHeight {
+			return advancedProgress
+		}
 	}
 	return stalledProgress
 }

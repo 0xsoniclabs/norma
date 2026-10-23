@@ -476,7 +476,7 @@ function name or a mapping.
 | `blockGasRate`     | Assert block gas rate ≤ ceiling over an observation window.      | `ceiling`, `tolerance`, `duration`, `failing` |
 | `blockHashes`      | Assert all nodes agree on block hashes.                          | `failing`                                     |
 | `blockHeights`     | Assert all nodes are within tolerance of the same height.        | `tolerance`, `duration`, `failing`            |
-| `blocksHalted`     | Assert block production has halted over an observation window.   | `tolerance`, `duration`, `failing`            |
+| `blocksHalted`     | Assert every non-failing node keeps its height over a window.    | `tolerance`, `duration`, `failing`            |
 | `blocksProduced`   | Assert every non-failing node produces blocks over a window.     | `tolerance`, `duration`, `failing`            |
 | `eventThrottled`   | Assert the listed validators emit events far slower than others. | `throttledNodes`, `failing`                   |
 | `networkRules`     | Assert the active rules on all nodes match the given patch.      | `rules`, `duration`, `failing`                |
@@ -573,6 +573,13 @@ on a check that reads the parameter as a window, a `duration` below 2s is
 rejected, and so is a `tolerance` below 2. Deciding whether a height changed
 takes two samples, and a shorter window could only ever report that nothing was
 seen.
+
+`blocksProduced` and `blocksHalted` watch every running node not marked
+`failing`; stopped nodes are skipped. Each such node must show at least two
+samples in the window: a node that reported fewer, for example because it
+stopped answering, leaves the check undecided and fails it, even when the check
+is marked `failing`. A node still catching up to a halted head is producing
+blocks and fails `blocksHalted`.
 
 Neither floor applies to a `duration` used as a convergence budget. Nothing has
 to be sampled twice for `blockHeights` or `networkRules` to reach a verdict, so a
