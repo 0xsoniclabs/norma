@@ -42,9 +42,12 @@ var AllLoggerFlags = []cli.Flag{
 
 // SetupLogger sets up the logger for the application using the provided context.
 func SetupLogger(ctx *cli.Context) error {
+	return SetupLoggerWithOutput(ctx, os.Stdout, canColor())
+}
 
-	output := io.Writer(os.Stdout)
-	glogger := log.NewGlogHandler(newLogHandler(output, canColor()))
+// SetupLoggerWithOutput is SetupLogger writing to output instead of stdout.
+func SetupLoggerWithOutput(ctx *cli.Context, output io.Writer, useColor bool) error {
+	glogger := log.NewGlogHandler(newLogHandler(output, useColor))
 
 	verbosity := log.FromLegacyLevel(ctx.Int(verbosityFlag.Name))
 	glogger.Verbosity(verbosity)
