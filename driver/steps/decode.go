@@ -174,8 +174,7 @@ func DecodeKnown(value *yaml.Node, out any) error {
 	err = decoder.Decode(out)
 	// The lines yaml reports are relative to value, so they are dropped in
 	// favour of the caller's.
-	var typeErr *yaml.TypeError
-	if errors.As(err, &typeErr) {
+	if typeErr, ok := errors.AsType[*yaml.TypeError](err); ok {
 		messages := make([]string, len(typeErr.Errors))
 		for i, message := range typeErr.Errors {
 			messages[i] = relativeLine.ReplaceAllString(message, "")

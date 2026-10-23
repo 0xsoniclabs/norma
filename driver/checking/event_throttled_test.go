@@ -18,6 +18,7 @@ package checking
 
 import (
 	"context"
+	"maps"
 	"math/big"
 	"testing"
 	"testing/synctest"
@@ -594,12 +595,8 @@ func TestSampleEmissionRates_UsesTheMeasuredInterval(t *testing.T) {
 		// Each event fetched costs 100ms, so the first snapshot's walk alone takes
 		// as long as the whole requested window.
 		events := map[string]*rawEvent{}
-		for h, ev := range s1Events {
-			events[h] = ev
-		}
-		for h, ev := range s2Events {
-			events[h] = ev
-		}
+		maps.Copy(events, s1Events)
+		maps.Copy(events, s2Events)
 		rpcClient.EXPECT().Call(gomock.Any(), "dag_getEvent", gomock.Any()).
 			AnyTimes().DoAndReturn(func(result any, _ string, args ...any) error {
 			time.Sleep(100 * time.Millisecond)

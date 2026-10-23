@@ -17,6 +17,7 @@
 package nodelifetime
 
 import (
+	"maps"
 	"strings"
 	"testing"
 
@@ -54,9 +55,7 @@ func TestClientSteps_RejectNodesTheyCannotDrive(t *testing.T) {
 				// No call is expected on the network: the step must fail
 				// before it announces anything.
 				env := steps.NewEnv(driver.NewMockNetwork(gomock.NewController(t)), nil, nil)
-				for name, n := range target.nodes {
-					env.Nodes[name] = n
-				}
+				maps.Copy(env.Nodes, target.nodes)
 
 				err := step.Run(t.Context(), env)
 				if err == nil {

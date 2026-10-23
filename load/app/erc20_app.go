@@ -78,7 +78,7 @@ func NewERC20Application(ctxt AppContext, feederId, appId uint32) (Application, 
 
 func generateRecipientsAddresses() ([]common.Address, error) {
 	recipients := make([]common.Address, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		_, err := crand.Read(recipients[i][:])
 		if err != nil {
 			return nil, err
@@ -102,7 +102,7 @@ func (f *ERC20Application) CreateUsers(appContext AppContext, numUsers int) ([]U
 	// Create a list of users.
 	users := make([]User, numUsers)
 	addresses := make([]common.Address, numUsers)
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		// Generate a new account for each worker - avoid account nonces related bottlenecks
 		workerAccount, err := f.accountFactory.CreateAccount(appContext.GetClient())
 		if err != nil {
@@ -163,7 +163,7 @@ type ERC20User struct {
 	sender     *Account
 	contract   common.Address
 	recipients []common.Address
-	sentTxs    uint64
+	sentTxs    atomic.Uint64
 }
 
 func (g *ERC20User) GenerateTx() (*types.Transaction, error) {
@@ -180,11 +180,11 @@ func (g *ERC20User) GenerateTx() (*types.Transaction, error) {
 	const gasLimit = 52000 // Transfer method call takes 51349 of gas
 	tx, err := createTx(g.sender, g.contract, big.NewInt(0), data, gasLimit)
 	if err == nil {
-		atomic.AddUint64(&g.sentTxs, 1)
+		g.sentTxs.Add(1)
 	}
 	return tx, err
 }
 
 func (g *ERC20User) GetSentTransactions() uint64 {
-	return atomic.LoadUint64(&g.sentTxs)
+	return g.sentTxs.Load()
 }

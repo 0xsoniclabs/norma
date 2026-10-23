@@ -21,7 +21,6 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/steps"
-	"github.com/0xsoniclabs/norma/driver/steps/sonictool"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -40,9 +39,9 @@ func TestPrepareNode_BootstrapsFromTheGFileWithoutStarting(t *testing.T) {
 
 	env := steps.NewEnv(net, nil, nil)
 	step := &PrepareNode{
-		Node:       steps.Node{Node: "fresh"},
-		SharedFile: sonictool.SharedFile{File: "from-new.g"},
-		ImageName:  "sonic:v2.2.0",
+		Node:      steps.Node{Node: "fresh"},
+		File:      "from-new.g",
+		ImageName: "sonic:v2.2.0",
 	}
 	require.NoError(t, step.Run(t.Context(), env))
 	require.Equal(t, prepared, env.Nodes["fresh"])

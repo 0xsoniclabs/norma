@@ -17,9 +17,8 @@
 package monitoring
 
 import (
+	"slices"
 	"testing"
-
-	"golang.org/x/exp/slices"
 )
 
 type TestBlockSeries struct {

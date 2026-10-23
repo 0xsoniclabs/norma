@@ -104,7 +104,7 @@ func (f *SmartAccountApplication) CreateUsers(appContext AppContext, numUsers in
 	// Create a list of users.
 	users := make([]User, numUsers)
 	addresses := make([]common.Address, numUsers)
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		// Generate a new account for each worker - avoid account nonces related bottlenecks
 		workerAccount, err := f.accountFactory.CreateAccount(appContext.GetClient())
 		if err != nil {
@@ -160,7 +160,7 @@ type SmartAccountUser struct {
 	counterAddr      common.Address
 	codeAddr         common.Address
 	accountsCircular *AccountsCircularPool
-	sentTxs          uint64
+	sentTxs          atomic.Uint64
 }
 
 func (g *SmartAccountUser) GenerateTx() (*types.Transaction, error) {
@@ -205,11 +205,11 @@ func (g *SmartAccountUser) GenerateTx() (*types.Transaction, error) {
 	const gasLimit = 200_000
 	tx, err := createSetCodeTx(g.sender, g.entryPointAddr, new(uint256.Int), entryPointData, gasLimit, authAccounts, g.codeAddr)
 	if err == nil {
-		atomic.AddUint64(&g.sentTxs, 1)
+		g.sentTxs.Add(1)
 	}
 	return tx, err
 }
 
 func (g *SmartAccountUser) GetSentTransactions() uint64 {
-	return atomic.LoadUint64(&g.sentTxs)
+	return g.sentTxs.Load()
 }

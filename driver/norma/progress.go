@@ -1,9 +1,11 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"log/slog"
 	"math/big"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,7 +17,6 @@ import (
 	netmon "github.com/0xsoniclabs/norma/driver/monitoring/network"
 	nodemon "github.com/0xsoniclabs/norma/driver/monitoring/node"
 	"github.com/0xsoniclabs/norma/driver/network/local"
-	"golang.org/x/exp/constraints"
 )
 
 // progressLogger is a helper struct that logs the progress of the network.
@@ -205,13 +206,13 @@ func validatorIDFromMetricSubject(subject monitoring.Node) (int, bool) {
 	return id, true
 }
 
-func getLastValAllSubjects[K constraints.Ordered, T any, X monitoring.Series[K, T]](
+func getLastValAllSubjects[K cmp.Ordered, T any, X monitoring.Series[K, T]](
 	monitor *monitoring.Monitor,
 	metric monitoring.Metric[monitoring.Node, X],
 	activeNodes *activeNodes) []string {
 
 	nodes := monitoring.GetSubjects(monitor, metric)
-	sort.Slice(nodes, func(i, j int) bool { return nodes[i] < nodes[j] })
+	slices.Sort(nodes)
 
 	res := make([]string, 0, len(nodes))
 	for _, node := range nodes {
@@ -224,7 +225,7 @@ func getLastValAllSubjects[K constraints.Ordered, T any, X monitoring.Series[K, 
 	return res
 }
 
-func getLastValAsString[K constraints.Ordered, T any](exists bool, series monitoring.Series[K, T]) string {
+func getLastValAsString[K cmp.Ordered, T any](exists bool, series monitoring.Series[K, T]) string {
 	if !exists || series == nil {
 		return "N/A"
 	}

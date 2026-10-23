@@ -23,12 +23,12 @@ jobs:
     - name: setup go
       uses: actions/setup-go@v7 # Use actions/setup-go to specify the Go version
       with:
-        go-version: "1.26.0"
+        go-version: "1.27.0"
         cache-dependency-path: go.sum
 
 
     - name: golangci-lint go
       uses: golangci/golangci-lint-action@v9
       with:
-        version: v2.12.2
+        version: v2.15.0
         working-directory: .

@@ -17,6 +17,7 @@
 package checks
 
 import (
+	"maps"
 	"strings"
 	"testing"
 
@@ -43,9 +44,7 @@ func TestCheckDb_RejectsNodesItCannotDrive(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			env := steps.NewEnv(driver.NewMockNetwork(gomock.NewController(t)), nil, nil)
-			for label, node := range test.nodes {
-				env.Nodes[label] = node
-			}
+			maps.Copy(env.Nodes, test.nodes)
 			err := (&CheckDb{Node: steps.Node{Node: "ghost"}}).Run(t.Context(), env)
 			if err == nil || !strings.Contains(err.Error(), test.wantError) {
 				t.Errorf("unexpected error: %v", err)

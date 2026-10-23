@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -115,9 +116,7 @@ func runWithObserver(
 	}
 
 	env := steps.NewEnv(network, checks, registry)
-	for label, id := range genesisValidatorIds {
-		env.ValidatorIds[label] = id
-	}
+	maps.Copy(env.ValidatorIds, genesisValidatorIds)
 
 	for i, step := range scenario.Steps {
 		name, target := step.Name(), steps.TargetOf(step)

@@ -17,16 +17,16 @@
 package utils
 
 import (
+	"cmp"
 	"fmt"
 	"sync"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring"
-	"golang.org/x/exp/constraints"
 )
 
 // SyncedSeriesSource is a base type for all data sources using synced series
 // data as their data storage solution.
-type SyncedSeriesSource[S comparable, K constraints.Ordered, T any] struct {
+type SyncedSeriesSource[S comparable, K cmp.Ordered, T any] struct {
 	metric   monitoring.Metric[S, monitoring.Series[K, T]]
 	data     map[S]*monitoring.SyncedSeries[K, T]
 	dataLock sync.Mutex
@@ -34,7 +34,7 @@ type SyncedSeriesSource[S comparable, K constraints.Ordered, T any] struct {
 
 // NewSyncedSeriesSource creates a new data source managing per-subject synced
 // series data. Instances are intended to be the base of source implementations.
-func NewSyncedSeriesSource[S comparable, K constraints.Ordered, T any](
+func NewSyncedSeriesSource[S comparable, K cmp.Ordered, T any](
 	metric monitoring.Metric[S, monitoring.Series[K, T]],
 ) *SyncedSeriesSource[S, K, T] {
 	res := &SyncedSeriesSource[S, K, T]{

@@ -250,8 +250,7 @@ func planImage(imageRef string) imageBuildPlan {
 		// "latest" is a Docker tag convention, not a git ref; build from repo HEAD.
 		return imageBuildPlan{kind: imageBuildSonicRemote, clientSrc: sonicRepositoryURL}
 	}
-	if strings.HasPrefix(imageRef, "sonic:") {
-		tag := strings.TrimPrefix(imageRef, "sonic:")
+	if tag, ok := strings.CutPrefix(imageRef, "sonic:"); ok {
 		if tag != "" {
 			return imageBuildPlan{
 				kind:      imageBuildSonicRemote,

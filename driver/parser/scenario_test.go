@@ -1107,7 +1107,7 @@ func TestCheck_EmptySubChecks(t *testing.T) {
 func TestCheck_ObservationWindowTooShort(t *testing.T) {
 	tooShort := checking.MinObservationDuration - time.Millisecond
 	err := checkScenario(&checks.BlocksProduced{
-		Window: checks.Window{Duration: durationOf(tooShort)},
+		Duration: durationOf(tooShort),
 	}).Check()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "duration must be at least")
@@ -1115,7 +1115,7 @@ func TestCheck_ObservationWindowTooShort(t *testing.T) {
 
 func TestCheck_ObservationWindowAtTheMinimumIsAccepted(t *testing.T) {
 	require.NoError(t, checkScenario(&checks.BlocksProduced{
-		Window: checks.Window{Duration: durationOf(checking.MinObservationDuration)},
+		Duration: durationOf(checking.MinObservationDuration),
 	}).Check())
 }
 
@@ -1152,7 +1152,7 @@ func TestCheck_ToleranceTooShortForAnObservationWindow(t *testing.T) {
 func TestCheck_ToleranceAtTheMinimumIsAccepted(t *testing.T) {
 	minimum := checking.MinObservationSamples
 	require.NoError(t, checkScenario(&checks.BlocksProduced{
-		Window: checks.Window{Tolerance: &minimum},
+		Tolerance: &minimum,
 	}).Check())
 }
 
@@ -1161,10 +1161,8 @@ func TestCheck_ShortToleranceIsAcceptedWhenDurationOverridesIt(t *testing.T) {
 	// usable duration never reaches the checker.
 	tolerance := 1
 	require.NoError(t, checkScenario(&checks.BlocksProduced{
-		Window: checks.Window{
-			Tolerance: &tolerance,
-			Duration:  durationOf(checking.MinObservationDuration),
-		},
+		Tolerance: &tolerance,
+		Duration:  durationOf(checking.MinObservationDuration),
 	}).Check())
 }
 

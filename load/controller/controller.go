@@ -92,11 +92,9 @@ func (ac *AppController) Run(ctx context.Context) error {
 	var done sync.WaitGroup
 	for i, user := range ac.users {
 		source := driver.TransactionSource{App: ac.name, User: i}
-		done.Add(1)
-		go func() {
-			defer done.Done()
+		done.Go(func() {
 			runGeneratorLoop(user, source, ac.trigger, ac.network)
-		}()
+		})
 	}
 
 	var pending float64

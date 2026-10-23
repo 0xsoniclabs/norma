@@ -17,6 +17,7 @@
 package sonictool
 
 import (
+	"maps"
 	"strings"
 	"testing"
 
@@ -29,7 +30,7 @@ import (
 // create must be reported rather than reaching a nil one.
 func TestSonicToolSteps_RejectNodesTheyCannotDrive(t *testing.T) {
 	target := steps.Node{Node: "ghost"}
-	file := NodeFile{Node: target, SharedFile: SharedFile{File: "exported.g"}}
+	file := NodeFile{Node: target, File: "exported.g"}
 	all := map[string]steps.Step{
 		"healDb":        &HealDb{target},
 		"exportGenesis": &ExportGenesis{file},
@@ -58,9 +59,7 @@ func TestSonicToolSteps_RejectNodesTheyCannotDrive(t *testing.T) {
 				// No call is expected on the network: the step must fail
 				// before it announces anything.
 				env := steps.NewEnv(driver.NewMockNetwork(gomock.NewController(t)), nil, nil)
-				for name, n := range target.nodes {
-					env.Nodes[name] = n
-				}
+				maps.Copy(env.Nodes, target.nodes)
 
 				err := step.Run(t.Context(), env)
 				if err == nil {

@@ -13,41 +13,41 @@ import (
 
 func TestNetworkRulesPatch_HasSameFieldsAsOperaRules(t *testing.T) {
 	assertFieldParity(t,
-		reflect.TypeOf(opera.Rules{}),
-		reflect.TypeOf(NetworkRulesPatch{}),
+		reflect.TypeFor[opera.Rules](),
+		reflect.TypeFor[NetworkRulesPatch](),
 		"Name", "NetworkID")
 
 	assertFieldParity(t,
-		reflect.TypeOf(opera.DagRules{}),
-		reflect.TypeOf(DagPatch{}))
+		reflect.TypeFor[opera.DagRules](),
+		reflect.TypeFor[DagPatch]())
 
 	assertFieldParity(t,
-		reflect.TypeOf(opera.EmitterRules{}),
-		reflect.TypeOf(EmitterPatch{}))
+		reflect.TypeFor[opera.EmitterRules](),
+		reflect.TypeFor[EmitterPatch]())
 
 	assertFieldParity(t,
-		reflect.TypeOf(opera.EpochsRules{}),
-		reflect.TypeOf(EpochsPatch{}))
+		reflect.TypeFor[opera.EpochsRules](),
+		reflect.TypeFor[EpochsPatch]())
 
 	assertFieldParity(t,
-		reflect.TypeOf(opera.BlocksRules{}),
-		reflect.TypeOf(BlocksPatch{}))
+		reflect.TypeFor[opera.BlocksRules](),
+		reflect.TypeFor[BlocksPatch]())
 
 	assertFieldParity(t,
-		reflect.TypeOf(opera.EconomyRules{}),
-		reflect.TypeOf(EconomyPatch{}))
+		reflect.TypeFor[opera.EconomyRules](),
+		reflect.TypeFor[EconomyPatch]())
 
 	assertFieldParity(t,
-		reflect.TypeOf(opera.GasRules{}),
-		reflect.TypeOf(GasPatch{}))
+		reflect.TypeFor[opera.GasRules](),
+		reflect.TypeFor[GasPatch]())
 
 	assertFieldParity(t,
-		reflect.TypeOf(opera.GasPowerRules{}),
-		reflect.TypeOf(GasPowerPatch{}))
+		reflect.TypeFor[opera.GasPowerRules](),
+		reflect.TypeFor[GasPowerPatch]())
 
 	assertFieldParity(t,
-		reflect.TypeOf(opera.Upgrades{}),
-		reflect.TypeOf(UpgradesPatch{}))
+		reflect.TypeFor[opera.Upgrades](),
+		reflect.TypeFor[UpgradesPatch]())
 }
 
 func assertFieldParity(t *testing.T, srcType, patchType reflect.Type, excludedFromSrc ...string) {
@@ -77,8 +77,8 @@ func asSet(names []string) map[string]bool {
 
 func collectFieldNames(typ reflect.Type, excluded map[string]bool) []string {
 	fields := make([]string, 0, typ.NumField())
-	for i := 0; i < typ.NumField(); i++ {
-		name := typ.Field(i).Name
+	for field := range typ.Fields() {
+		name := field.Name
 		if excluded != nil && excluded[name] {
 			continue
 		}

@@ -85,7 +85,7 @@ func ParsePrometheusLogReader(reader io.Reader) ([]PrometheusLogValue, error) {
 				currentName = tokens[2]
 				nextType = PrometheusMetricType(tokens[3])
 			} else if tokens[0] == currentName {
-				val := PrometheusLogValue{PrometheusLogKey: PrometheusLogKey{Name: currentName}, metricType: nextType}
+				val := PrometheusLogValue{Name: currentName, metricType: nextType}
 				if skip, err := fillValue(tokens, &val); err != nil {
 					errs = append(errs, err)
 				} else if !skip {
