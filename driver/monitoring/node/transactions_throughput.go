@@ -48,12 +48,10 @@ type TransactionsThroughputSource struct {
 // NewTransactionsThroughputSource creates a metric capturing transaction throughput.
 func NewTransactionsThroughputSource(monitor *monitoring.Monitor) *TransactionsThroughputSource {
 	m := &TransactionsThroughputSource{
-		BlockNodeMetricSource: BlockNodeMetricSource[float32]{
-			SyncedSeriesSource: utils.NewSyncedSeriesSource(TransactionsThroughput),
-			monitor:            monitor,
-			syncingTracker:     newSyncingTracker(),
-		},
-		lastTimes: make(map[monitoring.Node]time.Time, 50),
+		SyncedSeriesSource: utils.NewSyncedSeriesSource(TransactionsThroughput),
+		monitor:            monitor,
+		syncingTracker:     newSyncingTracker(),
+		lastTimes:          make(map[monitoring.Node]time.Time, 50),
 	}
 	monitor.NodeLogProvider().RegisterLogListener(m)
 

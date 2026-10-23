@@ -17,6 +17,7 @@
 package monitoring
 
 import (
+	"cmp"
 	"log/slog"
 
 	"golang.org/x/exp/constraints"
@@ -32,14 +33,14 @@ type Number interface {
 // It is always checked if the input series has grown since and potential missing averages are computed and added to this series.
 // The moving average is computed fow a moving window sized to the configured period.
 // If the input series is shorter, the window used is smaller and the average computed for this smaller window.
-type SmaSeries[K constraints.Ordered, T Number] struct {
+type SmaSeries[K cmp.Ordered, T Number] struct {
 	input            Series[K, T]
 	output           *SyncedSeries[K, T]
 	startKey, endKey K // keep positions of first end last element of the window
 	period           int
 }
 
-func NewSMASeries[K constraints.Ordered, T Number](input Series[K, T], period int) *SmaSeries[K, T] {
+func NewSMASeries[K cmp.Ordered, T Number](input Series[K, T], period int) *SmaSeries[K, T] {
 	return &SmaSeries[K, T]{
 		input:  input,
 		output: &SyncedSeries[K, T]{},

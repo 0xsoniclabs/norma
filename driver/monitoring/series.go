@@ -16,19 +16,17 @@
 
 package monitoring
 
-import (
-	"golang.org/x/exp/constraints"
-)
+import "cmp"
 
 // DataPoint is one entry of a data series.
-type DataPoint[K constraints.Ordered, T any] struct {
+type DataPoint[K cmp.Ordered, T any] struct {
 	Position K
 	Value    T
 }
 
 // Series is a generic interface for arbitrarily indexed sequences of values.
 // The type K is the index type, the type T the value associated to the keys.
-type Series[K constraints.Ordered, T any] interface {
+type Series[K cmp.Ordered, T any] interface {
 	// GetRange captures a snapshot of all points collected for the half-open
 	// interval [from,to).
 	GetRange(from, to K) []DataPoint[K, T]

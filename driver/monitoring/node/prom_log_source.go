@@ -51,7 +51,6 @@ var (
 
 func init() {
 	for _, metric := range metrics {
-		metric := metric
 		metricsFactory := func(monitor *monitoring.Monitor) monitoring.Source[monitoring.Node, monitoring.Series[monitoring.Time, float64]] {
 			return NewPromLogSource(monitor, metric)
 		}

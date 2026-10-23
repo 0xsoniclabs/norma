@@ -106,12 +106,10 @@ func TestOperaNode_Transition_IsExclusiveUnderConcurrency(t *testing.T) {
 	var done sync.WaitGroup
 	results := make([]error, contenders)
 	for i := range contenders {
-		done.Add(1)
-		go func() {
-			defer done.Done()
+		done.Go(func() {
 			start.Wait()
 			results[i] = node.transition(NodeStateRunning, NodeStateStopping)
-		}()
+		})
 	}
 	start.Done()
 	done.Wait()

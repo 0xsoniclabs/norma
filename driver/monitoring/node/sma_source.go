@@ -17,11 +17,11 @@
 package nodemon
 
 import (
+	"cmp"
 	"fmt"
 	"sync"
 
 	"github.com/0xsoniclabs/norma/driver/monitoring"
-	"golang.org/x/exp/constraints"
 )
 
 func init() {
@@ -52,7 +52,7 @@ func init() {
 // NodeBlockSeriesTransformation is a source that captures an input source, and computes certain transformation on top of it.
 // The input source for this type must have the node as a subject and the Series as a value.
 // This type produces the same Nodes as the subjects and the series with the required transformation.
-type NodeBlockSeriesTransformation[K constraints.Ordered, T any, X monitoring.Series[K, T]] struct {
+type NodeBlockSeriesTransformation[K cmp.Ordered, T any, X monitoring.Series[K, T]] struct {
 	metric        monitoring.Metric[monitoring.Node, X]
 	source        monitoring.Metric[monitoring.Node, X] // source metrics to transform
 	monitor       *monitoring.Monitor
@@ -64,7 +64,7 @@ type NodeBlockSeriesTransformation[K constraints.Ordered, T any, X monitoring.Se
 // NewNodeSeriesTransformation creates a new source that can transform input source to the output source.
 // This transformation is limited to the source where the Node is the subject and values are series.
 // The output source is transformed to contain the same subjects, which addresses new, transformed, series
-func NewNodeSeriesTransformation[K constraints.Ordered, T any, X monitoring.Series[K, T]](
+func NewNodeSeriesTransformation[K cmp.Ordered, T any, X monitoring.Series[K, T]](
 	monitor *monitoring.Monitor,
 	metric monitoring.Metric[monitoring.Node, X],
 	source monitoring.Metric[monitoring.Node, X],

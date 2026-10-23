@@ -562,7 +562,7 @@ func (n *OperaNode) scanClientProcesses(ctx context.Context, action string) (int
 
 // parseClientScanCount extracts the count reported by clientScanScript.
 func parseClientScanCount(output string) (int, error) {
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, clientScanMarker) {
 			continue

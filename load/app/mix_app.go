@@ -105,7 +105,7 @@ func (m *MixApplication) CreateUsers(appContext AppContext, numUsers int) ([]Use
 	}
 
 	result := make([]User, numUsers)
-	for userIndex := 0; userIndex < numUsers; userIndex++ {
+	for userIndex := range numUsers {
 		users := make([]User, len(m.apps))
 		for subAppIndex := range m.apps {
 			users[subAppIndex] = subAppUsers[subAppIndex][userIndex]

@@ -77,7 +77,7 @@ func (f *CounterApplication) CreateUsers(appContext AppContext, numUsers int) ([
 
 	users := make([]User, numUsers)
 	addresses := make([]common.Address, numUsers)
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		// Generate a new account for each worker - avoid account nonces related bottlenecks
 		workerAccount, err := f.accountFactory.CreateAccount(appContext.GetClient())
 		if err != nil {

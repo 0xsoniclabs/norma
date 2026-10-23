@@ -19,6 +19,7 @@ package netmon
 import (
 	"context"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 
@@ -124,11 +125,8 @@ func testNetworkSubjects[T any](t *testing.T, source *BlockNetworkMetricSource[T
 	// The subject is a constant one network, i.e. no need to wait any incoming subjects
 	want := monitoring.Network{}
 	var found bool
-	for _, got := range source.GetSubjects() {
-		if got == want {
-			found = true
-			break
-		}
+	if slices.Contains(source.GetSubjects(), want) {
+		found = true
 	}
 
 	if !found {

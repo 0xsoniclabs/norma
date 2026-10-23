@@ -17,11 +17,10 @@
 package monitoring
 
 import (
+	"cmp"
 	"errors"
 	"sort"
 	"sync"
-
-	"golang.org/x/exp/constraints"
 )
 
 var ErrOutOfOrderAppend = errors.New("cannot append data out-of-order")
@@ -32,7 +31,7 @@ func IsOutOfOrderAppendError(err error) bool {
 
 // SyncedSeries implements a generic series retaining all data in memory and
 // offering synchronized access to its content.
-type SyncedSeries[K constraints.Ordered, T any] struct {
+type SyncedSeries[K cmp.Ordered, T any] struct {
 	data  []DataPoint[K, T]
 	mutex sync.Mutex
 }

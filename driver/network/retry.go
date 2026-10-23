@@ -29,7 +29,7 @@ func RetryReturn[Out any](
 ) (Out, error) {
 	var out Out
 	var err error
-	for i := 0; i < numAttempts; i++ {
+	for i := range numAttempts {
 		if ctx.Err() != nil {
 			return out, ctx.Err()
 		}

@@ -67,7 +67,6 @@ func chainNetwork(t *testing.T, nodes ...chainNode) driver.Network {
 
 	mocked := make([]driver.Node, 0, len(nodes))
 	for _, spec := range nodes {
-		spec := spec
 
 		node := driver.NewMockNode(ctrl)
 		node.EXPECT().GetLabel().AnyTimes().Return(spec.label)

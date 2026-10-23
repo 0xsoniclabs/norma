@@ -54,7 +54,7 @@ func TestChecks_RunTheirCheckerWithTheParametersOfTheScenario(t *testing.T) {
 			checker: "blocksRolling",
 		},
 		"blocksProduced with a window": {
-			check:   &BlocksProduced{Window: Window{Tolerance: &five, Duration: durationOf(30 * time.Second)}},
+			check:   &BlocksProduced{Tolerance: &five, Duration: durationOf(30 * time.Second)},
 			checker: "blocksRolling",
 			config:  checking.CheckerConfig{"tolerance": 5, "duration": int64(30 * time.Second)},
 		},
@@ -64,12 +64,12 @@ func TestChecks_RunTheirCheckerWithTheParametersOfTheScenario(t *testing.T) {
 			config:  checking.CheckerConfig{"failing": true},
 		},
 		"blockGasRate with a ceiling": {
-			check:   &BlockGasRate{Ceiling: &ceiling, Window: Window{Tolerance: &three}},
+			check:   &BlockGasRate{Ceiling: &ceiling, Tolerance: &three},
 			checker: "blockGasRate",
 			config:  checking.CheckerConfig{"ceiling": 16_500_000, "tolerance": 3},
 		},
 		"blockHeights passes its tolerance as slack": {
-			check:   &BlockHeights{Tolerance: &five, Convergence: Convergence{Duration: durationOf(0)}},
+			check:   &BlockHeights{Tolerance: &five, Duration: durationOf(0)},
 			checker: "blockHeight",
 			config:  checking.CheckerConfig{"slack": 5, "duration": int64(0)},
 		},
@@ -79,7 +79,7 @@ func TestChecks_RunTheirCheckerWithTheParametersOfTheScenario(t *testing.T) {
 			config:  checking.CheckerConfig{"failing": true},
 		},
 		"networkRules with expected rules": {
-			check:   &NetworkRules{Rules: rules, Convergence: Convergence{Duration: durationOf(10 * time.Second)}},
+			check:   &NetworkRules{Rules: rules, Duration: durationOf(10 * time.Second)},
 			checker: "networkRules",
 			config:  checking.CheckerConfig{"rules": rules, "duration": int64(10 * time.Second)},
 		},
@@ -186,7 +186,7 @@ func TestBlockGasRate_RejectsACeilingTheCheckerCannotHold(t *testing.T) {
 
 	// The window floor still applies alongside it.
 	short := 1
-	require.ErrorContains(t, (&BlockGasRate{Window: Window{Tolerance: &short}}).Validate(), "observation window")
+	require.ErrorContains(t, (&BlockGasRate{Tolerance: &short}).Validate(), "observation window")
 }
 
 func TestBlockHeights_RejectsANegativeTolerance(t *testing.T) {

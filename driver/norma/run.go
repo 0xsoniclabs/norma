@@ -442,14 +442,12 @@ func appendScenarioStepTimings(
 		start := e.Start.UTC().UnixNano()
 		duration := e.End.Sub(e.Start).Nanoseconds()
 		record := monitoring.CsvRecord{
-			Record: monitoring.Record{
-				Network: "network",
-				App:     e.Name,
-				Time:    &start,
-				Value:   fmt.Sprintf("%d", duration),
-			},
-			Metric: "ScenarioStepExecutionDuration",
-			Run:    label,
+			Network: "network",
+			App:     e.Name,
+			Time:    &start,
+			Value:   fmt.Sprintf("%d", duration),
+			Metric:  "ScenarioStepExecutionDuration",
+			Run:     label,
 		}
 
 		if _, err := record.WriteTo(file); err != nil {

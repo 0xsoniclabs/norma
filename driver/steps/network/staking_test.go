@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -470,9 +471,7 @@ func TestDelegation_SingleAccountRepeatedlyDelegatesAndUndelegates(t *testing.T)
 // newTestEnv builds the minimal environment the staking steps operate on.
 func newTestEnv(registry steps.ValidatorRegistry, nodes map[string]driver.Node) *steps.Env {
 	env := steps.NewEnv(nil, nil, registry)
-	for name, node := range nodes {
-		env.Nodes[name] = node
-	}
+	maps.Copy(env.Nodes, nodes)
 	return env
 }
 

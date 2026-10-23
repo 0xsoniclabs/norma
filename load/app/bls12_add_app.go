@@ -63,7 +63,7 @@ type Bls12AddApplication struct {
 func (app *Bls12AddApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
 	users := make([]User, numUsers)
 	addresses := make([]common.Address, numUsers)
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		// Generate a new account for each worker - avoid account nonces related bottlenecks
 		workerAccount, err := app.accountFactory.CreateAccount(appContext.GetClient())
 		if err != nil {

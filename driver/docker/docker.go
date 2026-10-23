@@ -242,7 +242,7 @@ func (c *Client) Start(ctx context.Context, config *ContainerConfig) (*Container
 	}
 	if config.GenesisFileBind != nil {
 		// ensure the genesis file exists on the host before starting the container
-		genesisPath := strings.Split(*config.GenesisFileBind, ":")[0]
+		genesisPath, _, _ := strings.Cut(*config.GenesisFileBind, ":")
 		if _, err := os.Stat(genesisPath); err != nil {
 			return nil, fmt.Errorf("genesis file %s does not exist: %w", genesisPath, err)
 		}

@@ -44,7 +44,7 @@ func (a *User) Less(b *User) bool {
 }
 
 // Time is the time used in time series. The value represents UnixNanos.
-// Note, time.Time cannot be used since it doesn't satisfy constraints.Ordered.
+// Note, time.Time cannot be used since it doesn't satisfy cmp.Ordered.
 type Time uint64
 
 func NewTime(time time.Time) Time {

@@ -42,7 +42,7 @@ func TestRpcClientImpl_WaitTransactionReceipt_Success(t *testing.T) {
 
 	mock.EXPECT().
 		Call(gomock.Any(), "eth_getTransactionReceipt", gomock.Any()).
-		DoAndReturn(func(result interface{}, method string, args ...interface{}) error {
+		DoAndReturn(func(result any, method string, args ...any) error {
 			resultPtr, ok := result.(*map[string]any)
 			if !ok {
 				t.Fatalf("result type is not *map[string]any")
@@ -73,7 +73,7 @@ func TestRpcClientImpl_WaitTransactionReceipt_Timeout(t *testing.T) {
 
 	mock.EXPECT().
 		Call(gomock.Any(), "eth_getTransactionReceipt", gomock.Any()).
-		DoAndReturn(func(result interface{}, method string, args ...interface{}) error {
+		DoAndReturn(func(result any, method string, args ...any) error {
 			resultPtr, ok := result.(*map[string]any)
 			if !ok {
 				t.Fatalf("result type is not *map[string]any")
@@ -126,7 +126,7 @@ func TestGetNetworkRules_ReturnsRules_WhenRulesAreAvailable(t *testing.T) {
 
 	mock.EXPECT().
 		Call(gomock.Any(), "eth_getRules", "latest").
-		DoAndReturn(func(result interface{}, method string, args ...interface{}) error {
+		DoAndReturn(func(result any, method string, args ...any) error {
 			resultPtr, ok := result.(**opera.Rules)
 			if !ok {
 				t.Fatalf("result type is not **opera.Rules")

@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -405,16 +406,16 @@ func (p *plotTab) add(values map[string]float64) {
 			p.lines = append(p.lines, slices.Repeat([]float64{math.NaN()}, samples))
 		}
 	}
-	legend := ""
+	var legend strings.Builder
 	for i, subject := range p.subjects {
 		value, ok := values[subject]
 		if !ok {
 			value = math.NaN()
 		}
 		p.lines[i] = append(p.lines[i], value)
-		legend += fmt.Sprintf("[#%06x]■ %s[-]  ", lineColors[i%len(lineColors)].Hex(), subject)
+		fmt.Fprintf(&legend, "[#%06x]■ %s[-]  ", lineColors[i%len(lineColors)].Hex(), subject)
 	}
-	p.legend.SetText(legend)
+	p.legend.SetText(legend.String())
 }
 
 // Draw plots as much of the end of each line as fits.

@@ -71,7 +71,7 @@ type blockProgressSensor struct {
 }
 
 func (s *blockProgressSensor) ReadValue() (mon.BlockStatus, error) {
-	var raw map[string]interface{}
+	var raw map[string]any
 	err := s.rpcClient.Call(&raw, "eth_getBlockByNumber", "latest", false)
 	if err != nil {
 		return mon.BlockStatus{}, err

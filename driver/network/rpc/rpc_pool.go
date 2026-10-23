@@ -169,7 +169,7 @@ func (p *RpcWorkerPool) AfterNodeCreation(newNode driver.Node) {
 		txs:    make(chan transactionWithSource),
 		closed: make(chan struct{}),
 	}
-	for i := 0; i < 150; i++ {
+	for range 150 {
 		n.group.add(newNode.GetLabel(), *rpcUrl, p.txs, n.txs, p.observers)
 	}
 	p.mu.Lock()
@@ -249,12 +249,9 @@ func (wg *workerGroup) add(nodeName string, rpcUrl driver.URL, txs, own chan tra
 func (wg *workerGroup) close() {
 	var done sync.WaitGroup
 	for _, w := range *wg {
-		w := w
-		done.Add(1)
-		go func() {
-			defer done.Done()
+		done.Go(func() {
 			w.close()
-		}()
+		})
 	}
 	done.Wait()
 }

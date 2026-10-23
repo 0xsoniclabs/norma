@@ -18,7 +18,7 @@ func TestActiveNodes_TrackActiveNodes(t *testing.T) {
 	const N = 100
 
 	ctrl := gomock.NewController(t)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		id := fmt.Sprintf("%d", i)
 		shadow[driver.NodeID(id)] = struct{}{}
 		node := driver.NewMockNode(ctrl)
@@ -26,7 +26,7 @@ func TestActiveNodes_TrackActiveNodes(t *testing.T) {
 		nodes.AfterNodeCreation(node)
 	}
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		r := rand.Intn(2)
 		if r == 0 {
 			id := fmt.Sprintf("%d", i)
@@ -37,7 +37,7 @@ func TestActiveNodes_TrackActiveNodes(t *testing.T) {
 		}
 	}
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		id := driver.NodeID(fmt.Sprintf("%d", i))
 		_, exists := shadow[id]
 		if got, want := nodes.containsId(id), exists; got != want {

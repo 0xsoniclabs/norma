@@ -19,6 +19,7 @@ package nodemon
 import (
 	"context"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -213,11 +214,8 @@ func TestBlockNodeMetricSource_SuppressesAfterRestartNotification(t *testing.T) 
 func testNodeSubjects[T any](t *testing.T, expected []monitoring.Node, source *BlockNodeMetricSource[T]) {
 	for _, want := range expected {
 		var found bool
-		for _, got := range source.GetSubjects() {
-			if got == want {
-				found = true
-				break
-			}
+		if slices.Contains(source.GetSubjects(), want) {
+			found = true
 		}
 		if !found {
 			t.Errorf("Node %v not found in: %v", want, source.GetSubjects())

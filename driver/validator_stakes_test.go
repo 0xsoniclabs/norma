@@ -1,9 +1,8 @@
 package driver
 
 import (
+	"slices"
 	"testing"
-
-	"golang.org/x/exp/slices"
 )
 
 func TestGetValidatorStakes(t *testing.T) {

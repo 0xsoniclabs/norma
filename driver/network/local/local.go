@@ -605,14 +605,12 @@ func (a *localApplication) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	a.cancel = cancel
 
-	a.done.Add(1)
-	go func() {
-		defer a.done.Done()
+	a.done.Go(func() {
 		err := a.controller.Run(ctx)
 		if err != nil {
 			slog.Error("failed to run load app", "error", err)
 		}
-	}()
+	})
 	return nil
 }
 
