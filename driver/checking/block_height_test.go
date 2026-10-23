@@ -148,29 +148,45 @@ func TestBlockHeight_ExpectedFailingNode(t *testing.T) {
 	}
 }
 
-func TestBlockHeight_UnreachableExpectedFailingNodeCountsAsFailed(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	rpc1 := rpc.NewMockClient(ctrl)
+func TestBlockHeight_ExpectedFailingNodeWithoutAHeightCountsAsFailed(t *testing.T) {
+	// The leader is low enough that block 0 is within the slack, so only the
+	// missing height can make the node count as failed.
+	tests := map[string]func(*driver.MockNode, *rpc.MockClient){
+		"unreachable": func(node *driver.MockNode, _ *rpc.MockClient) {
+			node.EXPECT().DialRpc(gomock.Any()).Return(nil, errors.New("connection refused"))
+		},
+		"at block zero": func(node *driver.MockNode, client *rpc.MockClient) {
+			node.EXPECT().DialRpc(gomock.Any()).Return(client, nil)
+			client.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, "0x0")
+			client.EXPECT().Close()
+		},
+	}
+	for name, failingNodeAnswers := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			rpc1 := rpc.NewMockClient(ctrl)
+			rpc2 := rpc.NewMockClient(ctrl)
 
-	node1 := driver.NewMockNode(ctrl)
-	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
-	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc1, nil)
-	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
+			node1 := driver.NewMockNode(ctrl)
+			node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
+			node1.EXPECT().DialRpc(gomock.Any()).Return(rpc1, nil)
+			node1.EXPECT().GetLabel().AnyTimes().Return("node1")
+			rpc1.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, "0x3")
+			rpc1.EXPECT().Close()
 
-	node2 := driver.NewMockNode(ctrl)
-	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
-	node2.EXPECT().DialRpc(gomock.Any()).Return(nil, errors.New("connection refused"))
-	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
+			node2 := driver.NewMockNode(ctrl)
+			node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
+			node2.EXPECT().GetLabel().AnyTimes().Return("node2")
+			failingNodeAnswers(node2, rpc2)
 
-	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().GetActiveNodes().Return([]driver.Node{node1, node2})
+			net := driver.NewMockNetwork(ctrl)
+			net.EXPECT().GetActiveNodes().Return([]driver.Node{node1, node2})
 
-	rpc1.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, "1000")
-	rpc1.EXPECT().Close()
-
-	c := blockHeightChecker{net: net}
-	if err := c.Check(t.Context()); err != nil {
-		t.Errorf("unexpected error: %v", err)
+			c := blockHeightChecker{net: net, slack: defaultSlack}
+			if err := c.Check(t.Context()); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 
