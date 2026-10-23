@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -51,6 +52,7 @@ type tui struct {
 	pages    *tview.Pages
 	tabNames []string
 	current  int
+	stopped  chan struct{}
 }
 
 // runWithTUI runs the scenarios while the TUI shows their progress. Quitting
@@ -78,8 +80,9 @@ func runWithTUI(cliCtx *cli.Context, runAll func(context.Context, *tui) error) e
 				return res
 			}),
 		},
-		tabs:  tview.NewTextView().SetRegions(true).SetDynamicColors(true),
-		pages: tview.NewPages(),
+		tabs:    tview.NewTextView().SetRegions(true).SetDynamicColors(true),
+		pages:   tview.NewPages(),
+		stopped: make(chan struct{}),
 	}
 	t.steps.SetBorder(true).SetTitle(" Steps ")
 	t.nodes.SetBorder(true).SetTitle(" Nodes ")
@@ -145,27 +148,47 @@ func runWithTUI(cliCtx *cli.Context, runAll func(context.Context, *tui) error) e
 	}()
 
 	var err error
-	go func() {
+	run := func() {
 		defer close(finished)
 		if err = runAll(ctx, t); err != nil {
 			slog.Error("run failed", "error", err)
 		}
 		slog.Info("run finished, press q to quit")
-	}()
+	}
+	// The run starts once the UI has drawn, so not at all if it fails to start.
+	var start sync.Once
+	t.app.SetAfterDrawFunc(func(tcell.Screen) { start.Do(func() { go run() }) })
 
-	if uiErr := t.app.SetRoot(root, true).Run(); uiErr != nil {
+	uiErr := t.app.SetRoot(root, true).Run()
+	close(t.stopped)
+	if uiErr != nil {
 		cancel()
+		start.Do(func() { close(finished) })
 		<-finished
 		return uiErr
 	}
 	return err
 }
 
+// update runs f on the UI and redraws it. It gives up once the UI stopped, as
+// nothing would run f anymore.
+func (t *tui) update(f func()) {
+	done := make(chan struct{})
+	go func() {
+		t.app.QueueUpdateDraw(f)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-t.stopped:
+	}
+}
+
 // show lists the steps of scenario, plots the metrics monitor collects and
 // shows the log of every node of its network until the returned function is
 // called.
 func (t *tui) show(scenario *parser.Scenario, monitor *monitoring.Monitor) (stop func()) {
-	t.app.QueueUpdateDraw(func() {
+	t.update(func() {
 		t.steps.Clear().SetTitle(" " + scenario.Name + " ")
 		for i, step := range scenario.Steps {
 			t.steps.AddItem(fmt.Sprintf("%d. %s %s", i+1, step.Name(), steps.TargetOf(step)), "", 0, nil)
@@ -173,8 +196,8 @@ func (t *tui) show(scenario *parser.Scenario, monitor *monitoring.Monitor) (stop
 		for _, plot := range t.plots {
 			plot.subjects, plot.lines = nil, nil
 		}
-		for _, name := range t.tabNames[1:] {
-			t.pages.RemovePage(name)
+		for i := 1; i < len(t.tabNames); i++ {
+			t.pages.RemovePage(fmt.Sprint(i))
 		}
 		t.tabNames = t.tabNames[:1]
 		t.selectTab(0)
@@ -200,7 +223,7 @@ func (t *tui) show(scenario *parser.Scenario, monitor *monitoring.Monitor) (stop
 				return
 			case <-ticker.C:
 			}
-			t.app.QueueUpdateDraw(func() {
+			t.update(func() {
 				for _, plot := range t.plots {
 					plot.add(plot.sample(monitor))
 				}
@@ -216,16 +239,17 @@ func (t *tui) show(scenario *parser.Scenario, monitor *monitoring.Monitor) (stop
 	}
 }
 
-// addTab adds a tab showing view after the existing ones.
+// addTab adds a tab showing view after the existing ones. Its page is named
+// by its index, as a node may be labeled like any other tab.
 func (t *tui) addTab(name string, view tview.Primitive) {
-	t.pages.AddPage(name, view, true, len(t.tabNames) == 0)
+	t.pages.AddPage(fmt.Sprint(len(t.tabNames)), view, true, len(t.tabNames) == 0)
 	t.tabNames = append(t.tabNames, name)
 	t.showTabs()
 }
 
 func (t *tui) selectTab(i int) {
 	t.current = i
-	t.pages.SwitchToPage(t.tabNames[i])
+	t.pages.SwitchToPage(fmt.Sprint(i))
 	t.showTabs()
 }
 
@@ -266,7 +290,7 @@ func (l *nodeLogs) AfterNodeCreation(node driver.Node) {
 	if !ok {
 		view = newLogView()
 		l.views[label] = view
-		l.t.app.QueueUpdateDraw(func() { l.t.addTab(label, view) })
+		l.t.update(func() { l.t.addTab(label, view) })
 	}
 	go func() {
 		defer func() {
@@ -319,7 +343,7 @@ func (t *tui) showNodes(monitor *monitoring.Monitor) {
 }
 
 func (t *tui) stepStarted(step int) {
-	t.app.QueueUpdateDraw(func() { t.steps.SetCurrentItem(step) })
+	t.update(func() { t.steps.SetCurrentItem(step) })
 }
 
 // plotTab plots a line per subject of a metric, sampled once a second.
@@ -441,7 +465,9 @@ func rate[T any](toFloat func(T) float64) func(monitoring.Series[monitoring.Time
 			return 0, false
 		}
 		points := series.GetRange(last.Position-monitoring.Time(rateWindow), last.Position+1)
-		if len(points) < 2 || toFloat(points[0].Value) > toFloat(last.Value) {
+		if len(points) < 2 || !slices.IsSortedFunc(points, func(a, b monitoring.DataPoint[monitoring.Time, T]) int {
+			return cmp.Compare(toFloat(a.Value), toFloat(b.Value))
+		}) {
 			return 0, false
 		}
 		first := points[0]
@@ -452,12 +478,16 @@ func rate[T any](toFloat func(T) float64) func(monitoring.Series[monitoring.Time
 func intToFloat(v int) float64 { return float64(v) }
 
 // stepHandler reports the start of every scenario step, read from the record
-// the executor logs for it.
+// the executor logs for it, whether or not the wrapped handler logs it.
 // ponytail: couples to the executor's "step"/"phase" log attributes, as the
 // operation colouring does; add a start hook to the executor if they change.
 type stepHandler struct {
 	slog.Handler
 	onStart func(step int)
+}
+
+func (h stepHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return level >= slog.LevelInfo || h.Handler.Enabled(ctx, level)
 }
 
 func (h stepHandler) Handle(ctx context.Context, r slog.Record) error {
@@ -473,6 +503,9 @@ func (h stepHandler) Handle(ctx context.Context, r slog.Record) error {
 	})
 	if phase == "started" && step > 0 {
 		h.onStart(int(step) - 1)
+	}
+	if !h.Handler.Enabled(ctx, r.Level) {
+		return nil
 	}
 	return h.Handler.Handle(ctx, r)
 }

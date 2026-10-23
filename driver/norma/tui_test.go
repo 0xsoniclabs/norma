@@ -4,6 +4,7 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,6 +26,20 @@ func TestStepHandler_ReportsStartedSteps(t *testing.T) {
 	logger.Info("progress update")
 
 	require.Equal(t, []int{0, 1}, started)
+}
+
+func TestStepHandler_ReportsStepsTheWrappedHandlerFilters(t *testing.T) {
+	var out strings.Builder
+	var started []int
+	logger := slog.New(stepHandler{slog.NewTextHandler(&out, &slog.HandlerOptions{Level: slog.LevelWarn}), func(step int) {
+		started = append(started, step)
+	}})
+
+	logger.Info("startNode", "step", 1, "phase", "started")
+	logger.Debug("waitFor", "step", 2, "phase", "started")
+
+	require.Equal(t, []int{0}, started)
+	require.Empty(t, out.String())
 }
 
 func TestPlotTab_LinesOfLateSubjectsStartWithGaps(t *testing.T) {
@@ -63,4 +78,11 @@ func TestRate_IsIncreasePerSecondOverWindow(t *testing.T) {
 	require.NoError(t, series.Append(monitoring.NewTime(start.Add(7*time.Second)), 5))
 	_, ok = rate(series)
 	require.False(t, ok, "no rate across a counter reset")
+
+	recovered := &monitoring.SyncedSeries[monitoring.Time, float64]{}
+	for i, value := range []float64{100, 120, 5, 110, 150} {
+		require.NoError(t, recovered.Append(monitoring.NewTime(start.Add(time.Duration(4+i)*time.Second)), value))
+	}
+	_, ok = rate(recovered)
+	require.False(t, ok, "no rate across a counter reset within the window")
 }
