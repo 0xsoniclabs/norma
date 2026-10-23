@@ -190,6 +190,38 @@ func TestBlockHeight_ExpectedFailingNodeWithoutAHeightCountsAsFailed(t *testing.
 	}
 }
 
+func TestBlockHeight_CancellationIsNotAnExpectedFailure(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	ctrl := gomock.NewController(t)
+	rpc1 := rpc.NewMockClient(ctrl)
+
+	node1 := driver.NewMockNode(ctrl)
+	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
+	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc1, nil)
+	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
+	rpc1.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, "0x1000")
+	rpc1.EXPECT().Close()
+
+	// The scenario ends while the node expected to fail is being dialled.
+	node2 := driver.NewMockNode(ctrl)
+	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
+	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
+	node2.EXPECT().DialRpc(gomock.Any()).DoAndReturn(
+		func(ctx context.Context) (rpc.Client, error) {
+			cancel()
+			return nil, ctx.Err()
+		})
+
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{node1, node2})
+
+	c := blockHeightChecker{net: net, slack: defaultSlack}
+	if err := c.Check(ctx); !errors.Is(err, context.Canceled) {
+		t.Errorf("expected a context error, got %v", err)
+	}
+}
+
 func TestBlockHeight_NoFailure_When_Expected(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	rpc1 := rpc.NewMockClient(ctrl)

@@ -130,6 +130,11 @@ func (c *blockHeightChecker) checkOnce(ctx context.Context) error {
 		})
 	}
 	wg.Wait()
+	// A read cut short because the scenario ended says nothing about a node,
+	// so it must not count as the failure a node was expected to show.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	maxHeight := int64(0)
 	expectedFailures := make(map[string]struct{})

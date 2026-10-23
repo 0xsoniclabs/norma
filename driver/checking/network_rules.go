@@ -148,6 +148,10 @@ func (c *networkRulesChecker) checkOnce(ctx context.Context) error {
 		}
 	}
 
+	// A dial cut short by the scenario ending is not a node failing.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if got, want := gotFailures, expectedFailures; !maps.Equal(got, want) {
 		return assertionf("unexpected failure set to validate network rules, got %v, want %v", got, want)
 	}

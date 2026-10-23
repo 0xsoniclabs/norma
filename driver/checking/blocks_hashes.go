@@ -90,6 +90,11 @@ func (c *blocksHashesChecker) Check(ctx context.Context) error {
 		}
 		clients[i] = client
 	}
+	// A read cut short because the scenario ended says nothing about a node,
+	// so it must not count as the failure a node was expected to show.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	if len(expectedFailures) == len(nodes) {
 		return nil // all nodes are expected to fail, cannot get pivot hash, has to only end the test
