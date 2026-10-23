@@ -148,6 +148,32 @@ func TestBlockHeight_ExpectedFailingNode(t *testing.T) {
 	}
 }
 
+func TestBlockHeight_UnreachableExpectedFailingNodeCountsAsFailed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	rpc1 := rpc.NewMockClient(ctrl)
+
+	node1 := driver.NewMockNode(ctrl)
+	node1.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
+	node1.EXPECT().DialRpc(gomock.Any()).Return(rpc1, nil)
+	node1.EXPECT().GetLabel().AnyTimes().Return("node1")
+
+	node2 := driver.NewMockNode(ctrl)
+	node2.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
+	node2.EXPECT().DialRpc(gomock.Any()).Return(nil, errors.New("connection refused"))
+	node2.EXPECT().GetLabel().AnyTimes().Return("node2")
+
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{node1, node2})
+
+	rpc1.EXPECT().Call(gomock.Any(), "eth_blockNumber").SetArg(0, "1000")
+	rpc1.EXPECT().Close()
+
+	c := blockHeightChecker{net: net}
+	if err := c.Check(t.Context()); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
 func TestBlockHeight_NoFailure_When_Expected(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	rpc1 := rpc.NewMockClient(ctrl)
@@ -172,8 +198,12 @@ func TestBlockHeight_NoFailure_When_Expected(t *testing.T) {
 	rpc2.EXPECT().Close()
 
 	c := blockHeightChecker{net: net}
-	if err := c.Check(t.Context()); err == nil || !strings.Contains(err.Error(), "unexpected failure set to provide the block height") {
+	err := c.Check(t.Context())
+	if err == nil || !strings.Contains(err.Error(), "unexpected failure set to provide the block height") {
 		t.Errorf("unexpected error: %v", err)
+	}
+	if !errors.Is(err, ErrAssertion) {
+		t.Errorf("a missing expected failure must count as the assertion failing: %v", err)
 	}
 }
 

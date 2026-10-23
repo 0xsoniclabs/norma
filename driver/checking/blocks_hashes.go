@@ -110,7 +110,7 @@ func (c *blocksHashesChecker) Check(ctx context.Context) error {
 	}
 
 	if got, want := gotFailures, expectedFailures; !maps.Equal(got, want) {
-		return fmt.Errorf("unexpected failure set to provide the block hashes: got %v, want %v", got, want)
+		return assertionf("unexpected failure set to provide the block hashes: got %v, want %v", got, want)
 	}
 
 	return nil
@@ -177,7 +177,7 @@ func compareHealthyNodes(
 			)
 		}
 		if block == nil {
-			return blockHashes{}, fmt.Errorf(
+			return blockHashes{}, assertionf(
 				"node %s does not have block %d, although it reported a "+
 					"higher chain head", n.GetLabel(), blockNumber,
 			)
@@ -234,13 +234,13 @@ func compareBlockHashes(
 	referenceHashes, block blockHashes, blockNumber uint64,
 ) error {
 	if referenceHashes.StateRoot != block.StateRoot {
-		return fmt.Errorf("stateRoot of the block %d does not match", blockNumber)
+		return assertionf("stateRoot of the block %d does not match", blockNumber)
 	}
 	if referenceHashes.ReceiptsRoot != block.ReceiptsRoot {
-		return fmt.Errorf("receiptsRoot of the block %d does not match", blockNumber)
+		return assertionf("receiptsRoot of the block %d does not match", blockNumber)
 	}
 	if referenceHashes.Hash != block.Hash {
-		return fmt.Errorf("hash of the block %d does not match", blockNumber)
+		return assertionf("hash of the block %d does not match", blockNumber)
 	}
 
 	return nil

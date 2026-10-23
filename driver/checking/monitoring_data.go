@@ -12,7 +12,8 @@ import (
 type MonitoringData interface {
 	// GetNodes returns the nodes that are being monitored.
 	GetNodes() []monitoring.Node
-	// GetBlockStatus returns the monitoring data for a specific node.
+	// GetBlockStatus returns the monitoring data for a specific node, or nil when
+	// the node is not monitored.
 	GetBlockStatus(monitoring.Node) monitoring.Series[monitoring.Time, monitoring.BlockStatus]
 	// GetBlockGasRate returns the block gas rate for the network.
 	GetBlockGasRate() monitoring.Series[monitoring.BlockNumber, float64]
@@ -28,7 +29,10 @@ func (m *monitoringDataAdapter) GetNodes() []monitoring.Node {
 }
 
 func (m *monitoringDataAdapter) GetBlockStatus(node monitoring.Node) monitoring.Series[monitoring.Time, monitoring.BlockStatus] {
-	data, _ := monitoring.GetData(m.monitor, node, nodemon.NodeBlockStatus)
+	data, exists := monitoring.GetData(m.monitor, node, nodemon.NodeBlockStatus)
+	if !exists {
+		return nil
+	}
 	return data
 }
 

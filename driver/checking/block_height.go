@@ -133,36 +133,44 @@ func (c *blockHeightChecker) checkOnce(ctx context.Context) error {
 
 	maxHeight := int64(0)
 	expectedFailures := make(map[string]struct{})
+	gotFailures := make(map[string]struct{})
 	for i, n := range nodes {
 		if n.IsExpectedFailure() {
 			expectedFailures[n.GetLabel()] = struct{}{}
+			// Not answering is one of the ways such a node may fail.
+			if errs[i] != nil || heights[i] < 1 {
+				gotFailures[n.GetLabel()] = struct{}{}
+				continue
+			}
 		}
 
 		if errs[i] != nil {
 			return fmt.Errorf("failed to get block height of node %s; %v", n.GetLabel(), errs[i])
 		}
 		if heights[i] < 1 {
-			return fmt.Errorf("node %s reports it is at invalid block %d", n.GetLabel(), heights[i])
+			return assertionf("node %s reports it is at invalid block %d", n.GetLabel(), heights[i])
 		}
 		if maxHeight < heights[i] {
 			maxHeight = heights[i]
 		}
 	}
 
-	gotFailures := make(map[string]struct{})
 	for i, n := range nodes {
+		if _, failed := gotFailures[n.GetLabel()]; failed {
+			continue
+		}
 		if heights[i] < maxHeight-int64(c.slack) {
 			if n.IsExpectedFailure() {
 				gotFailures[n.GetLabel()] = struct{}{}
 
 			} else {
-				return fmt.Errorf("node %s reports too old block %d (max block is %d, given slack of %d.)", n.GetLabel(), heights[i], maxHeight, c.slack)
+				return assertionf("node %s reports too old block %d (max block is %d, given slack of %d.)", n.GetLabel(), heights[i], maxHeight, c.slack)
 			}
 		}
 	}
 
 	if got, want := gotFailures, expectedFailures; !maps.Equal(got, want) {
-		return fmt.Errorf("unexpected failure set to provide the block height, got %v, want %v", got, want)
+		return assertionf("unexpected failure set to provide the block height, got %v, want %v", got, want)
 	}
 
 	return nil

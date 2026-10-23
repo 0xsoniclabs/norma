@@ -3,10 +3,12 @@ package checking
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
 
+	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
 	"go.uber.org/mock/gomock"
 )
@@ -14,6 +16,23 @@ import (
 // rollingWindow is the observation window used by these tests. The bubble's
 // fake clock makes it free.
 const rollingWindow = 10 * time.Second
+
+// activeNetwork returns a network whose active nodes carry the given labels,
+// none of them expected to fail.
+func activeNetwork(t *testing.T, labels ...monitoring.Node) driver.Network {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	nodes := make([]driver.Node, 0, len(labels))
+	for _, label := range labels {
+		node := driver.NewMockNode(ctrl)
+		node.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
+		node.EXPECT().GetLabel().AnyTimes().Return(string(label))
+		nodes = append(nodes, node)
+	}
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().AnyTimes().Return(nodes)
+	return net
+}
 
 func TestBlocksRolling_PassesWhileTheNetworkProduces(t *testing.T) {
 	// Whatever the sampling phase, jitter or dropped reads, a network that
@@ -31,7 +50,8 @@ func TestBlocksRolling_PassesWhileTheNetworkProduces(t *testing.T) {
 
 		start := time.Now()
 		c := &blocksRollingChecker{
-			monitor: net, duration: rollingWindow,
+			net: activeNetwork(t, net.GetNodes()...), monitor: net,
+			duration: rollingWindow,
 		}
 		err := c.Check(t.Context())
 
@@ -70,7 +90,8 @@ func TestBlocksRolling_FailsWhenProductionStoppedBeforeTheCheck(t *testing.T) {
 		net.run(30 * time.Second)
 
 		c := &blocksRollingChecker{
-			monitor: net, duration: rollingWindow,
+			net: activeNetwork(t, net.GetNodes()...), monitor: net,
+			duration: rollingWindow,
 		}
 		if err := c.Check(t.Context()); err == nil {
 			t.Errorf("seed %d: expected an error, got nil", seed)
@@ -93,7 +114,8 @@ func TestBlocksRolling_PassesWhenProductionResumesDuringTheWindow(t *testing.T) 
 		net.run(20 * time.Second)
 
 		c := &blocksRollingChecker{
-			monitor: net, duration: rollingWindow,
+			net: activeNetwork(t, net.GetNodes()...), monitor: net,
+			duration: rollingWindow,
 		}
 		if err := c.Check(t.Context()); err != nil {
 			t.Errorf("unexpected error: %v", err)
@@ -101,7 +123,7 @@ func TestBlocksRolling_PassesWhenProductionResumesDuringTheWindow(t *testing.T) 
 	})
 }
 
-func TestBlocksRolling_PassesWhenAnyNodeProduces(t *testing.T) {
+func TestBlocksRolling_FailsWhenASingleNodeIsStuck(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		net := newSimulation(t, 1)
 		net.addNode("halted", nodeBehavior{
@@ -119,7 +141,40 @@ func TestBlocksRolling_PassesWhenAnyNodeProduces(t *testing.T) {
 		net.run(10 * time.Second)
 
 		c := &blocksRollingChecker{
-			monitor: net, duration: rollingWindow,
+			net: activeNetwork(t, net.GetNodes()...), monitor: net,
+			duration: rollingWindow,
+		}
+		err := c.Check(t.Context())
+		if err == nil || !strings.Contains(err.Error(), "1 of 2 nodes produced no block") ||
+			!strings.Contains(err.Error(), "halted") {
+			t.Errorf("expected the stuck node to be reported, got %v", err)
+		}
+		if !errors.Is(err, ErrAssertion) {
+			t.Errorf("a stuck node must count as the assertion failing: %v", err)
+		}
+	})
+}
+
+func TestBlocksRolling_IgnoresNodesExpectedToFail(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		net := newSimulation(t, 1)
+		net.addNode("alive", nodeBehavior{
+			height:   production{blockInterval: 300 * time.Millisecond}.heightAt,
+			interval: time.Second,
+		})
+
+		net.run(10 * time.Second)
+
+		ctrl := gomock.NewController(t)
+		failing := driver.NewMockNode(ctrl)
+		failing.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
+		network := driver.NewMockNetwork(ctrl)
+		network.EXPECT().GetActiveNodes().Return(append(
+			activeNetwork(t, "alive").GetActiveNodes(), failing,
+		))
+
+		c := &blocksRollingChecker{
+			net: network, monitor: net, duration: rollingWindow,
 		}
 		if err := c.Check(t.Context()); err != nil {
 			t.Errorf("unexpected error: %v", err)
@@ -144,7 +199,8 @@ func TestBlocksRolling_FailsWhenAllNodesAreHalted(t *testing.T) {
 		net.run(10 * time.Second)
 
 		c := &blocksRollingChecker{
-			monitor: net, duration: rollingWindow,
+			net: activeNetwork(t, net.GetNodes()...), monitor: net,
+			duration: rollingWindow,
 		}
 		if err := c.Check(t.Context()); err == nil {
 			t.Errorf("expected an error, got nil")
@@ -164,7 +220,8 @@ func TestBlocksRolling_FailsWhenNodesStoppedReporting(t *testing.T) {
 		net.run(10 * time.Second)
 
 		c := &blocksRollingChecker{
-			monitor: net, duration: rollingWindow,
+			net: activeNetwork(t, net.GetNodes()...), monitor: net,
+			duration: rollingWindow,
 		}
 		if err := c.Check(t.Context()); err == nil {
 			t.Errorf("expected an error, got nil")
@@ -172,28 +229,32 @@ func TestBlocksRolling_FailsWhenNodesStoppedReporting(t *testing.T) {
 	})
 }
 
-func TestBlocksRolling_FailsWithoutAnyMonitoredNode(t *testing.T) {
+func TestBlocksRolling_FailsWithoutAnyActiveNode(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		c := &blocksRollingChecker{
-			monitor: newSimulation(t, 1), duration: rollingWindow,
+			net: activeNetwork(t), monitor: newSimulation(t, 1),
+			duration: rollingWindow,
 		}
-		if err := c.Check(t.Context()); err == nil {
-			t.Errorf("expected an error, got nil")
+		err := c.Check(t.Context())
+		if err == nil || !strings.Contains(err.Error(), "no active node") {
+			t.Errorf("expected an error about missing nodes, got %v", err)
 		}
 	})
 }
 
-func TestBlocksRolling_IgnoresNodesWithoutData(t *testing.T) {
+func TestBlocksRolling_FailsForNodesWithoutData(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		monitor := NewMockMonitoringData(ctrl)
-		monitor.EXPECT().GetNodes().Return([]monitoring.Node{"A"})
-		monitor.EXPECT().GetBlockStatus(gomock.Any()).Return(
+		monitor.EXPECT().GetBlockStatus(monitoring.Node("A")).Return(
 			&monitoring.SyncedSeries[monitoring.Time, monitoring.BlockStatus]{},
 		)
+		// A node the monitor never registered has no series at all.
+		monitor.EXPECT().GetBlockStatus(monitoring.Node("B")).Return(nil)
 
 		c := &blocksRollingChecker{
-			monitor: monitor, duration: rollingWindow,
+			net: activeNetwork(t, "A", "B"), monitor: monitor,
+			duration: rollingWindow,
 		}
 		if err := c.Check(t.Context()); err == nil {
 			t.Errorf("expected an error, got nil")
@@ -211,7 +272,8 @@ func TestBlocksRolling_DerivesTheWindowFromTolerance(t *testing.T) {
 
 		start := time.Now()
 		c := &blocksRollingChecker{
-			monitor: net, toleranceSamples: 6,
+			net: activeNetwork(t, net.GetNodes()...), monitor: net,
+			toleranceSamples: 6,
 		}
 		if err := c.Check(t.Context()); err != nil {
 			t.Errorf("unexpected error: %v", err)
@@ -247,7 +309,8 @@ func TestBlocksRolling_ReturnsContextError(t *testing.T) {
 
 		start := time.Now()
 		c := &blocksRollingChecker{
-			monitor: newSimulation(t, 1), duration: rollingWindow,
+			net: activeNetwork(t, "A"), monitor: newSimulation(t, 1),
+			duration: rollingWindow,
 		}
 		if err := c.Check(ctx); !errors.Is(err, context.Canceled) {
 			t.Errorf("expected a context error, got %v", err)

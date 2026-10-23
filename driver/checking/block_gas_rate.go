@@ -19,7 +19,6 @@ package checking
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"math"
 	"time"
 
@@ -110,18 +109,15 @@ func (c *blockGasRateChecker) Check(ctx context.Context) error {
 
 	head := series.GetLatest()
 	if head == nil || head.Position < firstBlock {
-		slog.Warn(
-			"blockGasRate: no block was produced during the observation "+
-				"window; there was no gas rate to check",
-			"window", window,
-			"from_block", firstBlock,
+		return fmt.Errorf(
+			"no block from %d on was produced during the %s observation "+
+				"window; there was no gas rate to check", firstBlock, window,
 		)
-		return nil
 	}
 
 	for _, point := range series.GetRange(firstBlock, head.Position+1) {
 		if point.Value > c.ceiling {
-			return fmt.Errorf(
+			return assertionf(
 				"exceeded gas ceiling; Block %d has gas rate of %f > %f",
 				point.Position, point.Value, c.ceiling,
 			)

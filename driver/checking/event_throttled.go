@@ -473,7 +473,7 @@ func verifyThrottled(
 	if ratio >= minGapRatio {
 		return nil
 	}
-	return fmt.Errorf(
+	return assertionf(
 		"no throttling detected: slowest unthrottled validator emits "+
 			"at %.2f/s but fastest expected-throttled validator emits "+
 			"at %.2f/s (ratio %.2f < required %.2f)",

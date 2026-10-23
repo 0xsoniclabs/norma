@@ -477,7 +477,7 @@ function name or a mapping.
 | `blockHashes`      | Assert all nodes agree on block hashes.                          | `failing`                                     |
 | `blockHeights`     | Assert all nodes are within tolerance of the same height.        | `tolerance`, `duration`, `failing`            |
 | `blocksHalted`     | Assert block production has halted over an observation window.   | `tolerance`, `duration`, `failing`            |
-| `blocksProduced`   | Assert the network produces blocks over an observation window.   | `tolerance`, `duration`, `failing`            |
+| `blocksProduced`   | Assert every non-failing node produces blocks over a window.     | `tolerance`, `duration`, `failing`            |
 | `eventThrottled`   | Assert the listed validators emit events far slower than others. | `throttledNodes`, `failing`                   |
 | `networkRules`     | Assert the active rules on all nodes match the given patch.      | `rules`, `duration`, `failing`                |
 | `receiptGasUsed`   | Assert the amended nodes correct receipt gas the leaked report.  | `amended`, `leaked`, `exportEpoch`, `failing` |
@@ -536,14 +536,14 @@ heads are queried, since the heads fix which events get counted.
 
 | Parameter        | Type                | Meaning                                                                         |
 | ---------------- | ------------------- | ------------------------------------------------------------------------------- |
-| `ceiling`        | float               | Maximum allowed gas rate.                                                       |
+| `ceiling`        | float               | Maximum allowed gas rate. Required; a window without any block fails the check. |
 | `tolerance`      | int                 | Meaning depends on the check — see below.                                       |
 | `duration`       | duration string     | Observation window (minimum **2s**), or convergence budget — see below.         |
 | `rules`          | `NetworkRulesPatch` | Expected rule set; every field set must equal the value reported by every node. |
 | `throttledNodes` | list of strings     | Node labels expected to be throttled. Required; every label must resolve.       |
 | `amended`        | list of strings     | Node labels correcting the receipt gas leaked by failed bare-root bundles.      |
 | `leaked`         | list of strings     | Node labels still reporting that leaked receipt gas.                            |
-| `failing`        | bool                | When `true` the check is **expected to fail**; a passing result is an error.    |
+| `failing`        | bool                | When `true` the check's assertion is **expected to fail**; a pass, or an error such as an unreachable node, is an error. |
 
 `tolerance` and `duration` are deliberately overloaded; this is what they mean
 per check, with the value used when the parameter is omitted:
@@ -552,7 +552,7 @@ per check, with the value used when the parameter is omitted:
 | ---------------- | --------------------------------- | ---------------------------- | --------------------------- |
 | `blocksProduced` | window, in samples — **10** (10s) | overrides the window — unset | —                           |
 | `blocksHalted`   | window, in samples — **10** (10s) | overrides the window — unset | —                           |
-| `blockGasRate`   | window, in samples — **10** (10s) | overrides the window — unset | `ceiling` — **unbounded**   |
+| `blockGasRate`   | window, in samples — **10** (10s) | overrides the window — unset | `ceiling` — required        |
 | `blockHeights`   | height slack, in blocks — **5**   | convergence budget — **30s** | —                           |
 | `networkRules`   | —                                 | convergence budget — **30s** | `rules` — required          |
 | `blockHashes`    | —                                 | —                            | —                           |

@@ -2,7 +2,9 @@ package checking
 
 import (
 	"context"
-	"fmt"
+	"errors"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -19,18 +21,21 @@ const blockSampleInterval = time.Second
 func init() {
 	RegisterNetworkCheck("blocksRolling", func(net driver.Network, monitor *monitoring.Monitor) Checker {
 		return &blocksRollingChecker{
+			net:              net,
 			monitor:          &monitoringDataAdapter{monitor},
 			toleranceSamples: defaultToleranceSamples,
 		}
 	})
 }
 
-// blocksRollingChecker verifies the network is still producing blocks by
-// observing it forward in time for an observation window and requiring at
-// least one node to advance its block height while it waits. Progress recorded
-// before the check started is ignored, so a network that was alive but halted
-// during a transition cannot pass on its own history.
+// blocksRollingChecker verifies every node keeps producing blocks by observing
+// the network forward in time for an observation window and requiring each
+// active node not expected to fail to advance its block height while it waits.
+// Progress recorded before the check started is ignored, so a network that was
+// alive but halted during a transition cannot pass on its own history, and a
+// single stuck node fails the check even while the others progress.
 type blocksRollingChecker struct {
+	net              driver.Network
 	monitor          MonitoringData
 	toleranceSamples int
 	// duration overrides the observation window; when 0 it is derived from
@@ -58,6 +63,7 @@ func (c *blocksRollingChecker) Configure(config CheckerConfig) Checker {
 	}
 
 	return &blocksRollingChecker{
+		net:              c.net,
 		monitor:          c.monitor,
 		toleranceSamples: tolerance,
 		duration:         duration,
@@ -70,6 +76,16 @@ func (c *blocksRollingChecker) Check(ctx context.Context) error {
 		return err
 	}
 
+	var nodes []monitoring.Node
+	for _, n := range c.net.GetActiveNodes() {
+		if !n.IsExpectedFailure() {
+			nodes = append(nodes, monitoring.Node(n.GetLabel()))
+		}
+	}
+	if len(nodes) == 0 {
+		return errors.New("no active node is expected to produce blocks")
+	}
+
 	// Observing forward in time distinguishes a live network from one halted
 	// at check time and ignores history recorded before the check.
 	observationStart := monitoring.NewTime(time.Now())
@@ -77,23 +93,37 @@ func (c *blocksRollingChecker) Check(ctx context.Context) error {
 		return err
 	}
 
-	for _, node := range c.monitor.GetNodes() {
-		series := c.monitor.GetBlockStatus(node)
-		last := series.GetLatest()
-		if last == nil {
-			continue
-		}
-		items := series.GetRange(observationStart, last.Position+1)
-		if len(items) == 0 {
-			continue
-		}
-		if items[0].Value.BlockHeight < items[len(items)-1].Value.BlockHeight {
-			return nil
+	var stalled []string
+	for _, node := range nodes {
+		if !advanced(c.monitor.GetBlockStatus(node), observationStart) {
+			stalled = append(stalled, string(node))
 		}
 	}
+	if len(stalled) > 0 {
+		slices.Sort(stalled)
+		return assertionf(
+			"%d of %d nodes produced no block during the %s observation "+
+				"window: %s", len(stalled), len(nodes), window,
+			strings.Join(stalled, ", "),
+		)
+	}
+	return nil
+}
 
-	return fmt.Errorf(
-		"network is down, no node produced a block during the %s "+
-			"observation window", window,
-	)
+// advanced reports whether the series shows the block height rising from
+// start on.
+func advanced(
+	series monitoring.Series[monitoring.Time, monitoring.BlockStatus],
+	start monitoring.Time,
+) bool {
+	if series == nil {
+		return false
+	}
+	last := series.GetLatest()
+	if last == nil {
+		return false
+	}
+	items := series.GetRange(start, last.Position+1)
+	return len(items) > 0 &&
+		items[0].Value.BlockHeight < items[len(items)-1].Value.BlockHeight
 }

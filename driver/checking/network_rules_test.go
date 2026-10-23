@@ -275,12 +275,12 @@ func TestNetworkRulesChecker_Check_FailsOnExpectedFailureSetMismatch(t *testing.
 	}
 }
 
-func TestNetworkRulesChecker_Check_EmptyPatchReturnsNil(t *testing.T) {
+func TestNetworkRulesChecker_Check_EmptyPatchFails(t *testing.T) {
 	checker := &networkRulesChecker{
 		rulesPatch: genesis.NetworkRulesPatch{},
 	}
-	if err := checker.Check(t.Context()); err != nil {
-		t.Fatalf("expected nil error for empty rules patch, got: %v", err)
+	if err := checker.Check(t.Context()); err == nil {
+		t.Fatal("expected an error for an empty rules patch")
 	}
 }
 

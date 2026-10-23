@@ -39,14 +39,15 @@ func (*BlockGasRate) Help() string {
 }
 
 func (c *BlockGasRate) Validate() error {
+	if c.Ceiling == nil {
+		return fmt.Errorf("ceiling is required")
+	}
 	// The checker compares against an int, so a fraction would be truncated
 	// and a value beyond the int range, infinity included, would overflow.
-	if c.Ceiling != nil {
-		ceiling := *c.Ceiling
-		if ceiling < 0 || ceiling != math.Trunc(ceiling) || ceiling >= math.MaxInt {
-			return fmt.Errorf("ceiling must be a non-negative whole number below %d, got %v",
-				math.MaxInt, ceiling)
-		}
+	ceiling := *c.Ceiling
+	if ceiling < 0 || ceiling != math.Trunc(ceiling) || ceiling >= math.MaxInt {
+		return fmt.Errorf("ceiling must be a non-negative whole number below %d, got %v",
+			math.MaxInt, ceiling)
 	}
 	return c.Window.Validate()
 }

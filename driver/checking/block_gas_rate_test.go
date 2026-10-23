@@ -89,7 +89,7 @@ func TestBlocksGasRate_PassesWhenBlocksStayBelowTheCeiling(t *testing.T) {
 	})
 }
 
-func TestBlocksGasRate_PassesWhenNoBlockIsProduced(t *testing.T) {
+func TestBlocksGasRate_FailsWhenNoBlockIsProduced(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		net := newSimulation(t, 1)
 		net.addNode("A", nodeBehavior{
@@ -108,13 +108,17 @@ func TestBlocksGasRate_PassesWhenNoBlockIsProduced(t *testing.T) {
 		c := &blockGasRateChecker{
 			monitor: net, ceiling: 30, duration: gasRateWindow,
 		}
-		if err := c.Check(t.Context()); err != nil {
-			t.Errorf("unexpected error: %v", err)
+		err := c.Check(t.Context())
+		if err == nil || !strings.Contains(err.Error(), "no gas rate to check") {
+			t.Errorf("expected an error about the empty window, got %v", err)
+		}
+		if errors.Is(err, ErrAssertion) {
+			t.Errorf("an empty window must not count as the assertion failing: %v", err)
 		}
 	})
 }
 
-func TestBlocksGasRate_PassesOnAnEmptySeries(t *testing.T) {
+func TestBlocksGasRate_FailsOnAnEmptySeries(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		monitor := NewMockMonitoringData(ctrl)
@@ -126,8 +130,8 @@ func TestBlocksGasRate_PassesOnAnEmptySeries(t *testing.T) {
 			monitor: monitor, ceiling: 30,
 			duration: gasRateWindow,
 		}
-		if err := c.Check(t.Context()); err != nil {
-			t.Errorf("unexpected error: %v", err)
+		if err := c.Check(t.Context()); err == nil {
+			t.Errorf("expected an error, got nil")
 		}
 	})
 }
