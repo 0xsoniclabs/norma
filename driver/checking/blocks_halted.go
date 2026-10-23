@@ -2,7 +2,9 @@ package checking
 
 import (
 	"context"
-	"log/slog"
+	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -12,6 +14,7 @@ import (
 func init() {
 	RegisterNetworkCheck("blocksHalted", func(net driver.Network, monitor *monitoring.Monitor) Checker {
 		return &blocksHaltedChecker{
+			net:              net,
 			monitor:          &monitoringDataAdapter{monitor},
 			toleranceSamples: defaultToleranceSamples,
 		}
@@ -20,12 +23,14 @@ func init() {
 
 // blocksHaltedChecker verifies that no node in the network is producing blocks.
 // It observes the network forward in time: it waits for an observation window
-// and then requires that no node advanced its block height while it waited.
-// Only samples collected during that window are considered, so block
-// production that happened before the check started - for instance in the
-// seconds a stopNode step needs to actually bring the network down - cannot
-// make the check fail.
+// and then requires that every active node not expected to fail was seen
+// keeping its block height while it waited. Only samples collected during that
+// window are considered, so block production that happened before the check
+// started - for instance in the seconds a stopNode step needs to actually bring
+// the network down - cannot make the check fail. A node catching up is still
+// producing, and fails it.
 type blocksHaltedChecker struct {
+	net              driver.Network
 	monitor          MonitoringData
 	toleranceSamples int
 	// duration overrides the observation window; when 0 it is derived from
@@ -49,6 +54,7 @@ func (c *blocksHaltedChecker) Configure(config CheckerConfig) Checker {
 	}
 
 	return &blocksHaltedChecker{
+		net:              c.net,
 		monitor:          c.monitor,
 		toleranceSamples: tolerance,
 		duration:         duration,
@@ -61,56 +67,45 @@ func (c *blocksHaltedChecker) Check(ctx context.Context) error {
 		return err
 	}
 
+	// Stopped nodes cannot produce blocks, so they are not watched; with none
+	// running at all, the network is halted.
+	var nodes []monitoring.Node
+	for _, n := range c.net.GetActiveNodes() {
+		if !n.IsExpectedFailure() {
+			nodes = append(nodes, monitoring.Node(n.GetLabel()))
+		}
+	}
+
 	observationStart := monitoring.NewTime(time.Now())
 	if err := sleep(ctx, window); err != nil {
 		return err
 	}
 
-	observedNodes := 0
-	for _, node := range c.monitor.GetNodes() {
-		series := c.monitor.GetBlockStatus(node)
-		last := series.GetLatest()
-		if last == nil {
-			continue
-		}
-
-		points := series.GetRange(observationStart, last.Position+1)
-		if len(points) < MinObservationSamples {
-			// Too few samples to tell whether the height changed: the node is
-			// unreachable, was removed, or its reads kept failing. That is
-			// consistent with a halt, but it does not witness one.
-			continue
-		}
-		observedNodes++
-
-		// A single increase between consecutive samples means the node is
-		// still producing blocks.
-		for i := 1; i < len(points); i++ {
-			if points[i].Value.BlockHeight > points[i-1].Value.BlockHeight {
-				return assertionf(
-					"network is still producing blocks: node %s advanced "+
-						"from block %d to %d during the %s observation window",
-					node,
-					points[0].Value.BlockHeight,
-					points[len(points)-1].Value.BlockHeight,
-					window,
-				)
-			}
+	var producing, unobserved []string
+	for _, node := range nodes {
+		switch progress(c.monitor.GetBlockStatus(node), observationStart) {
+		case advancedProgress:
+			producing = append(producing, string(node))
+		case unobservedProgress:
+			unobserved = append(unobserved, string(node))
 		}
 	}
-
-	if observedNodes == 0 {
-		// No node was watched long enough to see its height stay put. The
-		// network is considered halted, but on absent data rather than on an
-		// observation.
-		slog.Warn(
-			"blocksHalted: no node reported enough block heights during the "+
-				"observation window; the network is considered halted "+
-				"because no change could be observed",
-			"window", window,
-			"samples_needed", MinObservationSamples,
+	slices.Sort(producing)
+	slices.Sort(unobserved)
+	if len(producing) > 0 {
+		return assertionf(
+			"network is still producing blocks: %d of %d nodes advanced "+
+				"during the %s observation window: %s", len(producing),
+			len(nodes), window, strings.Join(producing, ", "),
 		)
 	}
-
+	if len(unobserved) > 0 {
+		return fmt.Errorf(
+			"%d of %d nodes reported fewer than %d block heights during the "+
+				"%s observation window, so a halt was not observed: %s",
+			len(unobserved), len(nodes), MinObservationSamples, window,
+			strings.Join(unobserved, ", "),
+		)
+	}
 	return nil
 }

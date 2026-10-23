@@ -22,7 +22,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver/checking"
 )
 
-// BlocksHalted asserts that block production has stopped.
+// BlocksHalted asserts that every active node has stopped producing blocks.
 type BlocksHalted struct {
 	Window
 	Failing
@@ -31,7 +31,7 @@ type BlocksHalted struct {
 func (*BlocksHalted) Name() string { return "blocksHalted" }
 
 func (*BlocksHalted) Help() string {
-	return "Assert that block production has halted, by observing the network for the given duration."
+	return "Assert that no active node not expected to fail produces a block during the observation window."
 }
 
 func (c *BlocksHalted) Run(ctx context.Context, checks checking.Checks) error {
