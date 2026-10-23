@@ -22,7 +22,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver/checking"
 )
 
-// BlocksProduced asserts that all nodes keep producing blocks.
+// BlocksProduced asserts that every active node keeps producing blocks.
 type BlocksProduced struct {
 	Window
 	Failing
@@ -31,7 +31,7 @@ type BlocksProduced struct {
 func (*BlocksProduced) Name() string { return "blocksProduced" }
 
 func (*BlocksProduced) Help() string {
-	return "Assert that all nodes have produced blocks within tolerance."
+	return "Assert that every active node not expected to fail produces blocks during the observation window."
 }
 
 func (c *BlocksProduced) Run(ctx context.Context, checks checking.Checks) error {

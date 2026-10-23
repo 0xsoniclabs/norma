@@ -149,3 +149,27 @@ func TestBigIntValueMarshalJSON_DecodesAsBigInt(t *testing.T) {
 		})
 	}
 }
+
+func TestNetworkRulesPatch_IsEmpty(t *testing.T) {
+	zero, off := uint64(0), false
+	tests := map[string]struct {
+		patch NetworkRulesPatch
+		empty bool
+	}{
+		"no section":          {patch: NetworkRulesPatch{}, empty: true},
+		"empty section":       {patch: NetworkRulesPatch{Blocks: &BlocksPatch{}}, empty: true},
+		"empty subsection":    {patch: NetworkRulesPatch{Economy: &EconomyPatch{Gas: &GasPatch{}}}, empty: true},
+		"zero value":          {patch: NetworkRulesPatch{Blocks: &BlocksPatch{MaxBlockGas: &zero}}},
+		"false value":         {patch: NetworkRulesPatch{Upgrades: &UpgradesPatch{Brio: &off}}},
+		"nested value":        {patch: NetworkRulesPatch{Economy: &EconomyPatch{Gas: &GasPatch{EventGas: &zero}}}},
+		"big integer value":   {patch: NetworkRulesPatch{Economy: &EconomyPatch{MinBaseFee: &BigIntValue{}}}},
+		"value next to empty": {patch: NetworkRulesPatch{Blocks: &BlocksPatch{}, Upgrades: &UpgradesPatch{Brio: &off}}},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := test.patch.IsEmpty(); got != test.empty {
+				t.Errorf("IsEmpty() = %v, want %v", got, test.empty)
+			}
+		})
+	}
+}

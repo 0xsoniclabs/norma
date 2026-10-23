@@ -17,6 +17,7 @@
 package checking
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -254,6 +255,20 @@ func TestBlockHashes_UnreachableFailingNodeIsExpected(t *testing.T) {
 	c := blocksHashesChecker{net: net}
 	if err := c.Check(t.Context()); err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestBlockHashes_CancellationIsNotAnExpectedFailure(t *testing.T) {
+	net := chainNetwork(t,
+		chainNode{label: "healthy", height: 10},
+		chainNode{label: "crashed", failing: true, dialErr: true},
+	)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	c := blocksHashesChecker{net: net}
+	if err := c.Check(ctx); !errors.Is(err, context.Canceled) {
+		t.Errorf("expected a context error, got %v", err)
 	}
 }
 

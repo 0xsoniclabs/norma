@@ -79,8 +79,8 @@ func (c *networkRulesChecker) Check(ctx context.Context) error {
 	if c.configureErr != nil {
 		return c.configureErr
 	}
-	if reflect.DeepEqual(c.rulesPatch, genesis.NetworkRulesPatch{}) {
-		return nil
+	if c.rulesPatch.IsEmpty() {
+		return fmt.Errorf("no network rules to check")
 	}
 
 	if c.timeout <= 0 {
@@ -144,12 +144,16 @@ func (c *networkRulesChecker) checkOnce(ctx context.Context) error {
 				continue
 			}
 			details := explainRulesMismatch(rules, patched)
-			return fmt.Errorf("applied network rules mismatch on node %s: %s", node.GetLabel(), details)
+			return assertionf("applied network rules mismatch on node %s: %s", node.GetLabel(), details)
 		}
 	}
 
+	// A dial cut short by the scenario ending is not a node failing.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if got, want := gotFailures, expectedFailures; !maps.Equal(got, want) {
-		return fmt.Errorf("unexpected failure set to validate network rules, got %v, want %v", got, want)
+		return assertionf("unexpected failure set to validate network rules, got %v, want %v", got, want)
 	}
 
 	return nil

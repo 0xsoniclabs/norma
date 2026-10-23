@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/monitoring"
@@ -77,6 +78,22 @@ func (c Checks) GetCheckerByName(name string) Checker {
 	return c[name]
 }
 
+// ErrAssertion marks an error as the network failing what a checker asserts,
+// as opposed to the checker being unable to decide, for instance because a
+// node could not be reached.
+var ErrAssertion = errors.New("assertion failed")
+
+type assertionError struct{ error }
+
+func (assertionError) Is(target error) bool { return target == ErrAssertion }
+
+func (e assertionError) Unwrap() error { return e.error }
+
+// assertionf formats an error that matches ErrAssertion.
+func assertionf(format string, args ...any) error {
+	return assertionError{fmt.Errorf(format, args...)}
+}
+
 // failingChecker is used to create a checker that expects an error
 type failingChecker struct {
 	checker Checker
@@ -87,10 +104,17 @@ func NewFailingChecker(checker Checker) Checker {
 	return &failingChecker{checker}
 }
 
+// Check passes only when the checker's assertion fails. Any other error means
+// the expected failure was not observed, so it fails the check.
 func (c *failingChecker) Check(ctx context.Context) error {
-	if err := c.checker.Check(ctx); err == nil {
+	err := c.checker.Check(ctx)
+	if err == nil {
 		return fmt.Errorf("failure expected")
 	}
+	if !errors.Is(err, ErrAssertion) {
+		return fmt.Errorf("failure expected, but the check could not decide: %w", err)
+	}
+	slog.Info("check failed as expected", "reason", err)
 	return nil
 }
 

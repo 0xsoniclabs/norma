@@ -89,7 +89,7 @@ func (c *receiptGasUsedChecker) Check(ctx context.Context) error {
 			return err
 		}
 		if len(want) != len(got) {
-			return fmt.Errorf("block %d has %d receipts on %v but %d on %v",
+			return assertionf("block %d has %d receipts on %v but %d on %v",
 				block, len(want), c.amended, len(got), c.leaked)
 		}
 		if !differ && !slices.Equal(want, got) {
@@ -100,7 +100,7 @@ func (c *receiptGasUsedChecker) Check(ctx context.Context) error {
 		}
 	}
 	if !differ {
-		return fmt.Errorf("no receipt in a block before epoch %d, up to block %d, "+
+		return assertionf("no receipt in a block before epoch %d, up to block %d, "+
 			"reports a different GasUsed on %v than on %v", c.exportEpoch, limit, c.amended, c.leaked)
 	}
 	return nil
@@ -165,7 +165,7 @@ func commonGasUsed(clients []labeledClient, block uint64) ([]uint64, error) {
 			continue
 		}
 		if !slices.Equal(common, gasUsed) {
-			return nil, fmt.Errorf("receipts of block %d report GasUsed %v on node %s but %v on node %s",
+			return nil, assertionf("receipts of block %d report GasUsed %v on node %s but %v on node %s",
 				block, common, clients[0].label, gasUsed, c.label)
 		}
 	}

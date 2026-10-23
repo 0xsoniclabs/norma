@@ -2,7 +2,6 @@ package checking
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -88,7 +87,7 @@ func (c *blocksHaltedChecker) Check(ctx context.Context) error {
 		// still producing blocks.
 		for i := 1; i < len(points); i++ {
 			if points[i].Value.BlockHeight > points[i-1].Value.BlockHeight {
-				return fmt.Errorf(
+				return assertionf(
 					"network is still producing blocks: node %s advanced "+
 						"from block %d to %d during the %s observation window",
 					node,

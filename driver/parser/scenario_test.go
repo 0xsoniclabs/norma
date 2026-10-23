@@ -1132,7 +1132,10 @@ func checkScenario(check checks.Check) *Scenario {
 var windowChecks = map[string]func(checks.Window) checks.Check{
 	"blocksProduced": func(w checks.Window) checks.Check { return &checks.BlocksProduced{Window: w} },
 	"blocksHalted":   func(w checks.Window) checks.Check { return &checks.BlocksHalted{Window: w} },
-	"blockGasRate":   func(w checks.Window) checks.Check { return &checks.BlockGasRate{Window: w} },
+	"blockGasRate": func(w checks.Window) checks.Check {
+		ceiling := 1e6
+		return &checks.BlockGasRate{Ceiling: &ceiling, Window: w}
+	},
 }
 
 func TestCheck_ToleranceTooShortForAnObservationWindow(t *testing.T) {
@@ -1181,7 +1184,13 @@ func TestCheck_ShortDurationIsAcceptedAsAConvergenceBudget(t *testing.T) {
 	// rejected by the observation-window floor.
 	convergenceChecks := map[string]func(checks.Convergence) checks.Check{
 		"blockHeights": func(c checks.Convergence) checks.Check { return &checks.BlockHeights{Convergence: c} },
-		"networkRules": func(c checks.Convergence) checks.Check { return &checks.NetworkRules{Convergence: c} },
+		"networkRules": func(c checks.Convergence) checks.Check {
+			maxBlockGas := uint64(1)
+			return &checks.NetworkRules{
+				Rules:       genesis.NetworkRulesPatch{Blocks: &genesis.BlocksPatch{MaxBlockGas: &maxBlockGas}},
+				Convergence: c,
+			}
+		},
 	}
 	for name, newCheck := range convergenceChecks {
 		t.Run(name, func(t *testing.T) {

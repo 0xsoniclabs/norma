@@ -18,6 +18,7 @@ package checks
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -117,7 +118,7 @@ func TestChecks_RunTheirCheckerWithTheParametersOfTheScenario(t *testing.T) {
 				// A check expected to fail passes when its checker fails.
 				var checkErr error
 				if failing, _ := test.config["failing"].(bool); failing {
-					checkErr = errors.New("observed failure")
+					checkErr = fmt.Errorf("%w: observed failure", checking.ErrAssertion)
 				}
 				configured.EXPECT().Check(gomock.Any()).Return(checkErr)
 			}
@@ -169,7 +170,12 @@ func TestNetworkRules_RejectsRulesTheNetworkWouldRefuse(t *testing.T) {
 		Upgrades: &genesis.UpgradesPatch{Allegro: &allegro},
 	}}
 	require.ErrorContains(t, check.Validate(), "invalid rules")
-	require.NoError(t, (&NetworkRules{}).Validate())
+	require.ErrorContains(t, (&NetworkRules{}).Validate(), "rules must set at least one rule")
+	nested := &NetworkRules{Rules: genesis.NetworkRulesPatch{
+		Blocks:  &genesis.BlocksPatch{},
+		Economy: &genesis.EconomyPatch{Gas: &genesis.GasPatch{}},
+	}}
+	require.ErrorContains(t, nested.Validate(), "rules must set at least one rule")
 }
 
 func TestBlockGasRate_RejectsACeilingTheCheckerCannotHold(t *testing.T) {
@@ -182,11 +188,11 @@ func TestBlockGasRate_RejectsACeilingTheCheckerCannotHold(t *testing.T) {
 	zero, large := 0.0, 1e18
 	require.NoError(t, (&BlockGasRate{Ceiling: &zero}).Validate())
 	require.NoError(t, (&BlockGasRate{Ceiling: &large}).Validate())
-	require.NoError(t, (&BlockGasRate{}).Validate())
+	require.ErrorContains(t, (&BlockGasRate{}).Validate(), "ceiling is required")
 
 	// The window floor still applies alongside it.
 	short := 1
-	require.ErrorContains(t, (&BlockGasRate{Tolerance: &short}).Validate(), "observation window")
+	require.ErrorContains(t, (&BlockGasRate{Ceiling: &large, Tolerance: &short}).Validate(), "observation window")
 }
 
 func TestBlockHeights_RejectsANegativeTolerance(t *testing.T) {

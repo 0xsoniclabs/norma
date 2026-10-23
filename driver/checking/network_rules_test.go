@@ -1,6 +1,8 @@
 package checking
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -171,6 +173,46 @@ func TestNetworkRulesChecker_Check_ExpectedFailingNode(t *testing.T) {
 	}
 }
 
+func TestNetworkRulesChecker_Check_CancellationIsNotAnExpectedFailure(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	healthy := driver.NewMockNode(ctrl)
+	failing := driver.NewMockNode(ctrl)
+	client := rpc.NewMockClient(ctrl)
+
+	patch := genesis.NetworkRulesPatch{
+		Blocks: &genesis.BlocksPatch{MaxBlockGas: new(uint64(20500000000))},
+	}
+	patched := opera.FakeNetRules(opera.GetSonicUpgrades())
+	if err := genesis.ApplyNetworkRulesPatch(&patched, patch); err != nil {
+		t.Fatalf("failed to prepare patched rules: %v", err)
+	}
+
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{healthy, failing})
+
+	healthy.EXPECT().IsExpectedFailure().AnyTimes().Return(false)
+	healthy.EXPECT().DialRpc(gomock.Any()).Return(client, nil)
+	healthy.EXPECT().GetLabel().AnyTimes().Return("healthy")
+	client.EXPECT().GetNetworkRules("latest").Return(patched, nil)
+	client.EXPECT().Close()
+
+	// The scenario ends while the node expected to fail is being dialled.
+	failing.EXPECT().IsExpectedFailure().AnyTimes().Return(true)
+	failing.EXPECT().GetLabel().AnyTimes().Return("failing")
+	failing.EXPECT().DialRpc(gomock.Any()).DoAndReturn(
+		func(ctx context.Context) (rpc.Client, error) {
+			cancel()
+			return nil, ctx.Err()
+		})
+
+	checker := &networkRulesChecker{net: net, rulesPatch: patch}
+	if err := checker.Check(ctx); !errors.Is(err, context.Canceled) {
+		t.Errorf("expected a context error, got %v", err)
+	}
+}
+
 func TestNetworkRulesChecker_Check_ConvergesAfterLag(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -275,12 +317,17 @@ func TestNetworkRulesChecker_Check_FailsOnExpectedFailureSetMismatch(t *testing.
 	}
 }
 
-func TestNetworkRulesChecker_Check_EmptyPatchReturnsNil(t *testing.T) {
-	checker := &networkRulesChecker{
-		rulesPatch: genesis.NetworkRulesPatch{},
-	}
-	if err := checker.Check(t.Context()); err != nil {
-		t.Fatalf("expected nil error for empty rules patch, got: %v", err)
+func TestNetworkRulesChecker_Check_EmptyPatchFails(t *testing.T) {
+	for name, patch := range map[string]genesis.NetworkRulesPatch{
+		"no section":     {},
+		"empty sections": {Blocks: &genesis.BlocksPatch{}, Economy: &genesis.EconomyPatch{Gas: &genesis.GasPatch{}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			checker := &networkRulesChecker{rulesPatch: patch}
+			if err := checker.Check(t.Context()); err == nil {
+				t.Fatal("expected an error for a patch setting no rule")
+			}
+		})
 	}
 }
 

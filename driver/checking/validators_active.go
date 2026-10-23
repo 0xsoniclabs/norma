@@ -179,7 +179,7 @@ func verifyAllActive(expected map[int]string, active []int) error {
 		return nil
 	}
 	slices.Sort(missing)
-	return fmt.Errorf(
+	return assertionf(
 		"%d of %d running validator nodes are not in the validator set and "+
 			"so take no part in consensus: %s; the active set is %v",
 		len(missing), len(expected), strings.Join(missing, ", "), active,

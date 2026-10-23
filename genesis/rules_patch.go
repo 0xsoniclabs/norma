@@ -122,6 +122,33 @@ func (p *NetworkRulesPatch) PrettyPrint() string {
 	return string(b)
 }
 
+// IsEmpty reports whether the patch sets no rule. Sections without any value
+// set count as empty; a value set to zero or false does not.
+func (p NetworkRulesPatch) IsEmpty() bool {
+	data, err := json.Marshal(p)
+	if err != nil {
+		return false
+	}
+	var tree any
+	if err := json.Unmarshal(data, &tree); err != nil {
+		return false
+	}
+	return !setsValue(tree)
+}
+
+func setsValue(node any) bool {
+	section, isSection := node.(map[string]any)
+	if !isSection {
+		return true
+	}
+	for _, child := range section {
+		if setsValue(child) {
+			return true
+		}
+	}
+	return false
+}
+
 type DagPatch struct {
 	MaxParents     *uint64 `yaml:"MaxParents,omitempty" json:"MaxParents,omitempty"`
 	MaxFreeParents *uint64 `yaml:"MaxFreeParents,omitempty" json:"MaxFreeParents,omitempty"`
