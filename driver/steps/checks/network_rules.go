@@ -38,8 +38,8 @@ func (*NetworkRules) Help() string {
 }
 
 func (c *NetworkRules) Validate() error {
-	if c.Rules == (genesis.NetworkRulesPatch{}) {
-		return fmt.Errorf("rules must not be empty")
+	if c.Rules.IsEmpty() {
+		return fmt.Errorf("rules must set at least one rule")
 	}
 	if err := genesis.ValidateNetworkRulesPatch(c.Rules); err != nil {
 		return fmt.Errorf("invalid rules: %w", err)

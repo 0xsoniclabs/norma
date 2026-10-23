@@ -79,7 +79,7 @@ func (c *networkRulesChecker) Check(ctx context.Context) error {
 	if c.configureErr != nil {
 		return c.configureErr
 	}
-	if reflect.DeepEqual(c.rulesPatch, genesis.NetworkRulesPatch{}) {
+	if c.rulesPatch.IsEmpty() {
 		return fmt.Errorf("no network rules to check")
 	}
 

@@ -262,6 +262,56 @@ func TestBlocksRolling_FailsForNodesWithoutData(t *testing.T) {
 	})
 }
 
+func TestBlocksRolling_ExpectedFailureNeedsAnObservedStall(t *testing.T) {
+	// A check expected to fail must see a node stand still; a node it cannot
+	// read does not show that, however long it waits.
+	tests := map[string]struct {
+		behavior nodeBehavior
+		wantErr  string
+	}{
+		"halted": {behavior: nodeBehavior{
+			height: production{
+				blockInterval: 300 * time.Millisecond,
+				haltAt:        simulationEpoch.Add(5 * time.Second),
+			}.heightAt,
+			interval: time.Second,
+		}},
+		"unreachable": {behavior: nodeBehavior{
+			height:          production{blockInterval: 300 * time.Millisecond}.heightAt,
+			interval:        time.Second,
+			unreachableFrom: simulationEpoch.Add(10 * time.Second),
+		}, wantErr: "could not decide"},
+		"sampled too sparsely": {behavior: nodeBehavior{
+			height:   production{blockInterval: 300 * time.Millisecond}.heightAt,
+			interval: 3 * time.Second,
+		}, wantErr: "could not decide"},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				net := newSimulation(t, 1)
+				net.addNode("A", test.behavior)
+				net.run(10 * time.Second)
+
+				c := NewFailingChecker(&blocksRollingChecker{
+					net: activeNetwork(t, net.GetNodes()...), monitor: net,
+					duration: 2 * time.Second,
+				})
+				err := c.Check(t.Context())
+				if test.wantErr == "" {
+					if err != nil {
+						t.Errorf("unexpected error: %v", err)
+					}
+					return
+				}
+				if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+					t.Errorf("expected an error containing %q, got %v", test.wantErr, err)
+				}
+			})
+		})
+	}
+}
+
 func TestBlocksRolling_DerivesTheWindowFromTolerance(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		net := newSimulation(t, 1)

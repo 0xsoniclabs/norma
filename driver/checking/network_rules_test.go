@@ -276,11 +276,16 @@ func TestNetworkRulesChecker_Check_FailsOnExpectedFailureSetMismatch(t *testing.
 }
 
 func TestNetworkRulesChecker_Check_EmptyPatchFails(t *testing.T) {
-	checker := &networkRulesChecker{
-		rulesPatch: genesis.NetworkRulesPatch{},
-	}
-	if err := checker.Check(t.Context()); err == nil {
-		t.Fatal("expected an error for an empty rules patch")
+	for name, patch := range map[string]genesis.NetworkRulesPatch{
+		"no section":     {},
+		"empty sections": {Blocks: &genesis.BlocksPatch{}, Economy: &genesis.EconomyPatch{Gas: &genesis.GasPatch{}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			checker := &networkRulesChecker{rulesPatch: patch}
+			if err := checker.Check(t.Context()); err == nil {
+				t.Fatal("expected an error for a patch setting no rule")
+			}
+		})
 	}
 }
 

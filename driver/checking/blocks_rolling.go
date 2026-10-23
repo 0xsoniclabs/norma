@@ -3,6 +3,7 @@ package checking
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -93,37 +94,62 @@ func (c *blocksRollingChecker) Check(ctx context.Context) error {
 		return err
 	}
 
-	var stalled []string
+	// Only a node watched long enough to see its height stay put witnesses a
+	// stall; one without enough samples leaves the check undecided.
+	var stalled, unobserved []string
 	for _, node := range nodes {
-		if !advanced(c.monitor.GetBlockStatus(node), observationStart) {
+		switch progress(c.monitor.GetBlockStatus(node), observationStart) {
+		case stalledProgress:
 			stalled = append(stalled, string(node))
+		case unobservedProgress:
+			unobserved = append(unobserved, string(node))
 		}
 	}
+	slices.Sort(stalled)
+	slices.Sort(unobserved)
 	if len(stalled) > 0 {
-		slices.Sort(stalled)
 		return assertionf(
 			"%d of %d nodes produced no block during the %s observation "+
 				"window: %s", len(stalled), len(nodes), window,
 			strings.Join(stalled, ", "),
 		)
 	}
+	if len(unobserved) > 0 {
+		return fmt.Errorf(
+			"%d of %d nodes reported fewer than %d block heights during the "+
+				"%s observation window: %s", len(unobserved), len(nodes),
+			MinObservationSamples, window, strings.Join(unobserved, ", "),
+		)
+	}
 	return nil
 }
 
-// advanced reports whether the series shows the block height rising from
-// start on.
-func advanced(
+type blockProgress int
+
+const (
+	advancedProgress blockProgress = iota
+	stalledProgress
+	unobservedProgress
+)
+
+// progress classifies the block heights the series recorded from start on.
+func progress(
 	series monitoring.Series[monitoring.Time, monitoring.BlockStatus],
 	start monitoring.Time,
-) bool {
+) blockProgress {
 	if series == nil {
-		return false
+		return unobservedProgress
 	}
 	last := series.GetLatest()
 	if last == nil {
-		return false
+		return unobservedProgress
 	}
 	items := series.GetRange(start, last.Position+1)
-	return len(items) > 0 &&
-		items[0].Value.BlockHeight < items[len(items)-1].Value.BlockHeight
+	if len(items) < MinObservationSamples {
+		return unobservedProgress
+	}
+	if items[0].Value.BlockHeight < items[len(items)-1].Value.BlockHeight {
+		return advancedProgress
+	}
+	return stalledProgress
 }

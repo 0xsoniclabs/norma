@@ -170,7 +170,12 @@ func TestNetworkRules_RejectsRulesTheNetworkWouldRefuse(t *testing.T) {
 		Upgrades: &genesis.UpgradesPatch{Allegro: &allegro},
 	}}
 	require.ErrorContains(t, check.Validate(), "invalid rules")
-	require.ErrorContains(t, (&NetworkRules{}).Validate(), "rules must not be empty")
+	require.ErrorContains(t, (&NetworkRules{}).Validate(), "rules must set at least one rule")
+	nested := &NetworkRules{Rules: genesis.NetworkRulesPatch{
+		Blocks:  &genesis.BlocksPatch{},
+		Economy: &genesis.EconomyPatch{Gas: &genesis.GasPatch{}},
+	}}
+	require.ErrorContains(t, nested.Validate(), "rules must set at least one rule")
 }
 
 func TestBlockGasRate_RejectsACeilingTheCheckerCannotHold(t *testing.T) {
