@@ -158,6 +158,12 @@ func runWithTUI(cliCtx *cli.Context, runAll func(context.Context, *tui) error) e
 	// The run starts once the UI has drawn, so not at all if it fails to start.
 	var start sync.Once
 	t.app.SetAfterDrawFunc(func(tcell.Screen) { start.Do(func() { go run() }) })
+	// A signal also quits the TUI, once the run cleaned up.
+	go func() {
+		<-cliCtx.Done()
+		<-finished
+		t.app.Stop()
+	}()
 
 	uiErr := t.app.SetRoot(root, true).Run()
 	close(t.stopped)
@@ -223,11 +229,18 @@ func (t *tui) show(scenario *parser.Scenario, monitor *monitoring.Monitor) (stop
 				return
 			case <-ticker.C:
 			}
+			// Sampled here, as the network may be locked for minutes while
+			// it peers nodes, which must not block the UI.
+			samples := make([]map[string]float64, len(t.plots))
+			for i, plot := range t.plots {
+				samples[i] = plot.sample(monitor)
+			}
+			rows := nodeRows(monitor)
 			t.update(func() {
-				for _, plot := range t.plots {
-					plot.add(plot.sample(monitor))
+				for i, plot := range t.plots {
+					plot.add(samples[i])
 				}
-				t.showNodes(monitor)
+				t.showNodes(rows)
 			})
 		}
 	}()
@@ -314,8 +327,27 @@ func (l *nodeLogs) BeforeNodeRemoval(driver.Node) {}
 
 func (l *nodeLogs) AfterApplicationCreation(driver.Application) {}
 
-// showNodes lists the running nodes with their latest block and epoch.
-func (t *tui) showNodes(monitor *monitoring.Monitor) {
+// nodeRows lists the running nodes with their latest block and epoch.
+func nodeRows(monitor *monitoring.Monitor) [][3]string {
+	var labels []string
+	for _, node := range monitor.Network().GetActiveNodes() {
+		labels = append(labels, node.GetLabel())
+	}
+	slices.Sort(labels)
+	rows := make([][3]string, len(labels))
+	for i, label := range labels {
+		rows[i] = [3]string{label, "-", "-"}
+		if series, ok := monitoring.GetData(monitor, monitoring.Node(label), nodemon.NodeBlockStatus); ok && series != nil {
+			if point := series.GetLatest(); point != nil {
+				rows[i][1], rows[i][2] = fmt.Sprint(point.Value.BlockHeight), fmt.Sprint(point.Value.Epoch)
+			}
+		}
+	}
+	return rows
+}
+
+// showNodes shows the rows of nodeRows below a header.
+func (t *tui) showNodes(rows [][3]string) {
 	t.nodes.Clear()
 	for column, header := range []string{"Node", "Block", "Epoch"} {
 		align := tview.AlignRight
@@ -324,21 +356,10 @@ func (t *tui) showNodes(monitor *monitoring.Monitor) {
 		}
 		t.nodes.SetCell(0, column, tview.NewTableCell(header).SetAttributes(tcell.AttrBold).SetAlign(align).SetExpansion(1))
 	}
-	var labels []string
-	for _, node := range monitor.Network().GetActiveNodes() {
-		labels = append(labels, node.GetLabel())
-	}
-	slices.Sort(labels)
-	for i, label := range labels {
-		block, epoch := "-", "-"
-		if series, ok := monitoring.GetData(monitor, monitoring.Node(label), nodemon.NodeBlockStatus); ok && series != nil {
-			if point := series.GetLatest(); point != nil {
-				block, epoch = fmt.Sprint(point.Value.BlockHeight), fmt.Sprint(point.Value.Epoch)
-			}
-		}
-		t.nodes.SetCell(i+1, 0, tview.NewTableCell(label).SetExpansion(1))
-		t.nodes.SetCell(i+1, 1, tview.NewTableCell(block).SetAlign(tview.AlignRight).SetExpansion(1))
-		t.nodes.SetCell(i+1, 2, tview.NewTableCell(epoch).SetAlign(tview.AlignRight).SetExpansion(1))
+	for i, row := range rows {
+		t.nodes.SetCell(i+1, 0, tview.NewTableCell(row[0]).SetExpansion(1))
+		t.nodes.SetCell(i+1, 1, tview.NewTableCell(row[1]).SetAlign(tview.AlignRight).SetExpansion(1))
+		t.nodes.SetCell(i+1, 2, tview.NewTableCell(row[2]).SetAlign(tview.AlignRight).SetExpansion(1))
 	}
 }
 
