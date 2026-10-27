@@ -17,6 +17,7 @@
 package shaper
 
 import (
+	"fmt"
 	"log/slog"
 	"time"
 )
@@ -58,10 +59,11 @@ func (s *autoShaper) GetNumMessagesInInterval(start time.Time, duration time.Dur
 	if start.Sub(s.lastOverflowCheck) >= time.Second {
 		s.lastOverflowCheck = start
 
-		// Fetch the latest refresh rates.
-		gap := getProcessingGap(s.loadInfo)
-
-		if float64(gap) > 2*s.rate {
+		// Fetch the latest refresh rates. Without them the load is unknown,
+		// so the rate is held.
+		if gap, err := getProcessingGap(s.loadInfo); err != nil {
+			slog.Error("autoShaper: failed to fetch the load, holding the rate", "error", err)
+		} else if float64(gap) > 2*s.rate {
 			s.rate *= 1 - s.decrease
 		} else {
 			s.rate += s.increase
@@ -72,18 +74,19 @@ func (s *autoShaper) GetNumMessagesInInterval(start time.Time, duration time.Dur
 	return s.rate * duration.Seconds()
 }
 
-func getProcessingGap(info LoadInfoSource) uint64 {
+// getProcessingGap returns the number of sent transactions not yet received.
+// Apps may count more received than sent transactions, which is no gap.
+func getProcessingGap(info LoadInfoSource) (uint64, error) {
 	sent, err := info.GetSentTransactions()
 	if err != nil {
-		slog.Error("autoShaper: failed to fetch number of sent transactions",
-			"error", err)
-		return 0
+		return 0, fmt.Errorf("failed to fetch number of sent transactions: %w", err)
 	}
 	received, err := info.GetReceivedTransactions()
 	if err != nil {
-		slog.Error("autoShaper: failed to fetch number of received transactions",
-			"error", err)
-		return 0
+		return 0, fmt.Errorf("failed to fetch number of received transactions: %w", err)
 	}
-	return sent - received
+	if received >= sent {
+		return 0, nil
+	}
+	return sent - received, nil
 }

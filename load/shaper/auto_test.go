@@ -17,6 +17,7 @@
 package shaper
 
 import (
+	"errors"
 	"math"
 	"testing"
 	"time"
@@ -66,5 +67,45 @@ func TestAutoShaper_ShrinksMultiplicative(t *testing.T) {
 		}
 		rate *= 0.8
 		start = start.Add(time.Second)
+	}
+}
+
+func TestAutoShaper_HoldsTheRateWhenTheLoadCannotBeRead(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	info := NewMockLoadInfoSource(ctrl)
+
+	info.EXPECT().GetSentTransactions().AnyTimes().Return(uint64(100000), nil)
+	info.EXPECT().GetReceivedTransactions().AnyTimes().Return(uint64(0), errors.New("node unreachable"))
+
+	shaper := NewAutoShaper(10, 0.2)
+	shaper.(*autoShaper).rate = 1000
+
+	start := time.Now()
+	shaper.Start(start, info)
+
+	for range 3 {
+		start = start.Add(time.Second)
+		if got := shaper.GetNumMessagesInInterval(start, time.Second); got != 1000 {
+			t.Errorf("rate should be held, got %f", got)
+		}
+	}
+}
+
+func TestAutoShaper_GrowsWhenMoreTransactionsAreReceivedThanSent(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	info := NewMockLoadInfoSource(ctrl)
+
+	info.EXPECT().GetSentTransactions().AnyTimes().Return(uint64(100), nil)
+	info.EXPECT().GetReceivedTransactions().AnyTimes().Return(uint64(102), nil)
+
+	shaper := NewAutoShaper(10, 0.2)
+	shaper.(*autoShaper).rate = 1000
+
+	start := time.Now()
+	shaper.Start(start, info)
+
+	start = start.Add(time.Second)
+	if got := shaper.GetNumMessagesInInterval(start, time.Second); got != 1010 {
+		t.Errorf("rate should grow, got %f", got)
 	}
 }
