@@ -46,8 +46,9 @@ func init() {
 // faster than the network produced them.
 type TransactionsThroughputSource struct {
 	BlockNodeMetricSource[float32]
-	lastTimes map[monitoring.Node]time.Time // creation times of the latest received blocks
-	carried   map[monitoring.Node]int       // transactions of blocks created at the same time as the latest
+	lastHeights map[monitoring.Node]int       // heights of the latest received blocks
+	lastTimes   map[monitoring.Node]time.Time // creation times of the latest measured blocks
+	carried     map[monitoring.Node]int       // transactions of blocks created at the same time as the latest
 }
 
 // NewTransactionsThroughputSource creates a metric capturing transaction throughput.
@@ -56,6 +57,7 @@ func NewTransactionsThroughputSource(monitor *monitoring.Monitor) *TransactionsT
 		SyncedSeriesSource: utils.NewSyncedSeriesSource(TransactionsThroughput),
 		monitor:            monitor,
 		syncingTracker:     newSyncingTracker(),
+		lastHeights:        make(map[monitoring.Node]int, 50),
 		lastTimes:          make(map[monitoring.Node]time.Time, 50),
 		carried:            make(map[monitoring.Node]int, 50),
 	}
@@ -72,6 +74,12 @@ func newTransactionsThroughputSource(monitor *monitoring.Monitor) monitoring.Sou
 func (s *TransactionsThroughputSource) OnBlock(node monitoring.Node, block monitoring.Block) {
 	s.markNodeAsSyncing(node)
 
+	if height, exists := s.lastHeights[node]; exists && block.Height <= height {
+		// a block replayed by a restarted node, its transactions were counted already
+		return
+	}
+	s.lastHeights[node] = block.Height
+
 	created := block.Time.Add(-block.Age)
 	prevTime, exists := s.lastTimes[node]
 	if !exists {
@@ -82,13 +90,9 @@ func (s *TransactionsThroughputSource) OnBlock(node monitoring.Node, block monit
 	}
 
 	timeDiff := created.Sub(prevTime).Nanoseconds()
-	if timeDiff < 0 {
-		// a block replayed by a restarted node, its transactions were counted already
-		return
-	}
 	// blocks created within the resolution of the log count towards the next one
 	s.carried[node] += block.Txs
-	if timeDiff == 0 {
+	if timeDiff <= 0 {
 		return
 	}
 	txs := float64(s.carried[node]) * 1e9 / float64(timeDiff)

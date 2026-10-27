@@ -62,8 +62,8 @@ type inclusionObserver struct {
 	blocks  chan monitoring.Block
 
 	mu     sync.Mutex
-	seen   map[int]bool // heights queued or read, they are announced by every node
-	missed map[int]bool // heights given up on, unless a later announcement is read
+	seen   map[int]bool      // heights queued or read, they are announced by every node
+	missed map[int]time.Time // heights given up on, at their first announcement, until one is read
 }
 
 func newInclusionObserver(tracker *Tracker, clients clientSource) *inclusionObserver {
@@ -72,7 +72,7 @@ func newInclusionObserver(tracker *Tracker, clients clientSource) *inclusionObse
 		clients: clients,
 		blocks:  make(chan monitoring.Block, pendingBlocks),
 		seen:    map[int]bool{},
-		missed:  map[int]bool{},
+		missed:  map[int]time.Time{},
 	}
 }
 
@@ -83,11 +83,14 @@ func (o *inclusionObserver) OnBlock(_ monitoring.Node, block monitoring.Block) {
 	if o.seen[block.Height] {
 		return
 	}
+	if at, found := o.missed[block.Height]; found && at.Before(block.Time) {
+		block.Time = at
+	}
 	select {
 	case o.blocks <- block:
 		o.seen[block.Height] = true
 	default:
-		o.missed[block.Height] = true
+		o.missed[block.Height] = block.Time
 	}
 }
 
@@ -123,7 +126,7 @@ func (o *inclusionObserver) run(ctx context.Context) {
 				client = nil
 			}
 			if err != nil {
-				o.giveUp(block.Height, err)
+				o.giveUp(block, err)
 				continue
 			}
 			o.tracker.MarkBlock(block.Height, block.Time, contents.transactions)
@@ -137,17 +140,17 @@ func (o *inclusionObserver) run(ctx context.Context) {
 
 // giveUp records a block that could not be read. A later announcement of it
 // by another node queues it again.
-func (o *inclusionObserver) giveUp(height int, err error) {
+func (o *inclusionObserver) giveUp(block monitoring.Block, err error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if len(o.missed) == 0 {
 		slog.Warn("failed to read the contents of a block, inclusions will be missing",
-			"block", height, "error", err)
+			"block", block.Height, "error", err)
 	} else {
-		slog.Debug("failed to read contents of block", "block", height, "error", err)
+		slog.Debug("failed to read contents of block", "block", block.Height, "error", err)
 	}
-	delete(o.seen, height)
-	o.missed[height] = true
+	delete(o.seen, block.Height)
+	o.missed[block.Height] = block.Time
 }
 
 func (o *inclusionObserver) logSummary() {

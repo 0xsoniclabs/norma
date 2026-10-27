@@ -329,6 +329,7 @@ func TestTransactionsThroughput_MeasuresOnBlockCreationTimes(t *testing.T) {
 	source.OnBlock("A", block(1, 0, 0, 10))
 	source.OnBlock("A", block(2, time.Millisecond, time.Second, 10))
 	source.OnBlock("A", block(1, 2*time.Millisecond, 0, 10))           // replayed
+	source.OnBlock("A", block(2, 2*time.Millisecond, time.Second, 10)) // replayed
 	source.OnBlock("A", block(3, 3*time.Millisecond, time.Second, 10)) // created with the previous one
 	source.OnBlock("A", block(4, 4*time.Millisecond, 2*time.Second, 20))
 

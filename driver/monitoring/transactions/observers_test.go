@@ -301,22 +301,26 @@ func TestInclusionObserver_ReadsABlockFromAnotherNodeIfOneCannotServeIt(t *testi
 	defer cancel()
 	go observer.run(ctx)
 
-	block := monitoring.Block{Height: 7, Time: epoch.Add(2 * time.Second)}
-	observer.OnBlock("validator-0", block)
+	observer.OnBlock("validator-0", monitoring.Block{Height: 7, Time: epoch.Add(2 * time.Second)})
 	require.Eventually(func() bool {
 		observer.mu.Lock()
 		defer observer.mu.Unlock()
-		return observer.missed[7]
+		_, missed := observer.missed[7]
+		return missed
 	}, 10*time.Second, 10*time.Millisecond)
 	require.Equal(0, tracker.Counts("app").Included)
 
-	observer.OnBlock("validator-1", block)
+	// The block keeps the time of its first announcement.
+	observer.OnBlock("validator-1", monitoring.Block{Height: 7, Time: epoch.Add(10 * time.Second)})
 	require.Eventually(func() bool {
-		return tracker.Counts("app").Included == 1
+		observer.mu.Lock()
+		defer observer.mu.Unlock()
+		return len(observer.missed) == 0 && tracker.Counts("app").Included == 1
 	}, 10*time.Second, 10*time.Millisecond)
-	observer.mu.Lock()
-	defer observer.mu.Unlock()
-	require.Empty(observer.missed)
+	require.Equal(
+		[]Sample{{At: epoch, Duration: 2 * time.Second}},
+		tracker.Samples("app", TimeToInclude),
+	)
 }
 
 func TestReadBlock_RetriesANodeThatIsBehind(t *testing.T) {
