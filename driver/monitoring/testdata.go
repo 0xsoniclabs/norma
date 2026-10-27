@@ -50,14 +50,14 @@ var (
 	dur5, _ = time.ParseDuration("2.579ms")
 	dur6, _ = time.ParseDuration("5.686ms")
 
-	block1 = Block{Height: 1, Time: time1, Txs: 10, GasUsed: 11, ProcessingTime: dur1, GasBaseFee: 1, GasRate: 1.23}
-	block2 = Block{Height: 2, Time: time2, Txs: 20, GasUsed: 22, ProcessingTime: dur2, GasBaseFee: 2, GasRate: 2.31}
-	block3 = Block{Height: 3, Time: time3, Txs: 30, GasUsed: 33, ProcessingTime: dur3, GasBaseFee: 3, GasRate: 3.12}
+	block1 = Block{Height: 1, Time: time1, Txs: 10, GasUsed: 11, ProcessingTime: dur1, Age: 7392 * time.Millisecond, GasBaseFee: 1, GasRate: 1.23}
+	block2 = Block{Height: 2, Time: time2, Txs: 20, GasUsed: 22, ProcessingTime: dur2, Age: 343255 * time.Microsecond, GasBaseFee: 2, GasRate: 2.31}
+	block3 = Block{Height: 3, Time: time3, Txs: 30, GasUsed: 33, ProcessingTime: dur3, Age: 380470 * time.Microsecond, GasBaseFee: 3, GasRate: 3.12}
 
-	block4 = Block{Height: 1, Time: time4, Txs: 10, GasUsed: 11, ProcessingTime: dur4, GasBaseFee: 1, GasRate: 3.4}
-	block5 = Block{Height: 2, Time: time5, Txs: 20, GasUsed: 22, ProcessingTime: dur5, GasBaseFee: 2, GasRate: 5}
+	block4 = Block{Height: 1, Time: time4, Txs: 10, GasUsed: 11, ProcessingTime: dur4, Age: 7392 * time.Millisecond, GasBaseFee: 1, GasRate: 3.4}
+	block5 = Block{Height: 2, Time: time5, Txs: 20, GasUsed: 22, ProcessingTime: dur5, Age: 343255 * time.Microsecond, GasBaseFee: 2, GasRate: 5}
 
-	block6 = Block{Height: 1, Time: time6, Txs: 10, GasUsed: 11, ProcessingTime: dur6, GasBaseFee: 1, GasRate: 2.34}
+	block6 = Block{Height: 1, Time: time6, Txs: 10, GasUsed: 11, ProcessingTime: dur6, Age: 7392 * time.Millisecond, GasBaseFee: 1, GasRate: 2.34}
 
 	NodeBlockTestData = map[Node][]Block{
 		Node1TestId: {block1, block2, block3},

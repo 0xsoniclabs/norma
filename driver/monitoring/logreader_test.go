@@ -52,7 +52,7 @@ func TestParseTime(t *testing.T) {
 }
 
 func TestParseBlock(t *testing.T) {
-	blockReader := NewLogReader(strings.NewReader(Node1TestLog))
+	blockReader := NewLogReader(strings.NewReader(Node1TestLog), func(string, error) {})
 
 	var count int
 	for got := range blockReader {
@@ -83,7 +83,7 @@ func TestParseBlock(t *testing.T) {
 }
 
 func TestParseLogStream(t *testing.T) {
-	blockReader := NewLogReader(strings.NewReader(Node1TestLog))
+	blockReader := NewLogReader(strings.NewReader(Node1TestLog), func(string, error) {})
 
 	var count int
 	for got := range blockReader {
@@ -110,5 +110,27 @@ func TestParseLogStream(t *testing.T) {
 
 	if len(BlockHeight1TestMap) != count {
 		t.Errorf("not all keys were visited")
+	}
+}
+
+func TestLogReader_SkipsLinesThatCannotBeParsed(t *testing.T) {
+	log := "garbage\n" +
+		"INFO [05-04|09:34:15.080] New block index=1 gas_used=11\n" +
+		"INFO [05-04|09:34:15.080] " + strings.Repeat("x", 100_000) + "\n" +
+		"INFO [05-04|09:34:15.537] New block      index=2 id=3:1:3d6fb6       gas_used=22 txs=20/0 base_fee=2 gas_rate=2.31 age=343.255ms t=1.579ms"
+
+	var skipped []string
+	var blocks []Block
+	for block := range NewLogReader(strings.NewReader(log), func(line string, err error) {
+		skipped = append(skipped, line)
+	}) {
+		blocks = append(blocks, block)
+	}
+
+	if len(skipped) != 1 || !strings.Contains(skipped[0], "index=1") {
+		t.Errorf("unexpected skipped lines: %q", skipped)
+	}
+	if len(blocks) != 1 || blocks[0] != block2 {
+		t.Errorf("unexpected blocks: %v, want %v", blocks, block2)
 	}
 }

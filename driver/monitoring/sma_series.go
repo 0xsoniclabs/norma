@@ -19,6 +19,7 @@ package monitoring
 import (
 	"cmp"
 	"log/slog"
+	"sync"
 
 	"golang.org/x/exp/constraints"
 )
@@ -38,6 +39,7 @@ type SmaSeries[K cmp.Ordered, T Number] struct {
 	output           *SyncedSeries[K, T]
 	startKey, endKey K // keep positions of first end last element of the window
 	period           int
+	mu               sync.Mutex // guards the window, which every read moves
 }
 
 func NewSMASeries[K cmp.Ordered, T Number](input Series[K, T], period int) *SmaSeries[K, T] {
@@ -49,6 +51,8 @@ func NewSMASeries[K cmp.Ordered, T Number](input Series[K, T], period int) *SmaS
 }
 
 func (s *SmaSeries[K, T]) calculate() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	latest := s.input.GetLatest()
 	if latest != nil && (latest.Position > s.endKey || s.endKey == s.startKey) {
 		var sum T

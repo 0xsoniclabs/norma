@@ -184,7 +184,7 @@ of each node, meassured for block height, it is a good idea to have the nodes as
 Notice that the items selected from drop down menus are actually the columns from the flat CSV file that has been imported. 
 
 The metrics used actually contains three additional metricts, in total:
-* `TransactionsThroughput` - transaction throughput for every block and node
+* `TransactionsThroughput` - transaction throughput for every block and node, measured between the times consensus created the blocks
 * `TransactionsThroughputSMA_10` - simple moving average for 10 blocks
 * `TransactionsThroughputSMA_100` - simple moving average for 100 blocks
 * `TransactionsThroughputSMA_1000` - simple moving average for 1000 blocks

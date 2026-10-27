@@ -37,10 +37,12 @@ import (
 const pendingBlocks = 1024
 
 // A block is read from a node that may not have processed it yet, so a failed
-// read is retried a few times before the block is given up on.
+// read is retried a few times, and then on other nodes, before the block is
+// given up on.
 const (
 	blockReadAttempts   = 3
 	blockReadRetryDelay = 250 * time.Millisecond
+	blockReadNodes      = 3
 )
 
 // inclusionObserver marks the transactions of every new block as included.
@@ -60,8 +62,8 @@ type inclusionObserver struct {
 	blocks  chan monitoring.Block
 
 	mu     sync.Mutex
-	seen   map[int]bool // heights already read, they are announced by every node
-	missed int
+	seen   map[int]bool // heights queued or read, they are announced by every node
+	missed map[int]bool // heights given up on, unless a later announcement is read
 }
 
 func newInclusionObserver(tracker *Tracker, clients clientSource) *inclusionObserver {
@@ -70,25 +72,22 @@ func newInclusionObserver(tracker *Tracker, clients clientSource) *inclusionObse
 		clients: clients,
 		blocks:  make(chan monitoring.Block, pendingBlocks),
 		seen:    map[int]bool{},
+		missed:  map[int]bool{},
 	}
 }
 
 // OnBlock implements monitoring.LogListener.
 func (o *inclusionObserver) OnBlock(_ monitoring.Node, block monitoring.Block) {
 	o.mu.Lock()
+	defer o.mu.Unlock()
 	if o.seen[block.Height] {
-		o.mu.Unlock()
 		return
 	}
-	o.seen[block.Height] = true
-	o.mu.Unlock()
-
 	select {
 	case o.blocks <- block:
+		o.seen[block.Height] = true
 	default:
-		o.mu.Lock()
-		o.missed++
-		o.mu.Unlock()
+		o.missed[block.Height] = true
 	}
 }
 
@@ -109,50 +108,54 @@ func (o *inclusionObserver) run(ctx context.Context) {
 			o.logSummary()
 			return
 		case block := <-o.blocks:
-			if client == nil {
-				var err error
-				if client, err = o.clients.dial(ctx); err != nil {
-					// The network is gone or not reachable; the remaining
-					// blocks are dropped rather than retried forever.
-					o.count(1)
-					continue
+			var contents blockContents
+			var err error
+			for range blockReadNodes {
+				if client == nil {
+					if client, err = o.clients.dial(ctx); err != nil {
+						continue
+					}
 				}
-			}
-			contents, err := readBlock(ctx, client, block.Height, rules)
-			if err != nil {
-				o.mu.Lock()
-				first := o.missed == 0
-				o.mu.Unlock()
-				if first {
-					slog.Warn("failed to read the contents of a block, inclusions will be missing",
-						"block", block.Height, "error", err)
-				} else {
-					slog.Debug("failed to read contents of block",
-						"block", block.Height, "error", err)
+				if contents, err = readBlock(ctx, client, block.Height, rules); err == nil {
+					break
 				}
 				client.Close()
 				client = nil
-				o.count(1)
+			}
+			if err != nil {
+				o.giveUp(block.Height, err)
 				continue
 			}
 			o.tracker.MarkBlock(block.Height, block.Time, contents.transactions)
 			o.tracker.MarkBlockLimits(block.Height, contents.limits)
+			o.mu.Lock()
+			delete(o.missed, block.Height)
+			o.mu.Unlock()
 		}
 	}
 }
 
-func (o *inclusionObserver) count(missed int) {
+// giveUp records a block that could not be read. A later announcement of it
+// by another node queues it again.
+func (o *inclusionObserver) giveUp(height int, err error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	o.missed += missed
+	if len(o.missed) == 0 {
+		slog.Warn("failed to read the contents of a block, inclusions will be missing",
+			"block", height, "error", err)
+	} else {
+		slog.Debug("failed to read contents of block", "block", height, "error", err)
+	}
+	delete(o.seen, height)
+	o.missed[height] = true
 }
 
 func (o *inclusionObserver) logSummary() {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if o.missed > 0 {
+	if len(o.missed) > 0 {
 		slog.Warn("transactions of some blocks could not be read, their inclusions are missing",
-			"blocks", o.missed)
+			"blocks", len(o.missed))
 	}
 }
 

@@ -125,9 +125,8 @@ func (s *NodeBlockSeriesTransformation[K, T, X]) Shutdown() error {
 }
 
 func (s *NodeBlockSeriesTransformation[K, T, X]) ForEachRecord(consumer func(r monitoring.Record)) {
-	subjects := monitoring.GetSubjects(s.monitor, s.source)
-	for _, subject := range subjects {
-		series, exists := monitoring.GetData(s.monitor, subject, s.source)
+	for _, subject := range s.GetSubjects() {
+		series, exists := s.GetData(subject)
 		if !exists {
 			continue
 		}

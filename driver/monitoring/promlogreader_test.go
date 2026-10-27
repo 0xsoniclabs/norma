@@ -17,6 +17,7 @@
 package monitoring
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -60,6 +61,21 @@ func TestParseCorruptedLineShouldNotPanic(t *testing.T) {
 
 	if len(prometheusValues) != 0 {
 		t.Errorf("should read no data")
+	}
+}
+
+func TestParsePrometheusLog_SkipsLinesThatCannotBeParsed(t *testing.T) {
+	txt := "# TYPE p2p_peers gauge\n" +
+		"p2p_peers {kind=\"inbound\"} 3\n" +
+		"# TYPE\n" +
+		testTxtPrometheusLog
+
+	values, err := ParsePrometheusLogReader(strings.NewReader(txt))
+	if err == nil {
+		t.Errorf("skipped lines should be reported")
+	}
+	if !slices.Equal(values, expectedValues) {
+		t.Errorf("unexpected values: %v, want %v", values, expectedValues)
 	}
 }
 

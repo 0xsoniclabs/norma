@@ -71,6 +71,8 @@ const (
 // measured values are categorised into quantiles.
 // For both variants, the value contains an actual value measured for this particular metric.
 // A line starting with the `# TYPE` marks the beginning of a new metric.
+// Lines that cannot be parsed are skipped and reported in the error, which is
+// returned along with the values of all other lines.
 func ParsePrometheusLogReader(reader io.Reader) ([]PrometheusLogValue, error) {
 	res := make([]PrometheusLogValue, 0, 2000)
 	scanner := bufio.NewScanner(reader)
@@ -81,7 +83,7 @@ func ParsePrometheusLogReader(reader io.Reader) ([]PrometheusLogValue, error) {
 		line := scanner.Text()
 		tokens := strings.Split(line, " ")
 		if len(tokens) >= 2 {
-			if tokens[1] == "TYPE" {
+			if tokens[1] == "TYPE" && len(tokens) >= 4 {
 				currentName = tokens[2]
 				nextType = PrometheusMetricType(tokens[3])
 			} else if tokens[0] == currentName {
