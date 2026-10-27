@@ -36,7 +36,7 @@ import (
 type Monitor struct {
 	network         driver.Network
 	config          MonitorConfig
-	nodeLogProvider NodeLogProvider
+	nodeLogProvider *NodeLogDispatcher
 	promLogProvider PrometheusLogProvider
 	sources         map[string]source
 }
@@ -73,6 +73,7 @@ func (m *Monitor) GetMeasurementFileName() string {
 // should be called before abandoning the Monitor instance.
 func (m *Monitor) Shutdown() error {
 	m.promLogProvider.Shutdown()
+	m.nodeLogProvider.logSummary()
 	var errs = []error{}
 
 	// Shut down all sources.

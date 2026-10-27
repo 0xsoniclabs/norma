@@ -40,9 +40,15 @@ func init() {
 }
 
 // TransactionsThroughputSource is a metric source that captures transaction throughput.
+//
+// The throughput is measured between the times consensus created the blocks,
+// not the times a node processed them: a node catching up processes blocks far
+// faster than the network produced them.
 type TransactionsThroughputSource struct {
 	BlockNodeMetricSource[float32]
-	lastTimes map[monitoring.Node]time.Time // timestamps of the latest received blocks
+	lastHeights map[monitoring.Node]int       // heights of the latest received blocks
+	lastTimes   map[monitoring.Node]time.Time // creation times of the latest measured blocks
+	carried     map[monitoring.Node]int       // transactions of blocks created at the same time as the latest
 }
 
 // NewTransactionsThroughputSource creates a metric capturing transaction throughput.
@@ -51,7 +57,9 @@ func NewTransactionsThroughputSource(monitor *monitoring.Monitor) *TransactionsT
 		SyncedSeriesSource: utils.NewSyncedSeriesSource(TransactionsThroughput),
 		monitor:            monitor,
 		syncingTracker:     newSyncingTracker(),
+		lastHeights:        make(map[monitoring.Node]int, 50),
 		lastTimes:          make(map[monitoring.Node]time.Time, 50),
+		carried:            make(map[monitoring.Node]int, 50),
 	}
 	monitor.NodeLogProvider().RegisterLogListener(m)
 
@@ -66,26 +74,37 @@ func newTransactionsThroughputSource(monitor *monitoring.Monitor) monitoring.Sou
 func (s *TransactionsThroughputSource) OnBlock(node monitoring.Node, block monitoring.Block) {
 	s.markNodeAsSyncing(node)
 
+	if height, exists := s.lastHeights[node]; exists && block.Height <= height {
+		// a block replayed by a restarted node, its transactions were counted already
+		return
+	}
+	s.lastHeights[node] = block.Height
+
+	created := block.Time.Add(-block.Age)
 	prevTime, exists := s.lastTimes[node]
-	s.lastTimes[node] = block.Time
 	if !exists {
 		// very first node received - no difference can be computed, but the data series is expected to be created
+		s.lastTimes[node] = created
 		s.GetOrAddSubject(node)
 		return
 	}
 
-	timeDiff := block.Time.Sub(prevTime).Nanoseconds()
-	// prevent NaN or Inf: when the time difference is bellow measured value, skip the block.
-	if timeDiff != 0 {
-		txs := float64(block.Txs) * 1e9 / float64(timeDiff)
-		series := s.GetOrAddSubject(node)
-		if err := series.Append(monitoring.BlockNumber(block.Height), float32(txs)); err != nil {
-			if s.shouldSuppressAppendConflict(node, err) {
-				return
-			}
-			slog.Error("error to add to the series", "error", err)
+	timeDiff := created.Sub(prevTime).Nanoseconds()
+	// blocks created within the resolution of the log count towards the next one
+	s.carried[node] += block.Txs
+	if timeDiff <= 0 {
+		return
+	}
+	txs := float64(s.carried[node]) * 1e9 / float64(timeDiff)
+	s.lastTimes[node] = created
+	s.carried[node] = 0
+	series := s.GetOrAddSubject(node)
+	if err := series.Append(monitoring.BlockNumber(block.Height), float32(txs)); err != nil {
+		if s.shouldSuppressAppendConflict(node, err) {
 			return
 		}
-		s.markNodeAsSynced(node)
+		slog.Error("error to add to the series", "error", err)
+		return
 	}
+	s.markNodeAsSynced(node)
 }

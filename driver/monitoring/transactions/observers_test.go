@@ -277,6 +277,52 @@ func TestInclusionObserver_ReadsEveryBlockOnce(t *testing.T) {
 	)
 }
 
+func TestInclusionObserver_ReadsABlockFromAnotherNodeIfOneCannotServeIt(t *testing.T) {
+	require := require.New(t)
+	tracker := NewTracker()
+	tx := newAccount(t, 1).transaction(t, 0)
+	tracker.OnTransactionSubmitted(source("app", 0), tx, epoch, nil)
+
+	unknown := newFakeClient(t, nil)
+	unknown.handler = func(string, ...any) (string, error) { return `null`, nil }
+	known := newFakeClient(t, nil)
+	known.handler = func(method string, args ...any) (string, error) {
+		if method == "eth_getBlockByNumber" {
+			return `{"gasLimit": "0x12a05f200"}`, nil
+		}
+		return fmt.Sprintf(`[{"transactionHash": %q, "gasUsed": "0x5208"}]`, tx.Hash()), nil
+	}
+
+	// The block is given up on after the first nodes cannot serve it, and read
+	// once it is announced again.
+	clients := &clientSequence{clients: []rpc.Client{unknown, unknown, unknown, known}}
+	observer := newInclusionObserver(tracker, clients)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go observer.run(ctx)
+
+	observer.OnBlock("validator-0", monitoring.Block{Height: 7, Time: epoch.Add(2 * time.Second)})
+	require.Eventually(func() bool {
+		observer.mu.Lock()
+		defer observer.mu.Unlock()
+		_, missed := observer.missed[7]
+		return missed
+	}, 10*time.Second, 10*time.Millisecond)
+	require.Equal(0, tracker.Counts("app").Included)
+
+	// The block keeps the time of its first announcement.
+	observer.OnBlock("validator-1", monitoring.Block{Height: 7, Time: epoch.Add(10 * time.Second)})
+	require.Eventually(func() bool {
+		observer.mu.Lock()
+		defer observer.mu.Unlock()
+		return len(observer.missed) == 0 && tracker.Counts("app").Included == 1
+	}, 10*time.Second, 10*time.Millisecond)
+	require.Equal(
+		[]Sample{{At: epoch, Duration: 2 * time.Second}},
+		tracker.Samples("app", TimeToInclude),
+	)
+}
+
 func TestReadBlock_RetriesANodeThatIsBehind(t *testing.T) {
 	require := require.New(t)
 
@@ -317,6 +363,22 @@ type fixedClient struct {
 
 func (c fixedClient) dial(context.Context) (rpc.Client, error) {
 	return c.client, nil
+}
+
+// clientSequence hands out the given clients in order, repeating the last one.
+type clientSequence struct {
+	mu      sync.Mutex
+	clients []rpc.Client
+}
+
+func (c *clientSequence) dial(context.Context) (rpc.Client, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	client := c.clients[0]
+	if len(c.clients) > 1 {
+		c.clients = c.clients[1:]
+	}
+	return client, nil
 }
 
 // fakeClient answers RPC calls with canned JSON, decoded into the result the

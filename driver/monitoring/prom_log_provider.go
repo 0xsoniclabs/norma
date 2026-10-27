@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -116,7 +117,11 @@ type PrometheusLogDispatcher struct {
 	done    chan bool
 	stopped bool
 
+	// logReader returns nil values if the metrics could not be fetched, and
+	// the values it could parse along with an error if it skipped lines.
 	logReader func(driver.URL) ([]PrometheusLogValue, error)
+
+	partialScrapes atomic.Int64 // scrapes that skipped lines
 }
 
 // NewPrometheusLogDispatcher creates a new object that periodically parses Prometheus logs
@@ -124,8 +129,9 @@ type PrometheusLogDispatcher struct {
 // The logs are parsed from all nodes every 1s and distributed to registered listeners.
 func NewPrometheusLogDispatcher(network driver.Network) *PrometheusLogDispatcher {
 
+	client := &http.Client{Timeout: 5 * time.Second}
 	logReader := func(url driver.URL) ([]PrometheusLogValue, error) {
-		resp, err := http.Get(fmt.Sprintf("%s/debug/metrics/prometheus", url))
+		resp, err := client.Get(fmt.Sprintf("%s/debug/metrics/prometheus", url))
 		if err != nil {
 			return nil, err
 		}
@@ -176,6 +182,9 @@ func (n *PrometheusLogDispatcher) Shutdown() {
 	close(n.done)
 	n.wg.Wait()
 	slog.Info("prometheus log parser closed")
+	if partial := n.partialScrapes.Load(); partial > 0 {
+		slog.Warn("prometheus metrics of nodes could not be parsed completely, some values are missing", "scrapes", partial)
+	}
 }
 
 func (n *PrometheusLogDispatcher) RegisterLogListener(key PrometheusLogKey, listener TimeLogListener) {
@@ -264,7 +273,11 @@ func (n *PrometheusLogDispatcher) startPeriodicDispatch() {
 			case t := <-n.ticker.C:
 				n.nodesLock.Lock()
 				for _, ch := range n.nodes {
-					ch <- NewTime(t)
+					// a node still busy with earlier scrapes skips this one
+					select {
+					case ch <- NewTime(t):
+					default:
+					}
 				}
 				n.nodesLock.Unlock()
 			}
@@ -281,13 +294,18 @@ func (n *PrometheusLogDispatcher) startNodeLogsDispatch(nodeId Node, url *driver
 	go func(node Node, url driver.URL) {
 		defer n.wg.Done()
 		for range ch {
-			if logs, err := n.logReader(url); err == nil {
-				n.distributeLog(NewTime(time.Now()), node, logs)
-			} else {
+			// the values of a partially parsed scrape are still valid
+			logs, err := n.logReader(url)
+			n.distributeLog(NewTime(time.Now()), node, logs)
+			if err != nil {
 				n.nodesLock.Lock()
 				// report only errors occurred before shutdown
 				if _, exists := n.nodes[node]; exists {
-					slog.Error("monitoring: failed to parse log", "error", err)
+					if logs == nil {
+						slog.Error("monitoring: failed to parse log", "error", err)
+					} else if n.partialScrapes.Add(1) == 1 {
+						slog.Warn("monitoring: skipped prometheus metrics that could not be parsed", "node", node, "error", err)
+					}
 				}
 				n.nodesLock.Unlock()
 			}

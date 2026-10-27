@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -303,5 +304,39 @@ func TestTransactionsThroughputSource_SuppressesAfterRestartNotification(t *test
 	}
 	if !source.shouldSuppressAppendConflict(node, monitoring.ErrOutOfOrderAppend) {
 		t.Fatalf("out-of-order conflict should be suppressed after a restart")
+	}
+}
+
+func TestTransactionsThroughput_MeasuresOnBlockCreationTimes(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().RegisterListener(gomock.Any()).AnyTimes()
+	net.EXPECT().GetActiveNodes().AnyTimes().Return([]driver.Node{})
+
+	monitor, err := monitoring.NewMonitor(net, monitoring.MonitorConfig{OutputDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("failed to initiate monitor: %v", err)
+	}
+	source := NewTransactionsThroughputSource(monitor)
+
+	// A catching-up node processes blocks created a second apart within a millisecond.
+	now := time.Now()
+	block := func(height int, processed time.Duration, created time.Duration, txs int) monitoring.Block {
+		at := now.Add(10*time.Second + processed)
+		return monitoring.Block{Height: height, Time: at, Age: at.Sub(now.Add(created)), Txs: txs}
+	}
+	source.OnBlock("A", block(1, 0, 0, 10))
+	source.OnBlock("A", block(2, time.Millisecond, time.Second, 10))
+	source.OnBlock("A", block(1, 2*time.Millisecond, 0, 10))           // replayed
+	source.OnBlock("A", block(2, 2*time.Millisecond, time.Second, 10)) // replayed
+	source.OnBlock("A", block(3, 3*time.Millisecond, time.Second, 10)) // created with the previous one
+	source.OnBlock("A", block(4, 4*time.Millisecond, 2*time.Second, 20))
+
+	series, _ := source.GetData("A")
+	got := series.GetRange(0, 100)
+	want := []monitoring.DataPoint[monitoring.BlockNumber, float32]{{Position: 2, Value: 10}, {Position: 4, Value: 30}}
+	if !slices.Equal(got, want) {
+		t.Errorf("unexpected throughput: %v, want %v", got, want)
 	}
 }

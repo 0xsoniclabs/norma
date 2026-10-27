@@ -23,6 +23,7 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver"
 )
@@ -70,6 +71,8 @@ type NodeLogDispatcher struct {
 
 	nodes     map[Node]*nodeLogState
 	nodesLock sync.Mutex
+
+	skippedLines atomic.Int64 // block lines that could not be parsed
 }
 
 // nodeLogState records which node object's log stream is being consumed;
@@ -200,7 +203,12 @@ func (n *NodeLogDispatcher) startDispatcher(nodeId Node, source driver.Node, rea
 		defer func() {
 			_ = reader.Close()
 		}()
-		ch := NewLogReader(reader)
+		ch := NewLogReader(reader, func(line string, err error) {
+			if n.skippedLines.Add(1) == 1 {
+				slog.Warn("failed to parse a block from the log, its data will be missing",
+					"node", nodeId, "line", line, "error", err)
+			}
+		})
 		for b := range ch {
 			n.listenersLock.Lock()
 			for k := range n.listeners {
@@ -209,6 +217,13 @@ func (n *NodeLogDispatcher) startDispatcher(nodeId Node, source driver.Node, rea
 			n.listenersLock.Unlock()
 		}
 	}()
+}
+
+// logSummary reports the block lines that were skipped during the run.
+func (n *NodeLogDispatcher) logSummary() {
+	if skipped := n.skippedLines.Load(); skipped > 0 {
+		slog.Warn("block lines of node logs could not be parsed, their blocks are missing", "lines", skipped)
+	}
 }
 
 func (n *NodeLogDispatcher) runLogCollector(node driver.Node) {

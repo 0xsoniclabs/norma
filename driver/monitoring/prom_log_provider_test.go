@@ -17,6 +17,7 @@
 package monitoring
 
 import (
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -353,3 +354,44 @@ var (
 		},
 	}
 )
+
+func TestLogsDispatched_PartiallyParsedScrapeIsDistributed(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	node := driver.NewMockNode(ctrl)
+	url := driver.URL("A")
+	node.EXPECT().GetServiceUrl(gomock.Any()).AnyTimes().Return(&url, nil)
+	node.EXPECT().GetLabel().AnyTimes().Return("A")
+	net.EXPECT().RegisterListener(gomock.Any())
+	net.EXPECT().GetActiveNodes().AnyTimes().Return([]driver.Node{node})
+
+	scrape := "# TYPE chain_block_age gauge\n" +
+		"chain_block_age 42\n" +
+		"# TYPE p2p_peers gauge\n" +
+		"p2p_peers {kind=\"inbound\"} 3\n"
+	dispatcher := newPrometheusLogDispatcher(net, 10*time.Millisecond, func(driver.URL) ([]PrometheusLogValue, error) {
+		return ParsePrometheusLogReader(strings.NewReader(scrape))
+	})
+	defer dispatcher.Shutdown()
+
+	received := make(chan float64, 1)
+	listener := NewMockTimeLogListener(ctrl)
+	listener.EXPECT().OnLog(Node("A"), gomock.Any(), gomock.Any()).AnyTimes().Do(func(_ Node, _ Time, value float64) {
+		select {
+		case received <- value:
+		default:
+		}
+	})
+	dispatcher.RegisterLogListener(NewPrometheusNameKey("chain_block_age"), listener)
+
+	select {
+	case got := <-received:
+		if got != 42 {
+			t.Errorf("unexpected value: %v", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the values of the scrape were not distributed")
+	}
+}

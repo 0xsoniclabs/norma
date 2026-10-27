@@ -65,8 +65,8 @@ func TestSMASource(t *testing.T) {
 	}
 
 	expected := map[monitoring.Node][]float32{
-		monitoring.Node1TestId: {43.763676, 52.494083},
-		monitoring.Node2TestId: {40.733196},
+		monitoring.Node1TestId: {2.6646256, 34.46062},
+		monitoring.Node2TestId: {2.6526096},
 		monitoring.Node3TestId: {},
 	}
 
@@ -138,6 +138,7 @@ func TestSMACsvExport(t *testing.T) {
 	// time diff only 50ns
 	source.OnBlock("A", monitoring.Block{Height: 10, Time: time.Unix(seconds, 0), Txs: 10})
 	source.OnBlock("A", monitoring.Block{Height: 11, Time: time.Unix(seconds+1, 0), Txs: 10})
+	source.OnBlock("A", monitoring.Block{Height: 12, Time: time.Unix(seconds+2, 0), Txs: 30})
 
 	if err := monitor.Shutdown(); err != nil {
 		t.Fatalf("failed to shut down monitoring: %v", err)
@@ -147,7 +148,9 @@ func TestSMACsvExport(t *testing.T) {
 
 	lines := []string{
 		"TransactionsThroughput, network, A, , , 11, , 10\n",
+		"TransactionsThroughput, network, A, , , 12, , 30\n",
 		"TransactionThroughputSMA_2, network, A, , , 11, , 10\n",
+		"TransactionThroughputSMA_2, network, A, , , 12, , 20\n",
 	}
 
 	csv := string(content)
