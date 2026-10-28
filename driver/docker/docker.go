@@ -225,12 +225,15 @@ func (c *Client) Close() error {
 	return c.cli.Close()
 }
 
+// containerRemovalTimeout bounds the removal of a container that failed to start.
+const containerRemovalTimeout = 30 * time.Second
+
 // Start creates and runs one Container. The provided configuration allows
 // to configure the Docker image to run inside the container -- and thus the
 // services to be offered. When a Network is provided, the container's IP on
 // that network is resolved and used to reach services directly, without
 // port forwarding.
-func (c *Client) Start(ctx context.Context, config *ContainerConfig) (*Container, error) {
+func (c *Client) Start(ctx context.Context, config *ContainerConfig) (_ *Container, err error) {
 	envVars := []string{}
 	for key, value := range config.Environment {
 		envVars = append(envVars, fmt.Sprintf("%s=%s", key, value))
@@ -274,10 +277,21 @@ func (c *Client) Start(ctx context.Context, config *ContainerConfig) (*Container
 	if err != nil {
 		return nil, err
 	}
+	// A container that fails to start is removed here: no one else knows of
+	// it. The removal has its own budget, as ctx may be what ended the start.
+	defer func() {
+		if err == nil {
+			return
+		}
+		removeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), containerRemovalTimeout)
+		defer cancel()
+		if removeErr := c.cli.ContainerRemove(removeCtx, resp.ID, container.RemoveOptions{Force: true}); removeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to remove container that did not start: %w", removeErr))
+		}
+	}()
 
 	if config.Network != nil {
-		err := c.cli.NetworkConnect(ctx, config.Network.id, resp.ID, nil)
-		if err != nil {
+		if err := c.cli.NetworkConnect(ctx, config.Network.id, resp.ID, nil); err != nil {
 			return nil, err
 		}
 	}
@@ -832,8 +846,8 @@ func (c *Client) listNetworks(ctx context.Context) ([]dockerNetwork.Inspect, err
 
 // ContainerExists returns true if a container with the given name is
 // currently running on the Docker host.
-func (c *Client) ContainerExists(name string) (bool, error) {
-	containers, err := c.cli.ContainerList(context.Background(), container.ListOptions{
+func (c *Client) ContainerExists(ctx context.Context, name string) (bool, error) {
+	containers, err := c.cli.ContainerList(ctx, container.ListOptions{
 		Filters: filters.NewArgs(filters.Arg("name", fmt.Sprintf("^/%s$", name))),
 	})
 	if err != nil {

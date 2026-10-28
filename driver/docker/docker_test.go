@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/network"
+	"github.com/stretchr/testify/require"
 )
 
 func TestImplements(t *testing.T) {
@@ -325,6 +326,32 @@ func networkExists(t *testing.T, cli *Client, id string) bool {
 	}
 
 	return exists
+}
+
+// A container that fails to start is known to no one but Start, so Start
+// removes it; left behind, nothing would ever clean it up.
+func TestClient_Start_RemovesTheContainer_WhenStartingItFails(t *testing.T) {
+	cli, err := NewClient()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cli.Close() })
+
+	// The container cannot start on a network that does not exist, and the
+	// deadline ends the retries, as a scenario's deadline would.
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	name := strings.ReplaceAll(t.Name(), "/", "-")
+	timeout := time.Second
+	_, err = cli.Start(ctx, &ContainerConfig{
+		Hostname:        name,
+		ImageName:       "hello-world",
+		ShutdownTimeout: &timeout,
+		Network:         &Network{id: "no-such-network"},
+	})
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+
+	exists, err := cli.ContainerExists(t.Context(), name)
+	require.NoError(t, err)
+	require.False(t, exists, "the container that failed to start was left behind")
 }
 
 func startContainer(t *testing.T) (*Client, *Container) {

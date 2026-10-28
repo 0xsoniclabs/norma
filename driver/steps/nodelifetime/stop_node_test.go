@@ -18,12 +18,12 @@ package nodelifetime
 
 import (
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver/steps"
 
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -133,7 +133,5 @@ func TestStopNode_StopsTheNode_WhenRemovingItFails(t *testing.T) {
 	node.EXPECT().Cleanup(gomock.Any()).Return(nil)
 
 	err := (&StopNode{steps.Node{Node: "observer"}}).Run(t.Context(), env)
-	if err == nil || !strings.Contains(err.Error(), "peer unreachable") {
-		t.Fatalf("expected the removal error, got %v", err)
-	}
+	require.ErrorContains(t, err, "peer unreachable")
 }

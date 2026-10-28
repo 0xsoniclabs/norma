@@ -198,7 +198,7 @@ func CreateOperaDockerNode(
 		return nil, fmt.Errorf("docker network is required to start an Opera node")
 	}
 
-	exists, err := client.ContainerExists(config.Label)
+	exists, err := client.ContainerExists(ctx, config.Label)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start docker node: %w", err)
 	}
@@ -661,7 +661,12 @@ func (n *OperaNode) ExecDone() <-chan struct{} {
 // teardown path, and refusing to release the container because the client
 // was already gone would leak it and fail otherwise-successful scenarios.
 func (n *OperaNode) Stop(ctx context.Context) error {
-	if err := n.StopSonicd(ctx); err != nil {
+	// A client that ignores the signal must not hold up the container stop,
+	// which kills it after the same grace.
+	graceful, cancel := context.WithTimeout(ctx, containerShutdownTimeout)
+	err := n.StopSonicd(graceful)
+	cancel()
+	if err != nil {
 		slog.Debug("client process was not stopped gracefully",
 			"node", n.GetLabel(), "error", err)
 	}
