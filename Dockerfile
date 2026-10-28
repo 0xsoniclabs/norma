@@ -16,7 +16,7 @@
 #
 # It checks out the required version of the client, and builds it.
 #
-FROM golang:1.26.3 AS client-build
+FROM golang:1.27.3 AS client-build
 
 WORKDIR /client
 
