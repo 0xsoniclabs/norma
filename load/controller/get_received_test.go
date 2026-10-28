@@ -2,7 +2,10 @@ package controller
 
 import (
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/rpc"
@@ -94,5 +97,64 @@ func TestGetReceivedTransactions_SetsClientToNilOnReconnectFailure(t *testing.T)
 	// using a closed client.
 	if ac.rpcClient != nil {
 		t.Fatal("expected rpcClient to be nil after reconnect failure")
+	}
+}
+
+func TestGetReceivedTransactions_ConcurrentReadersShareOneClient(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockApp := app.NewMockApplication(ctrl)
+	mockNet := driver.NewMockNetwork(ctrl)
+	ac := &AppController{application: mockApp, network: mockNet}
+
+	// Every dial hands out a new client that records when it is closed.
+	var mu sync.Mutex
+	dials := 0
+	closed := map[rpc.Client]bool{}
+	mockNet.EXPECT().DialRandomRpc().AnyTimes().DoAndReturn(func() (rpc.Client, error) {
+		client := rpc.NewMockClient(ctrl)
+		client.EXPECT().Close().AnyTimes().Do(func() {
+			mu.Lock()
+			defer mu.Unlock()
+			closed[client] = true
+		})
+		mu.Lock()
+		defer mu.Unlock()
+		dials++
+		return client, nil
+	})
+
+	// The first read fails, so its reader closes the client and re-dials,
+	// while the other readers are in the middle of reading.
+	var reads atomic.Int32
+	mockApp.EXPECT().GetReceivedTransactions(gomock.Any()).AnyTimes().DoAndReturn(
+		func(client rpc.Client) (uint64, error) {
+			first := reads.Add(1) == 1
+			time.Sleep(20 * time.Millisecond)
+			mu.Lock()
+			defer mu.Unlock()
+			if closed[client] {
+				t.Errorf("a read used a client that was closed")
+			}
+			if first {
+				return 0, errors.New("node unreachable")
+			}
+			return 1, nil
+		})
+
+	start := make(chan struct{})
+	var readers sync.WaitGroup
+	for range 4 {
+		readers.Go(func() {
+			<-start
+			if _, err := ac.GetReceivedTransactions(); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+	close(start)
+	readers.Wait()
+
+	if dials != 2 {
+		t.Errorf("expected one dial and one re-dial, got %d dials", dials)
 	}
 }

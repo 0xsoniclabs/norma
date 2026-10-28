@@ -33,7 +33,9 @@ import (
 // AppController emits transactions to the testing network into a blockchain app to generate a load.
 // The Shaper passed into the driver controls the frequency of emitting transactions.
 // The Generator passed into the driver constructs the transactions.
-// The RPC Client is used to send the transactions into the network.
+// The controller reads the progress of the app through a client of its own,
+// since the client of the app context is shared by all apps. The client lives
+// as long as the controller: the progress of a stopped app is still read.
 type AppController struct {
 	name        string
 	shaper      shaper.Shaper
@@ -41,7 +43,9 @@ type AppController struct {
 	network     driver.Network
 	trigger     chan struct{}
 	users       []app.User
-	rpcClient   rpc.Client
+
+	rpcClientMu sync.Mutex // guards rpcClient, used by both the shaper and the monitoring
+	rpcClient   rpc.Client // dialed on first use
 }
 
 // NewAppController creates the controller of an application. The name is the
@@ -81,13 +85,10 @@ func NewAppController(
 		network:     network,
 		trigger:     trigger,
 		users:       users,
-		rpcClient:   context.GetClient(),
 	}, nil
 }
 
 func (ac *AppController) Run(ctx context.Context) error {
-	defer ac.rpcClient.Close()
-
 	// start generators for each user
 	var done sync.WaitGroup
 	for i, user := range ac.users {
@@ -148,6 +149,8 @@ func (ac *AppController) GetSentTransactions() (uint64, error) {
 }
 
 func (ac *AppController) GetReceivedTransactions() (uint64, error) {
+	ac.rpcClientMu.Lock()
+	defer ac.rpcClientMu.Unlock()
 	for retry := 0; ; retry++ {
 		if ac.rpcClient == nil {
 			var err error
