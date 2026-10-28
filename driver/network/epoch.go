@@ -70,7 +70,7 @@ func AdvanceEpoch(ctx context.Context, client rpc.Client, epochIncrement int) er
 			return fmt.Errorf("failed to get current epoch after advancing: %w", err)
 		}
 		if newEpoch >= currentEpoch+hexutil.Uint64(epochIncrement) {
-			logEpochSummary(client)
+			logEpochSummary(ctx, client)
 			return nil
 		}
 		select {
@@ -109,7 +109,7 @@ func WaitForEpochChange(ctx context.Context, clients []rpc.Client) error {
 		}
 		if newEpoch > currentEpoch {
 			slog.Info("epoch changed", "from", uint64(currentEpoch), "to", uint64(newEpoch))
-			logEpochSummary(clients[0])
+			logEpochSummary(ctx, clients[0])
 			return nil
 		}
 		select {
@@ -134,27 +134,27 @@ func GetCurrentEpoch(client rpc.Client) (hexutil.Uint64, error) {
 // consensus in the epoch currently being built. SFC validator sets are
 // per-epoch: a validator registered mid-epoch is absent from this set until
 // that epoch is sealed.
-func GetActiveValidatorIDs(client rpc.Client) ([]int, error) {
+func GetActiveValidatorIDs(ctx context.Context, client rpc.Client) ([]int, error) {
 	sfcContract, err := sfc100.NewContract(sfc.ContractAddress, client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SFC contract representation; %v", err)
 	}
 
-	epoch, err := sfcContract.CurrentEpoch(nil)
+	epoch, err := sfcContract.CurrentEpoch(&bind.CallOpts{Context: ctx})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current epoch: %w", err)
 	}
 
-	return getValidatorIDsOfEpoch(sfcContract, epoch)
+	return getValidatorIDsOfEpoch(ctx, sfcContract, epoch)
 }
 
 // getValidatorIDsOfEpoch returns the ids of the validators of the given epoch.
 // Callers that already know the epoch use this to avoid reading it twice, which
 // would let the two reads straddle a seal and report a mismatched pair.
 func getValidatorIDsOfEpoch(
-	sfcContract *sfc100.Contract, epoch *big.Int,
+	ctx context.Context, sfcContract *sfc100.Contract, epoch *big.Int,
 ) ([]int, error) {
-	validators, err := sfcContract.GetEpochValidatorIDs(nil, epoch)
+	validators, err := sfcContract.GetEpochValidatorIDs(&bind.CallOpts{Context: ctx}, epoch)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to get epoch validator IDs for epoch %v: %w", epoch, err,
@@ -168,7 +168,12 @@ func getValidatorIDsOfEpoch(
 	return ids, nil
 }
 
-func logEpochSummary(client rpc.Client) {
+// logEpochSummary logs the epoch and validators the client reports. It is a
+// diagnostic, so it gives up on a client that does not answer in time.
+func logEpochSummary(ctx context.Context, client rpc.Client) {
+	ctx, cancel := context.WithTimeout(ctx, nodeResponseTimeout)
+	defer cancel()
+
 	// get a representation of the deployed contract
 	sfcContract, err := sfc100.NewContract(sfc.ContractAddress, client)
 	if err != nil {
@@ -176,13 +181,13 @@ func logEpochSummary(client rpc.Client) {
 		return
 	}
 
-	epoch, err := sfcContract.CurrentEpoch(nil)
+	epoch, err := sfcContract.CurrentEpoch(&bind.CallOpts{Context: ctx})
 	if err != nil {
 		slog.Error("failed to get current epoch", "error", err)
 		return
 	}
 
-	validatorIds, err := getValidatorIDsOfEpoch(sfcContract, epoch)
+	validatorIds, err := getValidatorIDsOfEpoch(ctx, sfcContract, epoch)
 	if err != nil {
 		slog.Error("failed to get active validators", "error", err)
 		return

@@ -112,7 +112,7 @@ func (a netBasedValidatorRegistry) EnsureValidatorsActive(ctx context.Context, v
 	}
 	defer rpcClient.Close()
 
-	if active, err := network.GetActiveValidatorIDs(rpcClient); err == nil &&
+	if active, err := network.GetActiveValidatorIDs(ctx, rpcClient); err == nil &&
 		len(missingValidators(validatorIds, active)) == 0 {
 		slog.Info("validators are already in the validator set",
 			"validators", validatorIds,
@@ -146,7 +146,7 @@ func (a netBasedValidatorRegistry) EnsureValidatorsActive(ctx context.Context, v
 	// timeout; it is only reported once the deadline expires.
 	deadline := time.Now().Add(validatorActivationTimeout)
 	for {
-		active, readErr := network.GetActiveValidatorIDs(rpcClient)
+		active, readErr := network.GetActiveValidatorIDs(ctx, rpcClient)
 		missing := missingValidators(validatorIds, active)
 		if readErr == nil && len(missing) == 0 {
 			slog.Info("validators joined the validator set",

@@ -79,7 +79,7 @@ type validatorsActiveChecker struct {
 	net driver.Network
 	// getActiveValidators reads the current epoch's validator set.
 	// Overridable for tests.
-	getActiveValidators func(rpc.Client) ([]int, error)
+	getActiveValidators func(context.Context, rpc.Client) ([]int, error)
 	// timeout bounds convergence polling. Zero means a single attempt.
 	timeout time.Duration
 }
@@ -147,7 +147,7 @@ func (c *validatorsActiveChecker) readActiveValidators(
 		return nil, err
 	}
 	defer client.Close()
-	return c.getActiveValidators(client)
+	return c.getActiveValidators(ctx, client)
 }
 
 // expectedValidatorLabels maps the validator id of every running validator

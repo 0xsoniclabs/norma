@@ -127,7 +127,7 @@ func TestValidatorsActiveChecker_ReportsValidatorMissingFromTheSet(t *testing.T)
 		1: "genesis-validator",
 		2: "joining-validator",
 	})
-	checker.getActiveValidators = func(rpc.Client) ([]int, error) {
+	checker.getActiveValidators = func(context.Context, rpc.Client) ([]int, error) {
 		return []int{1}, nil
 	}
 
@@ -141,7 +141,7 @@ func TestValidatorsActiveChecker_Passes_WhenAllValidatorsAreInTheSet(t *testing.
 	checker := checkerWithNodes(ctrl, map[int]string{
 		1: "alpha", 2: "beta",
 	})
-	checker.getActiveValidators = func(rpc.Client) ([]int, error) {
+	checker.getActiveValidators = func(context.Context, rpc.Client) ([]int, error) {
 		return []int{1, 2}, nil
 	}
 
@@ -151,7 +151,7 @@ func TestValidatorsActiveChecker_Passes_WhenAllValidatorsAreInTheSet(t *testing.
 func TestValidatorsActiveChecker_PropagatesValidatorSetReadFailure(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	checker := checkerWithNodes(ctrl, map[int]string{1: "alpha"})
-	checker.getActiveValidators = func(rpc.Client) ([]int, error) {
+	checker.getActiveValidators = func(context.Context, rpc.Client) ([]int, error) {
 		return nil, fmt.Errorf("SFC unreachable")
 	}
 
@@ -168,7 +168,7 @@ func TestValidatorsActiveChecker_Passes_OnceALaggingNodeCatchesUp(t *testing.T) 
 	checker.timeout = time.Minute
 
 	reads := 0
-	checker.getActiveValidators = func(rpc.Client) ([]int, error) {
+	checker.getActiveValidators = func(context.Context, rpc.Client) ([]int, error) {
 		reads++
 		if reads < 3 {
 			return []int{1}, nil
@@ -187,7 +187,7 @@ func TestValidatorsActiveChecker_Fails_WhenTheLagOutlastsTheTimeout(t *testing.T
 	checker.timeout = 100 * time.Millisecond
 
 	reads := 0
-	checker.getActiveValidators = func(rpc.Client) ([]int, error) {
+	checker.getActiveValidators = func(context.Context, rpc.Client) ([]int, error) {
 		reads++
 		return []int{1}, nil
 	}
@@ -206,7 +206,7 @@ func TestValidatorsActiveChecker_Passes_OnceAFailingReadRecovers(t *testing.T) {
 	checker.timeout = time.Minute
 
 	reads := 0
-	checker.getActiveValidators = func(rpc.Client) ([]int, error) {
+	checker.getActiveValidators = func(context.Context, rpc.Client) ([]int, error) {
 		reads++
 		if reads < 2 {
 			return nil, fmt.Errorf("SFC unreachable")
@@ -224,7 +224,7 @@ func TestValidatorsActiveChecker_Aborts_WhenTheContextIsCancelled(t *testing.T) 
 	checker.timeout = time.Minute
 
 	ctx, cancel := context.WithCancel(context.Background())
-	checker.getActiveValidators = func(rpc.Client) ([]int, error) {
+	checker.getActiveValidators = func(context.Context, rpc.Client) ([]int, error) {
 		cancel()
 		return []int{1}, nil
 	}
