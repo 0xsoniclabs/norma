@@ -312,7 +312,7 @@ func (c *Client) Start(ctx context.Context, config *ContainerConfig) (_ *Contain
 	}
 
 	if config.Network != nil {
-		if err := ctr.resolveIP(); err != nil {
+		if err := ctr.resolveIP(ctx); err != nil {
 			return nil, err
 		}
 	}
@@ -430,7 +430,7 @@ func (c *Container) Cleanup(ctx context.Context) error {
 // at start time, it is looked up on demand via container inspection.
 func (c *Container) GetAddressForService(service *network.ServiceDescription) (*network.AddressPort, error) {
 	if c.ip == "" {
-		if err := c.resolveIP(); err != nil {
+		if err := c.resolveIP(context.Background()); err != nil {
 			return nil, fmt.Errorf("failed to resolve container IP: %w", err)
 		}
 	}
@@ -446,8 +446,8 @@ func (c *Container) IP() string {
 // resolveIP inspects the container and populates c.ip. When the
 // container was started with a specific network, only that network is
 // considered; otherwise the first available IP is used.
-func (c *Container) resolveIP() error {
-	info, err := c.client.cli.ContainerInspect(context.Background(), c.id)
+func (c *Container) resolveIP(ctx context.Context) error {
+	info, err := c.client.cli.ContainerInspect(ctx, c.id)
 	if err != nil {
 		return fmt.Errorf("failed to inspect container: %w", err)
 	}

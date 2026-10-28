@@ -82,7 +82,7 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 
 			nodes := []driver.Node{}
 			for i := range N {
-				node, err := net.CreateNode(t.Context(), &driver.NodeConfig{
+				node, err := net.CreateNode(ctx, &driver.NodeConfig{
 					Image: driver.DefaultClientDockerImageName,
 					Name:  fmt.Sprintf("N-%d-%s", i, t.Name()),
 				})
