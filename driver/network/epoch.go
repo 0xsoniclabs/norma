@@ -85,8 +85,15 @@ func AdvanceEpoch(ctx context.Context, client rpc.Client, epochIncrement int) er
 
 // WaitForEpochChange waits until the current epoch changes. It polls the
 // network until a new epoch is observed or a timeout of 60 seconds is reached.
-func WaitForEpochChange(ctx context.Context, client rpc.Client) error {
-	currentEpoch, err := GetCurrentEpoch(client)
+// The network's epoch is the highest the clients report, so a node catching up
+// does not pass for a change.
+func WaitForEpochChange(ctx context.Context, clients []rpc.Client) error {
+	epoch := func() (hexutil.Uint64, error) {
+		return MaxOf(ctx, clients, func(_ context.Context, client rpc.Client) (hexutil.Uint64, error) {
+			return GetCurrentEpoch(client)
+		})
+	}
+	currentEpoch, err := epoch()
 	if err != nil {
 		return fmt.Errorf("failed to get current epoch: %w", err)
 	}
@@ -96,13 +103,13 @@ func WaitForEpochChange(ctx context.Context, client rpc.Client) error {
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("aborted while waiting for epoch to change: %w", err)
 		}
-		newEpoch, err := GetCurrentEpoch(client)
+		newEpoch, err := epoch()
 		if err != nil {
 			return fmt.Errorf("failed to get epoch while waiting: %w", err)
 		}
 		if newEpoch > currentEpoch {
 			slog.Info("epoch changed", "from", uint64(currentEpoch), "to", uint64(newEpoch))
-			logEpochSummary(client)
+			logEpochSummary(clients[0])
 			return nil
 		}
 		select {

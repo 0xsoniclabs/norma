@@ -59,11 +59,6 @@ func (s *WaitForBlocks) Validate() error {
 func (*WaitForBlocks) UpdateModel(*steps.Model) error { return nil }
 
 func (s *WaitForBlocks) Run(ctx context.Context, env *steps.Env) error {
-	client, err := env.Net.DialRandomRpc()
-	if err != nil {
-		return fmt.Errorf("failed to connect to network: %w", err)
-	}
-	defer client.Close()
 	slog.Info("waiting for blocks", "count", s.Blocks)
-	return steps.WaitForBlocks(ctx, client, s.Blocks)
+	return steps.WaitForBlocks(ctx, env.Net, s.Blocks)
 }

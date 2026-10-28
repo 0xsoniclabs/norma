@@ -23,36 +23,47 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/network"
 	"github.com/0xsoniclabs/norma/driver/rpc"
 )
 
 // blockProductionTimeout bounds how long the chain may stand still while
-// waiting for blocks, as the random node polled may have stopped following it.
+// waiting for blocks, as the network may have halted.
 var blockProductionTimeout = 2 * time.Minute
 
 // WaitForBlockProduction waits until the network produces a new block,
 // confirming it is actively processing transactions.
 func WaitForBlockProduction(ctx context.Context, net driver.Network) error {
-	client, err := net.DialRandomRpc()
+	err := WaitForBlocks(ctx, net, 1)
 	if errors.Is(err, driver.ErrEmptyNetwork) {
 		// Without a node, there is no block production to wait for.
 		return nil
 	}
-	if err != nil {
-		return fmt.Errorf("failed to connect to the network: %w", err)
-	}
-	defer client.Close()
-	return WaitForBlocks(ctx, client, 1)
+	return err
 }
 
-// WaitForBlocks waits until the chain seen by client has grown by count
+// WaitForBlocks waits until the network has grown by count blocks, failing
+// once it has not grown for blockProductionTimeout. The network's height is
+// the highest of its nodes, so a node catching up does not pass for growth.
+func WaitForBlocks(ctx context.Context, net driver.Network, count uint64) error {
+	clients, err := dialNodes(ctx, net)
+	if err != nil {
+		return err
+	}
+	defer network.CloseAll(clients)
+	return waitForBlocks(ctx, func(ctx context.Context) (uint64, error) {
+		return network.MaxOf(ctx, clients, readBlockNumber)
+	}, count)
+}
+
+// waitForBlocks waits until the height read by blockNumber has grown by count
 // blocks, failing once it has not grown for blockProductionTimeout.
-func WaitForBlocks(ctx context.Context, client rpc.Client, count uint64) error {
+func waitForBlocks(ctx context.Context, height func(context.Context) (uint64, error), count uint64) error {
 	grownAt := time.Now()
 	blockNumber := func() (uint64, error) {
 		ctx, cancel := context.WithDeadline(ctx, grownAt.Add(blockProductionTimeout))
 		defer cancel()
-		return client.BlockNumber(ctx)
+		return height(ctx)
 	}
 
 	baseline, err := blockNumber()
@@ -80,14 +91,29 @@ func WaitForBlocks(ctx context.Context, client rpc.Client, count uint64) error {
 	return nil
 }
 
-// NetworkBlockHeight returns the current block height from an existing network node.
+// NetworkBlockHeight returns the highest block the nodes of the network have
+// reached.
 func NetworkBlockHeight(ctx context.Context, net driver.Network) (uint64, error) {
-	client, err := net.DialRandomRpc()
+	clients, err := dialNodes(ctx, net)
 	if err != nil {
 		return 0, err
 	}
-	defer client.Close()
+	defer network.CloseAll(clients)
+	return network.MaxOf(ctx, clients, readBlockNumber)
+}
+
+func readBlockNumber(ctx context.Context, client rpc.Client) (uint64, error) {
 	return client.BlockNumber(ctx)
+}
+
+// dialNodes connects to the active nodes of the network, failing with
+// driver.ErrEmptyNetwork if there are none.
+func dialNodes(ctx context.Context, net driver.Network) ([]rpc.Client, error) {
+	nodes := net.GetActiveNodes()
+	if len(nodes) == 0 {
+		return nil, driver.ErrEmptyNetwork
+	}
+	return network.DialNodes(ctx, nodes)
 }
 
 // WaitForNodeSync waits until the given node has synced to at least the target block height.

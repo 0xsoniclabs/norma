@@ -35,7 +35,7 @@ func TestWaitForBlocks_ReturnsOnceCountIsProduced(t *testing.T) {
 	// per read, so a fourth read means it waited for exactly three blocks.
 	client := clientWithBlockNumbers(ctrl, growingBlockHeight(), 4)
 
-	require.NoError(t, WaitForBlocks(t.Context(), client, 3))
+	require.NoError(t, waitForBlocks(t.Context(), client.BlockNumber, 3))
 }
 
 func TestWaitForBlocks_WaitsPastTheTimeout_WhenBlocksKeepArriving(t *testing.T) {
@@ -45,7 +45,7 @@ func TestWaitForBlocks_WaitsPastTheTimeout_WhenBlocksKeepArriving(t *testing.T) 
 	setBlockProductionTimeout(t, 500*time.Millisecond)
 
 	start := time.Now()
-	require.NoError(t, WaitForBlocks(t.Context(), client, count))
+	require.NoError(t, waitForBlocks(t.Context(), client.BlockNumber, count))
 	require.Greater(t, time.Since(start), blockProductionTimeout)
 }
 
@@ -55,7 +55,7 @@ func TestWaitForBlocks_FailsWithAStall_WhenTheChainStopsGrowing(t *testing.T) {
 	// Negative, so the chain counts as stalled from the first poll on.
 	setBlockProductionTimeout(t, -1)
 
-	err := WaitForBlocks(t.Context(), client, 3)
+	err := waitForBlocks(t.Context(), client.BlockNumber, 3)
 	require.ErrorContains(t, err, "no block produced")
 }
 
@@ -66,24 +66,50 @@ func TestWaitForBlocks_KeepsWaiting_WhenTheCountIsTheLargestUint64(t *testing.T)
 	client := clientWithBlockNumbers(ctrl, constantBlockHeight(7), -1)
 	setBlockProductionTimeout(t, -1)
 
-	err := WaitForBlocks(t.Context(), client, math.MaxUint64)
+	err := waitForBlocks(t.Context(), client.BlockNumber, math.MaxUint64)
 	require.ErrorContains(t, err, "no block produced")
 }
 
 // A network no node of which answers is not producing blocks, so the wait
 // between steps must not pass without having seen one.
 func TestWaitForBlockProduction_Fails_WhenNoNodeCanBeDialled(t *testing.T) {
-	net := driver.NewMockNetwork(gomock.NewController(t))
-	net.EXPECT().DialRandomRpc().Return(nil, errors.New("no reachable node"))
+	ctrl := gomock.NewController(t)
+	node := driver.NewMockNode(ctrl)
+	node.EXPECT().IsExpectedFailure().Return(false).AnyTimes()
+	node.EXPECT().DialRpc(gomock.Any()).Return(nil, errors.New("no reachable node"))
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{node})
 
 	require.ErrorContains(t, WaitForBlockProduction(t.Context(), net), "no reachable node")
 }
 
 func TestWaitForBlockProduction_Passes_OnAnEmptyNetwork(t *testing.T) {
 	net := driver.NewMockNetwork(gomock.NewController(t))
-	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork)
+	net.EXPECT().GetActiveNodes().Return(nil)
 
 	require.NoError(t, WaitForBlockProduction(t.Context(), net))
+}
+
+// A node catching up shows its height growing while the network is halted;
+// the network's height is that of its most advanced node.
+func TestNetworkBlockHeight_IsTheHighestOfTheNodes(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	var nodes []driver.Node
+	for _, height := range []uint64{7, 12, 9} {
+		client := rpc.NewMockClient(ctrl)
+		client.EXPECT().BlockNumber(gomock.Any()).Return(height, nil)
+		client.EXPECT().Close()
+		nodes = append(nodes, nodeServing(ctrl, client))
+	}
+	down := driver.NewMockNode(ctrl)
+	down.EXPECT().IsExpectedFailure().Return(false).AnyTimes()
+	down.EXPECT().DialRpc(gomock.Any()).Return(nil, errors.New("down"))
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return(append(nodes, down))
+
+	height, err := NetworkBlockHeight(t.Context(), net)
+	require.NoError(t, err)
+	require.Equal(t, uint64(12), height)
 }
 
 // clientWithBlockNumbers returns an RPC client answering BlockNumber from
@@ -113,4 +139,12 @@ func setBlockProductionTimeout(t *testing.T, timeout time.Duration) {
 	original := blockProductionTimeout
 	blockProductionTimeout = timeout
 	t.Cleanup(func() { blockProductionTimeout = original })
+}
+
+// nodeServing returns a node, not expected to fail, whose RPC is client.
+func nodeServing(ctrl *gomock.Controller, client rpc.Client) driver.Node {
+	node := driver.NewMockNode(ctrl)
+	node.EXPECT().IsExpectedFailure().Return(false).AnyTimes()
+	node.EXPECT().DialRpc(gomock.Any()).Return(client, nil).AnyTimes()
+	return node
 }

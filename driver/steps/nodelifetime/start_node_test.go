@@ -75,7 +75,7 @@ func startEnv(
 ) (*steps.Env, func() []driver.NodeConfig) {
 	t.Helper()
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
+	net.EXPECT().GetActiveNodes().Return(nil).AnyTimes()
 
 	var mu sync.Mutex
 	var configs []driver.NodeConfig
@@ -211,8 +211,11 @@ func TestStartNode_Fails_WhenTheNodeDoesNotSync(t *testing.T) {
 	head := rpc.NewMockClient(ctrl)
 	head.EXPECT().BlockNumber(gomock.Any()).Return(uint64(10), nil).AnyTimes()
 	head.EXPECT().Close().AnyTimes()
+	headNode := driver.NewMockNode(ctrl)
+	headNode.EXPECT().IsExpectedFailure().Return(false).AnyTimes()
+	headNode.EXPECT().DialRpc(gomock.Any()).Return(head, nil).AnyTimes()
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().DialRandomRpc().Return(head, nil).AnyTimes()
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{headNode}).AnyTimes()
 	net.EXPECT().CreateNode(gomock.Any()).DoAndReturn(func(config *driver.NodeConfig) (driver.Node, error) {
 		node := driver.NewMockNode(ctrl)
 		node.EXPECT().GetLabel().Return(config.Name).AnyTimes()
@@ -225,9 +228,13 @@ func TestStartNode_Fails_WhenTheNodeDoesNotSync(t *testing.T) {
 }
 
 func TestStartNode_Fails_WhenTheSyncTargetCannotBeRead(t *testing.T) {
-	net := driver.NewMockNetwork(gomock.NewController(t))
-	net.EXPECT().DialRandomRpc().Return(nil, errors.New("no reachable node")).AnyTimes()
+	ctrl := gomock.NewController(t)
+	down := driver.NewMockNode(ctrl)
+	down.EXPECT().IsExpectedFailure().Return(false).AnyTimes()
+	down.EXPECT().DialRpc(gomock.Any()).Return(nil, errors.New("no reachable node"))
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{down})
 
 	err := (&StartNode{Node: steps.Node{Node: "obs"}}).Run(t.Context(), steps.NewEnv(net, nil, nil))
-	require.ErrorContains(t, err, "failed to determine sync target for obs: no reachable node")
+	require.ErrorContains(t, err, "failed to determine sync target for obs: none of 1 nodes could be dialled: no reachable node")
 }
