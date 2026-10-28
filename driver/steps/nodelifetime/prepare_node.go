@@ -92,7 +92,7 @@ func (s *PrepareNode) Run(ctx context.Context, env *steps.Env) error {
 		image = s.ImageName
 	}
 
-	prepared, err := env.Net.CreateNode(&driver.NodeConfig{
+	prepared, err := env.Net.CreateNode(ctx, &driver.NodeConfig{
 		Name:           name,
 		Failing:        s.Failing,
 		Image:          image,

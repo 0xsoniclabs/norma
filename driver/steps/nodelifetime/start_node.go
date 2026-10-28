@@ -238,7 +238,7 @@ func (s *StartNode) Run(ctx context.Context, env *steps.Env) error {
 	g, _ := errgroup.WithContext(ctx)
 	for instance := range instances {
 		g.Go(func() error {
-			node, err := env.Net.CreateNode(&driver.NodeConfig{
+			node, err := env.Net.CreateNode(ctx, &driver.NodeConfig{
 				Name:           instanceNames[instance],
 				Failing:        s.Failing,
 				Image:          image,

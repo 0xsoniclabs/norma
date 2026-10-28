@@ -65,11 +65,13 @@ const (
 type Network interface {
 	// CreateNode creates a new node instance running a network client based on
 	// the given configuration. It is used by the scenario executor to add
-	// nodes to the network as needed.
-	CreateNode(config *NodeConfig) (Node, error)
+	// nodes to the network as needed. Starting and peering the node are
+	// bounded by ctx.
+	CreateNode(ctx context.Context, config *NodeConfig) (Node, error)
 
-	// RemoveNode ends the client gracefully and removes node from the network
-	RemoveNode(Node) error
+	// RemoveNode ends the client gracefully and removes node from the network.
+	// Unpeering it from the other nodes is bounded by ctx.
+	RemoveNode(ctx context.Context, node Node) error
 
 	// CreateApplication creates a new application in this network, ready to
 	// produce load as defined by its configuration.

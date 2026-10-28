@@ -87,18 +87,18 @@ func (mr *MockNetworkMockRecorder) CreateApplication(arg0, arg1 any) *gomock.Cal
 }
 
 // CreateNode mocks base method.
-func (m *MockNetwork) CreateNode(config *NodeConfig) (Node, error) {
+func (m *MockNetwork) CreateNode(ctx context.Context, config *NodeConfig) (Node, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateNode", config)
+	ret := m.ctrl.Call(m, "CreateNode", ctx, config)
 	ret0, _ := ret[0].(Node)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateNode indicates an expected call of CreateNode.
-func (mr *MockNetworkMockRecorder) CreateNode(config any) *gomock.Call {
+func (mr *MockNetworkMockRecorder) CreateNode(ctx, config any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateNode", reflect.TypeOf((*MockNetwork)(nil).CreateNode), config)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateNode", reflect.TypeOf((*MockNetwork)(nil).CreateNode), ctx, config)
 }
 
 // DialRandomRpc mocks base method.
@@ -198,17 +198,17 @@ func (mr *MockNetworkMockRecorder) RegisterTransactionObserver(arg0 any) *gomock
 }
 
 // RemoveNode mocks base method.
-func (m *MockNetwork) RemoveNode(arg0 Node) error {
+func (m *MockNetwork) RemoveNode(ctx context.Context, node Node) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveNode", arg0)
+	ret := m.ctrl.Call(m, "RemoveNode", ctx, node)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RemoveNode indicates an expected call of RemoveNode.
-func (mr *MockNetworkMockRecorder) RemoveNode(arg0 any) *gomock.Call {
+func (mr *MockNetworkMockRecorder) RemoveNode(ctx, node any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveNode", reflect.TypeOf((*MockNetwork)(nil).RemoveNode), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveNode", reflect.TypeOf((*MockNetwork)(nil).RemoveNode), ctx, node)
 }
 
 // ResumeNode mocks base method.

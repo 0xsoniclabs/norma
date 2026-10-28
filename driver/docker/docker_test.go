@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/network"
+	"github.com/stretchr/testify/require"
 )
 
 func TestImplements(t *testing.T) {
@@ -325,6 +326,41 @@ func networkExists(t *testing.T, cli *Client, id string) bool {
 	}
 
 	return exists
+}
+
+// A container that fails to start is known to no one but Start, so Start
+// removes it; left behind, nothing would ever clean it up.
+func TestClient_Start_RemovesTheContainer_WhenStartingItFails(t *testing.T) {
+	cli, err := NewClient()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cli.Close() })
+
+	// The container is created, but cannot join a network that does not
+	// exist. Depending on the daemon, connecting fails, or every start does
+	// until the deadline ends the retries, as a scenario's would; either way
+	// after the container exists.
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	name := strings.ReplaceAll(t.Name(), "/", "-")
+	timeout := time.Second
+	started, err := cli.Start(ctx, &ContainerConfig{
+		Hostname:        name,
+		ImageName:       "hello-world",
+		ShutdownTimeout: &timeout,
+		Network:         &Network{id: "no-such-network", name: "no-such-network"},
+	})
+	if started != nil {
+		t.Cleanup(func() { _ = started.Cleanup(context.Background()) })
+	}
+	require.Error(t, err)
+
+	// Listed with the stopped ones, as a container that never started is.
+	containers, err := cli.listContainers(t.Context())
+	require.NoError(t, err)
+	for _, container := range containers {
+		require.NotContains(t, container.Names, "/"+name,
+			"the container that failed to start was left behind")
+	}
 }
 
 func startContainer(t *testing.T) (*Client, *Container) {

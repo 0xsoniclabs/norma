@@ -72,10 +72,10 @@ func TestRun_StartAndStopNode(t *testing.T) {
 	node.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
 	gomock.InOrder(
 		registry.EXPECT().RegisterNewValidator(gomock.Any(), uint64(0)).Return(validatorId, nil),
-		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
+		net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).Return(node, nil),
 		registry.EXPECT().EnsureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil),
 		registry.EXPECT().UnregisterValidator(gomock.Any(), validatorId, gomock.Any()).Return(nil),
-		net.EXPECT().RemoveNode(node).Return(nil),
+		net.EXPECT().RemoveNode(gomock.Any(), node).Return(nil),
 		node.EXPECT().Stop(gomock.Any()).Return(nil),
 		node.EXPECT().Cleanup(gomock.Any()).Return(nil),
 	)
@@ -118,7 +118,7 @@ func TestRun_StartNode_ForwardsCustomStake(t *testing.T) {
 		registry.EXPECT().
 			RegisterNewValidator(gomock.Any(), customStake).
 			Return(validatorId, nil),
-		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
+		net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).Return(node, nil),
 		registry.EXPECT().
 			EnsureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil),
 	)
@@ -158,7 +158,7 @@ func TestRun_UndelegateSingleInstanceWithSuffix(t *testing.T) {
 	gomock.InOrder(
 		registry.EXPECT().RegisterNewValidator(gomock.Any(), uint64(0)).
 			Return(validatorId, nil),
-		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
+		net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).Return(node, nil),
 		registry.EXPECT().
 			EnsureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil),
 		registry.EXPECT().
@@ -221,7 +221,7 @@ func TestRun_UndelegateMultiInstance(t *testing.T) {
 			instances := 2
 			registry.EXPECT().RegisterNewValidator(gomock.Any(), gomock.Any()).Return(2, nil)
 			registry.EXPECT().RegisterNewValidator(gomock.Any(), gomock.Any()).Return(3, nil)
-			net.EXPECT().CreateNode(gomock.Any()).DoAndReturn(func(config *driver.NodeConfig) (driver.Node, error) {
+			net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, config *driver.NodeConfig) (driver.Node, error) {
 				if config.Name == "validators-0" {
 					return node0, nil
 				}
@@ -276,10 +276,10 @@ func TestRun_StopNodeWithoutUndelegate(t *testing.T) {
 	node.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
 	gomock.InOrder(
 		registry.EXPECT().RegisterNewValidator(gomock.Any(), gomock.Any()).Return(validatorId, nil),
-		net.EXPECT().CreateNode(gomock.Any()).Return(node, nil),
+		net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).Return(node, nil),
 		registry.EXPECT().EnsureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil),
 		// No unregister call expected
-		net.EXPECT().RemoveNode(node).Return(nil),
+		net.EXPECT().RemoveNode(gomock.Any(), node).Return(nil),
 		node.EXPECT().Stop(gomock.Any()).Return(nil),
 		node.EXPECT().Cleanup(gomock.Any()).Return(nil),
 	)
@@ -319,18 +319,18 @@ func TestRun_RejoinNode(t *testing.T) {
 	gomock.InOrder(
 		// First start: registers as new validator
 		registry.EXPECT().RegisterNewValidator(gomock.Any(), gomock.Any()).Return(validatorId, nil),
-		net.EXPECT().CreateNode(gomock.Any()).Do(func(config *driver.NodeConfig) {
+		net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).Do(func(_ context.Context, config *driver.NodeConfig) {
 			if config.ValidatorId == nil || *config.ValidatorId != validatorId {
 				t.Errorf("first start: expected ValidatorId=%d, got %v", validatorId, config.ValidatorId)
 			}
 		}).Return(node1, nil),
 		registry.EXPECT().EnsureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil),
 		// Stop without undelegate
-		net.EXPECT().RemoveNode(node1).Return(nil),
+		net.EXPECT().RemoveNode(gomock.Any(), node1).Return(nil),
 		node1.EXPECT().Stop(gomock.Any()).Return(nil),
 		node1.EXPECT().Cleanup(gomock.Any()).Return(nil),
 		// Rejoin: no registration, but validator ID is preserved.
-		net.EXPECT().CreateNode(gomock.Any()).Do(func(config *driver.NodeConfig) {
+		net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).Do(func(_ context.Context, config *driver.NodeConfig) {
 			if config.ValidatorId == nil || *config.ValidatorId != validatorId {
 				t.Errorf("rejoin: expected ValidatorId=%d, got %v", validatorId, config.ValidatorId)
 			}
@@ -516,7 +516,7 @@ func TestRun_MultiInstanceNode(t *testing.T) {
 		return <-ids, nil
 	}).Times(2)
 
-	net.EXPECT().CreateNode(gomock.Any()).DoAndReturn(func(config *driver.NodeConfig) (driver.Node, error) {
+	net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, config *driver.NodeConfig) (driver.Node, error) {
 		switch config.Name {
 		case "validators-0":
 			return node1, nil
@@ -594,7 +594,7 @@ func TestRun_UndelegateWithDelegator_UsesDelegatorKey(t *testing.T) {
 
 	validatorId := 2
 	registry.EXPECT().RegisterNewValidator(gomock.Any(), uint64(0)).Return(validatorId, nil)
-	net.EXPECT().CreateNode(gomock.Any()).Return(node, nil)
+	net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).Return(node, nil)
 	registry.EXPECT().EnsureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil)
 	node.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
 
@@ -645,7 +645,7 @@ func TestRun_UndelegateWithUnknownDelegator_ReturnsError(t *testing.T) {
 
 	validatorId := 2
 	registry.EXPECT().RegisterNewValidator(gomock.Any(), uint64(0)).Return(validatorId, nil)
-	net.EXPECT().CreateNode(gomock.Any()).Return(node, nil)
+	net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).Return(node, nil)
 	registry.EXPECT().EnsureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil)
 	node.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
 	// No undelegate call should occur.
@@ -686,7 +686,7 @@ func TestRun_VerifyStakes_PassesWhenAllStakesMatch(t *testing.T) {
 
 	validatorId := 2
 	registry.EXPECT().RegisterNewValidator(gomock.Any(), uint64(0)).Return(validatorId, nil)
-	net.EXPECT().CreateNode(gomock.Any()).Return(node, nil)
+	net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).Return(node, nil)
 	registry.EXPECT().EnsureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil)
 	node.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
 
@@ -733,7 +733,7 @@ func TestRun_VerifyStakes_FailsOnMismatch(t *testing.T) {
 
 	validatorId := 2
 	registry.EXPECT().RegisterNewValidator(gomock.Any(), uint64(0)).Return(validatorId, nil)
-	net.EXPECT().CreateNode(gomock.Any()).Return(node, nil)
+	net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).Return(node, nil)
 	registry.EXPECT().EnsureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil)
 	node.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
 
@@ -782,7 +782,7 @@ func TestRun_VerifyStakes_ChecksFullyUndelegatedPairIsZero(t *testing.T) {
 
 	validatorId := 2
 	registry.EXPECT().RegisterNewValidator(gomock.Any(), uint64(0)).Return(validatorId, nil)
-	net.EXPECT().CreateNode(gomock.Any()).Return(node, nil)
+	net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).Return(node, nil)
 	registry.EXPECT().EnsureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil)
 	node.EXPECT().GetValidatorId().Return(&validatorId).AnyTimes()
 
@@ -877,7 +877,7 @@ func TestRun_DoesNotActOnTheNetwork_WhenTheModelRejectsAStep(t *testing.T) {
 	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 	node.EXPECT().GetValidatorId().Return(new(2)).AnyTimes()
 	registry.EXPECT().RegisterNewValidator(gomock.Any(), gomock.Any()).Return(2, nil)
-	net.EXPECT().CreateNode(gomock.Any()).Return(node, nil)
+	net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).Return(node, nil)
 	registry.EXPECT().EnsureValidatorsActive(gomock.Any(), []int{2}).Return(nil)
 	registry.EXPECT().FundDelegator(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	registry.EXPECT().Delegate(gomock.Any(), 2, uint64(100), gomock.Any()).Return(nil)
@@ -920,12 +920,12 @@ func TestRun_TracksTheObserverRole_WhenAValidatorLabelRejoinsAsAnObserver(t *tes
 	observer.EXPECT().GetValidatorId().Return(nil).AnyTimes()
 	gomock.InOrder(
 		registry.EXPECT().RegisterNewValidator(gomock.Any(), uint64(0)).Return(validatorId, nil),
-		net.EXPECT().CreateNode(gomock.Any()).Return(validator, nil),
+		net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).Return(validator, nil),
 		registry.EXPECT().EnsureValidatorsActive(gomock.Any(), []int{validatorId}).Return(nil),
-		net.EXPECT().RemoveNode(validator).Return(nil),
+		net.EXPECT().RemoveNode(gomock.Any(), validator).Return(nil),
 		validator.EXPECT().Stop(gomock.Any()).Return(nil),
 		validator.EXPECT().Cleanup(gomock.Any()).Return(nil),
-		net.EXPECT().CreateNode(gomock.Any()).Return(observer, nil),
+		net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).Return(observer, nil),
 	)
 
 	scenario := parser.Scenario{

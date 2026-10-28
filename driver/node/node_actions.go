@@ -306,7 +306,7 @@ func (n *OperaNode) WaitForSync(ctx context.Context) error {
 			if err := connectivityCheck(ctx, n); err != nil {
 				return err
 			}
-			_, err := n.GetNodeID()
+			_, err := n.GetNodeID(ctx)
 			return err
 		})
 	if err != nil {

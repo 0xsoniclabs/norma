@@ -18,6 +18,7 @@ package nodelifetime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/0xsoniclabs/norma/driver/steps"
@@ -66,19 +67,26 @@ func (s *StopNode) Run(ctx context.Context, env *steps.Env) error {
 		return fmt.Errorf("node %q not found in active nodes", base)
 	}
 
-	g, gctx := errgroup.WithContext(ctx)
+	// Once removed, a node is no longer the network's to tear down, so its
+	// teardown must run to the end: neither the scenario's deadline nor a
+	// sibling's failure may cut it short.
+	teardownCtx := context.WithoutCancel(ctx)
+	var g errgroup.Group
 	for _, target := range targets {
 		g.Go(func() error {
-			if err := env.Net.RemoveNode(target.node); err != nil {
-				return fmt.Errorf("failed to remove node %s: %w", target.name, err)
+			// A node that failed to be unpeered is out of the network all the
+			// same, so it is still stopped and cleaned up.
+			var errs []error
+			if err := env.Net.RemoveNode(ctx, target.node); err != nil {
+				errs = append(errs, fmt.Errorf("failed to remove node %s: %w", target.name, err))
 			}
-			if err := target.node.Stop(gctx); err != nil {
-				return fmt.Errorf("failed to stop node %s: %w", target.name, err)
+			if err := target.node.Stop(teardownCtx); err != nil {
+				return errors.Join(append(errs, fmt.Errorf("failed to stop node %s: %w", target.name, err))...)
 			}
-			if err := target.node.Cleanup(gctx); err != nil {
-				return fmt.Errorf("failed to cleanup node %s: %w", target.name, err)
+			if err := target.node.Cleanup(teardownCtx); err != nil {
+				errs = append(errs, fmt.Errorf("failed to cleanup node %s: %w", target.name, err))
 			}
-			return nil
+			return errors.Join(errs...)
 		})
 	}
 

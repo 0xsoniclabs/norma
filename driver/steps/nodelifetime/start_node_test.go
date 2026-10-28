@@ -17,6 +17,7 @@
 package nodelifetime
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"strings"
@@ -80,7 +81,7 @@ func startEnv(
 
 	var mu sync.Mutex
 	var configs []driver.NodeConfig
-	net.EXPECT().CreateNode(gomock.Any()).DoAndReturn(func(config *driver.NodeConfig) (driver.Node, error) {
+	net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, config *driver.NodeConfig) (driver.Node, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		configs = append(configs, *config)
@@ -217,7 +218,7 @@ func TestStartNode_Fails_WhenTheNodeDoesNotSync(t *testing.T) {
 	headNode.EXPECT().DialRpc(gomock.Any()).Return(head, nil).AnyTimes()
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().GetActiveNodes().Return([]driver.Node{headNode}).AnyTimes()
-	net.EXPECT().CreateNode(gomock.Any()).DoAndReturn(func(config *driver.NodeConfig) (driver.Node, error) {
+	net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, config *driver.NodeConfig) (driver.Node, error) {
 		node := driver.NewMockNode(ctrl)
 		node.EXPECT().GetLabel().Return(config.Name).AnyTimes()
 		node.EXPECT().DialRpc(gomock.Any()).Return(nil, errors.New("not ready")).AnyTimes()
@@ -257,7 +258,7 @@ func TestStartNode_DoesNotActivateAValidator_ThatStaysBehind(t *testing.T) {
 	behind.EXPECT().Close().AnyTimes()
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().GetActiveNodes().Return([]driver.Node{headNode}).AnyTimes()
-	net.EXPECT().CreateNode(gomock.Any()).DoAndReturn(func(config *driver.NodeConfig) (driver.Node, error) {
+	net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, config *driver.NodeConfig) (driver.Node, error) {
 		node := driver.NewMockNode(ctrl)
 		node.EXPECT().GetLabel().Return(config.Name).AnyTimes()
 		node.EXPECT().DialRpc(gomock.Any()).Return(behind, nil).AnyTimes()

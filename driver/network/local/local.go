@@ -210,41 +210,110 @@ func (n *LocalNetwork) startGenesisValidators(
 // addNodeIntoNetwork connects the node with other nodes in the network, adds it into the list of nodes.
 // It is best-effort: if some existing nodes are unreachable, the new node will
 // still join the network as long as at least one peer connection succeeds.
+//
+// Peering runs outside nodesMutex, since a peer that has crashed takes minutes
+// of retries to give up on. The node is listed before its peers are chosen, so
+// of two nodes added at once the later one always peers with the earlier. It
+// stays listed if it fails to join, so that Shutdown still tears it down.
 func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaNode) error {
-	n.nodesMutex.Lock()
-	defer n.nodesMutex.Unlock()
-
-	id, err := node.GetNodeID()
+	id, err := node.GetNodeID(ctx)
 	if err != nil {
+		// Keyed by label, like a node that never had peers.
+		n.nodesMutex.Lock()
+		n.nodes[driver.NodeID(node.GetLabel())] = node
+		n.nodesMutex.Unlock()
 		return fmt.Errorf("failed to get node id; %v", err)
 	}
-	var attempted, succeeded int
-	for _, other := range n.nodes {
-		// A suspended node's client is known to be down; dialing it would
-		// only burn the retry budget. It re-peers itself when resumed.
-		if n.suspended[other] {
-			slog.Info("skipping suspended node while adding peers",
-				"node", other.GetLabel())
-			continue
-		}
-		attempted++
-		if err = other.AddPeer(ctx, id); err != nil {
+
+	n.nodesMutex.Lock()
+	n.nodes[id] = node
+	peers := n.peersOf(node)
+	n.nodesMutex.Unlock()
+
+	var succeeded, failed atomic.Int32
+	var wg sync.WaitGroup
+	for _, other := range peers {
+		wg.Go(func() {
+			ctx, cancel := n.whileListed(ctx, other)
+			defer cancel()
+			err := other.AddPeer(ctx, id)
+			if err == nil {
+				succeeded.Add(1)
+				return
+			}
+			if !n.isListed(other) {
+				return // removed meanwhile, so there is nothing to peer with
+			}
+			failed.Add(1)
 			label := other.GetLabel()
 			if checkErr := other.CheckRunning(ctx); checkErr != nil {
 				slog.Error("node has crashed", "node", label, "status", checkErr)
 			} else {
 				slog.Warn("failed to add peer to node", "node", label, "error", err)
 			}
-		} else {
-			succeeded++
-		}
+		})
 	}
-	if attempted > 0 && succeeded == 0 {
+	wg.Wait()
+
+	if failed.Load() > 0 && succeeded.Load() == 0 {
 		return fmt.Errorf("failed to add peer; no existing node was reachable")
 	}
-	n.nodes[id] = node
+	n.nodesMutex.Lock()
 	n.bootstrapped = true
+	n.nodesMutex.Unlock()
 	return nil
+}
+
+// whileListed returns a context that also ends once the given node leaves the
+// network, so that peering with it stops instead of retrying for minutes.
+func (n *LocalNetwork) whileListed(ctx context.Context, node *node.OperaNode) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if !n.isListed(node) {
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	return ctx, cancel
+}
+
+// isListed reports whether the given node is still part of the network.
+func (n *LocalNetwork) isListed(node *node.OperaNode) bool {
+	n.nodesMutex.Lock()
+	defer n.nodesMutex.Unlock()
+	for _, listed := range n.nodes {
+		if listed == node {
+			return true
+		}
+	}
+	return false
+}
+
+// peersOf returns the nodes the given node is to be peered with: all others
+// but the suspended ones, whose client is known to be down and re-peers itself
+// when resumed. The caller must hold nodesMutex.
+func (n *LocalNetwork) peersOf(self *node.OperaNode) []*node.OperaNode {
+	var peers []*node.OperaNode
+	for _, other := range n.nodes {
+		if other == self {
+			continue
+		}
+		if n.suspended[other] {
+			slog.Info("skipping suspended node while peering", "node", other.GetLabel())
+			continue
+		}
+		peers = append(peers, other)
+	}
+	return peers
 }
 
 // ReconnectNode re-establishes peer connections between the given node
@@ -261,24 +330,17 @@ func (n *LocalNetwork) ReconnectNode(
 
 	n.nodesMutex.Lock()
 	// Remove any stale entry for this OperaNode (old enode ID).
-	var stale driver.NodeID
 	for id, existing := range n.nodes {
 		if existing == opera {
-			stale = id
 			delete(n.nodes, id)
 			break
 		}
 	}
 	n.nodesMutex.Unlock()
 
-	err := n.addNodeIntoNetwork(ctx, opera)
-	if err != nil && stale != "" {
-		// Restored so that Shutdown still stops and cleans up the container.
-		n.nodesMutex.Lock()
-		n.nodes[stale] = opera
-		n.nodesMutex.Unlock()
-	}
-	return err
+	// The node is listed again whether or not it rejoins, so Shutdown still
+	// stops and cleans up the container.
+	return n.addNodeIntoNetwork(ctx, opera)
 }
 
 // createNode is an internal version of CreateNode enabling the creation
@@ -325,9 +387,9 @@ func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNod
 }
 
 // CreateNode creates nodes in the network during run.
-func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error) {
+func (n *LocalNetwork) CreateNode(ctx context.Context, config *driver.NodeConfig) (driver.Node, error) {
 	if config.Cheater {
-		_, err := n.createNode(n.ctx, &node.OperaNodeConfig{
+		_, err := n.createNode(ctx, &node.OperaNodeConfig{
 			Label:          "cheater-" + config.Name,
 			Failing:        config.Failing,
 			Image:          config.Image,
@@ -346,7 +408,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 		*datadir = fmt.Sprintf("%s/%s", n.config.OutputDir, *config.DataVolume)
 	}
 
-	return n.createNode(n.ctx, &node.OperaNodeConfig{
+	return n.createNode(ctx, &node.OperaNodeConfig{
 		Label:           config.Name,
 		Failing:         config.Failing,
 		Image:           config.Image,
@@ -393,7 +455,7 @@ func (n *LocalNetwork) prepareGenesis(ctx context.Context) error {
 	n.genesisJsonPath = genesisPath
 	return nil
 }
-func (n *LocalNetwork) RemoveNode(node driver.Node) error {
+func (n *LocalNetwork) RemoveNode(ctx context.Context, node driver.Node) error {
 	// Listeners already saw a suspended node go, or, if prepared, never saw it.
 	n.nodesMutex.Lock()
 	announced := !n.suspended[node]
@@ -407,7 +469,6 @@ func (n *LocalNetwork) RemoveNode(node driver.Node) error {
 	}
 
 	n.nodesMutex.Lock()
-	defer n.nodesMutex.Unlock()
 	// Looked up by pointer rather than GetNodeID, which needs a running client:
 	// a node whose client is stopped, killed or was never started is removable.
 	var id driver.NodeID
@@ -417,23 +478,32 @@ func (n *LocalNetwork) RemoveNode(node driver.Node) error {
 			break
 		}
 	}
-
+	removed := n.nodes[id]
 	delete(n.nodes, id)
 	delete(n.suspended, node)
 	// A prepared node is still keyed by its label: it never had peers.
 	if id == "" || id == driver.NodeID(node.GetLabel()) {
+		n.nodesMutex.Unlock()
 		return nil
 	}
-	for _, other := range n.nodes {
-		if n.suspended[other] {
-			continue
-		}
-		if err := other.RemovePeer(n.ctx, id); err != nil {
-			return fmt.Errorf("failed to remove peer; %v", err)
-		}
-	}
+	peers := n.peersOf(removed)
+	n.nodesMutex.Unlock()
 
-	return nil
+	// Unpeered outside nodesMutex, like peering in addNodeIntoNetwork.
+	errs := make([]error, len(peers))
+	var wg sync.WaitGroup
+	for i, other := range peers {
+		wg.Go(func() {
+			ctx, cancel := n.whileListed(ctx, other)
+			defer cancel()
+			// A peer removed meanwhile has dropped the connection anyway.
+			if err := other.RemovePeer(ctx, id); err != nil && n.isListed(other) {
+				errs[i] = fmt.Errorf("failed to remove peer from %s; %v", other.GetLabel(), err)
+			}
+		})
+	}
+	wg.Wait()
+	return errors.Join(errs...)
 }
 
 func (n *LocalNetwork) SendTransaction(tx *types.Transaction, source driver.TransactionSource) {
@@ -786,7 +856,11 @@ func (n *LocalNetwork) Shutdown() error {
 	}
 
 	// Second, shut down the nodes.
-	for _, node := range n.nodes {
+	n.nodesMutex.Lock()
+	nodes := n.nodes
+	n.nodes = map[driver.NodeID]*node.OperaNode{}
+	n.nodesMutex.Unlock()
+	for _, node := range nodes {
 		// TODO: shutdown nodes in parallel.
 		if err := node.Stop(ctx); err != nil {
 			errs = append(errs, err)
@@ -795,7 +869,6 @@ func (n *LocalNetwork) Shutdown() error {
 			errs = append(errs, err)
 		}
 	}
-	n.nodes = map[driver.NodeID]*node.OperaNode{}
 
 	// Third, shut down the docker network.
 	if n.network != nil {

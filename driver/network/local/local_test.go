@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -81,7 +82,7 @@ func TestLocalNetwork_CanStartNodesAndShutThemDown(t *testing.T) {
 
 			nodes := []driver.Node{}
 			for i := range N {
-				node, err := net.CreateNode(&driver.NodeConfig{
+				node, err := net.CreateNode(ctx, &driver.NodeConfig{
 					Image: driver.DefaultClientDockerImageName,
 					Name:  fmt.Sprintf("N-%d-%s", i, t.Name()),
 				})
@@ -201,7 +202,7 @@ func TestLocalNetwork_CanPerformNetworkShutdown(t *testing.T) {
 	})
 
 	for i := range N {
-		_, err := net.CreateNode(&driver.NodeConfig{
+		_, err := net.CreateNode(t.Context(), &driver.NodeConfig{
 			Name:  fmt.Sprintf("N-%d-%s", i, t.Name()),
 			Image: driver.DefaultClientDockerImageName,
 		})
@@ -236,7 +237,7 @@ func TestLocalNetwork_Shutdown_Graceful(t *testing.T) {
 		_ = net.Shutdown()
 	})
 
-	createdNode, err := net.CreateNode(&driver.NodeConfig{
+	createdNode, err := net.CreateNode(t.Context(), &driver.NodeConfig{
 		Name:  fmt.Sprintf("N-%d-%s", 1, t.Name()),
 		Image: driver.DefaultClientDockerImageName,
 	})
@@ -357,7 +358,7 @@ func TestLocalNetwork_NotifiesListenersOnNodeStartup(t *testing.T) {
 	net.RegisterListener(listener)
 	listener.EXPECT().AfterNodeCreation(gomock.Any())
 
-	_, err = net.CreateNode(&driver.NodeConfig{
+	_, err = net.CreateNode(t.Context(), &driver.NodeConfig{
 		Name:  t.Name(),
 		Image: driver.DefaultClientDockerImageName,
 	})
@@ -387,8 +388,8 @@ func TestLocalNetwork_RemoveNode_NotifiesListeners_OnlyWhenTheNodeIsNotSuspended
 	}
 
 	listener.EXPECT().BeforeNodeRemoval(running)
-	require.NoError(t, net.RemoveNode(running))
-	require.NoError(t, net.RemoveNode(suspended))
+	require.NoError(t, net.RemoveNode(t.Context(), running))
+	require.NoError(t, net.RemoveNode(t.Context(), suspended))
 }
 
 func TestLocalNetwork_NotifiesListenersOnAppStartup(t *testing.T) {
@@ -416,6 +417,46 @@ func TestLocalNetwork_NotifiesListenersOnAppStartup(t *testing.T) {
 	}
 }
 
+// Nodes stopped together are unpeered concurrently, so one may still try to
+// unpeer from another that has already gone; that is no failure, and every
+// node is removed.
+func TestLocalNetwork_RemovesNodesStoppedTogether(t *testing.T) {
+	t.Parallel()
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
+	net, err := NewLocalLegacyNetwork(t.Context(), &config)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = net.Shutdown()
+	})
+
+	nodes := make([]driver.Node, 3)
+	for i := range nodes {
+		nodes[i], err = net.CreateNode(t.Context(), &driver.NodeConfig{
+			Name:  fmt.Sprintf("N-%d-%s", i, t.Name()),
+			Image: driver.DefaultClientDockerImageName,
+		})
+		require.NoError(t, err)
+	}
+
+	var wg sync.WaitGroup
+	for _, node := range nodes {
+		wg.Go(func() {
+			if err := net.RemoveNode(t.Context(), node); err != nil {
+				t.Errorf("failed to remove node %s: %v", node.GetLabel(), err)
+			}
+			if err := node.Stop(t.Context()); err != nil {
+				t.Errorf("failed to stop node %s: %v", node.GetLabel(), err)
+			}
+			if err := node.Cleanup(context.Background()); err != nil {
+				t.Errorf("failed to clean up node %s: %v", node.GetLabel(), err)
+			}
+		})
+	}
+	wg.Wait()
+
+	require.Len(t, net.GetActiveNodes(), 1, "only the validator remains")
+}
+
 func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
@@ -437,7 +478,7 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 
 			nodes := make([]driver.Node, 0, N)
 			for i := range N {
-				node, err := net.CreateNode(&driver.NodeConfig{
+				node, err := net.CreateNode(t.Context(), &driver.NodeConfig{
 					Name:  fmt.Sprintf("N-%d-%s", i, t.Name()),
 					Image: driver.DefaultClientDockerImageName,
 				})
@@ -449,11 +490,11 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 
 			// remove nodes one by one
 			for _, node := range nodes {
-				if err := net.RemoveNode(node); err != nil {
+				if err := net.RemoveNode(t.Context(), node); err != nil {
 					t.Errorf("cannot remove node: %s", err)
 				}
 
-				id, err := node.GetNodeID()
+				id, err := node.GetNodeID(t.Context())
 				if err != nil {
 					t.Errorf("cannot get node ID: %s", err)
 				}
@@ -491,7 +532,7 @@ func TestReconnectNodeAndRemoveNode_Succeed_WhenOnlyOtherNodeIsSuspended(t *test
 	require.Len(validators, 1, "expected one genesis validator")
 	validator := validators[0]
 
-	observer, err := net.CreateNode(&driver.NodeConfig{
+	observer, err := net.CreateNode(t.Context(), &driver.NodeConfig{
 		Name:  "observer-" + t.Name(),
 		Image: driver.DefaultClientDockerImageName,
 	})
@@ -510,7 +551,7 @@ func TestReconnectNodeAndRemoveNode_Succeed_WhenOnlyOtherNodeIsSuspended(t *test
 	// immediately, rather than retrying it for minutes and failing.
 	require.NoError(net.ReconnectNode(t.Context(), observer),
 		"reconnect stalled on suspended node")
-	require.NoError(net.RemoveNode(observer),
+	require.NoError(net.RemoveNode(t.Context(), observer),
 		"remove stalled on suspended node")
 
 	require.NoError(observer.Stop(t.Context()), "failed to stop node")
@@ -533,7 +574,7 @@ func TestLocalNetwork_RemoveNode_Succeeds_WhenTheNodesClientIsNotRunning(t *test
 		require.NoError(net.Shutdown())
 	})
 
-	stopped, err := net.CreateNode(&driver.NodeConfig{
+	stopped, err := net.CreateNode(t.Context(), &driver.NodeConfig{
 		Name:  "stopped-" + t.Name(),
 		Image: driver.DefaultClientDockerImageName,
 	})
@@ -544,7 +585,7 @@ func TestLocalNetwork_RemoveNode_Succeeds_WhenTheNodesClientIsNotRunning(t *test
 	require.NoError(opera.StopSonicd(t.Context()), "failed to stop client")
 	require.NoError(opera.ExportGenesis(t.Context(), "removal.g"), "failed to export g-file")
 
-	prepared, err := net.CreateNode(&driver.NodeConfig{
+	prepared, err := net.CreateNode(t.Context(), &driver.NodeConfig{
 		Name:        "prepared-" + t.Name(),
 		Image:       driver.DefaultClientDockerImageName,
 		GenesisFile: "removal.g",
@@ -552,7 +593,7 @@ func TestLocalNetwork_RemoveNode_Succeeds_WhenTheNodesClientIsNotRunning(t *test
 	require.NoError(err, "failed to prepare node")
 
 	for _, removed := range []driver.Node{stopped, prepared} {
-		require.NoError(net.RemoveNode(removed), "failed to remove %s", removed.GetLabel())
+		require.NoError(net.RemoveNode(t.Context(), removed), "failed to remove %s", removed.GetLabel())
 		for _, remaining := range net.nodes {
 			require.NotSame(removed, remaining, "%s was not removed", removed.GetLabel())
 		}
@@ -697,7 +738,7 @@ func TestLocalNetwork_Can_Run_Multiple_Client_Images_TaggedVersions(t *testing.T
 // getChecksum creates a node of the provided image type on the provided network
 // and extracts the sha256 checksum of the sonicd binary via docker exec.
 func getChecksum(net *LocalNetwork, image string) (string, error) {
-	n, err := net.CreateNode(&driver.NodeConfig{
+	n, err := net.CreateNode(context.Background(), &driver.NodeConfig{
 		Name:  fmt.Sprintf("T-%s", strings.ReplaceAll(image, ":", "-")),
 		Image: image,
 	})
@@ -930,7 +971,7 @@ func TestLocalNetwork_FailingFlagPropagated(t *testing.T) {
 		}
 	})
 
-	if _, err := net.CreateNode(&driver.NodeConfig{
+	if _, err := net.CreateNode(t.Context(), &driver.NodeConfig{
 		Name:    t.Name() + "-failing-late",
 		Failing: true,
 		Image:   driver.DefaultClientDockerImageName,
@@ -976,7 +1017,7 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	})
 
 	dataVolume := "abcd"
-	node, err := net.CreateNode(&driver.NodeConfig{
+	node, err := net.CreateNode(t.Context(), &driver.NodeConfig{
 		Name:       t.Name() + "-2",
 		DataVolume: &dataVolume,
 		Image:      driver.DefaultClientDockerImageName,
@@ -1018,7 +1059,7 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	}
 
 	// stop the node
-	if err := net.RemoveNode(node); err != nil {
+	if err := net.RemoveNode(t.Context(), node); err != nil {
 		t.Fatalf("failed to remove node: %v", err)
 	}
 	if err := node.Stop(t.Context()); err != nil {
@@ -1029,7 +1070,7 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	}
 
 	// re-run another node on the same data volume
-	if _, err := net.CreateNode(&driver.NodeConfig{
+	if _, err := net.CreateNode(t.Context(), &driver.NodeConfig{
 		Name:       t.Name() + "-3",
 		DataVolume: &dataVolume,
 		Image:      driver.DefaultClientDockerImageName,

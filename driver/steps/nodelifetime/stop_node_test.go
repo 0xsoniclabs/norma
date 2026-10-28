@@ -17,11 +17,13 @@
 package nodelifetime
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver/steps"
 
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -33,7 +35,7 @@ func TestStopNode_SingleInstanceSuffix(t *testing.T) {
 	env := steps.NewEnv(net, nil, nil)
 	env.Nodes["validator-A-0"] = node
 
-	net.EXPECT().RemoveNode(node).Return(nil)
+	net.EXPECT().RemoveNode(gomock.Any(), node).Return(nil)
 	node.EXPECT().Stop(gomock.Any()).Return(nil)
 	node.EXPECT().Cleanup(gomock.Any()).Return(nil)
 
@@ -59,11 +61,11 @@ func TestStopNode_MultipleInstances(t *testing.T) {
 	env.Nodes["validators-1"] = node1
 	env.Nodes["other"] = other
 
-	net.EXPECT().RemoveNode(node0).Return(nil)
+	net.EXPECT().RemoveNode(gomock.Any(), node0).Return(nil)
 	node0.EXPECT().Stop(gomock.Any()).Return(nil)
 	node0.EXPECT().Cleanup(gomock.Any()).Return(nil)
 
-	net.EXPECT().RemoveNode(node1).Return(nil)
+	net.EXPECT().RemoveNode(gomock.Any(), node1).Return(nil)
 	node1.EXPECT().Stop(gomock.Any()).Return(nil)
 	node1.EXPECT().Cleanup(gomock.Any()).Return(nil)
 
@@ -97,7 +99,7 @@ func TestStopNode_IgnoresNodesThatAreNotItsInstances(t *testing.T) {
 		env.Nodes[label] = driver.NewMockNode(ctrl)
 	}
 
-	net.EXPECT().RemoveNode(node).Return(nil)
+	net.EXPECT().RemoveNode(gomock.Any(), node).Return(nil)
 	node.EXPECT().Stop(gomock.Any()).Return(nil)
 	node.EXPECT().Cleanup(gomock.Any()).Return(nil)
 
@@ -114,4 +116,22 @@ func TestStopNode_IgnoresNodesThatAreNotItsInstances(t *testing.T) {
 			t.Errorf("expected %s to remain", label)
 		}
 	}
+}
+
+// A node the network failed to unpeer is out of it all the same; left running,
+// nothing would ever stop it, as the network no longer lists it.
+func TestStopNode_StopsTheNode_WhenRemovingItFails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	env := steps.NewEnv(net, nil, nil)
+	env.Nodes["observer"] = node
+
+	net.EXPECT().RemoveNode(gomock.Any(), node).Return(errors.New("peer unreachable"))
+	node.EXPECT().Stop(gomock.Any()).Return(nil)
+	node.EXPECT().Cleanup(gomock.Any()).Return(nil)
+
+	err := (&StopNode{steps.Node{Node: "observer"}}).Run(t.Context(), env)
+	require.ErrorContains(t, err, "peer unreachable")
 }

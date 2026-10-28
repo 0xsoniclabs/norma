@@ -48,7 +48,7 @@ type Node interface {
 
 	// GetNodeID returns an enode identifying this node within the Norma network.
 	// An error shall be produced if no valid node ID could be obtained.
-	GetNodeID() (NodeID, error)
+	GetNodeID(ctx context.Context) (NodeID, error)
 
 	// GetValidatorId returns the validator ID used by this node, if it is a
 	// validator node. If the node is not a validator, it returns nil.
