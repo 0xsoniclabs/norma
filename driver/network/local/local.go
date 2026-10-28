@@ -213,10 +213,15 @@ func (n *LocalNetwork) startGenesisValidators(
 //
 // Peering runs outside nodesMutex, since a peer that has crashed takes minutes
 // of retries to give up on. The node is listed before its peers are chosen, so
-// of two nodes added at once the later one always peers with the earlier.
+// of two nodes added at once the later one always peers with the earlier. It
+// stays listed if it fails to join, so that Shutdown still tears it down.
 func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaNode) error {
 	id, err := node.GetNodeID(ctx)
 	if err != nil {
+		// Keyed by label, like a node that never had peers.
+		n.nodesMutex.Lock()
+		n.nodes[driver.NodeID(node.GetLabel())] = node
+		n.nodesMutex.Unlock()
 		return fmt.Errorf("failed to get node id; %v", err)
 	}
 
@@ -229,6 +234,8 @@ func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaN
 	var wg sync.WaitGroup
 	for _, other := range peers {
 		wg.Go(func() {
+			ctx, cancel := n.whileListed(ctx, other)
+			defer cancel()
 			err := other.AddPeer(ctx, id)
 			if err == nil {
 				succeeded.Add(1)
@@ -248,14 +255,35 @@ func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaN
 	}
 	wg.Wait()
 
-	n.nodesMutex.Lock()
-	defer n.nodesMutex.Unlock()
 	if failed.Load() > 0 && succeeded.Load() == 0 {
-		delete(n.nodes, id)
 		return fmt.Errorf("failed to add peer; no existing node was reachable")
 	}
+	n.nodesMutex.Lock()
 	n.bootstrapped = true
+	n.nodesMutex.Unlock()
 	return nil
+}
+
+// whileListed returns a context that also ends once the given node leaves the
+// network, so that peering with it stops instead of retrying for minutes.
+func (n *LocalNetwork) whileListed(ctx context.Context, node *node.OperaNode) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if !n.isListed(node) {
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	return ctx, cancel
 }
 
 // isListed reports whether the given node is still part of the network.
@@ -302,24 +330,17 @@ func (n *LocalNetwork) ReconnectNode(
 
 	n.nodesMutex.Lock()
 	// Remove any stale entry for this OperaNode (old enode ID).
-	var stale driver.NodeID
 	for id, existing := range n.nodes {
 		if existing == opera {
-			stale = id
 			delete(n.nodes, id)
 			break
 		}
 	}
 	n.nodesMutex.Unlock()
 
-	err := n.addNodeIntoNetwork(ctx, opera)
-	if err != nil && stale != "" {
-		// Restored so that Shutdown still stops and cleans up the container.
-		n.nodesMutex.Lock()
-		n.nodes[stale] = opera
-		n.nodesMutex.Unlock()
-	}
-	return err
+	// The node is listed again whether or not it rejoins, so Shutdown still
+	// stops and cleans up the container.
+	return n.addNodeIntoNetwork(ctx, opera)
 }
 
 // createNode is an internal version of CreateNode enabling the creation
@@ -473,6 +494,8 @@ func (n *LocalNetwork) RemoveNode(ctx context.Context, node driver.Node) error {
 	var wg sync.WaitGroup
 	for i, other := range peers {
 		wg.Go(func() {
+			ctx, cancel := n.whileListed(ctx, other)
+			defer cancel()
 			// A peer removed meanwhile has dropped the connection anyway.
 			if err := other.RemovePeer(ctx, id); err != nil && n.isListed(other) {
 				errs[i] = fmt.Errorf("failed to remove peer from %s; %v", other.GetLabel(), err)

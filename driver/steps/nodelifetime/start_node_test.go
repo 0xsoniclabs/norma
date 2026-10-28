@@ -258,7 +258,7 @@ func TestStartNode_DoesNotActivateAValidator_ThatStaysBehind(t *testing.T) {
 	behind.EXPECT().Close().AnyTimes()
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().GetActiveNodes().Return([]driver.Node{headNode}).AnyTimes()
-	net.EXPECT().CreateNode(gomock.Any()).DoAndReturn(func(config *driver.NodeConfig) (driver.Node, error) {
+	net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, config *driver.NodeConfig) (driver.Node, error) {
 		node := driver.NewMockNode(ctrl)
 		node.EXPECT().GetLabel().Return(config.Name).AnyTimes()
 		node.EXPECT().DialRpc(gomock.Any()).Return(behind, nil).AnyTimes()
