@@ -34,7 +34,8 @@ import (
 // The Shaper passed into the driver controls the frequency of emitting transactions.
 // The Generator passed into the driver constructs the transactions.
 // The controller reads the progress of the app through a client of its own,
-// since the client of the app context is shared by all apps.
+// since the client of the app context is shared by all apps. The client lives
+// as long as the controller: the progress of a stopped app is still read.
 type AppController struct {
 	name        string
 	shaper      shaper.Shaper
@@ -88,8 +89,6 @@ func NewAppController(
 }
 
 func (ac *AppController) Run(ctx context.Context) error {
-	defer ac.closeClient()
-
 	// start generators for each user
 	var done sync.WaitGroup
 	for i, user := range ac.users {
@@ -176,14 +175,5 @@ func (ac *AppController) GetReceivedTransactions() (uint64, error) {
 			ac.rpcClient = nil
 			return 0, fmt.Errorf("failed to dial random RPC: %w", err)
 		}
-	}
-}
-
-func (ac *AppController) closeClient() {
-	ac.rpcClientMu.Lock()
-	defer ac.rpcClientMu.Unlock()
-	if ac.rpcClient != nil {
-		ac.rpcClient.Close()
-		ac.rpcClient = nil
 	}
 }

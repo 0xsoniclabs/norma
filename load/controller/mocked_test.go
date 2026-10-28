@@ -78,62 +78,73 @@ func TestMockedTrafficGenerating(t *testing.T) {
 func TestStoppingAnAppKeepsTheOthersSending(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	// The shared client has no expectations: closing it fails the test.
+	// No client has a Close expectation: the shared one belongs to the app
+	// context, and each controller keeps its own for reading its progress.
 	shared := rpc.NewMockClient(ctrl)
 	appContext := app.NewMockAppContext(ctrl)
 	appContext.EXPECT().GetClient().Return(shared).AnyTimes()
 
-	own := rpc.NewMockClient(ctrl)
-	own.EXPECT().Close().AnyTimes()
-	network := driver.NewMockNetwork(ctrl)
-	network.EXPECT().DialRandomRpc().Return(own, nil).AnyTimes()
-
 	var demoTx types.Transaction
-	var sentByB atomic.Int64
-	network.EXPECT().SendTransaction(&demoTx, gomock.Any()).AnyTimes().Do(
-		func(_ *types.Transaction, source driver.TransactionSource) {
-			if source.App == "B" {
-				sentByB.Add(1)
-			}
-		})
+	type sut struct {
+		controller *AppController
+		sent       atomic.Int64
+		read       atomic.Int64
+	}
+	newApp := func(name string, shaper shaper.Shaper) *sut {
+		res := &sut{}
+		own := rpc.NewMockClient(ctrl)
+		network := driver.NewMockNetwork(ctrl)
+		network.EXPECT().DialRandomRpc().Return(own, nil).Times(1)
+		network.EXPECT().SendTransaction(&demoTx, gomock.Any()).AnyTimes().Do(
+			func(*types.Transaction, driver.TransactionSource) { res.sent.Add(1) })
 
-	newController := func(name string, shaper shaper.Shaper) *AppController {
 		user := app.NewMockUser(ctrl)
 		user.EXPECT().GenerateTx().Return(&demoTx, nil).AnyTimes()
 		user.EXPECT().GetSentTransactions().Return(uint64(0)).AnyTimes()
 		application := app.NewMockApplication(ctrl)
 		application.EXPECT().CreateUsers(appContext, 1).Return([]app.User{user}, nil)
-		application.EXPECT().GetReceivedTransactions(own).Return(uint64(0), nil).AnyTimes()
-		controller, err := NewAppController(name, application, shaper, 1, appContext, network)
-		if err != nil {
+		application.EXPECT().GetReceivedTransactions(own).AnyTimes().DoAndReturn(
+			func(rpc.Client) (uint64, error) { return uint64(res.read.Add(1)), nil })
+
+		var err error
+		if res.controller, err = NewAppController(name, application, shaper, 1, appContext, network); err != nil {
 			t.Fatal(err)
 		}
-		return controller
+		return res
 	}
-	a := newController("A", shaper.NewConstantShaper(100))
-	b := newController("B", shaper.NewAutoShaper(100, 0.2))
+	a := newApp("A", shaper.NewConstantShaper(100))
+	b := newApp("B", shaper.NewAutoShaper(100, 0.2))
 
 	ctxA, stopA := context.WithCancel(t.Context())
 	ctxB, stopB := context.WithCancel(t.Context())
-	var running sync.WaitGroup
-	running.Go(func() { _ = a.Run(ctxA) })
-	running.Go(func() { _ = b.Run(ctxB) })
-	// The monitoring reads the received transactions while the shaper does.
+	var runningA, running sync.WaitGroup
+	runningA.Go(func() { _ = a.controller.Run(ctxA) })
+	running.Go(func() { _ = b.controller.Run(ctxB) })
+	// The monitoring reads the progress of both apps, also once A is
+	// stopped, while the shaper of B does.
 	running.Go(func() {
 		for ctxB.Err() == nil {
-			_, _ = b.GetReceivedTransactions()
+			_, _ = a.controller.GetReceivedTransactions()
+			_, _ = b.controller.GetReceivedTransactions()
 			time.Sleep(time.Millisecond)
 		}
 	})
 
 	time.Sleep(100 * time.Millisecond)
 	stopA()
-	before := sentByB.Load()
+	runningA.Wait()
+	sentByA, sentByB, readOfA := a.sent.Load(), b.sent.Load(), a.read.Load()
 	time.Sleep(1500 * time.Millisecond)
 	stopB()
 	running.Wait()
 
-	if sentByB.Load() == before {
+	if a.sent.Load() != sentByA {
+		t.Errorf("A kept sending after it was stopped")
+	}
+	if b.sent.Load() == sentByB {
 		t.Errorf("B stopped sending after A was stopped")
+	}
+	if a.read.Load() == readOfA {
+		t.Errorf("the progress of A could not be read after it was stopped")
 	}
 }
