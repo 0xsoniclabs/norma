@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestOnceByKey_RunsTheWorkOnce_ForConcurrentCallers(t *testing.T) {
@@ -27,13 +29,12 @@ func TestOnceByKey_RunsTheWorkOnce_ForConcurrentCallers(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	close(release)
 	for range 3 {
-		if got := <-results; got != 7 {
-			t.Errorf("unexpected value %d", got)
-		}
+		require.Equal(t, 7, <-results)
 	}
-	if value, _ := once.do(t.Context(), "key", work); value != 7 || runs != 1 {
-		t.Errorf("work ran %d times, last value %d", runs, value)
-	}
+	value, err := once.do(t.Context(), "key", work)
+	require.NoError(t, err)
+	require.Equal(t, 7, value)
+	require.Equal(t, 1, runs)
 }
 
 // A caller whose context ends stops waiting for another caller's run, which
@@ -53,17 +54,16 @@ func TestOnceByKey_StopsWaiting_WhenTheCallersContextEnds(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 	defer cancel()
-	if _, err := once.do(ctx, "key", func() (int, error) { return 2, nil }); !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("expected the caller's deadline, got %v", err)
-	}
+	_, err := once.do(ctx, "key", func() (int, error) { return 2, nil })
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
 func TestOnceByKey_RunsTheWorkAgain_WhenItFailed(t *testing.T) {
 	var once onceByKey[int]
-	if _, err := once.do(t.Context(), "key", func() (int, error) { return 0, errors.New("failed") }); err == nil {
-		t.Fatal("expected the failure")
-	}
-	if value, err := once.do(t.Context(), "key", func() (int, error) { return 3, nil }); err != nil || value != 3 {
-		t.Errorf("expected the work to run again, got %d, %v", value, err)
-	}
+	_, err := once.do(t.Context(), "key", func() (int, error) { return 0, errors.New("failed") })
+	require.Error(t, err)
+
+	value, err := once.do(t.Context(), "key", func() (int, error) { return 3, nil })
+	require.NoError(t, err)
+	require.Equal(t, 3, value)
 }

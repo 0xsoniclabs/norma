@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestPlanImage(t *testing.T) {
@@ -334,36 +336,31 @@ func TestEnsureImages_PullsImage(t *testing.T) {
 // A run builds or pulls an image once, however many nodes use it. The build
 // root does not exist, so any attempt to build would fail.
 func TestEnsureImages_SkipsImagesAlreadyEnsured(t *testing.T) {
-	if _, err := ensured.do(t.Context(), imageKey("sonic:ensured"), func() (struct{}, error) {
-		return struct{}{}, nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	markEnsured(t, "sonic:ensured")
 
-	if err := EnsureImages(t.Context(), []string{"sonic:ensured"}, "/does/not/exist"); err != nil {
-		t.Fatalf("an ensured image should not be built again: %v", err)
-	}
+	require.NoError(t, EnsureImages(t.Context(), []string{"sonic:ensured"}, "/does/not/exist"),
+		"an ensured image should not be built again")
 }
 
 func TestImageKey_IsTheSameForReferencesNamingOneImage(t *testing.T) {
-	if got, want := imageKey("sonic"), imageKey("sonic:latest"); got != want {
-		t.Errorf("sonic and sonic:latest name one image, got keys %q and %q", got, want)
-	}
-	if imageKey("sonic") == imageKey("sonic:local") {
-		t.Errorf("sonic and sonic:local name different images")
-	}
+	require.Equal(t, imageKey("sonic"), imageKey("sonic:latest"))
+	require.NotEqual(t, imageKey("sonic"), imageKey("sonic:local"))
 }
 
 // "sonic" and "sonic:latest" are one Docker tag; building it a second time
 // could pick up a newer HEAD than the version the run already read from it.
 func TestEnsureImages_DoesNotBuildAnImageAgain_UnderAnotherReference(t *testing.T) {
-	if _, err := ensured.do(t.Context(), imageKey("sonic"), func() (struct{}, error) {
-		return struct{}{}, nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	markEnsured(t, "sonic")
 
-	if err := EnsureImages(t.Context(), []string{"sonic:latest"}, "/does/not/exist"); err != nil {
-		t.Fatalf("sonic:latest should not be built again after sonic: %v", err)
-	}
+	require.NoError(t, EnsureImages(t.Context(), []string{"sonic:latest"}, "/does/not/exist"),
+		"sonic:latest should not be built again after sonic")
+}
+
+// markEnsured records the image named by ref as ensured without building it.
+func markEnsured(t *testing.T, ref string) {
+	t.Helper()
+	_, err := ensured.do(t.Context(), imageKey(ref), func() (struct{}, error) {
+		return struct{}{}, nil
+	})
+	require.NoError(t, err)
 }
