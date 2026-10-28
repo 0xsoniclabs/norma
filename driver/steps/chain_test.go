@@ -163,6 +163,18 @@ func TestWaitForBlocks_FailsWithAStall_WhenOnlyANodeBehindIsGrowing(t *testing.T
 	require.ErrorContains(t, err, "no block produced")
 }
 
+// A wait that reports success after the scenario's own deadline is too late
+// as well; the step must not pass once the scenario is out of time.
+func TestWithBudget_Fails_WhenTheWaitCompletesAfterTheSurroundingDeadline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond)
+	defer cancel()
+	err := withBudget(ctx, time.Minute, func(ctx context.Context) error {
+		<-ctx.Done()
+		return nil
+	})
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
 // clientWithBlockNumbers returns an RPC client answering BlockNumber from
 // heights, expecting reads calls, or any number if negative.
 func clientWithBlockNumbers(

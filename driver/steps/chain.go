@@ -166,10 +166,11 @@ func withBudget(ctx context.Context, budget time.Duration, wait func(context.Con
 	waitCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	err := wait(waitCtx)
-	if ctx.Err() == nil && waitCtx.Err() != nil {
-		if err == nil {
-			err = waitCtx.Err()
-		}
+	if err == nil {
+		// Done only after the budget, or the surrounding context, ran out.
+		err = waitCtx.Err()
+	}
+	if err != nil && ctx.Err() == nil && waitCtx.Err() != nil {
 		return fmt.Errorf("not done within %v: %w", budget, err)
 	}
 	return err
