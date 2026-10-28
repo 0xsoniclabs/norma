@@ -27,7 +27,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/image"
@@ -120,18 +119,21 @@ type imageBuildPlan struct {
 // callers wait for the one ensuring an image. Repeated builds across runs rely
 // on Docker's own image/layer cache.
 func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) error {
-	ensuredMu.Lock()
-	defer ensuredMu.Unlock()
-
-	var refs []string
 	for _, ref := range NormalizeImageRefs(imageRefs) {
-		if !ensured[ref] {
-			refs = append(refs, ref)
+		if _, err := ensured.do(ctx, ref, func() (struct{}, error) {
+			return struct{}{}, ensureImage(ctx, ref, buildRoot)
+		}); err != nil {
+			return err
 		}
 	}
-	if len(refs) == 0 {
-		return nil
-	}
+	return nil
+}
+
+// ensured holds the references ensured by this process.
+var ensured onceByKey[struct{}]
+
+// ensureImage builds or pulls the given reference.
+func ensureImage(ctx context.Context, ref string, buildRoot string) error {
 	if buildRoot == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -139,14 +141,12 @@ func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) err
 		}
 		buildRoot = cwd
 	}
-
 	buildRoot, err := ResolveBuildRoot(buildRoot)
 	if err != nil {
 		return err
 	}
 	slog.Info("resolved build root", "path", buildRoot)
 
-	slog.Info("checking images", "refs", refs)
 	cli, err := NewClient()
 	if err != nil {
 		return fmt.Errorf("failed to create docker client: %w", err)
@@ -155,35 +155,25 @@ func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) err
 		_ = cli.Close()
 	}()
 
-	for _, ref := range refs {
-
-		plan := planImage(ref)
-		start := time.Now()
-		switch plan.kind {
-		case imageBuildSonicRemote, imageBuildSonicLocal:
-			slog.Info("building image", "ref", ref, "clientSrc", plan.clientSrc)
-			if err := buildImage(ctx, buildRoot, ref, plan.clientSrc); err != nil {
-				return err
-			}
-		case imageBuildNone:
-			slog.Info("pulling image", "ref", ref)
-			if err := pullImage(ctx, cli, ref); err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("unsupported image plan for %q", ref)
+	plan := planImage(ref)
+	start := time.Now()
+	switch plan.kind {
+	case imageBuildSonicRemote, imageBuildSonicLocal:
+		slog.Info("building image", "ref", ref, "clientSrc", plan.clientSrc)
+		if err := buildImage(ctx, buildRoot, ref, plan.clientSrc); err != nil {
+			return err
 		}
-		ensured[ref] = true
-		slog.Info("image ready", "ref", ref, "took", time.Since(start))
+	case imageBuildNone:
+		slog.Info("pulling image", "ref", ref)
+		if err := pullImage(ctx, cli, ref); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unsupported image plan for %q", ref)
 	}
-
+	slog.Info("image ready", "ref", ref, "took", time.Since(start))
 	return nil
 }
-
-var (
-	ensuredMu sync.Mutex
-	ensured   = map[string]bool{} // references ensured by this process
-)
 
 // NormalizeImageRefs removes empty refs, deduplicates, and returns image refs
 // in lexical order.

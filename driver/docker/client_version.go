@@ -23,7 +23,6 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
-	"sync"
 )
 
 // SonicdBinaryPath is the client binary inside a client image. Stage 2 of the
@@ -57,25 +56,15 @@ func ClientVersions(ctx context.Context, imageRefs []string) ([]string, error) {
 	return versions, nil
 }
 
-var (
-	versionsMu sync.Mutex
-	versions   = map[string]string{} // reported versions, by image
-)
+// versions holds the versions images reported, by image.
+var versions onceByKey[string]
 
 // clientVersionOf returns the version the client of the given image reports,
 // asking each image once.
 func clientVersionOf(ctx context.Context, image string) (string, error) {
-	versionsMu.Lock()
-	defer versionsMu.Unlock()
-	if version, found := versions[image]; found {
-		return version, nil
-	}
-	version, err := clientVersion(ctx, image)
-	if err != nil {
-		return "", err
-	}
-	versions[image] = version
-	return version, nil
+	return versions.do(ctx, image, func() (string, error) {
+		return clientVersion(ctx, image)
+	})
 }
 
 // clientVersion runs the client of the given locally available image to have it

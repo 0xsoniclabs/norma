@@ -334,14 +334,11 @@ func TestEnsureImages_PullsImage(t *testing.T) {
 // A run builds or pulls an image once, however many nodes use it. The build
 // root does not exist, so any attempt to build would fail.
 func TestEnsureImages_SkipsImagesAlreadyEnsured(t *testing.T) {
-	ensuredMu.Lock()
-	ensured["sonic:ensured"] = true
-	ensuredMu.Unlock()
-	t.Cleanup(func() {
-		ensuredMu.Lock()
-		delete(ensured, "sonic:ensured")
-		ensuredMu.Unlock()
-	})
+	if _, err := ensured.do(t.Context(), "sonic:ensured", func() (struct{}, error) {
+		return struct{}{}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := EnsureImages(t.Context(), []string{"sonic:ensured"}, "/does/not/exist"); err != nil {
 		t.Fatalf("an ensured image should not be built again: %v", err)
