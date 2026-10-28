@@ -119,7 +119,7 @@ func TestOperaNode_RpcServiceIsReadyAfterStartup(t *testing.T) {
 			t.Errorf("failed to cleanup node: %v", err)
 		}
 	})
-	if id, err := node.GetNodeID(); err != nil || len(id) == 0 {
+	if id, err := node.GetNodeID(t.Context()); err != nil || len(id) == 0 {
 		t.Errorf("failed to fetch NodeID from Opera node: '%v', err: %v", id, err)
 	}
 }

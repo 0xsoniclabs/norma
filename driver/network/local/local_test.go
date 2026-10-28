@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -416,6 +417,46 @@ func TestLocalNetwork_NotifiesListenersOnAppStartup(t *testing.T) {
 	}
 }
 
+// Nodes stopped together are unpeered concurrently, so one may still try to
+// unpeer from another that has already gone; that is no failure, and every
+// node is removed.
+func TestLocalNetwork_RemovesNodesStoppedTogether(t *testing.T) {
+	t.Parallel()
+	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
+	net, err := NewLocalLegacyNetwork(t.Context(), &config)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = net.Shutdown()
+	})
+
+	nodes := make([]driver.Node, 3)
+	for i := range nodes {
+		nodes[i], err = net.CreateNode(t.Context(), &driver.NodeConfig{
+			Name:  fmt.Sprintf("N-%d-%s", i, t.Name()),
+			Image: driver.DefaultClientDockerImageName,
+		})
+		require.NoError(t, err)
+	}
+
+	var wg sync.WaitGroup
+	for _, node := range nodes {
+		wg.Go(func() {
+			if err := net.RemoveNode(t.Context(), node); err != nil {
+				t.Errorf("failed to remove node %s: %v", node.GetLabel(), err)
+			}
+			if err := node.Stop(t.Context()); err != nil {
+				t.Errorf("failed to stop node %s: %v", node.GetLabel(), err)
+			}
+			if err := node.Cleanup(context.Background()); err != nil {
+				t.Errorf("failed to clean up node %s: %v", node.GetLabel(), err)
+			}
+		})
+	}
+	wg.Wait()
+
+	require.Len(t, net.GetActiveNodes(), 1, "only the validator remains")
+}
+
 func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 	t.Parallel()
 	config := driver.NetworkConfig{Validators: driver.DefaultValidators(t.Name())}
@@ -453,7 +494,7 @@ func TestLocalNetwork_CanRemoveNode(t *testing.T) {
 					t.Errorf("cannot remove node: %s", err)
 				}
 
-				id, err := node.GetNodeID()
+				id, err := node.GetNodeID(t.Context())
 				if err != nil {
 					t.Errorf("cannot get node ID: %s", err)
 				}

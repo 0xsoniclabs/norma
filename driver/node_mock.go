@@ -87,18 +87,18 @@ func (mr *MockNodeMockRecorder) GetLabel() *gomock.Call {
 }
 
 // GetNodeID mocks base method.
-func (m *MockNode) GetNodeID() (NodeID, error) {
+func (m *MockNode) GetNodeID(ctx context.Context) (NodeID, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNodeID")
+	ret := m.ctrl.Call(m, "GetNodeID", ctx)
 	ret0, _ := ret[0].(NodeID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetNodeID indicates an expected call of GetNodeID.
-func (mr *MockNodeMockRecorder) GetNodeID() *gomock.Call {
+func (mr *MockNodeMockRecorder) GetNodeID(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeID", reflect.TypeOf((*MockNode)(nil).GetNodeID))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeID", reflect.TypeOf((*MockNode)(nil).GetNodeID), ctx)
 }
 
 // GetServiceUrl mocks base method.

@@ -589,7 +589,7 @@ func (n *OperaNode) GetServiceUrl(service *network.ServiceDescription) (*driver.
 	return &url, nil
 }
 
-func (n *OperaNode) GetNodeID() (driver.NodeID, error) {
+func (n *OperaNode) GetNodeID(ctx context.Context) (driver.NodeID, error) {
 	url, err := n.GetServiceUrl(&OperaRpcService)
 	if err != nil {
 		return "", fmt.Errorf("failed to get RPC service URL: %w", err)
@@ -597,14 +597,15 @@ func (n *OperaNode) GetNodeID() (driver.NodeID, error) {
 	if url == nil {
 		return "", fmt.Errorf("node does not export an RPC server")
 	}
-	rpcClient, err := rpc.DialContext(context.Background(), string(*url))
+	rpcClient, err := rpc.DialContext(ctx, string(*url))
 	if err != nil {
 		return "", err
 	}
+	defer rpcClient.Close()
 	var result struct {
 		Enode string
 	}
-	err = rpcClient.Call(&result, "admin_nodeInfo")
+	err = rpcClient.CallContext(ctx, &result, "admin_nodeInfo")
 	if err != nil {
 		return "", err
 	}
@@ -718,12 +719,13 @@ func (n *OperaNode) AddPeer(ctx context.Context, id driver.NodeID) error {
 	if err != nil {
 		return err
 	}
+	defer rpcClient.Close()
 	return network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second,
 		func(ctx context.Context) error {
-			if err := rpcClient.Call(nil, "admin_addTrustedPeer", id); err != nil {
+			if err := rpcClient.CallContext(ctx, nil, "admin_addTrustedPeer", id); err != nil {
 				return fmt.Errorf("failed to add trusted peer on node %s: %v", id, err)
 			}
-			return rpcClient.Call(nil, "admin_addPeer", id)
+			return rpcClient.CallContext(ctx, nil, "admin_addPeer", id)
 		})
 }
 
@@ -734,9 +736,10 @@ func (n *OperaNode) RemovePeer(ctx context.Context, id driver.NodeID) error {
 	if err != nil {
 		return err
 	}
+	defer rpcClient.Close()
 	return network.Retry(ctx, network.DefaultRetryAttempts, 1*time.Second,
 		func(ctx context.Context) error {
-			return rpcClient.Call(nil, "admin_removePeer", id)
+			return rpcClient.CallContext(ctx, nil, "admin_removePeer", id)
 		})
 }
 

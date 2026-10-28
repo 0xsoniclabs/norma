@@ -17,6 +17,8 @@
 package nodelifetime
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver/steps"
@@ -113,5 +115,25 @@ func TestStopNode_IgnoresNodesThatAreNotItsInstances(t *testing.T) {
 		if _, ok := env.Nodes[label]; !ok {
 			t.Errorf("expected %s to remain", label)
 		}
+	}
+}
+
+// A node the network failed to unpeer is out of it all the same; left running,
+// nothing would ever stop it, as the network no longer lists it.
+func TestStopNode_StopsTheNode_WhenRemovingItFails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	node := driver.NewMockNode(ctrl)
+
+	env := steps.NewEnv(net, nil, nil)
+	env.Nodes["observer"] = node
+
+	net.EXPECT().RemoveNode(gomock.Any(), node).Return(errors.New("peer unreachable"))
+	node.EXPECT().Stop(gomock.Any()).Return(nil)
+	node.EXPECT().Cleanup(gomock.Any()).Return(nil)
+
+	err := (&StopNode{steps.Node{Node: "observer"}}).Run(t.Context(), env)
+	if err == nil || !strings.Contains(err.Error(), "peer unreachable") {
+		t.Fatalf("expected the removal error, got %v", err)
 	}
 }

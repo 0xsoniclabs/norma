@@ -215,7 +215,7 @@ func (n *LocalNetwork) startGenesisValidators(
 // of retries to give up on. The node is listed before its peers are chosen, so
 // of two nodes added at once the later one always peers with the earlier.
 func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaNode) error {
-	id, err := node.GetNodeID()
+	id, err := node.GetNodeID(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get node id; %v", err)
 	}
@@ -225,7 +225,7 @@ func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaN
 	peers := n.peersOf(node)
 	n.nodesMutex.Unlock()
 
-	var succeeded atomic.Int32
+	var succeeded, failed atomic.Int32
 	var wg sync.WaitGroup
 	for _, other := range peers {
 		wg.Go(func() {
@@ -234,6 +234,10 @@ func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaN
 				succeeded.Add(1)
 				return
 			}
+			if !n.isListed(other) {
+				return // removed meanwhile, so there is nothing to peer with
+			}
+			failed.Add(1)
 			label := other.GetLabel()
 			if checkErr := other.CheckRunning(ctx); checkErr != nil {
 				slog.Error("node has crashed", "node", label, "status", checkErr)
@@ -246,12 +250,24 @@ func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaN
 
 	n.nodesMutex.Lock()
 	defer n.nodesMutex.Unlock()
-	if len(peers) > 0 && succeeded.Load() == 0 {
+	if failed.Load() > 0 && succeeded.Load() == 0 {
 		delete(n.nodes, id)
 		return fmt.Errorf("failed to add peer; no existing node was reachable")
 	}
 	n.bootstrapped = true
 	return nil
+}
+
+// isListed reports whether the given node is still part of the network.
+func (n *LocalNetwork) isListed(node *node.OperaNode) bool {
+	n.nodesMutex.Lock()
+	defer n.nodesMutex.Unlock()
+	for _, listed := range n.nodes {
+		if listed == node {
+			return true
+		}
+	}
+	return false
 }
 
 // peersOf returns the nodes the given node is to be peered with: all others
@@ -457,7 +473,8 @@ func (n *LocalNetwork) RemoveNode(ctx context.Context, node driver.Node) error {
 	var wg sync.WaitGroup
 	for i, other := range peers {
 		wg.Go(func() {
-			if err := other.RemovePeer(ctx, id); err != nil {
+			// A peer removed meanwhile has dropped the connection anyway.
+			if err := other.RemovePeer(ctx, id); err != nil && n.isListed(other) {
 				errs[i] = fmt.Errorf("failed to remove peer from %s; %v", other.GetLabel(), err)
 			}
 		})
