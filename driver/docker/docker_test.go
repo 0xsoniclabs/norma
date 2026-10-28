@@ -335,23 +335,32 @@ func TestClient_Start_RemovesTheContainer_WhenStartingItFails(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = cli.Close() })
 
-	// The container cannot start on a network that does not exist, and the
-	// deadline ends the retries, as a scenario's deadline would.
+	// The container is created, but cannot join a network that does not
+	// exist. Depending on the daemon, connecting fails, or every start does
+	// until the deadline ends the retries, as a scenario's would; either way
+	// after the container exists.
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 	name := strings.ReplaceAll(t.Name(), "/", "-")
 	timeout := time.Second
-	_, err = cli.Start(ctx, &ContainerConfig{
+	started, err := cli.Start(ctx, &ContainerConfig{
 		Hostname:        name,
 		ImageName:       "hello-world",
 		ShutdownTimeout: &timeout,
-		Network:         &Network{id: "no-such-network"},
+		Network:         &Network{id: "no-such-network", name: "no-such-network"},
 	})
-	require.ErrorIs(t, err, context.DeadlineExceeded)
+	if started != nil {
+		t.Cleanup(func() { _ = started.Cleanup(context.Background()) })
+	}
+	require.Error(t, err)
 
-	exists, err := cli.ContainerExists(t.Context(), name)
+	// Listed with the stopped ones, as a container that never started is.
+	containers, err := cli.listContainers(t.Context())
 	require.NoError(t, err)
-	require.False(t, exists, "the container that failed to start was left behind")
+	for _, container := range containers {
+		require.NotContains(t, container.Names, "/"+name,
+			"the container that failed to start was left behind")
+	}
 }
 
 func startContainer(t *testing.T) (*Client, *Container) {
