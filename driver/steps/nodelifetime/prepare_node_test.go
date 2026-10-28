@@ -31,7 +31,7 @@ func TestPrepareNode_BootstrapsFromTheGFileWithoutStarting(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
 	prepared := driver.NewMockNode(ctrl)
-	net.EXPECT().CreateNode(&driver.NodeConfig{
+	net.EXPECT().CreateNode(gomock.Any(), &driver.NodeConfig{
 		Name:        "fresh",
 		Image:       "sonic:v2.2.0",
 		GenesisFile: "from-new.g",

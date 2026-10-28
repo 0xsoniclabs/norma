@@ -69,7 +69,7 @@ func (s *StopNode) Run(ctx context.Context, env *steps.Env) error {
 	g, gctx := errgroup.WithContext(ctx)
 	for _, target := range targets {
 		g.Go(func() error {
-			if err := env.Net.RemoveNode(target.node); err != nil {
+			if err := env.Net.RemoveNode(ctx, target.node); err != nil {
 				return fmt.Errorf("failed to remove node %s: %w", target.name, err)
 			}
 			if err := target.node.Stop(gctx); err != nil {

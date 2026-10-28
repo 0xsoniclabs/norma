@@ -210,41 +210,66 @@ func (n *LocalNetwork) startGenesisValidators(
 // addNodeIntoNetwork connects the node with other nodes in the network, adds it into the list of nodes.
 // It is best-effort: if some existing nodes are unreachable, the new node will
 // still join the network as long as at least one peer connection succeeds.
+//
+// Peering runs outside nodesMutex, since a peer that has crashed takes minutes
+// of retries to give up on. The node is listed before its peers are chosen, so
+// of two nodes added at once the later one always peers with the earlier.
 func (n *LocalNetwork) addNodeIntoNetwork(ctx context.Context, node *node.OperaNode) error {
-	n.nodesMutex.Lock()
-	defer n.nodesMutex.Unlock()
-
 	id, err := node.GetNodeID()
 	if err != nil {
 		return fmt.Errorf("failed to get node id; %v", err)
 	}
-	var attempted, succeeded int
-	for _, other := range n.nodes {
-		// A suspended node's client is known to be down; dialing it would
-		// only burn the retry budget. It re-peers itself when resumed.
-		if n.suspended[other] {
-			slog.Info("skipping suspended node while adding peers",
-				"node", other.GetLabel())
-			continue
-		}
-		attempted++
-		if err = other.AddPeer(ctx, id); err != nil {
+
+	n.nodesMutex.Lock()
+	n.nodes[id] = node
+	peers := n.peersOf(node)
+	n.nodesMutex.Unlock()
+
+	var succeeded atomic.Int32
+	var wg sync.WaitGroup
+	for _, other := range peers {
+		wg.Go(func() {
+			err := other.AddPeer(ctx, id)
+			if err == nil {
+				succeeded.Add(1)
+				return
+			}
 			label := other.GetLabel()
 			if checkErr := other.CheckRunning(ctx); checkErr != nil {
 				slog.Error("node has crashed", "node", label, "status", checkErr)
 			} else {
 				slog.Warn("failed to add peer to node", "node", label, "error", err)
 			}
-		} else {
-			succeeded++
-		}
+		})
 	}
-	if attempted > 0 && succeeded == 0 {
+	wg.Wait()
+
+	n.nodesMutex.Lock()
+	defer n.nodesMutex.Unlock()
+	if len(peers) > 0 && succeeded.Load() == 0 {
+		delete(n.nodes, id)
 		return fmt.Errorf("failed to add peer; no existing node was reachable")
 	}
-	n.nodes[id] = node
 	n.bootstrapped = true
 	return nil
+}
+
+// peersOf returns the nodes the given node is to be peered with: all others
+// but the suspended ones, whose client is known to be down and re-peers itself
+// when resumed. The caller must hold nodesMutex.
+func (n *LocalNetwork) peersOf(self *node.OperaNode) []*node.OperaNode {
+	var peers []*node.OperaNode
+	for _, other := range n.nodes {
+		if other == self {
+			continue
+		}
+		if n.suspended[other] {
+			slog.Info("skipping suspended node while peering", "node", other.GetLabel())
+			continue
+		}
+		peers = append(peers, other)
+	}
+	return peers
 }
 
 // ReconnectNode re-establishes peer connections between the given node
@@ -325,9 +350,9 @@ func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNod
 }
 
 // CreateNode creates nodes in the network during run.
-func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error) {
+func (n *LocalNetwork) CreateNode(ctx context.Context, config *driver.NodeConfig) (driver.Node, error) {
 	if config.Cheater {
-		_, err := n.createNode(n.ctx, &node.OperaNodeConfig{
+		_, err := n.createNode(ctx, &node.OperaNodeConfig{
 			Label:          "cheater-" + config.Name,
 			Failing:        config.Failing,
 			Image:          config.Image,
@@ -346,7 +371,7 @@ func (n *LocalNetwork) CreateNode(config *driver.NodeConfig) (driver.Node, error
 		*datadir = fmt.Sprintf("%s/%s", n.config.OutputDir, *config.DataVolume)
 	}
 
-	return n.createNode(n.ctx, &node.OperaNodeConfig{
+	return n.createNode(ctx, &node.OperaNodeConfig{
 		Label:           config.Name,
 		Failing:         config.Failing,
 		Image:           config.Image,
@@ -393,7 +418,7 @@ func (n *LocalNetwork) prepareGenesis(ctx context.Context) error {
 	n.genesisJsonPath = genesisPath
 	return nil
 }
-func (n *LocalNetwork) RemoveNode(node driver.Node) error {
+func (n *LocalNetwork) RemoveNode(ctx context.Context, node driver.Node) error {
 	// Listeners already saw a suspended node go, or, if prepared, never saw it.
 	n.nodesMutex.Lock()
 	announced := !n.suspended[node]
@@ -407,7 +432,6 @@ func (n *LocalNetwork) RemoveNode(node driver.Node) error {
 	}
 
 	n.nodesMutex.Lock()
-	defer n.nodesMutex.Unlock()
 	// Looked up by pointer rather than GetNodeID, which needs a running client:
 	// a node whose client is stopped, killed or was never started is removable.
 	var id driver.NodeID
@@ -417,23 +441,29 @@ func (n *LocalNetwork) RemoveNode(node driver.Node) error {
 			break
 		}
 	}
-
+	removed := n.nodes[id]
 	delete(n.nodes, id)
 	delete(n.suspended, node)
 	// A prepared node is still keyed by its label: it never had peers.
 	if id == "" || id == driver.NodeID(node.GetLabel()) {
+		n.nodesMutex.Unlock()
 		return nil
 	}
-	for _, other := range n.nodes {
-		if n.suspended[other] {
-			continue
-		}
-		if err := other.RemovePeer(n.ctx, id); err != nil {
-			return fmt.Errorf("failed to remove peer; %v", err)
-		}
-	}
+	peers := n.peersOf(removed)
+	n.nodesMutex.Unlock()
 
-	return nil
+	// Unpeered outside nodesMutex, like peering in addNodeIntoNetwork.
+	errs := make([]error, len(peers))
+	var wg sync.WaitGroup
+	for i, other := range peers {
+		wg.Go(func() {
+			if err := other.RemovePeer(ctx, id); err != nil {
+				errs[i] = fmt.Errorf("failed to remove peer from %s; %v", other.GetLabel(), err)
+			}
+		})
+	}
+	wg.Wait()
+	return errors.Join(errs...)
 }
 
 func (n *LocalNetwork) SendTransaction(tx *types.Transaction, source driver.TransactionSource) {
@@ -786,7 +816,11 @@ func (n *LocalNetwork) Shutdown() error {
 	}
 
 	// Second, shut down the nodes.
-	for _, node := range n.nodes {
+	n.nodesMutex.Lock()
+	nodes := n.nodes
+	n.nodes = map[driver.NodeID]*node.OperaNode{}
+	n.nodesMutex.Unlock()
+	for _, node := range nodes {
 		// TODO: shutdown nodes in parallel.
 		if err := node.Stop(ctx); err != nil {
 			errs = append(errs, err)
@@ -795,7 +829,6 @@ func (n *LocalNetwork) Shutdown() error {
 			errs = append(errs, err)
 		}
 	}
-	n.nodes = map[driver.NodeID]*node.OperaNode{}
 
 	// Third, shut down the docker network.
 	if n.network != nil {

@@ -33,7 +33,7 @@ func TestStopNode_SingleInstanceSuffix(t *testing.T) {
 	env := steps.NewEnv(net, nil, nil)
 	env.Nodes["validator-A-0"] = node
 
-	net.EXPECT().RemoveNode(node).Return(nil)
+	net.EXPECT().RemoveNode(gomock.Any(), node).Return(nil)
 	node.EXPECT().Stop(gomock.Any()).Return(nil)
 	node.EXPECT().Cleanup(gomock.Any()).Return(nil)
 
@@ -59,11 +59,11 @@ func TestStopNode_MultipleInstances(t *testing.T) {
 	env.Nodes["validators-1"] = node1
 	env.Nodes["other"] = other
 
-	net.EXPECT().RemoveNode(node0).Return(nil)
+	net.EXPECT().RemoveNode(gomock.Any(), node0).Return(nil)
 	node0.EXPECT().Stop(gomock.Any()).Return(nil)
 	node0.EXPECT().Cleanup(gomock.Any()).Return(nil)
 
-	net.EXPECT().RemoveNode(node1).Return(nil)
+	net.EXPECT().RemoveNode(gomock.Any(), node1).Return(nil)
 	node1.EXPECT().Stop(gomock.Any()).Return(nil)
 	node1.EXPECT().Cleanup(gomock.Any()).Return(nil)
 
@@ -97,7 +97,7 @@ func TestStopNode_IgnoresNodesThatAreNotItsInstances(t *testing.T) {
 		env.Nodes[label] = driver.NewMockNode(ctrl)
 	}
 
-	net.EXPECT().RemoveNode(node).Return(nil)
+	net.EXPECT().RemoveNode(gomock.Any(), node).Return(nil)
 	node.EXPECT().Stop(gomock.Any()).Return(nil)
 	node.EXPECT().Cleanup(gomock.Any()).Return(nil)
 
