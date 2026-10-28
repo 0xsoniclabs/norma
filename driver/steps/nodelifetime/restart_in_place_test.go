@@ -47,7 +47,7 @@ func TestStartNode_RestartsWithTheNodesRole_WhenTheTypeIsOmitted(t *testing.T) {
 
 			net := driver.NewMockNetwork(ctrl)
 			// An empty network leaves nothing to catch up with after the restart.
-			net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork)
+			net.EXPECT().GetActiveNodes().Return(nil)
 			net.EXPECT().ReconnectNode(gomock.Any(), client).Return(nil)
 			net.EXPECT().ResumeNode(client)
 
@@ -80,8 +80,11 @@ func TestStartNode_RestartInPlace_DoesNotWaitForCatchUp_WhenTheNodeIsExpectedToF
 			head := rpc.NewMockClient(ctrl)
 			head.EXPECT().BlockNumber(gomock.Any()).Return(uint64(10), nil)
 			head.EXPECT().Close()
+			headNode := driver.NewMockNode(ctrl)
+			headNode.EXPECT().IsExpectedFailure().Return(false).AnyTimes()
+			headNode.EXPECT().DialRpc(gomock.Any()).Return(head, nil)
 			net := driver.NewMockNetwork(ctrl)
-			net.EXPECT().DialRandomRpc().Return(head, nil)
+			net.EXPECT().GetActiveNodes().Return([]driver.Node{headNode})
 			net.EXPECT().ReconnectNode(gomock.Any(), client).Return(nil)
 			net.EXPECT().ResumeNode(client)
 

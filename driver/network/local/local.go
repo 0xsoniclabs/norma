@@ -579,13 +579,17 @@ func (n *LocalNetwork) AdvanceEpoch(ctx context.Context, epochIncrement int) err
 }
 
 func (n *LocalNetwork) WaitForEpochChange(ctx context.Context) error {
-	client, err := n.DialRandomRpc()
+	nodes := n.GetActiveNodes()
+	if len(nodes) == 0 {
+		return driver.ErrEmptyNetwork
+	}
+	clients, err := network.DialNodes(ctx, nodes)
 	if err != nil {
 		return fmt.Errorf("failed to connect to network: %w", err)
 	}
-	defer client.Close()
+	defer network.CloseAll(clients)
 
-	return network.WaitForEpochChange(ctx, client)
+	return network.WaitForEpochChange(ctx, clients)
 }
 
 // treasureAccountPrivateKey is an account with tokens that can be used to

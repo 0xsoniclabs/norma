@@ -75,6 +75,7 @@ func TestEnsureValidatorsActive_SealsAnEpoch_WhenAValidatorIsMissing(t *testing.
 		DoAndReturn(growingBlockHeight()).AnyTimes()
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().DialRandomRpc().Return(client, nil).AnyTimes()
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{nodeServing(ctrl, client)}).AnyTimes()
 	net.EXPECT().AdvanceEpoch(gomock.Any(), 1).
 		DoAndReturn(func(context.Context, int) error {
 			set = append(set, 3)
@@ -97,6 +98,7 @@ func TestEnsureValidatorsActive_Fails_WhenNoBlockIsProduced(t *testing.T) {
 	net := driver.NewMockNetwork(ctrl)
 	// No AdvanceEpoch: the seal is never attempted.
 	net.EXPECT().DialRandomRpc().Return(client, nil).AnyTimes()
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{nodeServing(ctrl, client)}).AnyTimes()
 
 	registry := netBasedValidatorRegistry{net: net}
 	err := registry.EnsureValidatorsActive(context.Background(), []int{2})
@@ -113,6 +115,7 @@ func TestEnsureValidatorsActive_Fails_WhenEpochCannotBeSealed(t *testing.T) {
 		DoAndReturn(growingBlockHeight()).AnyTimes()
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().DialRandomRpc().Return(client, nil).AnyTimes()
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{nodeServing(ctrl, client)}).AnyTimes()
 	net.EXPECT().AdvanceEpoch(gomock.Any(), 1).
 		Return(fmt.Errorf("epoch seal rejected"))
 
@@ -132,6 +135,7 @@ func TestEnsureValidatorsActive_Fails_WhenAValidatorNeverJoinsTheSet(t *testing.
 		DoAndReturn(growingBlockHeight()).AnyTimes()
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().DialRandomRpc().Return(client, nil).AnyTimes()
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{nodeServing(ctrl, client)}).AnyTimes()
 	net.EXPECT().AdvanceEpoch(gomock.Any(), 1).Return(nil)
 
 	// Negative, so the deadline is unambiguously in the past after the first

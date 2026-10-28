@@ -81,7 +81,7 @@ func TestUpdateRules_ReportsRulesTheNetworkRejects(t *testing.T) {
 func TestAdvanceEpoch_ReportsAFailedSeal(t *testing.T) {
 	net := driver.NewMockNetwork(gomock.NewController(t))
 	// Without a node to dial, the surrounding block waits are skipped.
-	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
+	net.EXPECT().GetActiveNodes().Return(nil).AnyTimes()
 	net.EXPECT().AdvanceEpoch(gomock.Any(), 1).Return(errors.New("seal reverted"))
 
 	err := (&AdvanceEpoch{}).Run(t.Context(), steps.NewEnv(net, nil, nil))
