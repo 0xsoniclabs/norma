@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/image"
@@ -98,7 +99,8 @@ type imageBuildPlan struct {
 // The function provides the runtime image provisioning path used by
 // scenario execution. It performs the following steps:
 //
-//  1. Normalize and deduplicate image references.
+//  1. Normalize and deduplicate image references, leaving out those already
+//     ensured.
 //  2. Resolve the Norma build root (see ResolveBuildRoot).
 //  3. For each image:
 //     - choose build or pull strategy via planImage;
@@ -111,12 +113,23 @@ type imageBuildPlan struct {
 //   - sonic:<tag>: from sonicRepositoryURL#<tag>
 //   - sonic:<commit hash>: from sonicRepositoryURL#<commit hash>
 //
-// Other images are pulled if missing.
+// Other images are pulled.
 //
-// The operation is idempotent with respect to already present tags, and relies
-// on Docker's own image/layer cache for repeated builds.
+// Each image is ensured once per process, so a run builds or pulls it once
+// however many nodes use it, and its nodes run the same binary. Concurrent
+// callers wait for the one ensuring an image. Repeated builds across runs rely
+// on Docker's own image/layer cache.
 func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) error {
-	if len(imageRefs) == 0 {
+	ensuredMu.Lock()
+	defer ensuredMu.Unlock()
+
+	var refs []string
+	for _, ref := range NormalizeImageRefs(imageRefs) {
+		if !ensured[ref] {
+			refs = append(refs, ref)
+		}
+	}
+	if len(refs) == 0 {
 		return nil
 	}
 	if buildRoot == "" {
@@ -133,7 +146,6 @@ func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) err
 	}
 	slog.Info("resolved build root", "path", buildRoot)
 
-	refs := NormalizeImageRefs(imageRefs)
 	slog.Info("checking images", "refs", refs)
 	cli, err := NewClient()
 	if err != nil {
@@ -161,11 +173,17 @@ func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) err
 		default:
 			return fmt.Errorf("unsupported image plan for %q", ref)
 		}
+		ensured[ref] = true
 		slog.Info("image ready", "ref", ref, "took", time.Since(start))
 	}
 
 	return nil
 }
+
+var (
+	ensuredMu sync.Mutex
+	ensured   = map[string]bool{} // references ensured by this process
+)
 
 // NormalizeImageRefs removes empty refs, deduplicates, and returns image refs
 // in lexical order.
