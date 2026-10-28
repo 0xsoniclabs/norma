@@ -56,13 +56,13 @@ func ClientVersions(ctx context.Context, imageRefs []string) ([]string, error) {
 	return versions, nil
 }
 
-// versions holds the versions images reported, by image.
+// versions holds the versions images reported, by imageKey.
 var versions onceByKey[string]
 
 // clientVersionOf returns the version the client of the given image reports,
 // asking each image once.
 func clientVersionOf(ctx context.Context, image string) (string, error) {
-	return versions.do(ctx, image, func() (string, error) {
+	return versions.do(ctx, imageKey(image), func() (string, error) {
 		return clientVersion(ctx, image)
 	})
 }

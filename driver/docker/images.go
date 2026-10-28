@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/distribution/reference"
 	"github.com/docker/docker/api/types/image"
 )
 
@@ -120,7 +121,7 @@ type imageBuildPlan struct {
 // on Docker's own image/layer cache.
 func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) error {
 	for _, ref := range NormalizeImageRefs(imageRefs) {
-		if _, err := ensured.do(ctx, ref, func() (struct{}, error) {
+		if _, err := ensured.do(ctx, imageKey(ref), func() (struct{}, error) {
 			return struct{}{}, ensureImage(ctx, ref, buildRoot)
 		}); err != nil {
 			return err
@@ -129,8 +130,19 @@ func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) err
 	return nil
 }
 
-// ensured holds the references ensured by this process.
+// ensured holds the images ensured by this process, by imageKey.
 var ensured onceByKey[struct{}]
+
+// imageKey identifies the Docker image a reference names, so that references
+// naming one image, such as "sonic" and "sonic:latest", share its build and
+// its version. A reference Docker cannot parse is its own key.
+func imageKey(ref string) string {
+	named, err := reference.ParseNormalizedNamed(ref)
+	if err != nil {
+		return ref
+	}
+	return reference.TagNameOnly(named).String()
+}
 
 // ensureImage builds or pulls the given reference.
 func ensureImage(ctx context.Context, ref string, buildRoot string) error {

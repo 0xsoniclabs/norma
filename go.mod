@@ -6,6 +6,7 @@ require (
 	github.com/0xsoniclabs/carmen/go v0.0.0-20260512102324-2d892af38ce4
 	github.com/0xsoniclabs/sonic v0.0.0-20260807135057-021825ca749b
 	github.com/Fantom-foundation/lachesis-base v0.0.0-20240116072301-a75735c4ef00
+	github.com/distribution/reference v0.6.0
 	github.com/docker/docker v27.3.1+incompatible
 	github.com/ethereum/go-ethereum v1.17.1
 	github.com/gdamore/tcell/v2 v2.13.10
@@ -43,7 +44,6 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/deckarep/golang-set/v2 v2.9.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
-	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/emicklei/dot v1.11.0 // indirect
