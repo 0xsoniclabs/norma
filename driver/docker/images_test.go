@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestPlanImage(t *testing.T) {
@@ -329,4 +331,36 @@ func TestEnsureImages_PullsImage(t *testing.T) {
 	if _, _, err := cli.cli.ImageInspectWithRaw(t.Context(), imageRef); err != nil {
 		t.Fatalf("image %s not found after EnsureImages pull: %v", imageRef, err)
 	}
+}
+
+// A run builds or pulls an image once, however many nodes use it. The build
+// root does not exist, so any attempt to build would fail.
+func TestEnsureImages_SkipsImagesAlreadyEnsured(t *testing.T) {
+	markEnsured(t, "sonic:ensured")
+
+	require.NoError(t, EnsureImages(t.Context(), []string{"sonic:ensured"}, "/does/not/exist"),
+		"an ensured image should not be built again")
+}
+
+func TestImageKey_IsTheSameForReferencesNamingOneImage(t *testing.T) {
+	require.Equal(t, imageKey("sonic"), imageKey("sonic:latest"))
+	require.NotEqual(t, imageKey("sonic"), imageKey("sonic:local"))
+}
+
+// "sonic" and "sonic:latest" are one Docker tag; building it a second time
+// could pick up a newer HEAD than the version the run already read from it.
+func TestEnsureImages_DoesNotBuildAnImageAgain_UnderAnotherReference(t *testing.T) {
+	markEnsured(t, "sonic")
+
+	require.NoError(t, EnsureImages(t.Context(), []string{"sonic:latest"}, "/does/not/exist"),
+		"sonic:latest should not be built again after sonic")
+}
+
+// markEnsured records the image named by ref as ensured without building it.
+func markEnsured(t *testing.T, ref string) {
+	t.Helper()
+	_, err := ensured.do(t.Context(), imageKey(ref), func() (struct{}, error) {
+		return struct{}{}, nil
+	})
+	require.NoError(t, err)
 }

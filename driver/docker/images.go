@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/distribution/reference"
 	"github.com/docker/docker/api/types/image"
 )
 
@@ -98,7 +99,8 @@ type imageBuildPlan struct {
 // The function provides the runtime image provisioning path used by
 // scenario execution. It performs the following steps:
 //
-//  1. Normalize and deduplicate image references.
+//  1. Normalize and deduplicate image references, leaving out those already
+//     ensured.
 //  2. Resolve the Norma build root (see ResolveBuildRoot).
 //  3. For each image:
 //     - choose build or pull strategy via planImage;
@@ -111,14 +113,39 @@ type imageBuildPlan struct {
 //   - sonic:<tag>: from sonicRepositoryURL#<tag>
 //   - sonic:<commit hash>: from sonicRepositoryURL#<commit hash>
 //
-// Other images are pulled if missing.
+// Other images are pulled.
 //
-// The operation is idempotent with respect to already present tags, and relies
-// on Docker's own image/layer cache for repeated builds.
+// Each image is ensured once per process, so a run builds or pulls it once
+// however many nodes use it, and its nodes run the same binary. Concurrent
+// callers wait for the one ensuring an image. Repeated builds across runs rely
+// on Docker's own image/layer cache.
 func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) error {
-	if len(imageRefs) == 0 {
-		return nil
+	for _, ref := range NormalizeImageRefs(imageRefs) {
+		if _, err := ensured.do(ctx, imageKey(ref), func() (struct{}, error) {
+			return struct{}{}, ensureImage(ctx, ref, buildRoot)
+		}); err != nil {
+			return err
+		}
 	}
+	return nil
+}
+
+// ensured holds the images ensured by this process, by imageKey.
+var ensured onceByKey[struct{}]
+
+// imageKey identifies the Docker image a reference names, so that references
+// naming one image, such as "sonic" and "sonic:latest", share its build and
+// its version. A reference Docker cannot parse is its own key.
+func imageKey(ref string) string {
+	named, err := reference.ParseNormalizedNamed(ref)
+	if err != nil {
+		return ref
+	}
+	return reference.TagNameOnly(named).String()
+}
+
+// ensureImage builds or pulls the given reference.
+func ensureImage(ctx context.Context, ref string, buildRoot string) error {
 	if buildRoot == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -126,15 +153,12 @@ func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) err
 		}
 		buildRoot = cwd
 	}
-
 	buildRoot, err := ResolveBuildRoot(buildRoot)
 	if err != nil {
 		return err
 	}
 	slog.Info("resolved build root", "path", buildRoot)
 
-	refs := NormalizeImageRefs(imageRefs)
-	slog.Info("checking images", "refs", refs)
 	cli, err := NewClient()
 	if err != nil {
 		return fmt.Errorf("failed to create docker client: %w", err)
@@ -143,27 +167,23 @@ func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) err
 		_ = cli.Close()
 	}()
 
-	for _, ref := range refs {
-
-		plan := planImage(ref)
-		start := time.Now()
-		switch plan.kind {
-		case imageBuildSonicRemote, imageBuildSonicLocal:
-			slog.Info("building image", "ref", ref, "clientSrc", plan.clientSrc)
-			if err := buildImage(ctx, buildRoot, ref, plan.clientSrc); err != nil {
-				return err
-			}
-		case imageBuildNone:
-			slog.Info("pulling image", "ref", ref)
-			if err := pullImage(ctx, cli, ref); err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("unsupported image plan for %q", ref)
+	plan := planImage(ref)
+	start := time.Now()
+	switch plan.kind {
+	case imageBuildSonicRemote, imageBuildSonicLocal:
+		slog.Info("building image", "ref", ref, "clientSrc", plan.clientSrc)
+		if err := buildImage(ctx, buildRoot, ref, plan.clientSrc); err != nil {
+			return err
 		}
-		slog.Info("image ready", "ref", ref, "took", time.Since(start))
+	case imageBuildNone:
+		slog.Info("pulling image", "ref", ref)
+		if err := pullImage(ctx, cli, ref); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unsupported image plan for %q", ref)
 	}
-
+	slog.Info("image ready", "ref", ref, "took", time.Since(start))
 	return nil
 }
 

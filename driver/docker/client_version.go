@@ -46,7 +46,7 @@ func ClientVersions(ctx context.Context, imageRefs []string) ([]string, error) {
 
 	versions := make([]string, 0, len(refs))
 	for _, ref := range refs {
-		version, err := clientVersion(ctx, ref)
+		version, err := clientVersionOf(ctx, ref)
 		if err != nil {
 			return nil, err
 		}
@@ -54,6 +54,17 @@ func ClientVersions(ctx context.Context, imageRefs []string) ([]string, error) {
 	}
 	slog.Info("resolved client versions", "refs", refs, "versions", versions)
 	return versions, nil
+}
+
+// versions holds the versions images reported, by imageKey.
+var versions onceByKey[string]
+
+// clientVersionOf returns the version the client of the given image reports,
+// asking each image once.
+func clientVersionOf(ctx context.Context, image string) (string, error) {
+	return versions.do(ctx, imageKey(image), func() (string, error) {
+		return clientVersion(ctx, image)
+	})
 }
 
 // clientVersion runs the client of the given locally available image to have it
