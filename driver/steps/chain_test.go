@@ -112,6 +112,25 @@ func TestNetworkBlockHeight_IsTheHighestOfTheNodes(t *testing.T) {
 	require.Equal(t, uint64(12), height)
 }
 
+// A node catching up keeps growing while the network is halted; the wait
+// follows the most advanced node, so it neither passes nor resets its stall
+// timeout on the growth of one that is behind.
+func TestWaitForBlocks_FailsWithAStall_WhenOnlyANodeBehindIsGrowing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	halted := rpc.NewMockClient(ctrl)
+	halted.EXPECT().BlockNumber(gomock.Any()).Return(uint64(100), nil).AnyTimes()
+	halted.EXPECT().Close()
+	catchingUp := rpc.NewMockClient(ctrl)
+	catchingUp.EXPECT().BlockNumber(gomock.Any()).DoAndReturn(growingBlockHeight()).AnyTimes()
+	catchingUp.EXPECT().Close()
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{nodeServing(ctrl, halted), nodeServing(ctrl, catchingUp)})
+	setBlockProductionTimeout(t, 300*time.Millisecond)
+
+	err := WaitForBlocks(t.Context(), net, 1)
+	require.ErrorContains(t, err, "no block produced")
+}
+
 // clientWithBlockNumbers returns an RPC client answering BlockNumber from
 // heights, expecting reads calls, or any number if negative.
 func clientWithBlockNumbers(

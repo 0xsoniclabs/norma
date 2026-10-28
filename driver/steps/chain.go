@@ -82,6 +82,10 @@ func waitForBlocks(ctx context.Context, height func(context.Context) (uint64, er
 		}
 		block, err := blockNumber()
 		if err != nil {
+			// A read the stall deadline cut short is reported as the stall.
+			if time.Since(grownAt) > blockProductionTimeout && ctx.Err() == nil {
+				continue
+			}
 			return fmt.Errorf("failed to get block number: %w", err)
 		}
 		if block > height {
