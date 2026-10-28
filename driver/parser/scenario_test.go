@@ -629,7 +629,7 @@ Scenario:
 	require.Len(t, scenario.Steps, 1)
 }
 
-func TestParseBytes_Timeouts(t *testing.T) {
+func TestParseBytes_ReadsTimeoutBudgets_WhenDurationsAreProvided(t *testing.T) {
 	input := `
 Name: Timeouts Test
 Timeouts:
@@ -644,7 +644,7 @@ Scenario:
 	require.Equal(t, 30*time.Second, scenario.Timeouts.WithDefaults().ValidatorActivation)
 }
 
-func TestCheck_NegativeTimeout(t *testing.T) {
+func TestCheck_RejectsTimeouts_WhenABudgetIsNegative(t *testing.T) {
 	scenario := Scenario{
 		Name:        "Negative",
 		Description: "A test scenario.",

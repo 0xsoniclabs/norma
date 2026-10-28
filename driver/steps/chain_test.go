@@ -125,7 +125,7 @@ func TestWaitForNodeSync_Fails_WhenTheBudgetRunsOut(t *testing.T) {
 	require.ErrorContains(t, err, "at block 5")
 }
 
-func TestWaitForNodeSync_ReturnsOnceTheTargetIsReached(t *testing.T) {
+func TestWaitForNodeSync_Returns_WhenTheTargetIsReached(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	client := rpc.NewMockClient(ctrl)
 	client.EXPECT().BlockNumber(gomock.Any()).DoAndReturn(growingBlockHeight()).Times(3)
