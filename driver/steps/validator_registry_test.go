@@ -159,6 +159,20 @@ func TestFundDelegator_UsesSystemTransactionNode_WhenTreasuryFundsDelegator(t *t
 	require.ErrorContains(t, err, "no nodes")
 }
 
+// The ID of a new validator follows the last registered one, so it must be
+// read from the node that confirmed the previous registration; a node a block
+// behind would hand out that ID again. A DialRandomRpc call would be
+// unexpected on this mock.
+func TestRegisterNewValidator_UsesSystemTransactionNode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().DialSystemRpc().Return(nil, fmt.Errorf("no nodes"))
+
+	registry := netBasedValidatorRegistry{net: net}
+	_, err := registry.RegisterNewValidator(context.Background(), 1)
+	require.ErrorContains(t, err, "no nodes")
+}
+
 func TestMissingValidators_ReportsWhatTheSetDoesNotHold(t *testing.T) {
 	require.Empty(t, missingValidators([]int{2, 3}, []int{1, 2, 3}))
 	require.Equal(t, []int{3}, missingValidators([]int{2, 3}, []int{1, 2}))

@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver"
+	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/norma/driver/steps"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -67,15 +68,14 @@ func TestStartNode_AwaitsBlockProductionUnlessExpectedToFail(t *testing.T) {
 	require.False(t, (&StartNode{Failing: true}).AwaitsBlockProduction())
 }
 
-// startEnv returns an environment on a network with no reachable node, so
-// the step's sync target defaults to block 0, and records the configs of the
-// nodes the step creates.
+// startEnv returns an environment on an empty network, so the step has no
+// block to sync to, and records the configs of the nodes the step creates.
 func startEnv(
 	t *testing.T, ctrl *gomock.Controller, registry steps.ValidatorRegistry,
 ) (*steps.Env, func() []driver.NodeConfig) {
 	t.Helper()
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().DialRandomRpc().Return(nil, errors.New("no nodes")).AnyTimes()
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 
 	var mu sync.Mutex
 	var configs []driver.NodeConfig
@@ -202,4 +202,32 @@ func TestStartNode_RestartsOnlyNodesNormaDrives(t *testing.T) {
 
 	step := &StartNode{Node: steps.Node{Node: "foreign"}}
 	require.ErrorContains(t, step.Run(t.Context(), env), "is not an OperaNode")
+}
+
+// A node that does not catch up with the network fails the step: whatever
+// the scenario does next assumes it is part of the network.
+func TestStartNode_Fails_WhenTheNodeDoesNotSync(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	head := rpc.NewMockClient(ctrl)
+	head.EXPECT().BlockNumber(gomock.Any()).Return(uint64(10), nil).AnyTimes()
+	head.EXPECT().Close().AnyTimes()
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().DialRandomRpc().Return(head, nil).AnyTimes()
+	net.EXPECT().CreateNode(gomock.Any()).DoAndReturn(func(config *driver.NodeConfig) (driver.Node, error) {
+		node := driver.NewMockNode(ctrl)
+		node.EXPECT().GetLabel().Return(config.Name).AnyTimes()
+		node.EXPECT().DialRpc(gomock.Any()).Return(nil, errors.New("not ready")).AnyTimes()
+		return node, nil
+	})
+
+	err := (&StartNode{Node: steps.Node{Node: "obs"}}).Run(t.Context(), steps.NewEnv(net, nil, nil))
+	require.ErrorContains(t, err, "node obs did not reach block 11")
+}
+
+func TestStartNode_Fails_WhenTheSyncTargetCannotBeRead(t *testing.T) {
+	net := driver.NewMockNetwork(gomock.NewController(t))
+	net.EXPECT().DialRandomRpc().Return(nil, errors.New("no reachable node")).AnyTimes()
+
+	err := (&StartNode{Node: steps.Node{Node: "obs"}}).Run(t.Context(), steps.NewEnv(net, nil, nil))
+	require.ErrorContains(t, err, "failed to determine sync target for obs: no reachable node")
 }

@@ -488,7 +488,8 @@ func (n *LocalNetwork) dialAnyRpc() (rpcdriver.Client, string, error) {
 
 // DialSystemRpc returns a client for the node that carries transactions sent
 // from the shared system account (fakenet key 1) — epoch advances and rule
-// updates.
+// updates — and validator registrations, which read the ID of the last
+// registered validator.
 //
 // Those transactions form a single nonce sequence, and their nonce is read from
 // the pending state of whichever node they are submitted through. Nodes observe

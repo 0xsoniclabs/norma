@@ -18,8 +18,8 @@ package steps
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -34,11 +34,12 @@ var blockProductionTimeout = 2 * time.Minute
 // confirming it is actively processing transactions.
 func WaitForBlockProduction(ctx context.Context, net driver.Network) error {
 	client, err := net.DialRandomRpc()
-	if err != nil {
-		// If we can't connect, log and proceed — the next step will fail
-		// with a more descriptive error if the network is truly down.
-		slog.Warn("skipping block production wait", "error", err)
+	if errors.Is(err, driver.ErrEmptyNetwork) {
+		// Without a node, there is no block production to wait for.
 		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to connect to the network: %w", err)
 	}
 	defer client.Close()
 	return WaitForBlocks(ctx, client, 1)

@@ -18,10 +18,12 @@ package steps
 
 import (
 	"context"
+	"errors"
 	"math"
 	"testing"
 	"time"
 
+	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -95,4 +97,20 @@ func setBlockProductionTimeout(t *testing.T, timeout time.Duration) {
 	original := blockProductionTimeout
 	blockProductionTimeout = timeout
 	t.Cleanup(func() { blockProductionTimeout = original })
+}
+
+// A network no node of which answers is not producing blocks, so the wait
+// between steps must not pass without having seen one.
+func TestWaitForBlockProduction_Fails_WhenNoNodeCanBeDialled(t *testing.T) {
+	net := driver.NewMockNetwork(gomock.NewController(t))
+	net.EXPECT().DialRandomRpc().Return(nil, errors.New("no reachable node"))
+
+	require.ErrorContains(t, WaitForBlockProduction(t.Context(), net), "no reachable node")
+}
+
+func TestWaitForBlockProduction_Passes_OnAnEmptyNetwork(t *testing.T) {
+	net := driver.NewMockNetwork(gomock.NewController(t))
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork)
+
+	require.NoError(t, WaitForBlockProduction(t.Context(), net))
 }
