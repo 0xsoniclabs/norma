@@ -97,6 +97,7 @@ type ethRpcClient interface {
 // rpcClient is a subset of the RPC client interface that is used by the application.
 type rpcClient interface {
 	Call(result any, method string, args ...any) error
+	CallContext(ctx context.Context, result any, method string, args ...any) error
 }
 
 type Impl struct {
@@ -110,28 +111,38 @@ func (r Impl) Call(result any, method string, args ...any) error {
 }
 
 func (r Impl) WaitTransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
+	// A caller's deadline governs the wait; without one, txReceiptTimeout does.
+	waitCtx := ctx
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		waitCtx, cancel = context.WithTimeout(ctx, r.txReceiptTimeout)
+		defer cancel()
+	}
+
 	// Wait for the response with some exponential backoff.
 	const maxDelay = 5 * time.Second
-	begin := time.Now()
 	delay := time.Millisecond
-	for time.Since(begin) < r.txReceiptTimeout {
-		if err := ctx.Err(); err != nil {
-			return nil, fmt.Errorf("aborted while waiting for transaction receipt: %w", err)
-		}
-		receipt, err := r.transactionReceipt(txHash)
+	for waitCtx.Err() == nil {
+		receipt, err := r.transactionReceipt(waitCtx, txHash)
 		if errors.Is(err, ethereum.NotFound) {
 			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("aborted while waiting for transaction receipt: %w", ctx.Err())
+			case <-waitCtx.Done():
 			case <-time.After(delay):
 			}
 			delay = min(2*delay, maxDelay)
 			continue
 		}
-		if err != nil {
+		if err != nil && waitCtx.Err() == nil {
 			return nil, fmt.Errorf("failed to get transaction receipt: %w", err)
 		}
-		return receipt, nil
+		if err == nil {
+			return receipt, nil
+		}
+	}
+	// The pool is only asked when the cutoff, not the caller, ended the wait:
+	// a caller out of time must not wait for one more request.
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("aborted while waiting for transaction receipt: %w", err)
 	}
 
 	status, err := r.GetTransactionPoolStatus(txHash)
@@ -196,9 +207,9 @@ func (r Impl) GetNetworkRules(block string) (opera.Rules, error) {
 	return *rules, nil
 }
 
-func (r Impl) transactionReceipt(txHash common.Hash) (*types.Receipt, error) {
+func (r Impl) transactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
 	var result map[string]any
-	err := r.Call(&result, "eth_getTransactionReceipt", txHash)
+	err := r.CallContext(ctx, &result, "eth_getTransactionReceipt", txHash)
 	if err != nil {
 		return nil, err
 	}

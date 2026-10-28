@@ -20,7 +20,7 @@ func TestNewContext_DoesNotDeployHelperContract(t *testing.T) {
 
 	mockRpc := rpc.NewMockClient(ctrl)
 	factory := NewMockRpcClientFactory(ctrl)
-	factory.EXPECT().DialSystemRpc().Return(mockRpc, nil)
+	factory.EXPECT().DialSystemRpc(gomock.Any()).Return(mockRpc, nil)
 
 	mockRpc.EXPECT().Close()
 
@@ -45,7 +45,7 @@ func TestFundAccounts_AttemptsToDeployHelperOnFirstCall(t *testing.T) {
 
 	mockRpc := rpc.NewMockClient(ctrl)
 	factory := NewMockRpcClientFactory(ctrl)
-	factory.EXPECT().DialSystemRpc().Return(mockRpc, nil)
+	factory.EXPECT().DialSystemRpc(gomock.Any()).Return(mockRpc, nil)
 
 	ctx, err := NewContext(context.Background(), factory, nil, genesis.NetworkRulesPatch{})
 	if err != nil {
@@ -88,7 +88,7 @@ func TestAppContext_FundAccounts_AdvancesNonceWithoutRereadingIt(t *testing.T) {
 
 	mockRpc := rpc.NewMockClient(ctrl)
 	factory := NewMockRpcClientFactory(ctrl)
-	factory.EXPECT().DialSystemRpc().Return(mockRpc, nil)
+	factory.EXPECT().DialSystemRpc(gomock.Any()).Return(mockRpc, nil)
 
 	// Fakenet validator 1, the account the treasury holds.
 	const treasuryKey = "163f5f0f9a621d72fedd85ffca3d08d131ab4e812181e0d30ffd1c885d20aac7"

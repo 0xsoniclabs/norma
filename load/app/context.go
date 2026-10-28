@@ -52,7 +52,7 @@ type RpcClientFactory interface {
 
 	// DialSystemRpc returns a client for the node that carries transactions sent
 	// from the shared system account, which the treasury is. See NewContext.
-	DialSystemRpc() (rpc.Client, error)
+	DialSystemRpc(ctx context.Context) (rpc.Client, error)
 }
 
 // NewContext initializes an application context bound to the node that carries
@@ -72,7 +72,7 @@ func NewContext(ctx context.Context, factory RpcClientFactory, treasury *Account
 	// several nodes lets one read a nonce another has already spent. Sharing the
 	// driver's pinned node keeps that single sequence in order. Generated load
 	// still reaches the network through its own clients.
-	rpcClient, err := factory.DialSystemRpc()
+	rpcClient, err := factory.DialSystemRpc(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to network: %w", err)
 	}

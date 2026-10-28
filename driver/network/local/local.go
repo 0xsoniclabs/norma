@@ -445,13 +445,13 @@ func (n *LocalNetwork) RegisterTransactionObserver(observer driver.TransactionOb
 }
 
 func (n *LocalNetwork) DialRandomRpc() (rpcdriver.Client, error) {
-	client, _, err := n.dialAnyRpc()
+	client, _, err := n.dialAnyRpc(n.ctx)
 	return client, err
 }
 
 // dialAnyRpc dials a randomly chosen reachable node, reporting which one it
 // settled on so callers that need to keep using it can remember the label.
-func (n *LocalNetwork) dialAnyRpc() (rpcdriver.Client, string, error) {
+func (n *LocalNetwork) dialAnyRpc(ctx context.Context) (rpcdriver.Client, string, error) {
 	nodes := n.GetActiveNodes()
 	if len(nodes) == 0 {
 		return nil, "", driver.ErrEmptyNetwork
@@ -469,13 +469,13 @@ func (n *LocalNetwork) dialAnyRpc() (rpcdriver.Client, string, error) {
 	perm := rand.Perm(len(reliable))
 	for _, i := range perm {
 		chosen := reliable[i]
-		client, err := chosen.DialRpc(n.ctx)
+		client, err := chosen.DialRpc(ctx)
 		if err != nil {
 			slog.Warn("node unreachable in DialRandomRpc, skipping",
 				"node", chosen.GetLabel(), "error", err)
 			continue
 		}
-		if probeErr := probeRpc(client); probeErr != nil {
+		if probeErr := probeRpc(ctx, client); probeErr != nil {
 			slog.Warn("node not responding in DialRandomRpc, skipping",
 				"node", chosen.GetLabel(), "error", probeErr)
 			client.Close()
@@ -503,12 +503,12 @@ func (n *LocalNetwork) dialAnyRpc() (rpcdriver.Client, string, error) {
 // reports the nonce following it. The pin is only re-chosen when the node it
 // names has become unreachable, which is also the one moment the hazard can
 // return — unavoidable, since the sequence has to continue somewhere.
-func (n *LocalNetwork) DialSystemRpc() (rpcdriver.Client, error) {
+func (n *LocalNetwork) DialSystemRpc(ctx context.Context) (rpcdriver.Client, error) {
 	n.systemRpcMu.Lock()
 	defer n.systemRpcMu.Unlock()
 
 	if n.systemRpcLabel != "" {
-		client, err := n.dialRpcByLabel(n.systemRpcLabel)
+		client, err := n.dialRpcByLabel(ctx, n.systemRpcLabel)
 		if err == nil {
 			return client, nil
 		}
@@ -516,7 +516,7 @@ func (n *LocalNetwork) DialSystemRpc() (rpcdriver.Client, error) {
 			"node", n.systemRpcLabel, "error", err)
 	}
 
-	client, label, err := n.dialAnyRpc()
+	client, label, err := n.dialAnyRpc(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -526,16 +526,16 @@ func (n *LocalNetwork) DialSystemRpc() (rpcdriver.Client, error) {
 
 // dialRpcByLabel dials the named node, failing if it is not active or does not
 // answer.
-func (n *LocalNetwork) dialRpcByLabel(label string) (rpcdriver.Client, error) {
+func (n *LocalNetwork) dialRpcByLabel(ctx context.Context, label string) (rpcdriver.Client, error) {
 	for _, node := range n.GetActiveNodes() {
 		if string(node.GetLabel()) != label {
 			continue
 		}
-		client, err := node.DialRpc(n.ctx)
+		client, err := node.DialRpc(ctx)
 		if err != nil {
 			return nil, err
 		}
-		if err := probeRpc(client); err != nil {
+		if err := probeRpc(ctx, client); err != nil {
 			client.Close()
 			return nil, fmt.Errorf("node %q is not answering: %w", label, err)
 		}
@@ -551,15 +551,15 @@ const rpcProbeTimeout = 2 * time.Second
 // probeRpc reports whether a dialled client actually answers. A node can accept
 // a connection while its RPC serves nothing, so dialling alone does not
 // establish that it is usable.
-func probeRpc(client rpcdriver.Client) error {
-	ctx, cancel := context.WithTimeout(context.Background(), rpcProbeTimeout)
+func probeRpc(ctx context.Context, client rpcdriver.Client) error {
+	ctx, cancel := context.WithTimeout(ctx, rpcProbeTimeout)
 	defer cancel()
 	_, err := client.BlockNumber(ctx)
 	return err
 }
 
 func (n *LocalNetwork) ApplyNetworkRules(ctx context.Context, rules driver.NetworkRules) error {
-	client, err := n.DialSystemRpc()
+	client, err := n.DialSystemRpc(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to connect to network: %w", err)
 	}
@@ -569,7 +569,7 @@ func (n *LocalNetwork) ApplyNetworkRules(ctx context.Context, rules driver.Netwo
 }
 
 func (n *LocalNetwork) AdvanceEpoch(ctx context.Context, epochIncrement int) error {
-	client, err := n.DialSystemRpc()
+	client, err := n.DialSystemRpc(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to connect to network: %w", err)
 	}

@@ -836,7 +836,9 @@ func TestRun_KeepsCallerDeadline_WhenLongerThanDefault(t *testing.T) {
 	scenario := parser.Scenario{
 		Name:        "Deadline",
 		Description: "Test scenario.",
-		Steps:       parser.Steps{&wait.WaitForEpoch{}},
+		// A budget longer than the deadline leaves the deadline to the caller.
+		Timeouts: steps.Timeouts{EpochChange: 3 * DefaultScenarioTimeout},
+		Steps:    parser.Steps{&wait.WaitForEpoch{}},
 	}
 
 	require.NoError(t, runChecked(t, ctx, net, &scenario, nil, nil))

@@ -8,6 +8,10 @@ Description: >-
   seconds to reach the head the network reached without it — so a node that
   cannot re-join after a long absence fails the scenario.
 
+Timeouts:
+  # The budget the restart below asserts on; the gap is sized against it.
+  NodeSync: 60s
+
 InitialNetworkRules:
   Emitter:
     # A third of the default 600ms event interval, so the chain accumulates
@@ -70,7 +74,7 @@ Scenario:
 
   # The gap. Load keeps running, so the chain grows the whole time the node
   # is absent. Kept to 150s deliberately: at 180s a measured run closed the
-  # gap in 32s of the runner's 60s sync budget, and a release test wants
+  # gap in 32s of the 60s NodeSync budget, and a release test wants
   # more headroom than that on a slower machine.
   - waitFor: 150s
 

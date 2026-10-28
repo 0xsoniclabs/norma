@@ -737,7 +737,7 @@ func TestLocalNetwork_DialSystemRpc_ReturnsSameNodeOnEveryCall(t *testing.T) {
 
 	var first string
 	for i := range 5 {
-		client, err := net.DialSystemRpc()
+		client, err := net.DialSystemRpc(t.Context())
 		require.NoError(err, "call %d", i+1)
 		client.Close()
 
@@ -782,7 +782,7 @@ func TestLocalNetwork_ProbeRpc_FailsWhenNodeAcceptsButDoesNotAnswer(t *testing.T
 			client := rpc.NewMockClient(gomock.NewController(t))
 			test.blockNumber(client)
 
-			err := probeRpc(client)
+			err := probeRpc(t.Context(), client)
 			if test.wantErr {
 				require.Error(err)
 				return
@@ -865,7 +865,7 @@ func TestLocalNetworkAdvanceEpoch_Success(t *testing.T) {
 	defer client.Close()
 
 	// get original epoch
-	originalEpoch, err := network.GetCurrentEpoch(client)
+	originalEpoch, err := network.GetCurrentEpoch(t.Context(), client)
 	if err != nil {
 		t.Fatalf("failed to get current epoch: %v", err)
 	}
@@ -875,7 +875,7 @@ func TestLocalNetworkAdvanceEpoch_Success(t *testing.T) {
 		t.Errorf("failed to advance epoch: %v", err)
 	}
 
-	newEpoch, err := network.GetCurrentEpoch(client)
+	newEpoch, err := network.GetCurrentEpoch(t.Context(), client)
 	if err != nil {
 		t.Fatalf("failed to get new epoch: %v", err)
 	}

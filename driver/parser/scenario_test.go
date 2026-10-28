@@ -629,6 +629,31 @@ Scenario:
 	require.Len(t, scenario.Steps, 1)
 }
 
+func TestParseBytes_ReadsTimeoutBudgets_WhenDurationsAreProvided(t *testing.T) {
+	input := `
+Name: Timeouts Test
+Timeouts:
+  NodeSync: 90s
+  EpochChange: 2m
+Scenario:
+  - advanceEpoch
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+	require.Equal(t, steps.Timeouts{NodeSync: 90 * time.Second, EpochChange: 2 * time.Minute}, scenario.Timeouts)
+	require.Equal(t, 30*time.Second, scenario.Timeouts.WithDefaults().ValidatorActivation)
+}
+
+func TestCheck_RejectsTimeouts_WhenABudgetIsNegative(t *testing.T) {
+	scenario := Scenario{
+		Name:        "Negative",
+		Description: "A test scenario.",
+		Timeouts:    steps.Timeouts{NodeSync: -time.Second},
+		Steps:       Steps{&network.AdvanceEpoch{}},
+	}
+	require.ErrorContains(t, scenario.Check(), "timeouts must not be negative")
+}
+
 func TestParseBytes_UnknownFunction(t *testing.T) {
 	input := `
 Name: Bad Function

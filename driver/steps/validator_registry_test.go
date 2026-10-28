@@ -140,11 +140,7 @@ func TestEnsureValidatorsActive_Fails_WhenAValidatorNeverJoinsTheSet(t *testing.
 
 	// Negative, so the deadline is unambiguously in the past after the first
 	// poll and the test does not depend on the clock advancing.
-	original := validatorActivationTimeout
-	validatorActivationTimeout = -1
-	t.Cleanup(func() { validatorActivationTimeout = original })
-
-	registry := netBasedValidatorRegistry{net: net}
+	registry := netBasedValidatorRegistry{net: net, timeouts: Timeouts{ValidatorActivation: -1}}
 	err := registry.EnsureValidatorsActive(context.Background(), []int{2, 3})
 	require.ErrorContains(t, err, "validators [3] did not join")
 	require.ErrorContains(t, err, "active validators are [1 2]")
@@ -156,11 +152,32 @@ func TestEnsureValidatorsActive_Fails_WhenAValidatorNeverJoinsTheSet(t *testing.
 func TestFundDelegator_UsesSystemTransactionNode_WhenTreasuryFundsDelegator(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().DialSystemRpc().Return(nil, fmt.Errorf("no nodes"))
+	net.EXPECT().DialSystemRpc(gomock.Any()).Return(nil, fmt.Errorf("no nodes"))
 
 	registry := netBasedValidatorRegistry{net: net}
 	err := registry.FundDelegator(context.Background(), common.Address{}, 1)
 	require.ErrorContains(t, err, "no nodes")
+}
+
+// A set that is complete only once the activation budget has run out is
+// reported as late; the budget is what the step asserts.
+func TestEnsureValidatorsActive_Fails_WhenTheSetCompletesAfterTheBudget(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	set := []int64{1, 2}
+	client := sfcClientReporting(t, ctrl, 7, &set)
+	client.EXPECT().BlockNumber(gomock.Any()).
+		DoAndReturn(growingBlockHeight()).AnyTimes()
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().DialRandomRpc().Return(client, nil).AnyTimes()
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{nodeServing(ctrl, client)}).AnyTimes()
+	net.EXPECT().AdvanceEpoch(gomock.Any(), 1).DoAndReturn(func(context.Context, int) error {
+		set = append(set, 3)
+		return nil
+	})
+
+	registry := netBasedValidatorRegistry{net: net, timeouts: Timeouts{ValidatorActivation: -1}}
+	err := registry.EnsureValidatorsActive(context.Background(), []int{2, 3})
+	require.ErrorContains(t, err, "validators [2 3] joined the validator set only after")
 }
 
 // The ID of a new validator follows the last registered one, so it must be
@@ -170,7 +187,7 @@ func TestFundDelegator_UsesSystemTransactionNode_WhenTreasuryFundsDelegator(t *t
 func TestRegisterNewValidator_UsesSystemTransactionNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().DialSystemRpc().Return(nil, fmt.Errorf("no nodes"))
+	net.EXPECT().DialSystemRpc(gomock.Any()).Return(nil, fmt.Errorf("no nodes"))
 
 	registry := netBasedValidatorRegistry{net: net}
 	_, err := registry.RegisterNewValidator(context.Background(), 1)

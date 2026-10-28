@@ -120,33 +120,58 @@ func dialNodes(ctx context.Context, net driver.Network) ([]rpc.Client, error) {
 	return network.DialNodes(ctx, nodes)
 }
 
-// WaitForNodeSync waits until the given node has synced to at least the target block height.
-func WaitForNodeSync(ctx context.Context, node driver.Node, targetBlock uint64) error {
-	client, err := node.DialRpc(ctx)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-
-	const syncTimeout = 60 * time.Second
-	deadline := time.Now().Add(syncTimeout)
-
-	for time.Now().Before(deadline) {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		block, err := client.BlockNumber(ctx)
+// WaitForNodeSync waits until the given node has synced to at least the target
+// block height, failing if it has not within budget.
+func WaitForNodeSync(ctx context.Context, node driver.Node, targetBlock uint64, budget time.Duration) error {
+	return withBudget(ctx, budget, func(ctx context.Context) error {
+		client, err := node.DialRpc(ctx)
 		if err != nil {
-			time.Sleep(500 * time.Millisecond)
-			continue
+			return err
 		}
-		if block >= targetBlock {
-			return nil
+		defer client.Close()
+
+		var block uint64
+		for {
+			// A read that fails is retried, as the node may still be starting.
+			if block, err = client.BlockNumber(ctx); err == nil && block >= targetBlock {
+				return nil
+			}
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("node did not sync to block %d, at block %d: %w", targetBlock, block, ctx.Err())
+			case <-time.After(200 * time.Millisecond):
+			}
 		}
-		time.Sleep(200 * time.Millisecond)
+	})
+}
+
+// AdvanceEpoch seals the current epoch of the network, failing if the next one
+// has not begun within budget.
+func AdvanceEpoch(ctx context.Context, net driver.Network, budget time.Duration) error {
+	return withBudget(ctx, budget, func(ctx context.Context) error {
+		return net.AdvanceEpoch(ctx, 1)
+	})
+}
+
+// WaitForEpochChange waits until the network begins a new epoch, failing if it
+// has not within budget.
+func WaitForEpochChange(ctx context.Context, net driver.Network, budget time.Duration) error {
+	return withBudget(ctx, budget, net.WaitForEpochChange)
+}
+
+// withBudget runs wait with a context bounded by budget, reporting the budget
+// if it ran out before the surrounding context did. A wait that completes only
+// after its budget fails too.
+func withBudget(ctx context.Context, budget time.Duration, wait func(context.Context) error) error {
+	waitCtx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+	err := wait(waitCtx)
+	if err == nil {
+		// Done only after the budget, or the surrounding context, ran out.
+		err = waitCtx.Err()
 	}
-	return fmt.Errorf("node did not sync to block %d within %s", targetBlock, syncTimeout)
+	if err != nil && ctx.Err() == nil && waitCtx.Err() != nil {
+		return fmt.Errorf("not done within %v: %w", budget, err)
+	}
+	return err
 }

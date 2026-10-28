@@ -32,10 +32,6 @@ import (
 
 //go:generate mockgen -source validator_registry.go -destination validator_registry_mock.go -package steps
 
-// validatorActivationTimeout bounds how long EnsureValidatorsActive waits for a
-// sealed epoch to propagate to the node it queries. Var so tests can shorten it.
-var validatorActivationTimeout = 30 * time.Second
-
 // ValidatorRegistry abstracts how an executor registers, activates and
 // unregisters validator nodes with the network, and how it moves stake
 // between external delegator accounts and those validators.
@@ -62,18 +58,20 @@ type ValidatorRegistry interface {
 // ValidatorRegistry: it registers and unregisters validators against a live
 // network via RPC.
 type netBasedValidatorRegistry struct {
-	net driver.Network
+	net      driver.Network
+	timeouts Timeouts
 }
 
-// NewValidatorRegistry returns the ValidatorRegistry acting on net.
-func NewValidatorRegistry(net driver.Network) ValidatorRegistry {
-	return netBasedValidatorRegistry{net: net}
+// NewValidatorRegistry returns the ValidatorRegistry acting on net, sealing
+// epochs and awaiting validators within the given budgets.
+func NewValidatorRegistry(net driver.Network, timeouts Timeouts) ValidatorRegistry {
+	return netBasedValidatorRegistry{net: net, timeouts: timeouts}
 }
 
 func (a netBasedValidatorRegistry) RegisterNewValidator(ctx context.Context, stake uint64) (int, error) {
 	// The ID of a new validator follows the last one registered, so it has to
 	// be read from the node that confirmed the previous registration.
-	rpcClient, err := a.net.DialSystemRpc()
+	rpcClient, err := a.net.DialSystemRpc(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect to RPC; %v", err)
 	}
@@ -132,7 +130,8 @@ func (a netBasedValidatorRegistry) EnsureValidatorsActive(ctx context.Context, v
 		)
 	}
 
-	if err := a.net.AdvanceEpoch(ctx, 1); err != nil {
+	timeouts := a.timeouts.WithDefaults()
+	if err := AdvanceEpoch(ctx, a.net, timeouts.EpochChange); err != nil {
 		return fmt.Errorf(
 			"failed to seal epoch to activate validators %v; %w",
 			validatorIds, err,
@@ -144,10 +143,42 @@ func (a netBasedValidatorRegistry) EnsureValidatorsActive(ctx context.Context, v
 	// failed read is treated like a set that has not caught up yet, since a
 	// node that is restarting or briefly unresponsive recovers well within the
 	// timeout; it is only reported once the deadline expires.
-	deadline := time.Now().Add(validatorActivationTimeout)
+	// The reads share the budget, so one a node never answers cannot hold up
+	// the step past it.
+	activationCtx, cancel := context.WithTimeout(ctx, timeouts.ValidatorActivation)
+	defer cancel()
+	var active, missing []int
+	var readErr error
 	for {
-		active, readErr := network.GetActiveValidatorIDs(ctx, rpcClient)
-		missing := missingValidators(validatorIds, active)
+		var read []int
+		if read, readErr = network.GetActiveValidatorIDs(activationCtx, rpcClient); readErr == nil {
+			active, missing = read, missingValidators(validatorIds, read)
+		}
+		// A set completed only after the budget is a late one.
+		if activationCtx.Err() != nil {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if active == nil {
+				return fmt.Errorf(
+					"failed to read the validator set while waiting %s for "+
+						"validators %v to join; %w",
+					timeouts.ValidatorActivation, validatorIds, readErr,
+				)
+			}
+			if len(missing) == 0 {
+				return fmt.Errorf(
+					"validators %v joined the validator set only after %s of "+
+						"sealing the epoch",
+					validatorIds, timeouts.ValidatorActivation,
+				)
+			}
+			return fmt.Errorf(
+				"validators %v did not join the validator set within %s of "+
+					"sealing the epoch; active validators are %v",
+				missing, timeouts.ValidatorActivation, active,
+			)
+		}
 		if readErr == nil && len(missing) == 0 {
 			slog.Info("validators joined the validator set",
 				"validators", validatorIds,
@@ -156,24 +187,8 @@ func (a netBasedValidatorRegistry) EnsureValidatorsActive(ctx context.Context, v
 			return nil
 		}
 
-		if time.Now().After(deadline) {
-			if readErr != nil {
-				return fmt.Errorf(
-					"failed to read the validator set while waiting %s for "+
-						"validators %v to join; %w",
-					validatorActivationTimeout, validatorIds, readErr,
-				)
-			}
-			return fmt.Errorf(
-				"validators %v did not join the validator set within %s of "+
-					"sealing the epoch; active validators are %v",
-				missing, validatorActivationTimeout, active,
-			)
-		}
-
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
+		case <-activationCtx.Done():
 		case <-time.After(200 * time.Millisecond):
 		}
 	}
@@ -246,7 +261,7 @@ func (a netBasedValidatorRegistry) FundDelegator(
 	// to go through the node that carries that account's nonce sequence. The
 	// other registry operations sign with per-validator or per-delegator keys
 	// and are free to use any node.
-	rpcClient, err := a.net.DialSystemRpc()
+	rpcClient, err := a.net.DialSystemRpc(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to connect to RPC; %v", err)
 	}

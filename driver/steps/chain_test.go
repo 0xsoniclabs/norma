@@ -112,6 +112,38 @@ func TestNetworkBlockHeight_IsTheHighestOfTheNodes(t *testing.T) {
 	require.Equal(t, uint64(12), height)
 }
 
+// A node that does not reach its target within the budget fails the wait,
+// rather than holding up the scenario until its own deadline.
+func TestWaitForNodeSync_Fails_WhenTheBudgetRunsOut(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	client := rpc.NewMockClient(ctrl)
+	client.EXPECT().BlockNumber(gomock.Any()).Return(uint64(5), nil).AnyTimes()
+	client.EXPECT().Close()
+
+	err := WaitForNodeSync(t.Context(), nodeServing(ctrl, client), 10, 50*time.Millisecond)
+	require.ErrorContains(t, err, "not done within 50ms")
+	require.ErrorContains(t, err, "at block 5")
+}
+
+func TestWaitForNodeSync_Returns_WhenTheTargetIsReached(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	client := rpc.NewMockClient(ctrl)
+	client.EXPECT().BlockNumber(gomock.Any()).DoAndReturn(growingBlockHeight()).Times(3)
+	client.EXPECT().Close()
+
+	require.NoError(t, WaitForNodeSync(t.Context(), nodeServing(ctrl, client), 3, time.Minute))
+}
+
+// A wait that only completes after its budget is too late, even if it reports
+// success: the budget is what the step asserts.
+func TestWithBudget_Fails_WhenTheWaitCompletesAfterTheBudget(t *testing.T) {
+	err := withBudget(t.Context(), time.Millisecond, func(ctx context.Context) error {
+		<-ctx.Done()
+		return nil
+	})
+	require.ErrorContains(t, err, "not done within 1ms")
+}
+
 // A node catching up keeps growing while the network is halted; the wait
 // follows the most advanced node, so it neither passes nor resets its stall
 // timeout on the growth of one that is behind.
@@ -129,6 +161,18 @@ func TestWaitForBlocks_FailsWithAStall_WhenOnlyANodeBehindIsGrowing(t *testing.T
 
 	err := WaitForBlocks(t.Context(), net, 1)
 	require.ErrorContains(t, err, "no block produced")
+}
+
+// A wait that reports success after the scenario's own deadline is too late
+// as well; the step must not pass once the scenario is out of time.
+func TestWithBudget_Fails_WhenTheWaitCompletesAfterTheSurroundingDeadline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond)
+	defer cancel()
+	err := withBudget(ctx, time.Minute, func(ctx context.Context) error {
+		<-ctx.Done()
+		return nil
+	})
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
 // clientWithBlockNumbers returns an RPC client answering BlockNumber from
