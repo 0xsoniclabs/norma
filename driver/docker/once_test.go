@@ -40,15 +40,16 @@ func TestOnceByKey_RunsTheWorkOnce_ForConcurrentCallers(t *testing.T) {
 // may build an image for minutes.
 func TestOnceByKey_StopsWaiting_WhenTheCallersContextEnds(t *testing.T) {
 	var once onceByKey[int]
-	release := make(chan struct{})
+	started, release := make(chan struct{}), make(chan struct{})
 	t.Cleanup(func() { close(release) })
 	go func() {
 		_, _ = once.do(context.Background(), "key", func() (int, error) {
+			close(started)
 			<-release
 			return 1, nil
 		})
 	}()
-	time.Sleep(10 * time.Millisecond)
+	<-started
 
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 	defer cancel()
