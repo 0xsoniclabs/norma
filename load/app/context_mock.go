@@ -10,6 +10,7 @@
 package app
 
 import (
+	context "context"
 	big "math/big"
 	reflect "reflect"
 
@@ -198,16 +199,16 @@ func (mr *MockRpcClientFactoryMockRecorder) DialRandomRpc() *gomock.Call {
 }
 
 // DialSystemRpc mocks base method.
-func (m *MockRpcClientFactory) DialSystemRpc() (rpc.Client, error) {
+func (m *MockRpcClientFactory) DialSystemRpc(ctx context.Context) (rpc.Client, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DialSystemRpc")
+	ret := m.ctrl.Call(m, "DialSystemRpc", ctx)
 	ret0, _ := ret[0].(rpc.Client)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DialSystemRpc indicates an expected call of DialSystemRpc.
-func (mr *MockRpcClientFactoryMockRecorder) DialSystemRpc() *gomock.Call {
+func (mr *MockRpcClientFactoryMockRecorder) DialSystemRpc(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DialSystemRpc", reflect.TypeOf((*MockRpcClientFactory)(nil).DialSystemRpc))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DialSystemRpc", reflect.TypeOf((*MockRpcClientFactory)(nil).DialSystemRpc), ctx)
 }

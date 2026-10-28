@@ -71,7 +71,7 @@ func NewValidatorRegistry(net driver.Network, timeouts Timeouts) ValidatorRegist
 func (a netBasedValidatorRegistry) RegisterNewValidator(ctx context.Context, stake uint64) (int, error) {
 	// The ID of a new validator follows the last one registered, so it has to
 	// be read from the node that confirmed the previous registration.
-	rpcClient, err := a.net.DialSystemRpc()
+	rpcClient, err := a.net.DialSystemRpc(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect to RPC; %v", err)
 	}
@@ -254,7 +254,7 @@ func (a netBasedValidatorRegistry) FundDelegator(
 	// to go through the node that carries that account's nonce sequence. The
 	// other registry operations sign with per-validator or per-delegator keys
 	// and are free to use any node.
-	rpcClient, err := a.net.DialSystemRpc()
+	rpcClient, err := a.net.DialSystemRpc(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to connect to RPC; %v", err)
 	}

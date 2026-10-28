@@ -139,8 +139,10 @@ func (r Impl) WaitTransactionReceipt(ctx context.Context, txHash common.Hash) (*
 			return receipt, nil
 		}
 	}
-	if errors.Is(ctx.Err(), context.Canceled) {
-		return nil, fmt.Errorf("aborted while waiting for transaction receipt: %w", ctx.Err())
+	// The pool is only asked when the cutoff, not the caller, ended the wait:
+	// a caller out of time must not wait for one more request.
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("aborted while waiting for transaction receipt: %w", err)
 	}
 
 	status, err := r.GetTransactionPoolStatus(txHash)

@@ -215,3 +215,27 @@ func TestRpcClientImpl_WaitTransactionReceipt_WaitsUntilTheCallersDeadline(t *te
 		t.Fatalf("expected the receipt, got %v", err)
 	}
 }
+
+// A caller out of time gets its error at once, without a request for the
+// pool status that an unresponsive node would never answer.
+func TestRpcClientImpl_WaitTransactionReceipt_DoesNotAskThePool_WhenTheCallersDeadlinePasses(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	mock := NewMockrpcClient(ctrl)
+	client := Impl{
+		rpcClient:        mock,
+		txReceiptTimeout: time.Hour,
+	}
+	mock.EXPECT().
+		CallContext(gomock.Any(), gomock.Any(), "eth_getTransactionReceipt", gomock.Any()).
+		Return(nil).
+		AnyTimes()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancel()
+	_, err := client.WaitTransactionReceipt(ctx, common.Hash{})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected the caller's deadline, got %v", err)
+	}
+}

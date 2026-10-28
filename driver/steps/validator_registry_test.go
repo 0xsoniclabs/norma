@@ -152,7 +152,7 @@ func TestEnsureValidatorsActive_Fails_WhenAValidatorNeverJoinsTheSet(t *testing.
 func TestFundDelegator_UsesSystemTransactionNode_WhenTreasuryFundsDelegator(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().DialSystemRpc().Return(nil, fmt.Errorf("no nodes"))
+	net.EXPECT().DialSystemRpc(gomock.Any()).Return(nil, fmt.Errorf("no nodes"))
 
 	registry := netBasedValidatorRegistry{net: net}
 	err := registry.FundDelegator(context.Background(), common.Address{}, 1)
@@ -187,7 +187,7 @@ func TestEnsureValidatorsActive_Fails_WhenTheSetCompletesAfterTheBudget(t *testi
 func TestRegisterNewValidator_UsesSystemTransactionNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().DialSystemRpc().Return(nil, fmt.Errorf("no nodes"))
+	net.EXPECT().DialSystemRpc(gomock.Any()).Return(nil, fmt.Errorf("no nodes"))
 
 	registry := netBasedValidatorRegistry{net: net}
 	_, err := registry.RegisterNewValidator(context.Background(), 1)
