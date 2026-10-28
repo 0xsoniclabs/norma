@@ -166,6 +166,13 @@ func (a netBasedValidatorRegistry) EnsureValidatorsActive(ctx context.Context, v
 					timeouts.ValidatorActivation, validatorIds, readErr,
 				)
 			}
+			if len(missing) == 0 {
+				return fmt.Errorf(
+					"validators %v joined the validator set only after %s of "+
+						"sealing the epoch",
+					validatorIds, timeouts.ValidatorActivation,
+				)
+			}
 			return fmt.Errorf(
 				"validators %v did not join the validator set within %s of "+
 					"sealing the epoch; active validators are %v",

@@ -11,6 +11,7 @@ import (
 	"github.com/0xsoniclabs/sonic/opera"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -211,9 +212,8 @@ func TestRpcClientImpl_WaitTransactionReceipt_WaitsUntilTheCallersDeadline(t *te
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	if _, err := client.WaitTransactionReceipt(ctx, common.Hash{}); err != nil {
-		t.Fatalf("expected the receipt, got %v", err)
-	}
+	_, err := client.WaitTransactionReceipt(ctx, common.Hash{})
+	require.NoError(t, err)
 }
 
 // A caller out of time gets its error at once, without a request for the
@@ -235,7 +235,5 @@ func TestRpcClientImpl_WaitTransactionReceipt_DoesNotAskThePool_WhenTheCallersDe
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
 	defer cancel()
 	_, err := client.WaitTransactionReceipt(ctx, common.Hash{})
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("expected the caller's deadline, got %v", err)
-	}
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 }

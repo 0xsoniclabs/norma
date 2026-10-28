@@ -177,7 +177,7 @@ func TestEnsureValidatorsActive_Fails_WhenTheSetCompletesAfterTheBudget(t *testi
 
 	registry := netBasedValidatorRegistry{net: net, timeouts: Timeouts{ValidatorActivation: -1}}
 	err := registry.EnsureValidatorsActive(context.Background(), []int{2, 3})
-	require.ErrorContains(t, err, "did not join the validator set within")
+	require.ErrorContains(t, err, "validators [2 3] joined the validator set only after")
 }
 
 // The ID of a new validator follows the last registered one, so it must be
