@@ -95,6 +95,25 @@ func (mr *MockClientMockRecorder) Call(result, method any, args ...any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Call", reflect.TypeOf((*MockClient)(nil).Call), varargs...)
 }
 
+// CallContext mocks base method.
+func (m *MockClient) CallContext(ctx context.Context, result any, method string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, result, method}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CallContext", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CallContext indicates an expected call of CallContext.
+func (mr *MockClientMockRecorder) CallContext(ctx, result, method any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, result, method}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CallContext", reflect.TypeOf((*MockClient)(nil).CallContext), varargs...)
+}
+
 // CallContract mocks base method.
 func (m *MockClient) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	m.ctrl.T.Helper()
@@ -677,4 +696,23 @@ func (mr *MockrpcClientMockRecorder) Call(result, method any, args ...any) *gomo
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{result, method}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Call", reflect.TypeOf((*MockrpcClient)(nil).Call), varargs...)
+}
+
+// CallContext mocks base method.
+func (m *MockrpcClient) CallContext(ctx context.Context, result any, method string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, result, method}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CallContext", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CallContext indicates an expected call of CallContext.
+func (mr *MockrpcClientMockRecorder) CallContext(ctx, result, method any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, result, method}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CallContext", reflect.TypeOf((*MockrpcClient)(nil).CallContext), varargs...)
 }

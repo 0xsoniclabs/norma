@@ -41,6 +41,10 @@ func (s *Scenario) Check() error {
 		errs = append(errs, fmt.Errorf("invalid initial network rules: %w", err))
 	}
 
+	if err := s.Timeouts.Validate(); err != nil {
+		errs = append(errs, err)
+	}
+
 	// Validate each step.
 	for i, step := range s.Steps {
 		if err := step.Validate(); err != nil {

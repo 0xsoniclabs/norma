@@ -282,7 +282,7 @@ func (s *StartNode) Run(ctx context.Context, env *steps.Env) error {
 	if targetBlock > 0 && !s.Failing {
 		for _, node := range newNodes {
 			slog.Info("waiting for node to sync", "node", node.GetLabel(), "target_block", targetBlock)
-			if err := steps.WaitForNodeSync(ctx, node, targetBlock+1); err != nil {
+			if err := steps.WaitForNodeSync(ctx, node, targetBlock+1, env.Timeouts.NodeSync); err != nil {
 				return fmt.Errorf("node %s did not reach block %d: %w", node.GetLabel(), targetBlock+1, err)
 			}
 		}

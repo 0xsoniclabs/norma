@@ -32,10 +32,6 @@ import (
 
 //go:generate mockgen -source validator_registry.go -destination validator_registry_mock.go -package steps
 
-// validatorActivationTimeout bounds how long EnsureValidatorsActive waits for a
-// sealed epoch to propagate to the node it queries. Var so tests can shorten it.
-var validatorActivationTimeout = 30 * time.Second
-
 // ValidatorRegistry abstracts how an executor registers, activates and
 // unregisters validator nodes with the network, and how it moves stake
 // between external delegator accounts and those validators.
@@ -62,12 +58,14 @@ type ValidatorRegistry interface {
 // ValidatorRegistry: it registers and unregisters validators against a live
 // network via RPC.
 type netBasedValidatorRegistry struct {
-	net driver.Network
+	net      driver.Network
+	timeouts Timeouts
 }
 
-// NewValidatorRegistry returns the ValidatorRegistry acting on net.
-func NewValidatorRegistry(net driver.Network) ValidatorRegistry {
-	return netBasedValidatorRegistry{net: net}
+// NewValidatorRegistry returns the ValidatorRegistry acting on net, sealing
+// epochs and awaiting validators within the given budgets.
+func NewValidatorRegistry(net driver.Network, timeouts Timeouts) ValidatorRegistry {
+	return netBasedValidatorRegistry{net: net, timeouts: timeouts}
 }
 
 func (a netBasedValidatorRegistry) RegisterNewValidator(ctx context.Context, stake uint64) (int, error) {
@@ -132,7 +130,8 @@ func (a netBasedValidatorRegistry) EnsureValidatorsActive(ctx context.Context, v
 		)
 	}
 
-	if err := a.net.AdvanceEpoch(ctx, 1); err != nil {
+	timeouts := a.timeouts.WithDefaults()
+	if err := AdvanceEpoch(ctx, a.net, timeouts.EpochChange); err != nil {
 		return fmt.Errorf(
 			"failed to seal epoch to activate validators %v; %w",
 			validatorIds, err,
@@ -144,7 +143,7 @@ func (a netBasedValidatorRegistry) EnsureValidatorsActive(ctx context.Context, v
 	// failed read is treated like a set that has not caught up yet, since a
 	// node that is restarting or briefly unresponsive recovers well within the
 	// timeout; it is only reported once the deadline expires.
-	deadline := time.Now().Add(validatorActivationTimeout)
+	deadline := time.Now().Add(timeouts.ValidatorActivation)
 	for {
 		active, readErr := network.GetActiveValidatorIDs(ctx, rpcClient)
 		missing := missingValidators(validatorIds, active)
@@ -161,13 +160,13 @@ func (a netBasedValidatorRegistry) EnsureValidatorsActive(ctx context.Context, v
 				return fmt.Errorf(
 					"failed to read the validator set while waiting %s for "+
 						"validators %v to join; %w",
-					validatorActivationTimeout, validatorIds, readErr,
+					timeouts.ValidatorActivation, validatorIds, readErr,
 				)
 			}
 			return fmt.Errorf(
 				"validators %v did not join the validator set within %s of "+
 					"sealing the epoch; active validators are %v",
-				missing, validatorActivationTimeout, active,
+				missing, timeouts.ValidatorActivation, active,
 			)
 		}
 

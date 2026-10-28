@@ -140,11 +140,7 @@ func TestEnsureValidatorsActive_Fails_WhenAValidatorNeverJoinsTheSet(t *testing.
 
 	// Negative, so the deadline is unambiguously in the past after the first
 	// poll and the test does not depend on the clock advancing.
-	original := validatorActivationTimeout
-	validatorActivationTimeout = -1
-	t.Cleanup(func() { validatorActivationTimeout = original })
-
-	registry := netBasedValidatorRegistry{net: net}
+	registry := netBasedValidatorRegistry{net: net, timeouts: Timeouts{ValidatorActivation: -1}}
 	err := registry.EnsureValidatorsActive(context.Background(), []int{2, 3})
 	require.ErrorContains(t, err, "validators [3] did not join")
 	require.ErrorContains(t, err, "active validators are [1 2]")

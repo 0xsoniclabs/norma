@@ -43,7 +43,7 @@ func Run(
 		network,
 		scenario,
 		checks,
-		steps.NewValidatorRegistry(network),
+		steps.NewValidatorRegistry(network, scenario.Timeouts),
 		nil,
 		nil,
 		nil,
@@ -68,7 +68,7 @@ func RunAndCaptureEventExecution(
 		network,
 		scenario,
 		checks,
-		steps.NewValidatorRegistry(network),
+		steps.NewValidatorRegistry(network, scenario.Timeouts),
 		func(execution EventExecution) {
 			executions = append(executions, execution)
 		},
@@ -116,6 +116,7 @@ func runWithObserver(
 	}
 
 	env := steps.NewEnv(network, checks, registry)
+	env.Timeouts = scenario.Timeouts.WithDefaults()
 	maps.Copy(env.ValidatorIds, genesisValidatorIds)
 
 	for i, step := range scenario.Steps {

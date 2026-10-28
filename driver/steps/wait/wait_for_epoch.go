@@ -36,5 +36,5 @@ func (*WaitForEpoch) Validate() error { return nil }
 func (*WaitForEpoch) UpdateModel(*steps.Model) error { return nil }
 
 func (*WaitForEpoch) Run(ctx context.Context, env *steps.Env) error {
-	return env.Net.WaitForEpochChange(ctx)
+	return steps.WaitForEpochChange(ctx, env.Net, env.Timeouts.EpochChange)
 }

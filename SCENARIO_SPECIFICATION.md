@@ -27,6 +27,8 @@ Description: <string>       # required
 InitialNetworkRules:        # optional, applied at genesis
   <NetworkRulesPatch>
 DisableEndChecks: <bool>    # optional, default false
+Timeouts:                   # optional, budgets of the waits steps assert on
+  <Timeouts>
 Scenario:                   # required, ordered list of steps
   - <step>
   - <step>
@@ -46,6 +48,7 @@ Scenario:                   # required, ordered list of steps
 | --------------------- | ------------------- | -------------------------------------------------------------------- |
 | `InitialNetworkRules` | `NetworkRulesPatch` | See [§4](#4-network-rules-patch). `MaxEpochDuration` defaults apply. |
 | `DisableEndChecks`    | bool                | `false`                                                              |
+| `Timeouts`            | `Timeouts`          | See [Timeouts](#timeouts).                                           |
 
 ### End-of-scenario checks
 
@@ -62,6 +65,23 @@ following steps to every scenario:
 
 Set `DisableEndChecks: true` for scenarios that intentionally halt the network
 (e.g. stopping all validators) — otherwise the automatic checks will fail.
+
+### Timeouts
+
+Some steps wait for the network and fail if it does not get there in time.
+`Timeouts` sets those budgets, as durations (`"90s"`, `"2m"`); an omitted or
+zero budget keeps its default, and a negative one is rejected.
+
+| Field                 | Default | Bounds                                                                                     |
+| --------------------- | ------- | ------------------------------------------------------------------------------------------ |
+| `NodeSync`            | `60s`   | A started or restarted node reaching the network's head.                                   |
+| `EpochChange`         | `60s`   | Sealing an epoch (`advanceEpoch`, validator activation) or awaiting one (`waitForEpoch`). |
+| `ValidatorActivation` | `30s`   | New validators joining the validator set once their epoch is sealed.                       |
+
+```yaml
+Timeouts:
+  NodeSync: 90s
+```
 
 ### Strict YAML parsing
 

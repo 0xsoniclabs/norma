@@ -39,6 +39,7 @@ type Scenario struct {
 	Description      string                    `yaml:"Description"`
 	InitialRules     genesis.NetworkRulesPatch `yaml:"InitialNetworkRules"`
 	DisableEndChecks bool                      `yaml:"DisableEndChecks,omitempty"`
+	Timeouts         steps.Timeouts            `yaml:"Timeouts,omitempty"`
 	Steps            Steps                     `yaml:"Scenario"`
 }
 

@@ -97,6 +97,7 @@ type ethRpcClient interface {
 // rpcClient is a subset of the RPC client interface that is used by the application.
 type rpcClient interface {
 	Call(result any, method string, args ...any) error
+	CallContext(ctx context.Context, result any, method string, args ...any) error
 }
 
 type Impl struct {

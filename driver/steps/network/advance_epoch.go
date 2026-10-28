@@ -41,7 +41,7 @@ func (*AdvanceEpoch) Run(ctx context.Context, env *steps.Env) error {
 	if err := steps.WaitForBlockProduction(ctx, env.Net); err != nil {
 		return err
 	}
-	if err := env.Net.AdvanceEpoch(ctx, 1); err != nil {
+	if err := steps.AdvanceEpoch(ctx, env.Net, env.Timeouts.EpochChange); err != nil {
 		return err
 	}
 	return steps.WaitForBlockProduction(ctx, env.Net)

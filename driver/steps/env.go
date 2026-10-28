@@ -44,6 +44,8 @@ type Env struct {
 	Stakes Ledger
 	// Model is what the steps run so far have done, as a dry run sees it.
 	Model *Model
+	// Timeouts are the budgets of the waits steps assert on.
+	Timeouts Timeouts
 }
 
 // NewEnv returns an Env with no nodes, apps or stakes.
@@ -52,6 +54,7 @@ func NewEnv(net driver.Network, checks checking.Checks, validators ValidatorRegi
 		Net:          net,
 		Checks:       checks,
 		Validators:   validators,
+		Timeouts:     Timeouts{}.WithDefaults(),
 		Nodes:        map[string]driver.Node{},
 		Apps:         map[string]driver.Application{},
 		NodeHistory:  map[string]bool{},

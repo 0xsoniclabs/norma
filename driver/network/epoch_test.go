@@ -1,6 +1,7 @@
 package network
 
 import (
+	"context"
 	big "math/big"
 	"testing"
 
@@ -27,8 +28,8 @@ func TestAdvanceEpoch_Success(t *testing.T) {
 	client := rpc.NewMockClient(ctrl)
 
 	// Obtaining the current epoch before advancing.
-	client.EXPECT().Call(gomock.Any(), "eth_currentEpoch").DoAndReturn(
-		func(result *hexutil.Uint64, _ string, _ ...any) error {
+	client.EXPECT().CallContext(gomock.Any(), gomock.Any(), "eth_currentEpoch").DoAndReturn(
+		func(_ context.Context, result *hexutil.Uint64, _ string, _ ...any) error {
 			*result = hexutil.Uint64(1)
 			return nil
 		},
@@ -40,8 +41,8 @@ func TestAdvanceEpoch_Success(t *testing.T) {
 	client.EXPECT().WaitTransactionReceipt(gomock.Any(), gomock.Any()).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil)
 
 	// Report the updated epoch after advancing.
-	client.EXPECT().Call(gomock.Any(), "eth_currentEpoch").DoAndReturn(
-		func(result *hexutil.Uint64, _ string, _ ...any) error {
+	client.EXPECT().CallContext(gomock.Any(), gomock.Any(), "eth_currentEpoch").DoAndReturn(
+		func(_ context.Context, result *hexutil.Uint64, _ string, _ ...any) error {
 			*result = hexutil.Uint64(2)
 			return nil
 		},
