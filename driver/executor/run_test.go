@@ -62,8 +62,8 @@ func TestRun_StartAndStopNode(t *testing.T) {
 	registry := steps.NewMockValidatorRegistry(ctrl)
 	node := driver.NewMockNode(ctrl)
 
-	// DialRandomRpc returns error so sync wait is skipped.
-	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	// An empty network has nothing to sync with or wait for.
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 	node.EXPECT().GetLabel().Return("validator-A").AnyTimes()
 	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 
@@ -103,7 +103,7 @@ func TestRun_StartNode_ForwardsCustomStake(t *testing.T) {
 	node := driver.NewMockNode(ctrl)
 
 	net.EXPECT().DialRandomRpc().
-		Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+		Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 	node.EXPECT().GetLabel().Return("heavy").AnyTimes()
 	node.EXPECT().DialRpc(gomock.Any()).
 		Return(nil, fmt.Errorf("not ready")).AnyTimes()
@@ -145,7 +145,7 @@ func TestRun_UndelegateSingleInstanceWithSuffix(t *testing.T) {
 	node := driver.NewMockNode(ctrl)
 
 	net.EXPECT().DialRandomRpc().
-		Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+		Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 	node.EXPECT().GetLabel().Return("heavy-0").AnyTimes()
 	node.EXPECT().DialRpc(gomock.Any()).
 		Return(nil, fmt.Errorf("not ready")).AnyTimes()
@@ -205,7 +205,7 @@ func TestRun_UndelegateMultiInstance(t *testing.T) {
 			node0 := driver.NewMockNode(ctrl)
 			node1 := driver.NewMockNode(ctrl)
 
-			net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+			net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 			node0.EXPECT().GetLabel().Return("validators-0").AnyTimes()
 			node0.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 			node1.EXPECT().GetLabel().Return("validators-1").AnyTimes()
@@ -263,7 +263,7 @@ func TestRun_StopNodeWithoutUndelegate(t *testing.T) {
 	registry := steps.NewMockValidatorRegistry(ctrl)
 	node := driver.NewMockNode(ctrl)
 
-	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 	node.EXPECT().GetLabel().Return("validator-A").AnyTimes()
 	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 
@@ -301,7 +301,7 @@ func TestRun_RejoinNode(t *testing.T) {
 	node1 := driver.NewMockNode(ctrl)
 	node2 := driver.NewMockNode(ctrl)
 
-	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 	node1.EXPECT().GetLabel().Return("validator-A").AnyTimes()
 	node1.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 	node2.EXPECT().GetLabel().Return("validator-A").AnyTimes()
@@ -353,7 +353,7 @@ func TestRun_RejoinNode(t *testing.T) {
 func TestRun_RunAndStopApp(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 	app := driver.NewMockApplication(ctrl)
 
 	rate := float32(10)
@@ -386,7 +386,7 @@ func TestRun_RunAndStopApp(t *testing.T) {
 func TestRun_UpdateRules(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 	baseFee := genesis.BigIntValue(*big.NewInt(3000000000))
 
 	net.EXPECT().ApplyNetworkRules(gomock.Any(), driver.NetworkRules{
@@ -419,8 +419,8 @@ func TestRun_AdvanceEpoch(t *testing.T) {
 	net := driver.NewMockNetwork(ctrl)
 
 	net.EXPECT().AdvanceEpoch(gomock.Any(), 1).Return(nil)
-	// DialRandomRpc returns error so waitForBlockProduction is skipped.
-	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	// An empty network has no block production to wait for.
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 
 	scenario := parser.Scenario{
 		Name:        "Epoch",
@@ -438,7 +438,7 @@ func TestRun_AdvanceEpoch(t *testing.T) {
 func TestRun_Check(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 	checker := checking.NewMockChecker(ctrl)
 
 	checker.EXPECT().Check(gomock.Any()).Return(nil)
@@ -486,7 +486,7 @@ func TestRun_MultiInstanceNode(t *testing.T) {
 	node1 := driver.NewMockNode(ctrl)
 	node2 := driver.NewMockNode(ctrl)
 
-	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 	node1.EXPECT().GetLabel().Return("validators-0").AnyTimes()
 	node1.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 	node2.EXPECT().GetLabel().Return("validators-1").AnyTimes()
@@ -576,7 +576,7 @@ func TestRun_UndelegateWithDelegator_UsesDelegatorKey(t *testing.T) {
 	registry := steps.NewMockValidatorRegistry(ctrl)
 	node := driver.NewMockNode(ctrl)
 
-	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 	node.EXPECT().GetLabel().Return("heavy").AnyTimes()
 	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 
@@ -626,7 +626,7 @@ func TestRun_UndelegateWithUnknownDelegator_ReturnsError(t *testing.T) {
 	registry := steps.NewMockValidatorRegistry(ctrl)
 	node := driver.NewMockNode(ctrl)
 
-	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 	node.EXPECT().GetLabel().Return("heavy").AnyTimes()
 	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 
@@ -666,7 +666,7 @@ func TestRun_VerifyStakes_PassesWhenAllStakesMatch(t *testing.T) {
 	registry := steps.NewMockValidatorRegistry(ctrl)
 	node := driver.NewMockNode(ctrl)
 
-	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 	node.EXPECT().GetLabel().Return("heavy").AnyTimes()
 	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 
@@ -712,7 +712,7 @@ func TestRun_VerifyStakes_FailsOnMismatch(t *testing.T) {
 	registry := steps.NewMockValidatorRegistry(ctrl)
 	node := driver.NewMockNode(ctrl)
 
-	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 	node.EXPECT().GetLabel().Return("heavy").AnyTimes()
 	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 
@@ -760,7 +760,7 @@ func TestRun_VerifyStakes_ChecksFullyUndelegatedPairIsZero(t *testing.T) {
 	registry := steps.NewMockValidatorRegistry(ctrl)
 	node := driver.NewMockNode(ctrl)
 
-	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 	node.EXPECT().GetLabel().Return("heavy").AnyTimes()
 	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 
@@ -853,7 +853,7 @@ func TestRun_DoesNotActOnTheNetwork_WhenTheModelRejectsAStep(t *testing.T) {
 	registry := steps.NewMockValidatorRegistry(ctrl)
 	node := driver.NewMockNode(ctrl)
 
-	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 	node.EXPECT().GetLabel().Return("heavy").AnyTimes()
 	node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()
 	node.EXPECT().GetValidatorId().Return(new(2)).AnyTimes()
@@ -890,7 +890,7 @@ func TestRun_TracksTheObserverRole_WhenAValidatorLabelRejoinsAsAnObserver(t *tes
 	validator := driver.NewMockNode(ctrl)
 	observer := driver.NewMockNode(ctrl)
 
-	net.EXPECT().DialRandomRpc().Return(nil, fmt.Errorf("no nodes")).AnyTimes()
+	net.EXPECT().DialRandomRpc().Return(nil, driver.ErrEmptyNetwork).AnyTimes()
 	for _, node := range []*driver.MockNode{validator, observer} {
 		node.EXPECT().GetLabel().Return("flex").AnyTimes()
 		node.EXPECT().DialRpc(gomock.Any()).Return(nil, fmt.Errorf("not ready")).AnyTimes()

@@ -67,7 +67,7 @@ func RegisterValidatorNode(ctx context.Context, backend ContractBackend, stake u
 	}
 
 	if receipt.Status != types.ReceiptStatusSuccessful {
-		return 0, fmt.Errorf("failed to deploy helper contract: transaction reverted")
+		return 0, fmt.Errorf("failed to create validator %d: transaction reverted", newValId)
 	}
 
 	slog.Info("Completed registration of new validator node", "validator_id", newValId)

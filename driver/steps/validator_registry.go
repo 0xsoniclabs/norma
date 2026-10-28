@@ -71,7 +71,9 @@ func NewValidatorRegistry(net driver.Network) ValidatorRegistry {
 }
 
 func (a netBasedValidatorRegistry) RegisterNewValidator(ctx context.Context, stake uint64) (int, error) {
-	rpcClient, err := a.net.DialRandomRpc()
+	// The ID of a new validator follows the last one registered, so it has to
+	// be read from the node that confirmed the previous registration.
+	rpcClient, err := a.net.DialSystemRpc()
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect to RPC; %v", err)
 	}
