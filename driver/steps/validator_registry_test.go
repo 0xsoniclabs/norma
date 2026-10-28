@@ -159,6 +159,27 @@ func TestFundDelegator_UsesSystemTransactionNode_WhenTreasuryFundsDelegator(t *t
 	require.ErrorContains(t, err, "no nodes")
 }
 
+// A set that is complete only once the activation budget has run out is
+// reported as late; the budget is what the step asserts.
+func TestEnsureValidatorsActive_Fails_WhenTheSetCompletesAfterTheBudget(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	set := []int64{1, 2}
+	client := sfcClientReporting(t, ctrl, 7, &set)
+	client.EXPECT().BlockNumber(gomock.Any()).
+		DoAndReturn(growingBlockHeight()).AnyTimes()
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().DialRandomRpc().Return(client, nil).AnyTimes()
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{nodeServing(ctrl, client)}).AnyTimes()
+	net.EXPECT().AdvanceEpoch(gomock.Any(), 1).DoAndReturn(func(context.Context, int) error {
+		set = append(set, 3)
+		return nil
+	})
+
+	registry := netBasedValidatorRegistry{net: net, timeouts: Timeouts{ValidatorActivation: -1}}
+	err := registry.EnsureValidatorsActive(context.Background(), []int{2, 3})
+	require.ErrorContains(t, err, "did not join the validator set within")
+}
+
 // The ID of a new validator follows the last registered one, so it must be
 // read from the node that confirmed the previous registration; a node a block
 // behind would hand out that ID again. A DialRandomRpc call would be

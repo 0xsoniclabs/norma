@@ -160,12 +160,16 @@ func WaitForEpochChange(ctx context.Context, net driver.Network, budget time.Dur
 }
 
 // withBudget runs wait with a context bounded by budget, reporting the budget
-// if it ran out before the surrounding context did.
+// if it ran out before the surrounding context did. A wait that completes only
+// after its budget fails too.
 func withBudget(ctx context.Context, budget time.Duration, wait func(context.Context) error) error {
 	waitCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	err := wait(waitCtx)
-	if err != nil && ctx.Err() == nil && waitCtx.Err() != nil {
+	if ctx.Err() == nil && waitCtx.Err() != nil {
+		if err == nil {
+			err = waitCtx.Err()
+		}
 		return fmt.Errorf("not done within %v: %w", budget, err)
 	}
 	return err

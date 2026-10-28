@@ -112,6 +112,38 @@ func TestNetworkBlockHeight_IsTheHighestOfTheNodes(t *testing.T) {
 	require.Equal(t, uint64(12), height)
 }
 
+// A node that does not reach its target within the budget fails the wait,
+// rather than holding up the scenario until its own deadline.
+func TestWaitForNodeSync_Fails_WhenTheBudgetRunsOut(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	client := rpc.NewMockClient(ctrl)
+	client.EXPECT().BlockNumber(gomock.Any()).Return(uint64(5), nil).AnyTimes()
+	client.EXPECT().Close()
+
+	err := WaitForNodeSync(t.Context(), nodeServing(ctrl, client), 10, 50*time.Millisecond)
+	require.ErrorContains(t, err, "not done within 50ms")
+	require.ErrorContains(t, err, "at block 5")
+}
+
+func TestWaitForNodeSync_ReturnsOnceTheTargetIsReached(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	client := rpc.NewMockClient(ctrl)
+	client.EXPECT().BlockNumber(gomock.Any()).DoAndReturn(growingBlockHeight()).Times(3)
+	client.EXPECT().Close()
+
+	require.NoError(t, WaitForNodeSync(t.Context(), nodeServing(ctrl, client), 3, time.Minute))
+}
+
+// A wait that only completes after its budget is too late, even if it reports
+// success: the budget is what the step asserts.
+func TestWithBudget_Fails_WhenTheWaitCompletesAfterTheBudget(t *testing.T) {
+	err := withBudget(t.Context(), time.Millisecond, func(ctx context.Context) error {
+		<-ctx.Done()
+		return nil
+	})
+	require.ErrorContains(t, err, "not done within 1ms")
+}
+
 // A node catching up keeps growing while the network is halted; the wait
 // follows the most advanced node, so it neither passes nor resets its stall
 // timeout on the growth of one that is behind.
@@ -166,26 +198,4 @@ func nodeServing(ctrl *gomock.Controller, client rpc.Client) driver.Node {
 	node.EXPECT().IsExpectedFailure().Return(false).AnyTimes()
 	node.EXPECT().DialRpc(gomock.Any()).Return(client, nil).AnyTimes()
 	return node
-}
-
-// A node that does not reach its target within the budget fails the wait,
-// rather than holding up the scenario until its own deadline.
-func TestWaitForNodeSync_Fails_WhenTheBudgetRunsOut(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	client := rpc.NewMockClient(ctrl)
-	client.EXPECT().BlockNumber(gomock.Any()).Return(uint64(5), nil).AnyTimes()
-	client.EXPECT().Close()
-
-	err := WaitForNodeSync(t.Context(), nodeServing(ctrl, client), 10, 50*time.Millisecond)
-	require.ErrorContains(t, err, "not done within 50ms")
-	require.ErrorContains(t, err, "at block 5")
-}
-
-func TestWaitForNodeSync_ReturnsOnceTheTargetIsReached(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	client := rpc.NewMockClient(ctrl)
-	client.EXPECT().BlockNumber(gomock.Any()).DoAndReturn(growingBlockHeight()).Times(3)
-	client.EXPECT().Close()
-
-	require.NoError(t, WaitForNodeSync(t.Context(), nodeServing(ctrl, client), 3, time.Minute))
 }

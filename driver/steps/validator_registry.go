@@ -143,20 +143,23 @@ func (a netBasedValidatorRegistry) EnsureValidatorsActive(ctx context.Context, v
 	// failed read is treated like a set that has not caught up yet, since a
 	// node that is restarting or briefly unresponsive recovers well within the
 	// timeout; it is only reported once the deadline expires.
-	deadline := time.Now().Add(timeouts.ValidatorActivation)
+	// The reads share the budget, so one a node never answers cannot hold up
+	// the step past it.
+	activationCtx, cancel := context.WithTimeout(ctx, timeouts.ValidatorActivation)
+	defer cancel()
+	var active, missing []int
+	var readErr error
 	for {
-		active, readErr := network.GetActiveValidatorIDs(ctx, rpcClient)
-		missing := missingValidators(validatorIds, active)
-		if readErr == nil && len(missing) == 0 {
-			slog.Info("validators joined the validator set",
-				"validators", validatorIds,
-				"active_validators", active,
-			)
-			return nil
+		var read []int
+		if read, readErr = network.GetActiveValidatorIDs(activationCtx, rpcClient); readErr == nil {
+			active, missing = read, missingValidators(validatorIds, read)
 		}
-
-		if time.Now().After(deadline) {
-			if readErr != nil {
+		// A set completed only after the budget is a late one.
+		if activationCtx.Err() != nil {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if active == nil {
 				return fmt.Errorf(
 					"failed to read the validator set while waiting %s for "+
 						"validators %v to join; %w",
@@ -169,10 +172,16 @@ func (a netBasedValidatorRegistry) EnsureValidatorsActive(ctx context.Context, v
 				missing, timeouts.ValidatorActivation, active,
 			)
 		}
+		if readErr == nil && len(missing) == 0 {
+			slog.Info("validators joined the validator set",
+				"validators", validatorIds,
+				"active_validators", active,
+			)
+			return nil
+		}
 
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
+		case <-activationCtx.Done():
 		case <-time.After(200 * time.Millisecond):
 		}
 	}

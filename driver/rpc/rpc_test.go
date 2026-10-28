@@ -41,8 +41,8 @@ func TestRpcClientImpl_WaitTransactionReceipt_Success(t *testing.T) {
 	}
 
 	mock.EXPECT().
-		Call(gomock.Any(), "eth_getTransactionReceipt", gomock.Any()).
-		DoAndReturn(func(result any, method string, args ...any) error {
+		CallContext(gomock.Any(), gomock.Any(), "eth_getTransactionReceipt", gomock.Any()).
+		DoAndReturn(func(_ context.Context, result any, method string, args ...any) error {
 			resultPtr, ok := result.(*map[string]any)
 			if !ok {
 				t.Fatalf("result type is not *map[string]any")
@@ -72,8 +72,8 @@ func TestRpcClientImpl_WaitTransactionReceipt_Timeout(t *testing.T) {
 	}
 
 	mock.EXPECT().
-		Call(gomock.Any(), "eth_getTransactionReceipt", gomock.Any()).
-		DoAndReturn(func(result any, method string, args ...any) error {
+		CallContext(gomock.Any(), gomock.Any(), "eth_getTransactionReceipt", gomock.Any()).
+		DoAndReturn(func(_ context.Context, result any, method string, args ...any) error {
 			resultPtr, ok := result.(*map[string]any)
 			if !ok {
 				t.Fatalf("result type is not *map[string]any")
@@ -105,7 +105,7 @@ func TestRpcClientImpl_WaitTransactionReceipt_Error(t *testing.T) {
 	injectedError := errors.New("injectedError")
 
 	mock.EXPECT().
-		Call(gomock.Any(), "eth_getTransactionReceipt", gomock.Any()).
+		CallContext(gomock.Any(), gomock.Any(), "eth_getTransactionReceipt", gomock.Any()).
 		Return(injectedError).
 		Times(1)
 
@@ -177,5 +177,41 @@ func TestRpcClientImpl_GetNetworkRules_Error(t *testing.T) {
 
 	if _, err := client.GetNetworkRules("latest"); !errors.Is(err, injectedError) {
 		t.Fatalf("expected error %v, got %v", injectedError, err)
+	}
+}
+
+// A caller with a deadline of its own, such as a scenario's budget for sealing
+// an epoch, decides how long to wait, not the fixed cutoff for callers without.
+func TestRpcClientImpl_WaitTransactionReceipt_WaitsUntilTheCallersDeadline(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	mock := NewMockrpcClient(ctrl)
+	client := Impl{
+		rpcClient:        mock,
+		txReceiptTimeout: time.Nanosecond,
+	}
+
+	available := time.Now().Add(50 * time.Millisecond)
+	mock.EXPECT().
+		CallContext(gomock.Any(), gomock.Any(), "eth_getTransactionReceipt", gomock.Any()).
+		DoAndReturn(func(_ context.Context, result any, _ string, _ ...any) error {
+			if time.Now().After(available) {
+				*result.(*map[string]any) = map[string]any{
+					"cumulativeGasUsed": "0x0",
+					"logsBloom":         "0x" + strings.Repeat("00", 256),
+					"logs":              []map[string]any{},
+					"transactionHash":   "0x" + strings.Repeat("00", 32),
+					"gasUsed":           "0x0",
+				}
+			}
+			return nil
+		}).
+		AnyTimes()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	if _, err := client.WaitTransactionReceipt(ctx, common.Hash{}); err != nil {
+		t.Fatalf("expected the receipt, got %v", err)
 	}
 }
