@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/0xsoniclabs/norma/driver"
-	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/0xsoniclabs/norma/driver/steps"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -44,10 +43,11 @@ func TestStartNode_RestartsWithTheNodesRole_WhenTheTypeIsOmitted(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			client := &recordingClient{MockNode: driver.NewMockNode(ctrl)}
 			client.EXPECT().GetValidatorId().Return(test.validatorId).AnyTimes()
+			client.EXPECT().IsExpectedFailure().Return(false).AnyTimes()
 
 			net := driver.NewMockNetwork(ctrl)
-			// An empty network leaves nothing to catch up with after the restart.
-			net.EXPECT().GetActiveNodes().Return(nil)
+			// A network without other nodes leaves nothing to catch up with.
+			net.EXPECT().GetActiveNodes().Return([]driver.Node{client})
 			net.EXPECT().ReconnectNode(gomock.Any(), client).Return(nil)
 			net.EXPECT().ResumeNode(client)
 
@@ -62,7 +62,7 @@ func TestStartNode_RestartsWithTheNodesRole_WhenTheTypeIsOmitted(t *testing.T) {
 
 // A node expected to fail may never catch up with the network, so a restart
 // in place does not wait for it to, whether the step or the node says so. A
-// DialRpc call to wait on the node would be unexpected on this mock.
+// GetActiveNodes call to wait on the network would be unexpected on this mock.
 func TestStartNode_RestartInPlace_DoesNotWaitForCatchUp_WhenTheNodeIsExpectedToFail(t *testing.T) {
 	tests := map[string]struct {
 		stepFailing, nodeFailing bool
@@ -77,14 +77,7 @@ func TestStartNode_RestartInPlace_DoesNotWaitForCatchUp_WhenTheNodeIsExpectedToF
 			client.EXPECT().GetValidatorId().Return(nil).AnyTimes()
 			client.EXPECT().IsExpectedFailure().Return(test.nodeFailing).AnyTimes()
 
-			head := rpc.NewMockClient(ctrl)
-			head.EXPECT().BlockNumber(gomock.Any()).Return(uint64(10), nil)
-			head.EXPECT().Close()
-			headNode := driver.NewMockNode(ctrl)
-			headNode.EXPECT().IsExpectedFailure().Return(false).AnyTimes()
-			headNode.EXPECT().DialRpc(gomock.Any()).Return(head, nil)
 			net := driver.NewMockNetwork(ctrl)
-			net.EXPECT().GetActiveNodes().Return([]driver.Node{headNode})
 			net.EXPECT().ReconnectNode(gomock.Any(), client).Return(nil)
 			net.EXPECT().ResumeNode(client)
 

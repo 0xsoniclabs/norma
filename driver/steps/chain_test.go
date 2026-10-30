@@ -90,48 +90,83 @@ func TestWaitForBlockProduction_Passes_OnAnEmptyNetwork(t *testing.T) {
 	require.NoError(t, WaitForBlockProduction(t.Context(), net))
 }
 
-// A node catching up shows its height growing while the network is halted;
-// the network's height is that of its most advanced node.
-func TestNetworkBlockHeight_IsTheHighestOfTheNodes(t *testing.T) {
+// A node that does not get within syncTolerance of the network within the
+// budget fails the wait, rather than holding up the scenario until its own
+// deadline.
+func TestWaitForNodeSync_Fails_WhenTheBudgetRunsOut(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	var nodes []driver.Node
-	for _, height := range []uint64{7, 12, 9} {
-		client := rpc.NewMockClient(ctrl)
-		client.EXPECT().BlockNumber(gomock.Any()).Return(height, nil)
-		client.EXPECT().Close()
-		nodes = append(nodes, nodeServing(ctrl, client))
-	}
+	node := nodeAtBlocks(ctrl, constantBlockHeight(5))
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{node, nodeAtBlocks(ctrl, constantBlockHeight(10))})
+
+	err := WaitForNodeSync(t.Context(), net, node, 50*time.Millisecond)
+	require.ErrorContains(t, err, "not done within 50ms")
+	require.ErrorContains(t, err, "node at block 5, network at block 10")
+}
+
+func TestWaitForNodeSync_Returns_OnceWithinTheToleranceOfTheNetwork(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	client := rpc.NewMockClient(ctrl)
+	client.EXPECT().BlockNumber(gomock.Any()).DoAndReturn(growingBlockHeight()).Times(10 - syncTolerance)
+	client.EXPECT().Close()
+	node := nodeServing(ctrl, client)
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{node, nodeAtBlocks(ctrl, constantBlockHeight(10))})
+
+	require.NoError(t, WaitForNodeSync(t.Context(), net, node, time.Minute))
+}
+
+// A halted network has no block beyond those the node already has, so the
+// node is caught up once it has them.
+func TestWaitForNodeSync_Returns_OnAHaltedNetworkTheNodeHasCaughtUpWith(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	node := nodeAtBlocks(ctrl, constantBlockHeight(26))
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{node, nodeAtBlocks(ctrl, constantBlockHeight(26))})
+
+	require.NoError(t, WaitForNodeSync(t.Context(), net, node, time.Minute))
+}
+
+// The network's height is that of its most advanced node; a node expected to
+// fail is not read, as a DialRpc call on its mock would be unexpected.
+func TestWaitForNodeSync_FollowsTheMostAdvancedNodeNotExpectedToFail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	node := nodeAtBlocks(ctrl, constantBlockHeight(7))
+	failing := driver.NewMockNode(ctrl)
+	failing.EXPECT().IsExpectedFailure().Return(true).AnyTimes()
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{
+		node,
+		nodeAtBlocks(ctrl, constantBlockHeight(7)),
+		nodeAtBlocks(ctrl, constantBlockHeight(10)),
+		failing,
+	})
+
+	err := WaitForNodeSync(t.Context(), net, node, 50*time.Millisecond)
+	require.ErrorContains(t, err, "node at block 7, network at block 10")
+}
+
+// A node alone in the network has nothing to catch up with; its own height is
+// not read.
+func TestWaitForNodeSync_Returns_WithoutOtherNodes(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	node := driver.NewMockNode(ctrl)
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{node})
+
+	require.NoError(t, WaitForNodeSync(t.Context(), net, node, time.Minute))
+}
+
+func TestWaitForNodeSync_Fails_WhenNoOtherNodeCanBeDialled(t *testing.T) {
+	ctrl := gomock.NewController(t)
 	down := driver.NewMockNode(ctrl)
 	down.EXPECT().IsExpectedFailure().Return(false).AnyTimes()
 	down.EXPECT().DialRpc(gomock.Any()).Return(nil, errors.New("down"))
 	net := driver.NewMockNetwork(ctrl)
-	net.EXPECT().GetActiveNodes().Return(append(nodes, down))
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{down})
 
-	height, err := NetworkBlockHeight(t.Context(), net)
-	require.NoError(t, err)
-	require.Equal(t, uint64(12), height)
-}
-
-// A node that does not reach its target within the budget fails the wait,
-// rather than holding up the scenario until its own deadline.
-func TestWaitForNodeSync_Fails_WhenTheBudgetRunsOut(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	client := rpc.NewMockClient(ctrl)
-	client.EXPECT().BlockNumber(gomock.Any()).Return(uint64(5), nil).AnyTimes()
-	client.EXPECT().Close()
-
-	err := WaitForNodeSync(t.Context(), nodeServing(ctrl, client), 10, 50*time.Millisecond)
-	require.ErrorContains(t, err, "not done within 50ms")
-	require.ErrorContains(t, err, "at block 5")
-}
-
-func TestWaitForNodeSync_Returns_WhenTheTargetIsReached(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	client := rpc.NewMockClient(ctrl)
-	client.EXPECT().BlockNumber(gomock.Any()).DoAndReturn(growingBlockHeight()).Times(3)
-	client.EXPECT().Close()
-
-	require.NoError(t, WaitForNodeSync(t.Context(), nodeServing(ctrl, client), 3, time.Minute))
+	err := WaitForNodeSync(t.Context(), net, driver.NewMockNode(ctrl), time.Minute)
+	require.ErrorContains(t, err, "failed to dial the network: none of 1 nodes could be dialled: down")
 }
 
 // A wait that only completes after its budget is too late, even if it reports
@@ -202,6 +237,14 @@ func setBlockProductionTimeout(t *testing.T, timeout time.Duration) {
 	original := blockProductionTimeout
 	blockProductionTimeout = timeout
 	t.Cleanup(func() { blockProductionTimeout = original })
+}
+
+// nodeAtBlocks returns a node, not expected to fail, whose RPC answers
+// BlockNumber from heights.
+func nodeAtBlocks(ctrl *gomock.Controller, heights func(context.Context) (uint64, error)) driver.Node {
+	client := clientWithBlockNumbers(ctrl, heights, -1)
+	client.(*rpc.MockClient).EXPECT().Close().AnyTimes()
+	return nodeServing(ctrl, client)
 }
 
 // nodeServing returns a node, not expected to fail, whose RPC is client.

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -95,17 +96,6 @@ func waitForBlocks(ctx context.Context, height func(context.Context) (uint64, er
 	return nil
 }
 
-// NetworkBlockHeight returns the highest block the nodes of the network have
-// reached.
-func NetworkBlockHeight(ctx context.Context, net driver.Network) (uint64, error) {
-	clients, err := dialNodes(ctx, net)
-	if err != nil {
-		return 0, err
-	}
-	defer network.CloseAll(clients)
-	return network.MaxOf(ctx, clients, readBlockNumber)
-}
-
 func readBlockNumber(ctx context.Context, client rpc.Client) (uint64, error) {
 	return client.BlockNumber(ctx)
 }
@@ -120,25 +110,46 @@ func dialNodes(ctx context.Context, net driver.Network) ([]rpc.Client, error) {
 	return network.DialNodes(ctx, nodes)
 }
 
-// WaitForNodeSync waits until the given node has synced to at least the target
-// block height, failing if it has not within budget.
-func WaitForNodeSync(ctx context.Context, node driver.Node, targetBlock uint64, budget time.Duration) error {
+// syncTolerance is how many blocks a node may trail the network by and still
+// count as caught up, allowing for blocks that are still reaching it.
+const syncTolerance = 2
+
+// WaitForNodeSync waits until the given node is within syncTolerance blocks of
+// the most advanced other node of the network, failing if it has not within
+// budget. The network's height is read anew on every poll, so on a halted
+// network the node is caught up once it has the blocks the others have.
+func WaitForNodeSync(ctx context.Context, net driver.Network, node driver.Node, budget time.Duration) error {
+	others := slices.DeleteFunc(net.GetActiveNodes(), func(n driver.Node) bool { return n == node })
+	if len(others) == 0 {
+		return nil
+	}
 	return withBudget(ctx, budget, func(ctx context.Context) error {
+		peers, err := network.DialNodes(ctx, others)
+		if err != nil {
+			return fmt.Errorf("failed to dial the network: %w", err)
+		}
+		defer network.CloseAll(peers)
 		client, err := node.DialRpc(ctx)
 		if err != nil {
 			return err
 		}
 		defer client.Close()
 
-		var block uint64
+		var block, head uint64
 		for {
-			// A read that fails is retried, as the node may still be starting.
-			if block, err = client.BlockNumber(ctx); err == nil && block >= targetBlock {
+			// Reads that fail are retried, as the node may still be starting.
+			// The network is read first, so the node is never measured against
+			// a block produced after its own height was read.
+			networkHeight, networkErr := network.MaxOf(ctx, peers, readBlockNumber)
+			if networkErr == nil {
+				head = networkHeight
+			}
+			if block, err = client.BlockNumber(ctx); err == nil && networkErr == nil && block+syncTolerance >= head {
 				return nil
 			}
 			select {
 			case <-ctx.Done():
-				return fmt.Errorf("node did not sync to block %d, at block %d: %w", targetBlock, block, ctx.Err())
+				return fmt.Errorf("node at block %d, network at block %d: %w", block, head, ctx.Err())
 			case <-time.After(200 * time.Millisecond):
 			}
 		}

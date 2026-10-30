@@ -18,7 +18,6 @@ package nodelifetime
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 
@@ -48,21 +47,10 @@ func (s *StartNode) restartInPlace(ctx context.Context, env *steps.Env, existing
 		return fmt.Errorf("node %q is not an OperaNode", name)
 	}
 
-	// Capture the network's height before the node comes back, so we know
-	// how far it has to catch up.
-	targetBlock, err := steps.NetworkBlockHeight(ctx, env.Net)
-	if err != nil {
-		if !errors.Is(err, driver.ErrEmptyNetwork) {
-			return fmt.Errorf(
-				"failed to determine sync target for restart of %s: %w", name, err)
-		}
-		targetBlock = 0
-	}
 	// The node keeps the role it was started with; UpdateModel refuses a step
 	// asking for another, and an omitted type means that role.
 	validator := opera.GetValidatorId() != nil
-	slog.Info("restarting node in place",
-		"node", name, "validator", validator, "target_block", targetBlock)
+	slog.Info("restarting node in place", "node", name, "validator", validator)
 
 	if validator {
 		if err := opera.StartSonicd(ctx); err != nil {
@@ -89,11 +77,9 @@ func (s *StartNode) restartInPlace(ctx context.Context, env *steps.Env, existing
 	env.Net.ResumeNode(existing)
 
 	// A node expected to fail may never catch up, as with a fresh start.
-	if targetBlock > 0 && !s.Failing && !existing.IsExpectedFailure() {
-		if err := steps.WaitForNodeSync(ctx, existing, targetBlock+1, env.Timeouts.NodeSync); err != nil {
-			return fmt.Errorf(
-				"restarted node %s did not reach block %d: %w",
-				name, targetBlock+1, err)
+	if !s.Failing && !existing.IsExpectedFailure() {
+		if err := steps.WaitForNodeSync(ctx, env.Net, existing, env.Timeouts.NodeSync); err != nil {
+			return fmt.Errorf("restarted node %s did not catch up with the network: %w", name, err)
 		}
 	}
 
