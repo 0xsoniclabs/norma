@@ -157,6 +157,19 @@ func TestWaitForNodeSync_Returns_WithoutOtherNodes(t *testing.T) {
 	require.NoError(t, WaitForNodeSync(t.Context(), net, node, time.Minute))
 }
 
+// A node expected to fail is no reference to sync with, even when it is the
+// only other node: a DialRpc call on its mock would be unexpected.
+func TestWaitForNodeSync_Returns_WhenEveryOtherNodeIsExpectedToFail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	node := driver.NewMockNode(ctrl)
+	failing := driver.NewMockNode(ctrl)
+	failing.EXPECT().IsExpectedFailure().Return(true).AnyTimes()
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{node, failing})
+
+	require.NoError(t, WaitForNodeSync(t.Context(), net, node, time.Minute))
+}
+
 func TestWaitForNodeSync_Fails_WhenNoOtherNodeCanBeDialled(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	down := driver.NewMockNode(ctrl)
