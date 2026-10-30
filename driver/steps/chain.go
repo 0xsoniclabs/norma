@@ -28,10 +28,6 @@ import (
 	"github.com/0xsoniclabs/norma/driver/rpc"
 )
 
-// blockProductionTimeout bounds how long the chain may stand still while
-// waiting for blocks, as the network may have halted.
-var blockProductionTimeout = 2 * time.Minute
-
 // WaitForBlockProduction waits until the network produces a new block,
 // confirming it is actively processing transactions.
 func WaitForBlockProduction(ctx context.Context, net driver.Network) error {
@@ -43,9 +39,9 @@ func WaitForBlockProduction(ctx context.Context, net driver.Network) error {
 	return err
 }
 
-// WaitForBlocks waits until the network has grown by count blocks, failing
-// once it has not grown for blockProductionTimeout. The network's height is
-// the highest of its nodes, so a node catching up does not pass for growth.
+// WaitForBlocks waits until the network has grown by count blocks, for as long
+// as ctx allows. The network's height is the highest of its nodes, so a node
+// catching up does not pass for growth.
 func WaitForBlocks(ctx context.Context, net driver.Network, count uint64) error {
 	clients, err := dialNodes(ctx, net)
 	if err != nil {
@@ -57,41 +53,29 @@ func WaitForBlocks(ctx context.Context, net driver.Network, count uint64) error 
 	}, count)
 }
 
-// waitForBlocks waits until the height read by blockNumber has grown by count
-// blocks, failing once it has not grown for blockProductionTimeout.
+// waitForBlocks waits until the height read by height has grown by count
+// blocks, for as long as ctx allows.
 func waitForBlocks(ctx context.Context, height func(context.Context) (uint64, error), count uint64) error {
-	grownAt := time.Now()
-	blockNumber := func() (uint64, error) {
-		ctx, cancel := context.WithDeadline(ctx, grownAt.Add(blockProductionTimeout))
-		defer cancel()
-		return height(ctx)
-	}
-
-	baseline, err := blockNumber()
+	baseline, err := height(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get block number: %w", err)
 	}
-	for height := baseline; height-baseline < count; {
-		if time.Since(grownAt) > blockProductionTimeout {
-			return fmt.Errorf("no block produced for %v, at block %d of %d",
-				blockProductionTimeout, height-baseline, count)
-		}
+	for current := baseline; current-baseline < count; {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("context cancelled while waiting for block production: %w", ctx.Err())
+			return fmt.Errorf("no block produced after block %d, %d of %d new blocks: %w",
+				current, current-baseline, count, ctx.Err())
 		case <-time.After(100 * time.Millisecond):
 		}
-		block, err := blockNumber()
+		block, err := height(ctx)
 		if err != nil {
-			// A read the stall deadline cut short is reported as the stall.
-			if time.Since(grownAt) > blockProductionTimeout && ctx.Err() == nil {
+			// A read cut short by the deadline is reported as the stall.
+			if ctx.Err() != nil {
 				continue
 			}
 			return fmt.Errorf("failed to get block number: %w", err)
 		}
-		if block > height {
-			height, grownAt = block, time.Now()
-		}
+		current = max(current, block)
 	}
 	return nil
 }
