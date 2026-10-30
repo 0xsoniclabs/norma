@@ -38,25 +38,15 @@ func TestWaitForBlocks_ReturnsOnceCountIsProduced(t *testing.T) {
 	require.NoError(t, waitForBlocks(t.Context(), client.BlockNumber, 3))
 }
 
-func TestWaitForBlocks_WaitsPastTheTimeout_WhenBlocksKeepArriving(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	const count = 8
-	client := clientWithBlockNumbers(ctrl, growingBlockHeight(), count+1)
-	setBlockProductionTimeout(t, 500*time.Millisecond)
-
-	start := time.Now()
-	require.NoError(t, waitForBlocks(t.Context(), client.BlockNumber, count))
-	require.Greater(t, time.Since(start), blockProductionTimeout)
-}
-
-func TestWaitForBlocks_FailsWithAStall_WhenTheChainStopsGrowing(t *testing.T) {
+// A network that stops growing fails the wait once the scenario runs out of
+// time, naming the height it stopped at.
+func TestWaitForBlocks_FailsAtTheDeadline_WhenTheChainStopsGrowing(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	client := clientWithBlockNumbers(ctrl, constantBlockHeight(7), -1)
-	// Negative, so the chain counts as stalled from the first poll on.
-	setBlockProductionTimeout(t, -1)
 
-	err := waitForBlocks(t.Context(), client.BlockNumber, 3)
-	require.ErrorContains(t, err, "no block produced")
+	err := waitForBlocks(withDeadline(t, 300*time.Millisecond), client.BlockNumber, 3)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	require.ErrorContains(t, err, "no block produced after block 7, 0 of 3 new blocks")
 }
 
 // A count this large would wrap a baseline+count target below the baseline,
@@ -64,10 +54,25 @@ func TestWaitForBlocks_FailsWithAStall_WhenTheChainStopsGrowing(t *testing.T) {
 func TestWaitForBlocks_KeepsWaiting_WhenTheCountIsTheLargestUint64(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	client := clientWithBlockNumbers(ctrl, constantBlockHeight(7), -1)
-	setBlockProductionTimeout(t, -1)
 
-	err := waitForBlocks(t.Context(), client.BlockNumber, math.MaxUint64)
-	require.ErrorContains(t, err, "no block produced")
+	err := waitForBlocks(withDeadline(t, 300*time.Millisecond), client.BlockNumber, math.MaxUint64)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+// A read the deadline cuts short is the stall, not a failed read.
+func TestWaitForBlocks_ReportsTheStall_WhenTheDeadlineCutsAReadShort(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	reads := 0
+	client := clientWithBlockNumbers(ctrl, func(ctx context.Context) (uint64, error) {
+		if reads++; reads == 1 {
+			return 7, nil
+		}
+		<-ctx.Done()
+		return 0, ctx.Err()
+	}, -1)
+
+	err := waitForBlocks(withDeadline(t, 300*time.Millisecond), client.BlockNumber, 1)
+	require.ErrorContains(t, err, "no block produced after block 7")
 }
 
 // A network no node of which answers is not producing blocks, so the wait
@@ -180,8 +185,8 @@ func TestWithBudget_Fails_WhenTheWaitCompletesAfterTheBudget(t *testing.T) {
 }
 
 // A node catching up keeps growing while the network is halted; the wait
-// follows the most advanced node, so it neither passes nor resets its stall
-// timeout on the growth of one that is behind.
+// follows the most advanced node, so it does not pass on the growth of one
+// that is behind.
 func TestWaitForBlocks_FailsWithAStall_WhenOnlyANodeBehindIsGrowing(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	halted := rpc.NewMockClient(ctrl)
@@ -192,10 +197,9 @@ func TestWaitForBlocks_FailsWithAStall_WhenOnlyANodeBehindIsGrowing(t *testing.T
 	catchingUp.EXPECT().Close()
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().GetActiveNodes().Return([]driver.Node{nodeServing(ctrl, halted), nodeServing(ctrl, catchingUp)})
-	setBlockProductionTimeout(t, 300*time.Millisecond)
 
-	err := WaitForBlocks(t.Context(), net, 1)
-	require.ErrorContains(t, err, "no block produced")
+	err := WaitForBlocks(withDeadline(t, 300*time.Millisecond), net, 1)
+	require.ErrorContains(t, err, "no block produced after block 100")
 }
 
 // A wait that reports success after the scenario's own deadline is too late
@@ -233,10 +237,11 @@ func constantBlockHeight(height uint64) func(context.Context) (uint64, error) {
 	}
 }
 
-func setBlockProductionTimeout(t *testing.T, timeout time.Duration) {
-	original := blockProductionTimeout
-	blockProductionTimeout = timeout
-	t.Cleanup(func() { blockProductionTimeout = original })
+// withDeadline returns the test's context, ending after timeout.
+func withDeadline(t *testing.T, timeout time.Duration) context.Context {
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
+	t.Cleanup(cancel)
+	return ctx
 }
 
 // nodeAtBlocks returns a node, not expected to fail, whose RPC answers
