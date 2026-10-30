@@ -99,11 +99,14 @@ func dialNodes(ctx context.Context, net driver.Network) ([]rpc.Client, error) {
 const syncTolerance = 2
 
 // WaitForNodeSync waits until the given node is within syncTolerance blocks of
-// the most advanced other node of the network, failing if it has not within
-// budget. The network's height is read anew on every poll, so on a halted
-// network the node is caught up once it has the blocks the others have.
+// the most advanced other node of the network not expected to fail, failing if
+// it has not within budget. The network's height is read anew on every poll,
+// so on a halted network the node is caught up once it has the blocks the
+// others have. Without such a node, there is nothing to catch up with.
 func WaitForNodeSync(ctx context.Context, net driver.Network, node driver.Node, budget time.Duration) error {
-	others := slices.DeleteFunc(net.GetActiveNodes(), func(n driver.Node) bool { return n == node })
+	others := slices.DeleteFunc(net.GetActiveNodes(), func(n driver.Node) bool {
+		return n == node || n.IsExpectedFailure()
+	})
 	if len(others) == 0 {
 		return nil
 	}
