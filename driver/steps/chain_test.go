@@ -146,6 +146,25 @@ func TestWaitForNodeSync_FollowsTheMostAdvancedNodeNotExpectedToFail(t *testing.
 	require.ErrorContains(t, err, "node at block 7, network at block 10")
 }
 
+// A node that led the network on one poll and fails a later read still holds
+// the blocks it reported, so the node must catch up with them.
+func TestWaitForNodeSync_KeepsTheHighestHead_WhenTheLeadingNodeFailsARead(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	node := nodeAtBlocks(ctrl, constantBlockHeight(5))
+	reads := 0
+	leading := nodeAtBlocks(ctrl, func(context.Context) (uint64, error) {
+		if reads++; reads == 1 {
+			return 100, nil
+		}
+		return 0, errors.New("unavailable")
+	})
+	net := driver.NewMockNetwork(ctrl)
+	net.EXPECT().GetActiveNodes().Return([]driver.Node{node, leading, nodeAtBlocks(ctrl, constantBlockHeight(5))})
+
+	err := WaitForNodeSync(t.Context(), net, node, 500*time.Millisecond)
+	require.ErrorContains(t, err, "node at block 5, network at block 100")
+}
+
 // A node alone in the network has nothing to catch up with; its own height is
 // not read.
 func TestWaitForNodeSync_Returns_WithoutOtherNodes(t *testing.T) {

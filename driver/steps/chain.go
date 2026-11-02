@@ -142,10 +142,11 @@ func WaitForNodeSync(ctx context.Context, net driver.Network, node driver.Node, 
 		for {
 			// Reads that fail are retried, as the node may still be starting.
 			// The network is read first, so the node is never measured against
-			// a block produced after its own height was read.
+			// a block produced after its own height was read. The head only
+			// rises, so a leading node failing a read does not lower it.
 			networkHeight, networkErr := network.MaxOf(ctx, peers, readBlockNumber)
 			if networkErr == nil {
-				head = networkHeight
+				head = max(head, networkHeight)
 			}
 			if block, err = client.BlockNumber(ctx); err == nil && networkErr == nil && block+syncTolerance >= head {
 				return nil
