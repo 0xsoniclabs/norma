@@ -175,16 +175,6 @@ func (s *StartNode) Run(ctx context.Context, env *steps.Env) error {
 		image = s.ImageName
 	}
 
-	// The new nodes have to reach the network's current height before the
-	// step completes.
-	targetBlock, err := steps.NetworkBlockHeight(ctx, env.Net)
-	if err != nil {
-		if !errors.Is(err, driver.ErrEmptyNetwork) {
-			return fmt.Errorf("failed to determine sync target for %s: %w", name, err)
-		}
-		targetBlock = 0
-	}
-
 	type nodeResult struct {
 		instanceName string
 		node         driver.Node
@@ -277,13 +267,13 @@ func (s *StartNode) Run(ctx context.Context, env *steps.Env) error {
 	// Also mark the base name in history for single-instance nodes.
 	env.NodeHistory[name] = true
 
-	// Skip sync wait for nodes expected to fail (they may never reach the
-	// target), and on a network that has no blocks to catch up with yet.
-	if targetBlock > 0 && !s.Failing {
+	// The new nodes have to catch up with the network before the step
+	// completes, unless they are expected to fail and may never do so.
+	if !s.Failing {
 		for _, node := range newNodes {
-			slog.Info("waiting for node to sync", "node", node.GetLabel(), "target_block", targetBlock)
-			if err := steps.WaitForNodeSync(ctx, node, targetBlock+1, env.Timeouts.NodeSync); err != nil {
-				return fmt.Errorf("node %s did not reach block %d: %w", node.GetLabel(), targetBlock+1, err)
+			slog.Info("waiting for node to sync", "node", node.GetLabel())
+			if err := steps.WaitForNodeSync(ctx, env.Net, node, env.Timeouts.NodeSync); err != nil {
+				return fmt.Errorf("node %s did not catch up with the network: %w", node.GetLabel(), err)
 			}
 		}
 	}

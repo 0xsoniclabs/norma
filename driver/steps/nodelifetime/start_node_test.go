@@ -226,19 +226,24 @@ func TestStartNode_Fails_WhenTheNodeDoesNotSync(t *testing.T) {
 	})
 
 	err := (&StartNode{Node: steps.Node{Node: "obs"}}).Run(t.Context(), steps.NewEnv(net, nil, nil))
-	require.ErrorContains(t, err, "node obs did not reach block 11")
+	require.ErrorContains(t, err, "node obs did not catch up with the network: not ready")
 }
 
-func TestStartNode_Fails_WhenTheSyncTargetCannotBeRead(t *testing.T) {
+func TestStartNode_Fails_WhenTheNetworkCannotBeRead(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	down := driver.NewMockNode(ctrl)
 	down.EXPECT().IsExpectedFailure().Return(false).AnyTimes()
 	down.EXPECT().DialRpc(gomock.Any()).Return(nil, errors.New("no reachable node"))
 	net := driver.NewMockNetwork(ctrl)
 	net.EXPECT().GetActiveNodes().Return([]driver.Node{down})
+	net.EXPECT().CreateNode(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, config *driver.NodeConfig) (driver.Node, error) {
+		node := driver.NewMockNode(ctrl)
+		node.EXPECT().GetLabel().Return(config.Name).AnyTimes()
+		return node, nil
+	})
 
 	err := (&StartNode{Node: steps.Node{Node: "obs"}}).Run(t.Context(), steps.NewEnv(net, nil, nil))
-	require.ErrorContains(t, err, "failed to determine sync target for obs: none of 1 nodes could be dialled: no reachable node")
+	require.ErrorContains(t, err, "node obs did not catch up with the network: failed to dial the network: none of 1 nodes could be dialled: no reachable node")
 }
 
 // A validator that answers but stays behind the network fails the step once
@@ -271,6 +276,7 @@ func TestStartNode_DoesNotActivateAValidator_ThatStaysBehind(t *testing.T) {
 	env.Timeouts.NodeSync = 50 * time.Millisecond
 
 	err := (&StartNode{Node: steps.Node{Node: "slow"}, Type: "validator"}).Run(t.Context(), env)
-	require.ErrorContains(t, err, "node slow did not reach block 11")
+	require.ErrorContains(t, err, "node slow did not catch up with the network")
+	require.ErrorContains(t, err, "node at block 5, network at block 10")
 	require.ErrorContains(t, err, "not done within 50ms")
 }
