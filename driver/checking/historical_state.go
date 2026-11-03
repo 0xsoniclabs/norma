@@ -94,7 +94,7 @@ func (c *historicalStateChecker) Check(ctx context.Context) error {
 		return err
 	}
 
-	queries, emitters, err := logQueries(ctx, nodes[0].GetLabel(), clients[0], limit)
+	queries, want, emitters, err := logQueries(ctx, nodes[0].GetLabel(), clients[0], limit)
 	if err != nil {
 		return err
 	}
@@ -104,14 +104,22 @@ func (c *historicalStateChecker) Check(ctx context.Context) error {
 		return err
 	}
 	queries = append(queries, stateQueries(samples, emitters, senders)...)
+	want = append(want, make([]json.RawMessage, len(queries)-len(want))...)
 	slog.Info("comparing historical state", "up_to_block", limit, "queries", len(queries), "nodes", len(nodes))
 
 	// ponytail: nodes are queried one after another, in parallel if the
 	// check ever becomes the long pole of a scenario.
-	want := make([]json.RawMessage, len(queries))
 	for i, n := range nodes {
 		for j, q := range queries {
+			if i == 0 && want[j] != nil {
+				continue
+			}
 			got, err := q.run(ctx, clients[i])
+			if isTooManyResults(err) {
+				// The reference node served the same range within the limit.
+				return assertionf("nodes %s and %s disagree on %s: %s serves too many logs",
+					nodes[0].GetLabel(), n.GetLabel(), q, n.GetLabel())
+			}
 			if err != nil {
 				return fmt.Errorf("failed to query %s at node %s; %w", q, n.GetLabel(), err)
 			}
@@ -182,30 +190,32 @@ type logEntry struct {
 // logQueries splits the blocks up to limit into ranges the reference node
 // serves the logs of, and returns a query reading each range from the receipts
 // plus, for a range holding logs, one reading it through the log index, which
-// the reference node must answer with the same logs. It also returns every
-// address that emitted a log.
+// the reference node must answer with the same logs. It also returns the
+// reference node's result of each query and every address that emitted a log.
 func logQueries(
 	ctx context.Context, label string, reference rpc.Client, limit uint64,
-) ([]historyQuery, []common.Address, error) {
+) ([]historyQuery, []json.RawMessage, []common.Address, error) {
 	var queries []historyQuery
+	var results []json.RawMessage
 	var emitters []common.Address
 	width := uint64(unindexedLogsRange)
 	for from := uint64(0); from <= limit; {
 		to := min(from+width, limit)
 		fromReceipts := logsQuery(from, to, nil)
 		receipts, err := fromReceipts.run(ctx, reference)
-		if err != nil && to > from && strings.Contains(err.Error(), "too many results") {
+		if isTooManyResults(err) && to > from {
 			width = (to - from) / 2
 			continue
 		}
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to query %s at node %s; %w", fromReceipts, label, err)
+			return nil, nil, nil, fmt.Errorf("failed to query %s at node %s; %w", fromReceipts, label, err)
 		}
 		queries = append(queries, fromReceipts)
+		results = append(results, receipts)
 
 		var receiptLogs []logEntry
 		if err := json.Unmarshal(receipts, &receiptLogs); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		var addresses []common.Address
 		for _, l := range receiptLogs {
@@ -216,18 +226,25 @@ func logQueries(
 		if len(addresses) > 0 {
 			fromIndex := logsQuery(from, to, addresses)
 			index, err := fromIndex.run(ctx, reference)
+			if isTooManyResults(err) {
+				// Both paths share the limit, which the receipts stayed within.
+				return nil, nil, nil, assertionf(
+					"node %s serves too many logs from its log index for blocks %d-%d, "+
+						"but %d from its receipts", label, from, to, len(receiptLogs))
+			}
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to query %s at node %s; %w", fromIndex, label, err)
+				return nil, nil, nil, fmt.Errorf("failed to query %s at node %s; %w", fromIndex, label, err)
 			}
 			if !bytes.Equal(index, receipts) {
 				var indexLogs []logEntry
 				_ = json.Unmarshal(index, &indexLogs)
-				return nil, nil, assertionf(
+				return nil, nil, nil, assertionf(
 					"node %s serves %d logs from its log index for blocks %d-%d, "+
 						"but %d different ones from its receipts",
 					label, len(indexLogs), from, to, len(receiptLogs))
 			}
 			queries = append(queries, fromIndex)
+			results = append(results, index)
 		}
 		for _, a := range addresses {
 			if !slices.Contains(emitters, a) {
@@ -238,7 +255,13 @@ func logQueries(
 		from = to + 1
 		width = unindexedLogsRange
 	}
-	return queries, emitters, nil
+	return queries, results, emitters, nil
+}
+
+// isTooManyResults reports whether err is Sonic refusing a log query for
+// matching more logs than its result limit.
+func isTooManyResults(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "too many results")
 }
 
 // sampleBlocks spreads historicalStateSamples blocks evenly over 1..limit,

@@ -205,6 +205,45 @@ func TestHistoricalState_FailsWhenAnotherNodeDuplicatesIndexedLogs(t *testing.T)
 	}
 }
 
+func TestHistoricalState_FailsWhenDuplicatedIndexedLogsExceedTheResultLimit(t *testing.T) {
+	// 100 logs per range fit the limit; served twice by the index, they do not.
+	tests := map[string][]historyNode{
+		"reference": {
+			{label: "node1", height: 250, maxLogs: 150, duplicateIndexedLogs: true},
+			{label: "node2", height: 250, maxLogs: 150},
+		},
+		"other node": {
+			{label: "node1", height: 250, maxLogs: 150},
+			{label: "node2", height: 250, maxLogs: 150, duplicateIndexedLogs: true},
+		},
+	}
+	for name, nodes := range tests {
+		t.Run(name, func(t *testing.T) {
+			net, _ := historyNetwork(t, nodes...)
+
+			c := historicalStateChecker{net: net}
+			err := c.Check(t.Context())
+			if !errors.Is(err, ErrAssertion) || !strings.Contains(err.Error(), "too many logs") {
+				t.Fatalf("got %v, want an assertion on too many logs", err)
+			}
+		})
+	}
+}
+
+func TestHistoricalState_QueriesTheReferenceLogsOnce(t *testing.T) {
+	// Blocks 0-250 fall into three ranges, each read from the receipts and
+	// through the log index.
+	net, calls := historyNetwork(t, historyNode{label: "node1", height: 250})
+
+	c := historicalStateChecker{net: net}
+	if err := c.Check(t.Context()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := calls["eth_getLogs"], 6; got != want {
+		t.Errorf("got %d log queries, want %d", got, want)
+	}
+}
+
 func TestHistoricalState_PassesWhenClientVersionsServeLogsDifferently(t *testing.T) {
 	net, _ := historyNetwork(t,
 		historyNode{label: "current", height: 250},
