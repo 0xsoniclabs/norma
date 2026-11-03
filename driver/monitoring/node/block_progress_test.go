@@ -31,7 +31,6 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	mon "github.com/0xsoniclabs/norma/driver/monitoring"
-	"github.com/0xsoniclabs/norma/driver/network"
 	"github.com/ethereum/go-ethereum/rpc"
 	"go.uber.org/mock/gomock"
 )
@@ -155,33 +154,23 @@ type TestRpcServer struct {
 }
 
 func StartTestRpcServer() (*TestRpcServer, error) {
-	port, err := network.GetFreePort()
+	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
 		return nil, err
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", getBlockHeight)
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
+		Addr:    fmt.Sprintf(":%d", ln.Addr().(*net.TCPAddr).Port),
 		Handler: mux,
 	}
-	ready := make(chan error)
 	done := make(chan bool)
 	go func() {
 		defer close(done)
-		ln, err := net.Listen("tcp", server.Addr)
-		if err != nil {
-			ready <- err
-			return
-		}
-		ready <- nil
 		if err := server.Serve(ln); err != http.ErrServerClosed {
 			slog.Error("server failed", "error", err)
 		}
 	}()
-	if err := <-ready; err != nil {
-		return nil, err
-	}
 	return &TestRpcServer{server, done}, nil
 }
 
