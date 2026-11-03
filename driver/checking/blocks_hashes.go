@@ -100,7 +100,7 @@ func (c *blocksHashesChecker) Check(ctx context.Context) error {
 		return nil // all nodes are expected to fail, cannot get pivot hash, has to only end the test
 	}
 
-	limit, err := c.commonHeight(ctx, nodes, clients)
+	limit, err := commonHeight(ctx, nodes, clients)
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func (c *blocksHashesChecker) Check(ctx context.Context) error {
 // commonHeight returns the highest block that every healthy node already
 // reports as being part of its chain. Blocks up to it are settled everywhere,
 // so comparing them cannot race block production.
-func (c *blocksHashesChecker) commonHeight(
+func commonHeight(
 	ctx context.Context, nodes []driver.Node, clients []rpc.Client,
 ) (uint64, error) {
 	limit := uint64(math.MaxUint64)
@@ -148,11 +148,11 @@ func (c *blocksHashesChecker) commonHeight(
 	}
 
 	if healthy == 0 {
-		return 0, fmt.Errorf("unable to check block hashes: no reachable node")
+		return 0, fmt.Errorf("unable to compare the nodes: no reachable node")
 	}
 	if limit < minComparableBlock {
 		return 0, fmt.Errorf(
-			"unable to check block hashes: the network is only at block %d, "+
+			"unable to compare the nodes: the network is only at block %d, "+
 				"at least block %d is required",
 			limit, minComparableBlock,
 		)

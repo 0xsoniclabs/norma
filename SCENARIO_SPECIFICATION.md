@@ -499,6 +499,7 @@ function name or a mapping.
 | `blocksHalted`     | Assert every non-failing node keeps its height over a window.    | `tolerance`, `duration`, `failing`            |
 | `blocksProduced`   | Assert every non-failing node produces blocks over a window.     | `tolerance`, `duration`, `failing`            |
 | `eventThrottled`   | Assert the listed validators emit events far slower than others. | `throttledNodes`, `failing`                   |
+| `historicalState`  | Assert all nodes serve the same logs and past account state.     | `failing`                                     |
 | `networkRules`     | Assert the active rules on all nodes match the given patch.      | `rules`, `duration`, `failing`                |
 | `receiptGasUsed`   | Assert the amended nodes correct receipt gas the leaked report.  | `amended`, `leaked`, `exportEpoch`, `failing` |
 | `validatorsActive` | Assert every running validator is in the epoch's validator set.  | `failing`                                     |
@@ -517,6 +518,7 @@ recorded before that instant. There are four shapes.
 | `networkRules`   | Convergence budget     | now + budget, at entry       | Live rules, re-read until they agree   |
 | `blockHashes`    | Fixed block range      | lowest head of healthy nodes | Blocks 0…that head, settled everywhere |
 | `receiptGasUsed` | Fixed block range      | lowest head of listed nodes  | Receipts of blocks 1…that head         |
+| `historicalState`| Fixed block range      | lowest head of healthy nodes | Logs of blocks 0…that head, state at 16 samples |
 | `eventThrottled` | Two measured snapshots | each DAG head query          | Event delta ÷ the interval measured    |
 
 **Forward observation.** The check notes the current instant, waits for its
@@ -545,6 +547,14 @@ compares blocks 0 to the lowest of them. Those blocks exist on every node, so
 the walk terminates and the verdict does not depend on which node was ahead
 while it ran. Blocks above that point are left for the next check rather than
 being read as a disagreement.
+
+`historicalState` uses the same range. It compares the logs of every block,
+read both from the receipts and through the log index (a node must serve the
+same logs either way, so an index holding duplicates fails), and, at 16 blocks
+spread evenly up to the head, the balance, nonce and code of the SFC, the
+contracts that emitted logs and the senders of the sampled blocks, plus the
+first 3 storage slots of the contracts, 16 accounts at most. Nodes marked
+`failing` are left out.
 
 **Measured snapshots.** `eventThrottled` derives emission rates from two DAG
 snapshots. Walking a DAG costs one RPC per event, so the snapshots can end up
@@ -576,6 +586,7 @@ per check, with the value used when the parameter is omitted:
 | `blockHeights`   | height slack, in blocks — **5**   | convergence budget — **30s** | —                           |
 | `networkRules`   | —                                 | convergence budget — **30s** | `rules` — required          |
 | `blockHashes`    | —                                 | —                            | —                           |
+| `historicalState`| —                                 | —                            | —                           |
 | `eventThrottled` | —                                 | —                            | `throttledNodes` — required |
 | `receiptGasUsed` | —                                 | —                            | `amended`, `leaked`, `exportEpoch` — required |
 
@@ -629,6 +640,7 @@ and the cost of a check.
 | `blocksProduced`, `blocksHalted`, `blockGasRate` | Always the full window (10s by default).                                                                                     |
 | `blockHeights`, `networkRules`                   | Nothing when the network is already in the expected state; up to the budget (30s) otherwise, including when `failing: true`. |
 | `blockHashes`, `receiptGasUsed`                  | No waiting; RPC-bound, roughly one call per block per node.                                                                  |
+| `historicalState`                                | No waiting; RPC-bound, two log queries per 100 blocks plus about 1,000 state reads, per node.                                |
 | `eventThrottled`                                 | 5s plus DAG walking time per attempt, up to 5 attempts with 2s pauses.                                                       |
 
 The scenario deadline is 10 minutes, so budget the observing checks accordingly.

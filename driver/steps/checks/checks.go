@@ -42,6 +42,7 @@ var Kinds = []func() Check{
 	func() Check { return &BlocksHalted{} },
 	func() Check { return &BlocksProduced{} },
 	func() Check { return &EventThrottled{} },
+	func() Check { return &HistoricalState{} },
 	func() Check { return &NetworkRules{} },
 	func() Check { return &ReceiptGasUsed{} },
 	func() Check { return &ValidatorsActive{} },
