@@ -47,3 +47,12 @@ Scenario:
       - blocksProduced:
           tolerance: 10
 
+  # The migrated databases must pass sonictool check.
+  - stopSonic: validator-migrating
+  - checkDb: validator-migrating
+    mode: live
+  - checkDb: validator-migrating
+    mode: archive
+  - startNode: validator-migrating
+    type: validator
+

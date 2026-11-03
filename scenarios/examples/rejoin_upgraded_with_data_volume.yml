@@ -26,3 +26,22 @@ Scenario:
     dataVolume: validator-data
 
   - waitForEpoch
+
+  # The upgraded databases must pass sonictool check. stable-validator-0 is
+  # the control: never interrupted, checked the same way, with 15M of the
+  # 20M stake online while it is stopped.
+  - stopSonic: migrating-validator
+  - checkDb: migrating-validator
+    mode: live
+  - checkDb: migrating-validator
+    mode: archive
+  - startNode: migrating-validator
+    type: validator
+
+  - stopSonic: stable-validator-0
+  - checkDb: stable-validator-0
+    mode: live
+  - checkDb: stable-validator-0
+    mode: archive
+  - startNode: stable-validator-0
+    type: validator

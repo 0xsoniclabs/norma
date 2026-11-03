@@ -121,5 +121,22 @@ Scenario:
   - stopApp: one-of
   - stopApp: subsidized
 
+  # The healed nodes' state databases must pass sonictool check once they
+  # have replayed the chain. There is no control: stable alone holds quorum.
+  - stopSonic: frail-in-window
+  - stopSonic: frail
+  - checkDb: frail-in-window
+    mode: live
+  - checkDb: frail-in-window
+    mode: archive
+  - checkDb: frail
+    mode: live
+  - checkDb: frail
+    mode: archive
+  - startNode: frail-in-window
+    type: validator
+  - startNode: frail
+    type: validator
+
   - checks:
       - validatorsActive

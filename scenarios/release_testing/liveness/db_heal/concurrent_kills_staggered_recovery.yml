@@ -70,6 +70,40 @@ Scenario:
 
   - stopApp: load
 
+  # The healed nodes' state databases must pass sonictool check once they
+  # have replayed the chain.
+  - stopSonic: frail-1
+  - stopSonic: frail-2
+  - stopSonic: frail-3
+  - checkDb: frail-1
+    mode: live
+  - checkDb: frail-1
+    mode: archive
+  - checkDb: frail-2
+    mode: live
+  - checkDb: frail-2
+    mode: archive
+  - checkDb: frail-3
+    mode: live
+  - checkDb: frail-3
+    mode: archive
+  - startNode: frail-1
+    type: validator
+  - startNode: frail-2
+    type: validator
+  - startNode: frail-3
+    type: validator
+
+  # The control: never interrupted, checked the same way, with 23M of the
+  # 33M stake online while it is stopped.
+  - stopSonic: stable-0
+  - checkDb: stable-0
+    mode: live
+  - checkDb: stable-0
+    mode: archive
+  - startNode: stable-0
+    type: validator
+
   # All six validators should converge on the same chain.
   - checks:
       - blockHeights:

@@ -87,3 +87,21 @@ Scenario:
   - checks:
       - blocksProduced:
           tolerance: 10
+
+  # The migrated databases must pass sonictool check, one node per upgrade
+  # path, one at a time to keep quorum.
+  - stopSonic: validator-1
+  - checkDb: validator-1
+    mode: live
+  - checkDb: validator-1
+    mode: archive
+  - startNode: validator-1
+    type: validator
+
+  - stopSonic: validator-3
+  - checkDb: validator-3
+    mode: live
+  - checkDb: validator-3
+    mode: archive
+  - startNode: validator-3
+    type: validator
