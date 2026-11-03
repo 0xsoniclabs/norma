@@ -34,3 +34,12 @@ Scenario:
     type: validator
 
   - waitFor: 20s
+
+  # The restarted node's state databases must pass sonictool check.
+  - stopSonic: validator-transient
+  - checkDb: validator-transient
+    mode: live
+  - checkDb: validator-transient
+    mode: archive
+  - startNode: validator-transient
+    type: validator

@@ -89,6 +89,25 @@ Scenario:
   - stopApp: churn
   - stopApp: bulk
 
+  # The healed node's state databases must pass sonictool check once it has
+  # replayed the chain. stable-0 is the control: never interrupted, checked
+  # the same way, with 21M of the 31M stake online while it is stopped.
+  - stopSonic: frail
+  - checkDb: frail
+    mode: live
+  - checkDb: frail
+    mode: archive
+  - startNode: frail
+    type: validator
+
+  - stopSonic: stable-0
+  - checkDb: stable-0
+    mode: live
+  - checkDb: stable-0
+    mode: archive
+  - startNode: stable-0
+    type: validator
+
   # The recovered node must still be a member of the validator set — it was
   # never unregistered, so a node that came back as an observer is a bug.
   #
