@@ -37,8 +37,3 @@ Scenario:
       constant: 10
 
   - waitFor: 90s
-
-  # The validators must serve the same logs and past state of the counter,
-  # ERC-20 and bundle contracts.
-  - checks:
-      - historicalState

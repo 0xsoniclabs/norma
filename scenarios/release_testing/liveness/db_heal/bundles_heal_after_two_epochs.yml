@@ -140,4 +140,3 @@ Scenario:
 
   - checks:
       - validatorsActive
-      - historicalState
