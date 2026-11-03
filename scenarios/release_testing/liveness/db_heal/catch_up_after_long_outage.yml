@@ -118,3 +118,4 @@ Scenario:
   # end check, against a 10 minute scenario deadline.
   - checks:
       - validatorsActive
+      - historicalState
