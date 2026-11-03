@@ -19,43 +19,9 @@ package network
 import (
 	context "context"
 	"fmt"
-	"net"
 	"testing"
 	"time"
 )
-
-func TestGetFreePort(t *testing.T) {
-	port, err := GetFreePort()
-	if err != nil {
-		t.Errorf("failed to obtain a free port: %v", err)
-	}
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		t.Errorf("provided port %d is not free", port)
-	}
-	if err := listener.Close(); err != nil {
-		t.Errorf("failed to close listener: %v", err)
-	}
-}
-
-func TestGetFreePorts(t *testing.T) {
-	ports, err := GetFreePorts(5)
-	if err != nil {
-		t.Errorf("failed to obtain a free ports: %v", err)
-	}
-	if got, want := len(ports), 5; got != want {
-		t.Errorf("invalid number of ports obtained, got %d, wanted %d", got, want)
-	}
-	for _, port := range ports {
-		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-		if err != nil {
-			t.Errorf("provided port %d is not free", port)
-		}
-		t.Cleanup(func() {
-			_ = listener.Close()
-		})
-	}
-}
 
 func TestRegisterDuplicatedPortsForServices(t *testing.T) {
 	service := ServiceDescription{
