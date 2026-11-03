@@ -45,6 +45,9 @@ type historyNode struct {
 	duplicateIndexedLogs bool
 	// maxLogs makes a multi-block log query fail once it matches more logs.
 	maxLogs int
+	// withoutTimestamps makes the log index serve logs without the block
+	// timestamp, as client versions that predate it do.
+	withoutTimestamps bool
 }
 
 var (
@@ -113,7 +116,9 @@ func (n historyNode) answer(method string, args []any) (any, error) {
 				"removed":          false,
 			}
 			if indexed {
-				entry["blockTimestamp"] = hexutil.EncodeUint64(b)
+				if !n.withoutTimestamps {
+					entry["blockTimestamp"] = hexutil.EncodeUint64(b)
+				}
 				logs = append(logs, entry)
 				if n.duplicateIndexedLogs {
 					logs = append(logs, entry)
@@ -197,6 +202,18 @@ func TestHistoricalState_FailsWhenAnotherNodeDuplicatesIndexedLogs(t *testing.T)
 	err := c.Check(t.Context())
 	if !errors.Is(err, ErrAssertion) || !strings.Contains(err.Error(), "eth_getLogs") {
 		t.Fatalf("got %v, want an assertion on eth_getLogs", err)
+	}
+}
+
+func TestHistoricalState_PassesWhenClientVersionsServeLogsDifferently(t *testing.T) {
+	net, _ := historyNetwork(t,
+		historyNode{label: "current", height: 250},
+		historyNode{label: "legacy", height: 250, withoutTimestamps: true},
+	)
+
+	c := historicalStateChecker{net: net}
+	if err := c.Check(t.Context()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

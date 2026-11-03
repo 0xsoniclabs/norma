@@ -136,10 +136,22 @@ func (q historyQuery) String() string {
 	return fmt.Sprintf("%s%v", q.method, q.args)
 }
 
+// run returns the result of the query, with logs reduced to the fields of
+// logEntry so that client versions serving them differently still compare
+// equal.
 func (q historyQuery) run(ctx context.Context, client rpc.Client) (json.RawMessage, error) {
 	var result json.RawMessage
-	err := client.CallContext(ctx, &result, q.method, q.args...)
-	return result, err
+	if err := client.CallContext(ctx, &result, q.method, q.args...); err != nil {
+		return nil, err
+	}
+	if q.method != "eth_getLogs" {
+		return result, nil
+	}
+	var logs []logEntry
+	if err := json.Unmarshal(result, &logs); err != nil {
+		return nil, fmt.Errorf("failed to decode logs; %w", err)
+	}
+	return json.Marshal(logs)
 }
 
 func logsQuery(from, to uint64, addresses []common.Address) historyQuery {
@@ -154,7 +166,7 @@ func logsQuery(from, to uint64, addresses []common.Address) historyQuery {
 }
 
 // logEntry is a log as eth_getLogs serves it, without the block timestamp,
-// which only the log index path is sure to fill in.
+// which not every client version and query path fills in.
 type logEntry struct {
 	Address          common.Address  `json:"address"`
 	Topics           json.RawMessage `json:"topics"`
@@ -181,7 +193,7 @@ func logQueries(
 	for from := uint64(0); from <= limit; {
 		to := min(from+width, limit)
 		fromReceipts := logsQuery(from, to, nil)
-		receiptLogs, err := runLogs(ctx, reference, fromReceipts)
+		receipts, err := fromReceipts.run(ctx, reference)
 		if err != nil && to > from && strings.Contains(err.Error(), "too many results") {
 			width = (to - from) / 2
 			continue
@@ -191,6 +203,10 @@ func logQueries(
 		}
 		queries = append(queries, fromReceipts)
 
+		var receiptLogs []logEntry
+		if err := json.Unmarshal(receipts, &receiptLogs); err != nil {
+			return nil, nil, err
+		}
 		var addresses []common.Address
 		for _, l := range receiptLogs {
 			if !slices.Contains(addresses, l.Address) {
@@ -199,11 +215,13 @@ func logQueries(
 		}
 		if len(addresses) > 0 {
 			fromIndex := logsQuery(from, to, addresses)
-			indexLogs, err := runLogs(ctx, reference, fromIndex)
+			index, err := fromIndex.run(ctx, reference)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to query %s at node %s; %w", fromIndex, label, err)
 			}
-			if !slices.EqualFunc(indexLogs, receiptLogs, logEntry.equal) {
+			if !bytes.Equal(index, receipts) {
+				var indexLogs []logEntry
+				_ = json.Unmarshal(index, &indexLogs)
 				return nil, nil, assertionf(
 					"node %s serves %d logs from its log index for blocks %d-%d, "+
 						"but %d different ones from its receipts",
@@ -221,24 +239,6 @@ func logQueries(
 		width = unindexedLogsRange
 	}
 	return queries, emitters, nil
-}
-
-func runLogs(ctx context.Context, client rpc.Client, q historyQuery) ([]logEntry, error) {
-	raw, err := q.run(ctx, client)
-	if err != nil {
-		return nil, err
-	}
-	var logs []logEntry
-	if err := json.Unmarshal(raw, &logs); err != nil {
-		return nil, fmt.Errorf("failed to decode logs; %w", err)
-	}
-	return logs, nil
-}
-
-func (l logEntry) equal(other logEntry) bool {
-	a, _ := json.Marshal(l)
-	b, _ := json.Marshal(other)
-	return bytes.Equal(a, b)
 }
 
 // sampleBlocks spreads historicalStateSamples blocks evenly over 1..limit,
