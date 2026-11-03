@@ -110,3 +110,4 @@ Scenario:
           tolerance: 5
       - blockHashes
       - validatorsActive
+      - historicalState
