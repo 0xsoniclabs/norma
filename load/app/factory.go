@@ -34,6 +34,15 @@ func IsSupportedApplicationType(appType string) bool {
 	return getFactory(appType) != nil
 }
 
+var registeredFactories = map[string]appFactoryFunc{}
+
+// RegisterApplication adds an application type next to the built-in ones. It
+// lets application sources kept outside this repository be compiled into this
+// package and register themselves from an init function.
+func RegisterApplication(appType string, factory appFactoryFunc) {
+	registeredFactories[strings.ToLower(appType)] = factory
+}
+
 func getFactory(appType string) appFactoryFunc {
 	switch strings.ToLower(appType) {
 	case "erc20":
@@ -75,5 +84,5 @@ func getFactory(appType string) appFactoryFunc {
 	case "mix":
 		return NewMixApplication
 	}
-	return nil
+	return registeredFactories[strings.ToLower(appType)]
 }
