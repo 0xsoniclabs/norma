@@ -114,10 +114,11 @@ type OperaNodeConfig struct {
 	NetworkConfig *driver.NetworkConfig
 	// ValidatorPubkey is nil if not a validator, else used as pubkey for the validator.
 	ValidatorPubkey *string
-	// MountDataDir is the directory where the node should store its state.
-	// Temporary location is used if nil.
-	MountDataDir *string
-	// GenesisJsonPath is the path to the host-generated genesis file mounted into the container.
+	// DataVolume names the Docker volume the node stores its state in, so a
+	// later node with the same volume continues from it. The container's own
+	// filesystem is used if nil.
+	DataVolume *string
+	// GenesisJsonPath is the path to the host-generated genesis file copied into the container.
 	GenesisJsonPath *string
 	// ExtraArguments are additional command line arguments to pass to the node.
 	ExtraArguments string
@@ -134,8 +135,10 @@ type OperaNodeConfig struct {
 	// empty, a temporary directory is used that is removed on cleanup, so
 	// callers that want the logs to outlive the run must set this.
 	LogsDir string
-	// SharedFilesDir is the host directory mounted at sharedDir. Every node
-	// of a network gets the same one. Empty mounts nothing.
+	// SharedFilesDir is the host directory holding the files nodes exchange,
+	// such as exported g-files. Every node of a network gets the same one;
+	// files are copied between it and sharedDir in the container. Empty
+	// disables the exchange.
 	SharedFilesDir string
 	// GenesisFile names a g-file in the shared directory to bootstrap
 	// from instead of genesis.json.
@@ -288,7 +291,7 @@ func printLog(ctx context.Context, node *OperaNode) error {
 // dataDir is the path where the node stores its state inside the container.
 const dataDir = "/datadir"
 
-// sharedDir is where SharedFilesDir is mounted inside the container.
+// sharedDir holds the container's copies of files in SharedFilesDir.
 const sharedDir = "/shared"
 
 // containerShutdownTimeout bounds how long docker waits for the container
@@ -344,31 +347,12 @@ func NewOperaNode(
 		"STATE_DB_DATADIR": dataDir,
 	}
 
-	var dataDirBinding *string
-	if config.MountDataDir != nil {
-		if err := os.MkdirAll(*config.MountDataDir, 0777); err != nil {
-			cleanupTempDirs()
-			return nil, fmt.Errorf("failed to create mount data dir: %w", err)
-		}
-
-		dataDirBinding = new(string)
-		*dataDirBinding = fmt.Sprintf("%s:%s", *config.MountDataDir, dataDir)
+	volumes := map[string]string{}
+	if config.DataVolume != nil {
+		volumes[*config.DataVolume] = dataDir
 	}
 
-	genesisBind := fmt.Sprintf("%s:/genesis.json:ro", genesisJSONPath)
-
-	var sharedDirBinding *string
-	if config.SharedFilesDir != "" {
-		// Create it so docker does not make it a root-owned directory.
-		if err := os.MkdirAll(config.SharedFilesDir, 0777); err != nil {
-			cleanupTempDirs()
-			return nil, fmt.Errorf("failed to create shared files dir: %w", err)
-		}
-		sharedDirBinding = new(string)
-		*sharedDirBinding = fmt.Sprintf("%s:%s", config.SharedFilesDir, sharedDir)
-	}
-
-	keystoreBinding, keystoreTempDir, err := resolveValidatorKeystore(config, envs)
+	keystoreTempDir, err := resolveValidatorKeystore(config, envs)
 	track(keystoreTempDir)
 	if err != nil {
 		cleanupTempDirs()
@@ -390,21 +374,25 @@ func NewOperaNode(
 	shutdownTimeout := containerShutdownTimeout
 	container, err := client.Start(ctx,
 		&docker.ContainerConfig{
-			Hostname:         config.Label,
-			ImageName:        image,
-			ShutdownTimeout:  &shutdownTimeout,
-			Environment:      envs,
-			Entrypoint:       containerEntrypoint,
-			Network:          dn,
-			DataDirBinding:   dataDirBinding,
-			GenesisFileBind:  &genesisBind,
-			KeystoreBinding:  keystoreBinding,
-			SharedDirBinding: sharedDirBinding,
-			LogsDir:          &logsDir,
+			Hostname:        config.Label,
+			ImageName:       image,
+			ShutdownTimeout: &shutdownTimeout,
+			Environment:     envs,
+			Entrypoint:      containerEntrypoint,
+			Network:         dn,
+			Volumes:         volumes,
+			LogsDir:         &logsDir,
 		})
 	if err != nil {
 		cleanupTempDirs()
 		return nil, err
+	}
+
+	// The daemon need not share the driver's filesystem, so the files the
+	// node needs are copied in rather than mounted.
+	if err := provideNodeFiles(ctx, container, genesisJSONPath, keystoreTempDir); err != nil {
+		cleanupTempDirs()
+		return nil, errors.Join(err, container.Cleanup(ctx))
 	}
 
 	// Use a private copy of the config to avoid modifying the original.
@@ -491,43 +479,49 @@ func resolveGenesisFile(
 	return path, tempDir, nil
 }
 
-// resolveValidatorKeystore writes the validator keystore for validator
-// nodes and returns the bind mount exposing it to the container, if any.
-// It also records the validator identity in envs. The returned tempDir is
-// non-empty when a temporary directory was created for the keystore.
+// resolveValidatorKeystore writes the keystore of a validator node into a
+// fresh temporary directory, returned for the caller to copy into the
+// container and clean up, and records the validator identity in envs. It
+// returns "" for nodes that are not validators.
 func resolveValidatorKeystore(
 	config *OperaNodeConfig,
 	envs map[string]string,
-) (binding *string, tempDir string, err error) {
+) (tempDir string, err error) {
 	if config.ValidatorId == nil || *config.ValidatorId <= 0 {
-		return nil, "", nil
+		return "", nil
 	}
 
 	envs["VALIDATOR_PUBKEY"] = config.PubKey
 	envs["VALIDATOR_ADDRESS"] = config.Address
 
-	if config.MountDataDir != nil {
-		if err := genesis.WriteValidatorKeystore(
-			config.PrivKey, *config.MountDataDir); err != nil {
-			return nil, "", fmt.Errorf(
-				"failed to write validator keystore in mounted datadir: %w", err)
-		}
-		return nil, "", nil
-	}
-
 	tempDir, err = os.MkdirTemp("",
 		fmt.Sprintf("norma-validator-%d-*", *config.ValidatorId))
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to create validator temp dir: %w", err)
+		return "", fmt.Errorf("failed to create validator temp dir: %w", err)
 	}
 	if err := genesis.WriteValidatorKeystore(config.PrivKey, tempDir); err != nil {
-		return nil, tempDir, fmt.Errorf("failed to write validator keystore: %w", err)
+		return tempDir, fmt.Errorf("failed to write validator keystore: %w", err)
 	}
+	return tempDir, nil
+}
 
-	binding = new(string)
-	*binding = fmt.Sprintf("%s:%s/keystore:ro",
-		filepath.Join(tempDir, "keystore"), dataDir)
-	return binding, tempDir, nil
+// provideNodeFiles copies the genesis and, for validators, the keystore into
+// a new container, and creates its shared directory.
+func provideNodeFiles(ctx context.Context, container *docker.Container, genesisPath, keystoreDir string) error {
+	if genesisPath != "" {
+		if err := container.CopyTo(ctx, genesisPath, "/genesis.json"); err != nil {
+			return err
+		}
+	}
+	if keystoreDir != "" {
+		if err := container.CopyTo(ctx, filepath.Join(keystoreDir, "keystore"), dataDir+"/keystore"); err != nil {
+			return err
+		}
+	}
+	if output, err := container.Exec(ctx, []string{"mkdir", "-p", sharedDir}); err != nil {
+		return fmt.Errorf("failed to create %s: %w - output: %s", sharedDir, err, output)
+	}
+	return nil
 }
 
 // resolveLogsDir determines where the client's output is written on the
@@ -669,16 +663,6 @@ func (n *OperaNode) Stop(ctx context.Context) error {
 	if err != nil {
 		slog.Debug("client process was not stopped gracefully",
 			"node", n.GetLabel(), "error", err)
-	}
-
-	// Fix permissions on the bind-mounted datadir while the container is
-	// still running, so non-root host users can clean up afterwards.
-	if n.container != nil && n.config.MountDataDir != nil {
-		if _, err := n.container.Exec(ctx,
-			[]string{"chmod", "-R", "777", dataDir}); err != nil {
-			slog.Debug("failed to relax datadir permissions",
-				"node", n.GetLabel(), "error", err)
-		}
 	}
 
 	if n.container == nil {

@@ -21,9 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"os"
-	"path/filepath"
-	"slices"
+	"os/exec"
 	"strings"
 	"sync"
 	"testing"
@@ -998,7 +996,7 @@ func TestLocalNetwork_FailingFlagPropagated(t *testing.T) {
 
 }
 
-func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
+func TestLocalNetwork_DataVolume_Can_Be_Reused(t *testing.T) {
 	t.Parallel()
 	temp := t.TempDir()
 
@@ -1026,36 +1024,21 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 		t.Fatalf("failed to create node: %v", err)
 	}
 
-	getModificationTime := func() (time.Time, []string, error) {
-		var carmenModTime time.Time
-		var found bool
-		var visitedDirs []string
-		localDirBinding := fmt.Sprintf("%s/%s", temp, dataVolume)
-		err := filepath.Walk(localDirBinding, func(path string, info os.FileInfo, err error) error {
-			visitedDirs = append(visitedDirs, path)
-			if strings.HasSuffix(path, "transactions.rlp") {
-				carmenModTime, found = info.ModTime(), true
-			}
-			return nil
-		})
-		if err == nil && !found {
-			err = fmt.Errorf("directory contains no database files, visited %v", visitedDirs)
+	// The volume lives in Docker, so it is read through a helper container.
+	volume := net.network.Name() + "_" + dataVolume
+	getModificationTime := func() (string, error) {
+		out, err := exec.Command("docker", "run", "--rm", "-v", volume+":/d", "alpine",
+			"sh", "-c", "find /d -name transactions.rlp -exec stat -c %y {} \\;").CombinedOutput()
+		if err == nil && strings.TrimSpace(string(out)) == "" {
+			err = fmt.Errorf("volume %s contains no database files", volume)
 		}
-		return carmenModTime, visitedDirs, err
+		return strings.TrimSpace(string(out)), err
 	}
 
 	// save modification time of the database lock
-	prevModTime, prevVisitedDirs, err := getModificationTime()
+	prevModTime, err := getModificationTime()
 	if err != nil {
 		t.Fatalf("failed to get modification time: %v", err)
-	}
-
-	if !slices.ContainsFunc(
-		prevVisitedDirs,
-		func(s string) bool { return strings.Contains(s, temp) }) {
-		t.Errorf(
-			"expected at least one visited directory to contain %s, but visited %v",
-			temp, prevVisitedDirs)
 	}
 
 	// stop the node
@@ -1079,18 +1062,11 @@ func TestLocalNetwork_MountDataDir_Can_Be_Reused(t *testing.T) {
 	}
 
 	// the database lock should have been updated
-	currModTime, currVisitedDirs, err := getModificationTime()
+	currModTime, err := getModificationTime()
 	if err != nil {
 		t.Fatalf("failed to get modification time: %v", err)
 	}
-	if got, want := currModTime, prevModTime; got.Equal(want) {
-		t.Errorf("got modification time %v, wanted modification time %v", got, want)
-	}
-	if !slices.ContainsFunc(
-		currVisitedDirs,
-		func(s string) bool { return strings.Contains(s, temp) }) {
-		t.Errorf(
-			"expected at least one visited directory to contain %s, but visited %v",
-			temp, currVisitedDirs)
+	if currModTime == prevModTime {
+		t.Errorf("the database was not written again, modification time stayed %v", currModTime)
 	}
 }

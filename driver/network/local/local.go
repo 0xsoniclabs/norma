@@ -65,6 +65,10 @@ type LocalNetwork struct {
 	// suspended set.
 	nodesMutex sync.Mutex
 
+	// volumes holds the Docker volumes created for the data volumes of the
+	// scenario, removed on Shutdown. Guarded by nodesMutex.
+	volumes map[string]bool
+
 	// bootstrapped is set once the first node has joined and never resets:
 	// the chain has history from then on, so a later (re)join must not be
 	// treated as a fresh bootstrap even if all nodes have been removed in
@@ -158,6 +162,7 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 		primaryAccount: primaryAccount,
 		nodes:          map[driver.NodeID]*node.OperaNode{},
 		suspended:      map[driver.Node]bool{},
+		volumes:        map[string]bool{},
 		apps:           []driver.Application{},
 		listeners:      map[driver.NetworkListener]bool{},
 		rpcWorkerPool:  rpc.NewRpcWorkerPool(ctx),
@@ -402,10 +407,14 @@ func (n *LocalNetwork) CreateNode(ctx context.Context, config *driver.NodeConfig
 		}
 	}
 
-	var datadir *string
+	var volume *string
 	if config.DataVolume != nil {
-		datadir = new(string)
-		*datadir = fmt.Sprintf("%s/%s", n.config.OutputDir, *config.DataVolume)
+		// Named after the network, so concurrent runs do not share data.
+		volume = new(string)
+		*volume = n.network.Name() + "_" + *config.DataVolume
+		n.nodesMutex.Lock()
+		n.volumes[*volume] = true
+		n.nodesMutex.Unlock()
 	}
 
 	return n.createNode(ctx, &node.OperaNodeConfig{
@@ -415,7 +424,7 @@ func (n *LocalNetwork) CreateNode(ctx context.Context, config *driver.NodeConfig
 		NetworkConfig:   &n.config,
 		ValidatorId:     config.ValidatorId,
 		GenesisJsonPath: &n.genesisJsonPath,
-		MountDataDir:    datadir,
+		DataVolume:      volume,
 		ExtraArguments:  config.ExtraArguments,
 		GenesisFile:     config.GenesisFile,
 	})
@@ -870,7 +879,18 @@ func (n *LocalNetwork) Shutdown() error {
 		}
 	}
 
-	// Third, shut down the docker network.
+	// Third, remove the data volumes, now that no container uses them.
+	n.nodesMutex.Lock()
+	volumes := n.volumes
+	n.volumes = map[string]bool{}
+	n.nodesMutex.Unlock()
+	for volume := range volumes {
+		if err := n.docker.RemoveVolume(ctx, volume); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	// Fourth, shut down the docker network.
 	if n.network != nil {
 		if err := n.network.Cleanup(ctx); err != nil {
 			errs = append(errs, err)

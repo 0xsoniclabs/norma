@@ -18,6 +18,7 @@ package docker
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"io"
 	"os"
@@ -432,41 +433,43 @@ func createNetwork(t *testing.T) (*Client, *Network) {
 	return cli, net
 }
 
-// The shared directory moves files between nodes, so a file written inside
-// the container has to be the same file on the host.
-func TestClient_Start_SharedDirBindingIsWritableFromTheContainer(t *testing.T) {
+// Files reach the node's container and come back through the Docker API, so
+// the daemon need not share the driver's filesystem.
+func TestContainer_CopyToAndFrom_MoveFilesThroughTheApi_WhenNestedAndLarge(t *testing.T) {
 	cli, err := NewClient()
-	if err != nil {
-		t.Fatalf("failed to create a docker client: %v", err)
-	}
+	require.NoError(t, err)
 	t.Cleanup(func() { _ = cli.Close() })
-
-	hostDir := t.TempDir()
-	binding := hostDir + ":/shared"
 	timeout := time.Second
 	cont, err := cli.Start(t.Context(), &ContainerConfig{
-		Hostname:         t.Name(),
-		ImageName:        "alpine",
-		Entrypoint:       []string{"tail", "-f", "/dev/null"},
-		ShutdownTimeout:  &timeout,
-		SharedDirBinding: &binding,
+		Hostname:        t.Name(),
+		ImageName:       "alpine",
+		Entrypoint:      []string{"tail", "-f", "/dev/null"},
+		ShutdownTimeout: &timeout,
 	})
-	if err != nil {
-		t.Fatalf("failed to start container: %v", err)
-	}
+	require.NoError(t, err)
 	t.Cleanup(func() { _ = cont.Cleanup(context.Background()) })
 
-	if output, err := cont.Exec(t.Context(),
-		[]string{"sh", "-c", "echo exported > /shared/exported.g"}); err != nil {
-		t.Fatalf("failed to write into the shared directory: %v - output: %s",
-			err, output)
-	}
+	hostDir := t.TempDir()
+	tree := filepath.Join(hostDir, "keystore")
+	require.NoError(t, os.MkdirAll(filepath.Join(tree, "validator"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(tree, "validator", "key"), []byte("secret"), 0o600))
+	large := filepath.Join(hostDir, "large.g")
+	require.NoError(t, os.WriteFile(large, bytes.Repeat([]byte("g"), 8<<20), 0o644))
 
-	content, err := os.ReadFile(filepath.Join(hostDir, "exported.g"))
-	if err != nil {
-		t.Fatalf("the file written in the container is not on the host: %v", err)
-	}
-	if got, want := strings.TrimSpace(string(content)), "exported"; got != want {
-		t.Errorf("unexpected content, got %q, want %q", got, want)
-	}
+	require.NoError(t, cont.CopyTo(t.Context(), tree, "/datadir/keystore"))
+	require.NoError(t, cont.CopyTo(t.Context(), large, "/shared/in.g"))
+	output, err := cont.Exec(t.Context(), []string{"sh", "-c",
+		"cat /datadir/keystore/validator/key && wc -c < /shared/in.g && cp /shared/in.g /shared/out.g"})
+	require.NoError(t, err, output)
+	require.Equal(t, "secret8388608", strings.ReplaceAll(strings.TrimSpace(output), "\n", ""))
+
+	back := filepath.Join(hostDir, "back.g")
+	require.NoError(t, cont.CopyFrom(t.Context(), "/shared/out.g", back))
+	got, err := os.ReadFile(back)
+	require.NoError(t, err)
+	want, err := os.ReadFile(large)
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+
+	require.Error(t, cont.CopyFrom(t.Context(), "/shared/missing.g", back))
 }

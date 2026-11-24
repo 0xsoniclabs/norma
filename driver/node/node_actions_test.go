@@ -28,6 +28,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/0xsoniclabs/norma/driver/docker"
+	"github.com/stretchr/testify/require"
 )
 
 // newNodeInState builds a node with no container, usable for exercising the
@@ -651,41 +652,41 @@ func TestBuildSonicdCmd_AppendsExtraArgumentsAsSeparateEntries(t *testing.T) {
 	}
 }
 
-func TestIsDirEmpty(t *testing.T) {
-	t.Run("true for empty directory", func(t *testing.T) {
-		if !isDirEmpty(t.TempDir()) {
-			t.Errorf("empty directory reported as non-empty")
-		}
-	})
+func TestOperaNode_HasState_OnlyWhenTheDataDirHoldsMoreThanTheKeystore(t *testing.T) {
+	tests := map[string]struct {
+		setup string
+		want  bool
+	}{
+		"no data directory":         {setup: "true", want: false},
+		"an empty data directory":   {setup: "mkdir -p /datadir", want: false},
+		"only the keystore":         {setup: "mkdir -p /datadir/keystore", want: false},
+		"a database next to it":     {setup: "mkdir -p /datadir/keystore /datadir/chaindata", want: true},
+		"a file of a previous node": {setup: "mkdir -p /datadir && touch /datadir/errlock", want: true},
+	}
+	cli, err := docker.NewClient()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cli.Close() })
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			timeout := time.Second
+			container, err := cli.Start(t.Context(), &docker.ContainerConfig{
+				Hostname:        strings.NewReplacer("/", "_", " ", "_").Replace(t.Name()),
+				ImageName:       "alpine",
+				Entrypoint:      []string{"tail", "-f", "/dev/null"},
+				ShutdownTimeout: &timeout,
+			})
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = container.Cleanup(context.Background()) })
+			output, err := container.Exec(t.Context(), []string{"sh", "-c", test.setup})
+			require.NoError(t, err, output)
+			node := &OperaNode{container: container, config: &OperaNodeConfig{Label: t.Name()}}
 
-	// The keystore is mounted before initialization, so its presence alone
-	// must not be mistaken for an already initialized data directory.
-	t.Run("true when only the keystore is present", func(t *testing.T) {
-		dir := t.TempDir()
-		if err := os.Mkdir(filepath.Join(dir, "keystore"), 0755); err != nil {
-			t.Fatalf("failed to create keystore dir: %v", err)
-		}
-		if !isDirEmpty(dir) {
-			t.Errorf("directory holding only a keystore reported as non-empty")
-		}
-	})
+			got, err := node.hasState(t.Context())
 
-	t.Run("false when other entries are present", func(t *testing.T) {
-		dir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(dir, "chaindata"),
-			[]byte("x"), 0644); err != nil {
-			t.Fatalf("failed to write file: %v", err)
-		}
-		if isDirEmpty(dir) {
-			t.Errorf("non-empty directory reported as empty")
-		}
-	})
-
-	t.Run("true for a missing directory", func(t *testing.T) {
-		if !isDirEmpty(filepath.Join(t.TempDir(), "absent")) {
-			t.Errorf("missing directory reported as non-empty")
-		}
-	})
+			require.NoError(t, err)
+			require.Equal(t, test.want, got)
+		})
+	}
 }
 
 // Logs placed in the configured output directory must outlive the run, so
