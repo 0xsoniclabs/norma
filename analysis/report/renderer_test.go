@@ -50,22 +50,11 @@ func TestRender_BuildsTheRendererImage_OnlyWhenItIsMissing(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			dir := t.TempDir()
-			require.NoError(t, os.WriteFile(filepath.Join(dir, "docker"), []byte(fakeDocker), 0o755))
-			if test.imageExists {
-				require.NoError(t, os.WriteFile(filepath.Join(dir, "image"), nil, 0o644))
-			}
-			if test.buildError != "" {
-				require.NoError(t, os.WriteFile(filepath.Join(dir, "build-error"), []byte(test.buildError), 0o644))
-			}
-			t.Setenv("FAKE_DOCKER_DIR", dir)
-			t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			dir := useFakeDocker(t, test.imageExists, test.buildError)
 
 			_, err := SingleEvalReport.Render(filepath.Join(dir, "measurements.csv"), t.TempDir(), "", "", "")
 
-			calls, readErr := os.ReadFile(filepath.Join(dir, "calls"))
-			require.NoError(t, readErr)
-			lines := strings.Split(strings.TrimSpace(string(calls)), "\n")
+			lines := fakeDockerCalls(t, dir)
 			if test.wantRender {
 				require.NoError(t, err)
 				require.Len(t, lines, len(test.wantCalls)+1)
@@ -83,6 +72,46 @@ func TestRender_BuildsTheRendererImage_OnlyWhenItIsMissing(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRender_MountsAbsolutePaths_WhenGivenRelativeOnes(t *testing.T) {
+	dir := useFakeDocker(t, true, "")
+	t.Chdir(t.TempDir())
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+
+	_, err = SingleEvalReport.Render("measurements.csv", "out", "", "", "")
+	require.NoError(t, err)
+
+	run := fakeDockerCalls(t, dir)[1]
+	require.Contains(t, run, "-v "+filepath.Join(wd, "measurements.csv")+":/input.csv:ro")
+	require.Contains(t, run, "-v "+filepath.Join(wd, "out")+":/output")
+}
+
+// useFakeDocker puts fakeDocker first on PATH and returns the directory it
+// works in. The renderer image exists if imageExists is set, and a build
+// fails with buildError if that is not empty.
+func useFakeDocker(t *testing.T, imageExists bool, buildError string) string {
+	t.Helper()
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "docker"), []byte(fakeDocker), 0o755))
+	if imageExists {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "image"), nil, 0o644))
+	}
+	if buildError != "" {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "build-error"), []byte(buildError), 0o644))
+	}
+	t.Setenv("FAKE_DOCKER_DIR", dir)
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return dir
+}
+
+// fakeDockerCalls returns the arguments of every call to fakeDocker in dir.
+func fakeDockerCalls(t *testing.T, dir string) []string {
+	t.Helper()
+	calls, err := os.ReadFile(filepath.Join(dir, "calls"))
+	require.NoError(t, err)
+	return strings.Split(strings.TrimSpace(string(calls)), "\n")
 }
 
 // fakeDocker logs its arguments, saves what a build reads from stdin, finds
