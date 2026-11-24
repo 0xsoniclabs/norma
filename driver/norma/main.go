@@ -42,6 +42,7 @@ func main() {
 			&checkCommand,
 			&estimateCommand,
 			&runCommand,
+			&runCloudCommand,
 			&buildCommand,
 			&purgeCommand,
 			&renderCommand,

@@ -2,7 +2,7 @@
 # that nothing else in the project shares. Docker and the run's files live on a
 # local NVMe SSD, which is fast and disappears with the VM. GCP deletes the VM
 # and its disks once ttl_minutes pass, even if nobody runs `terraform destroy`.
-# Driven by scripts/cloud-run.sh; see README.md.
+# Embedded in and driven by `norma run-cloud`; see README.md.
 
 terraform {
   required_providers {

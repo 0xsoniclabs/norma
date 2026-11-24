@@ -186,15 +186,8 @@ func runScenario(
 		scenarioFilePath = absPath
 	}
 
-	// create symlink as qol (_latest => _####) where #### is the randomly generated name
-	symlink := filepath.Join(filepath.Dir(outputDir), fmt.Sprintf("norma_data_%s_latest", label))
-	if _, lstatErr := os.Lstat(symlink); lstatErr == nil {
-		if err := os.Remove(symlink); err != nil {
-			return fmt.Errorf("failed to remove existing _latest symlink: %w", err)
-		}
-	}
-	if err := os.Symlink(outputDir, symlink); err != nil {
-		return fmt.Errorf("failed to create _latest symlink: %w", err)
+	if err := linkLatest(outputDir, label); err != nil {
+		return err
 	}
 
 	slog.Info("monitoring data is written", "output", outputDir)
@@ -258,28 +251,8 @@ func runScenario(
 		slog.Info("monitoring data was written", "output", outputDir)
 		slog.Info("raw data was exported", "file", monitor.GetMeasurementFileName())
 
-		if !skipReportRendering && ctx.Err() == nil {
-			slog.Info("rendering summary report ...")
-			if file, err := report.SingleEvalReport.Render(
-				monitor.GetMeasurementFileName(),
-				outputDir,
-				scenario.Name,
-				scenario.Description,
-				scenarioFilePath,
-			); err != nil {
-				slog.Error("report generation failed", "error", err)
-			} else {
-				slog.Info("summary report was exported", "file", fmt.Sprintf("file://%s/%s", outputDir, file))
-				if openReport {
-					if err := openBrowser(filepath.Join(outputDir, file)); err != nil {
-						slog.Warn("failed to open report in browser", "error", err)
-					}
-				}
-			}
-		} else {
-			slog.Info("report rendering skipped")
-			slog.Info(fmt.Sprintf("To render report run `norma render %s`", monitor.GetMeasurementFileName()))
-		}
+		renderReport(monitor.GetMeasurementFileName(), outputDir, scenario,
+			scenarioFilePath, skipReportRendering || ctx.Err() != nil, openReport)
 	}()
 
 	// Install monitoring sensory.
@@ -456,4 +429,48 @@ func appendScenarioStepTimings(
 	}
 
 	return nil
+}
+
+// linkLatest points norma_data_<label>_latest, next to outputDir, at
+// outputDir.
+func linkLatest(outputDir, label string) error {
+	symlink := filepath.Join(filepath.Dir(outputDir), fmt.Sprintf("norma_data_%s_latest", label))
+	if _, err := os.Lstat(symlink); err == nil {
+		if err := os.Remove(symlink); err != nil {
+			return fmt.Errorf("failed to remove existing _latest symlink: %w", err)
+		}
+	}
+	if err := os.Symlink(outputDir, symlink); err != nil {
+		return fmt.Errorf("failed to create _latest symlink: %w", err)
+	}
+	return nil
+}
+
+// renderReport renders the summary report of a run into outputDir, unless
+// skip is set, and opens it in the browser if open is set.
+func renderReport(
+	measurements, outputDir string,
+	scenario *parser.Scenario,
+	scenarioFilePath string,
+	skip, open bool,
+) {
+	if skip {
+		slog.Info("report rendering skipped")
+		slog.Info(fmt.Sprintf("To render report run `norma render %s`", measurements))
+		return
+	}
+	slog.Info("rendering summary report ...")
+	file, err := report.SingleEvalReport.Render(
+		measurements, outputDir, scenario.Name, scenario.Description, scenarioFilePath,
+	)
+	if err != nil {
+		slog.Error("report generation failed", "error", err)
+		return
+	}
+	slog.Info("summary report was exported", "file", fmt.Sprintf("file://%s/%s", outputDir, file))
+	if open {
+		if err := openBrowser(filepath.Join(outputDir, file)); err != nil {
+			slog.Warn("failed to open report in browser", "error", err)
+		}
+	}
 }

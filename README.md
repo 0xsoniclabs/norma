@@ -71,7 +71,8 @@ changes.
 | `run <file-or-dir>` | runs a scenario, or every scenario in a directory |
 | `check <file>` | checks a scenario for errors without running it |
 | `scenario-help` | lists all steps and their parameters |
-| `estimate <file>` | estimates offline how long a scenario runs and what it costs in the cloud |
+| `run-cloud --project <p> <file-or-dir>` | runs scenarios on a short-lived GCP VM; see [Cloud runs](#cloud-runs) |
+| `estimate <file-or-dir>` | estimates offline how long scenarios run and what they cost in the cloud |
 | `render <measurements.csv>` | renders the report of a past run |
 | `diff <measurements.csv...>` | renders a report comparing several runs |
 | `build [<file-or-dir>]` | builds the client images the scenarios need, and the report renderer |
@@ -167,53 +168,57 @@ To compare runs, for instance of two client versions, pass their
 ## Cloud runs
 
 Small scenarios run on your machine. Larger ones can run on a short-lived GCP
-VM, which runs the same `norma run` against its own Docker. (Spreading one
-network over several VMs is planned.)
+VM:
+```
+go run ./driver/norma run-cloud --project <project> [--tui] <file-or-dir>
+```
+Norma creates the VM, copies your working tree to it (including uncommitted
+changes), builds there, and runs `norma run` on the VM, next to the nodes, so
+load and measurements are the same as in a local run. Your terminal is
+connected to the remote run: `--tui` shows the remote TUI, and Ctrl-C or `q`
+stops the run as it would locally.
 
-First, estimate what the run takes and costs. This is offline:
+Afterwards, the run's data is copied to your machine and handled as `norma run`
+handles its own: `norma_data_<label>_<n>` lands in `/tmp` or in `-o <dir>`, and
+the report is rendered locally unless `--skip-report-rendering` is given, and
+opened with `--open-report`. `--label` and `--skip-checks` work as in `run`.
+
+Before creating anything, `run-cloud` prints its estimate and checks two
+things: that your account has the permissions the run needs, and that the
+worst-case cost is below `--max-cost` (USD, default 5). The estimate is also
+available on its own, offline:
 ```
 go run ./driver/norma estimate scenarios/release_testing/liveness/db_heal/bundles_heal_after_two_epochs.yml
 ```
 ```
-scenario:        Liveness DB Heal Bundles After Two Epochs
-expected run:    28m46s (+15m0s setup)
+expected run:    28m46s (+10m0s setup)
 peak:            3 nodes, 3 apps (needs 5 vCPU, 10 GB)
 machine:         n2-standard-8 (8 vCPU, 32 GB, $0.3885/h)
 timeout:         58m0s (VM deleted after 1h28m0s)
-expected cost:   $0.30
-worst-case cost: $0.61
+expected cost:   $0.28
+worst-case cost: $0.63
 uncalibrated:    checkDb, healDb, killSonic, stopSonic, waitForBlocks (their times are guesses)
 ```
 The step times are calibrated from past runs; steps listed as `uncalibrated`
 are guesses. Prices are static us-central1 on-demand prices. The worst case is
-a hard limit, because GCP deletes the VM when its time runs out.
-
-Then run it:
-```
-GCP_PROJECT=<project> scripts/cloud-run.sh <scenario.yml> [norma run flags]
-```
-Optional variables:
-- `GCP_ZONE`: default `us-central1-a`.
-- `MACHINE_TYPE`: default the smallest machine that fits the scenario.
-- `TIMEOUT`: default twice the estimated duration.
-- `MAX_COST`: in USD, default 5. The script refuses to start if the worst-case
-  cost is higher.
-
-The script creates the VM with Terraform ([infra/gcp/main.tf](infra/gcp/main.tf)),
-copies your working tree to it (including uncommitted changes), builds there,
-and runs the scenario. Ctrl-C reaches the remote run, which stops its nodes as
-it would locally.
+a hard limit, because GCP deletes the VM when its time runs out. Other flags:
+- `--zone`: default `us-central1-a`.
+- `--machine-type`: default the smallest machine that fits the scenario.
+- `--timeout`: default twice the estimated duration.
 
 Each run gets a network of its own: a VPC, subnet, firewall rule (SSH through
 IAP only) and Cloud NAT, all named `norma-run-<run-id>`. The VM has no public
 IP, and nothing else in the project shares its network, so runs neither touch
-other VMs nor each other.
+other VMs nor each other. Docker and the nodes' data live on a local NVMe SSD,
+which disappears with the VM. The resources are declared in
+[driver/cloud/main.tf](driver/cloud/main.tf); each run keeps its Terraform
+state and logs in `cloud-runs/<run-id>/`.
 
 Everything a run creates is deleted, however it ends:
-- On success, failure or Ctrl-C, the script copies the results into
-  `cloud-runs/<run-id>/results` and destroys the VM and its network. Then it
-  checks that none of them is left, and fails loudly if something is.
-- If the script itself dies, GCP deletes the VM and its disk once the timeout
+- On success, failure, Ctrl-C or SIGTERM, Norma collects the results, destroys
+  the VM and its network, and checks that none of them is left. It fails
+  loudly if something is. Further interrupts cannot stop the teardown.
+- If Norma itself is killed, GCP deletes the VM and its disks once the timeout
   plus 30 minutes have passed. The network is left; it costs next to nothing
   but counts against the project's quota of VPC networks (15 by default).
   Remove it with `terraform -chdir=cloud-runs/<run-id>/tf destroy`.
@@ -225,7 +230,7 @@ Requirements:
 - the Compute Engine and IAP APIs enabled in the project
   (`gcloud services enable compute.googleapis.com iap.googleapis.com`);
 - the roles Compute Admin (or Editor) and IAP-secured Tunnel User in the
-  project. The script checks the permissions before it creates anything.
+  project.
 
 Use a project with a billing budget alert.
 
