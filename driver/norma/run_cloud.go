@@ -35,12 +35,13 @@ import (
 var runCloudCommand = cli.Command{
 	Action:    runCloud,
 	Name:      "run-cloud",
-	Usage:     "runs scenarios on a short-lived GCP VM that is deleted afterwards",
+	Usage:     "runs scenarios on short-lived GCP VMs, one per node, that are deleted afterwards",
 	UsageText: "norma run-cloud --project P [flags] <scenario-file-or-dir>",
 	Flags: []cli.Flag{
 		&projectFlag,
 		&zoneFlag,
 		&machineTypeFlag,
+		&driverMachineTypeFlag,
 		&maxCostFlag,
 		&estimateTimeoutFlag,
 		&evalLabel,

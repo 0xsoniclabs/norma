@@ -40,6 +40,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/0xsoniclabs/norma/driver"
 )
 
 //go:embed main.tf
@@ -48,6 +50,7 @@ var terraformConfig []byte
 // Variables rather than constants so that tests can shorten or redirect them.
 var (
 	iamURL          = "https://cloudresourcemanager.googleapis.com/v1/projects/%s:testIamPermissions"
+	regionURL       = "https://compute.googleapis.com/compute/v1/projects/%s/regions/%s"
 	readyTimeout    = 10 * time.Minute
 	pollInterval    = 10 * time.Second
 	teardownTimeout = 20 * time.Minute
@@ -106,6 +109,9 @@ func Run(ctx context.Context, cfg Config) (collected []string, err error) {
 	if err := checkPermissions(ctx, cfg.Project); err != nil {
 		return nil, err
 	}
+	if err := checkQuotas(ctx, cfg.Project, region(cfg.Zone), cfg.Plan); err != nil {
+		return nil, err
+	}
 
 	r := &run{cfg: cfg, id: newRunID()}
 	r.name = "norma-run-" + r.id
@@ -145,7 +151,7 @@ func (r *run) execute(ctx context.Context) error {
 		return err
 	}
 
-	slog.Info("creating the VM and its network", "name", r.name, "log", r.path("apply.log"))
+	slog.Info("creating the VMs and their network", "name", r.name, "nodes", r.cfg.Plan.Hosts, "log", r.path("apply.log"))
 	r.created = true
 	if err := r.terraform(ctx, "apply.log", "init", "-input=false"); err != nil {
 		return err
@@ -154,8 +160,19 @@ func (r *run) execute(ctx context.Context) error {
 		return err
 	}
 
-	slog.Info("waiting for the VM to install Docker")
-	if err := r.waitReady(ctx); err != nil {
+	hosts, err := r.writeHosts(ctx)
+	if err != nil {
+		return err
+	}
+	slog.Info("waiting for the VMs to install Docker")
+	if err := r.waitReady(ctx, "driver VM", "test -f /ready"); err != nil {
+		return err
+	}
+	var ping []string
+	for _, h := range hosts {
+		ping = append(ping, fmt.Sprintf("curl -sf -m 5 http://%s:2375/_ping >/dev/null", h.IP))
+	}
+	if err := r.waitReady(ctx, "node VMs", strings.Join(ping, " && ")); err != nil {
 		return err
 	}
 
@@ -172,6 +189,9 @@ func (r *run) execute(ctx context.Context) error {
 	if err := r.upload(ctx, filepath.Dir(scenario), filepath.Base(scenario), remoteRoot+"/scenario"); err != nil {
 		return fmt.Errorf("failed to copy the scenario: %w", err)
 	}
+	if err := r.upload(ctx, r.dir, "hosts.json", remoteRoot); err != nil {
+		return fmt.Errorf("failed to copy the hosts: %w", err)
+	}
 
 	goImage, err := r.goImage()
 	if err != nil {
@@ -185,7 +205,8 @@ func (r *run) execute(ctx context.Context) error {
 	}
 
 	args := append([]string{"sudo", "./build/norma", "run", "--skip-report-rendering",
-		"-o", remoteOut, "--timeout", r.cfg.Plan.Timeout.String()}, r.cfg.RunFlags...)
+		"-o", remoteOut, "--timeout", r.cfg.Plan.Timeout.String(),
+		"--hosts", remoteRoot + "/hosts.json"}, r.cfg.RunFlags...)
 	args = append(args, remoteRoot+"/scenario/"+filepath.Base(scenario))
 	var sshFlags []string
 	if r.cfg.TTY {
@@ -292,10 +313,10 @@ func (r *run) leftovers(ctx context.Context) ([]string, error) {
 	}{
 		{[]string{"instances"}, "labels.norma-run=" + r.id},
 		{[]string{"disks"}, "labels.norma-run=" + r.id},
-		{[]string{"firewall-rules"}, "name=" + r.name},
-		{[]string{"routers"}, "name=" + r.name},
-		{[]string{"networks", "subnets"}, "name=" + r.name},
-		{[]string{"networks"}, "name=" + r.name},
+		{[]string{"firewall-rules"}, "name~^" + r.name},
+		{[]string{"routers"}, "name~^" + r.name},
+		{[]string{"networks", "subnets"}, "name~^" + r.name},
+		{[]string{"networks"}, "name~^" + r.name},
 	}
 	var left []string
 	for _, kind := range kinds {
@@ -315,17 +336,18 @@ func (r *run) leftovers(ctx context.Context) ([]string, error) {
 	return left, nil
 }
 
-func (r *run) waitReady(ctx context.Context) error {
+// waitReady waits until command succeeds on the driver VM.
+func (r *run) waitReady(ctx context.Context, what, command string) error {
 	deadline := time.Now().Add(readyTimeout)
 	for {
 		attemptCtx, cancel := context.WithDeadline(ctx, deadline)
-		out, err := r.ssh(attemptCtx, "test -f /ready").CombinedOutput()
+		out, err := r.ssh(attemptCtx, command).CombinedOutput()
 		cancel()
 		if err == nil {
 			return nil
 		}
 		if ctx.Err() == nil && time.Now().After(deadline) {
-			return fmt.Errorf("the VM was not ready after %s: %s", readyTimeout, bytes.TrimSpace(out))
+			return fmt.Errorf("the %s: not ready after %s: %s", what, readyTimeout, bytes.TrimSpace(out))
 		}
 		select {
 		case <-ctx.Done():
@@ -373,10 +395,37 @@ func (r *run) terraform(ctx context.Context, logName string, args ...string) err
 }
 
 func (r *run) tfvars() []byte {
-	return fmt.Appendf(nil, "project      = %q\nzone         = %q\nrun_id       = %q\n"+
-		"machine_type = %q\ndisk_gb      = %d\nttl_minutes  = %d\n",
-		r.cfg.Project, r.cfg.Zone, r.id, r.cfg.Plan.Machine.Name, bootDiskGB,
-		int(math.Ceil(r.cfg.Plan.TTL.Minutes())))
+	return fmt.Appendf(nil, "project             = %q\nzone                = %q\nrun_id              = %q\n"+
+		"driver_machine_type = %q\nnode_machine_type   = %q\nnode_count          = %d\n"+
+		"disk_gb             = %d\nttl_minutes         = %d\n",
+		r.cfg.Project, r.cfg.Zone, r.id, r.cfg.Plan.DriverMachine.Name, r.cfg.Plan.NodeMachine.Name,
+		r.cfg.Plan.Hosts, bootDiskGB, int(math.Ceil(r.cfg.Plan.TTL.Minutes())))
+}
+
+// writeHosts lists the node VMs Terraform created in hosts.json, for the
+// driver's `norma run --hosts`.
+func (r *run) writeHosts(ctx context.Context) ([]driver.Host, error) {
+	cmd := exec.CommandContext(ctx, "terraform", "-chdir="+filepath.Join(r.dir, "tf"), "output", "-json", "node_ips")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read the node IPs: %w", err)
+	}
+	var ips []string
+	if err := json.Unmarshal(out, &ips); err != nil {
+		return nil, fmt.Errorf("failed to read the node IPs %q: %w", out, err)
+	}
+	if len(ips) != r.cfg.Plan.Hosts {
+		return nil, fmt.Errorf("terraform created %d node VMs, expected %d", len(ips), r.cfg.Plan.Hosts)
+	}
+	hosts := make([]driver.Host, len(ips))
+	for i, ip := range ips {
+		hosts[i] = driver.Host{Name: fmt.Sprintf("node-%d", i), IP: ip, Docker: "tcp://" + ip + ":2375"}
+	}
+	data, err := json.MarshalIndent(hosts, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return hosts, os.WriteFile(r.path("hosts.json"), data, 0o644)
 }
 
 // goImage is the Go image the client images are built with, in the Debian
@@ -400,32 +449,10 @@ func (r *run) path(name string) string {
 // checkPermissions fails unless the gcloud account may do everything a run
 // needs, before anything is created.
 func checkPermissions(ctx context.Context, project string) error {
-	token, err := exec.CommandContext(ctx, "gcloud", "auth", "print-access-token").Output()
-	if err != nil {
-		return fmt.Errorf("failed to get a gcloud access token; run `gcloud auth login`: %w", err)
-	}
-	body, err := json.Marshal(map[string][]string{"permissions": requiredPermissions})
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf(iamURL, project), bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(string(token)))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to check the permissions in project %s: %w", project, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		msg, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to check the permissions in project %s: %s: %s", project, resp.Status, msg)
-	}
 	var granted struct{ Permissions []string }
-	if err := json.NewDecoder(resp.Body).Decode(&granted); err != nil {
-		return err
+	if err := callGoogle(ctx, http.MethodPost, fmt.Sprintf(iamURL, project),
+		map[string][]string{"permissions": requiredPermissions}, &granted); err != nil {
+		return fmt.Errorf("failed to check the permissions in project %s: %w", project, err)
 	}
 	var missing []string
 	for _, permission := range requiredPermissions {
@@ -439,6 +466,73 @@ func checkPermissions(ctx context.Context, project string) error {
 			project, strings.Join(missing, ", "))
 	}
 	return nil
+}
+
+// checkQuotas fails unless the region has room for the plan's VMs, before
+// anything is created.
+func checkQuotas(ctx context.Context, project, region string, plan Plan) error {
+	var info struct {
+		Quotas []struct {
+			Metric       string
+			Limit, Usage float64
+		}
+	}
+	if err := callGoogle(ctx, http.MethodGet, fmt.Sprintf(regionURL, project, region), nil, &info); err != nil {
+		return fmt.Errorf("failed to check the quotas of region %s: %w", region, err)
+	}
+	needs := map[string]int{
+		"CPUS":               plan.VCPUs(),
+		"N2_CPUS":            plan.VCPUs(),
+		"LOCAL_SSD_TOTAL_GB": plan.LocalSSDGB(),
+	}
+	var short []string
+	for _, q := range info.Quotas {
+		if need, ok := needs[q.Metric]; ok && q.Usage+float64(need) > q.Limit {
+			short = append(short, fmt.Sprintf("%s needs %d, %.0f of %.0f are free", q.Metric, need, q.Limit-q.Usage, q.Limit))
+		}
+	}
+	if len(short) > 0 {
+		return fmt.Errorf("region %s lacks quota for %d node VMs: %s", region, plan.Hosts, strings.Join(short, "; "))
+	}
+	return nil
+}
+
+// callGoogle calls a Google Cloud API as the gcloud account, sending body
+// and decoding the response into out.
+func callGoogle(ctx context.Context, method, url string, body, out any) error {
+	token, err := exec.CommandContext(ctx, "gcloud", "auth", "print-access-token").Output()
+	if err != nil {
+		return fmt.Errorf("failed to get a gcloud access token; run `gcloud auth login`: %w", err)
+	}
+	var reader io.Reader
+	if body != nil {
+		data, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		reader = bytes.NewReader(data)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, url, reader)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(string(token)))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		msg, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("%s: %s", resp.Status, msg)
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// region is the region of a zone, such as us-central1 for us-central1-a.
+func region(zone string) string {
+	return zone[:max(0, strings.LastIndex(zone, "-"))]
 }
 
 // catchSignals cancels the run on the first SIGINT or SIGTERM and keeps later

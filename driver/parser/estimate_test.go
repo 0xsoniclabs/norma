@@ -54,3 +54,61 @@ Scenario:
 	require.Equal(t, 0, got.PeakApps)
 	require.Equal(t, []string{"checkDb", "stopSonic", "waitForBlocks"}, got.Uncalibrated)
 }
+
+func TestEstimate_CountsTheHostsNodesTakePlacedOnePerMachine_WhenNodesComeAndGo(t *testing.T) {
+	tests := map[string]struct {
+		steps string
+		want  int
+	}{
+		"instances take a host each": {
+			steps: "  - startNode: val\n    type: validator\n    instances: 3\n",
+			want:  3,
+		},
+		"a node started again keeps its host": {
+			steps: "  - startNode: val\n    type: validator\n  - startNode: obs\n" +
+				"  - stopNode: obs\n  - startNode: obs\n",
+			want: 2,
+		},
+		"a restarted client stays in its container": {
+			steps: "  - startNode: val\n    type: validator\n  - startNode: obs\n" +
+				"  - stopSonic: obs\n  - startNode: obs\n",
+			want: 2,
+		},
+		"nodes continuing from one data volume share its host": {
+			steps: "  - startNode: val\n    type: validator\n  - startNode: a\n    dataVolume: v\n" +
+				"  - stopNode: a\n  - startNode: b\n    dataVolume: v\n",
+			want: 2,
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			scenario, err := ParseBytes([]byte("Name: n\nDescription: d\nDisableEndChecks: true\nScenario:\n" + test.steps))
+			require.NoError(t, err)
+
+			got, err := scenario.Estimate()
+
+			require.NoError(t, err)
+			require.Equal(t, test.want, got.Hosts)
+		})
+	}
+}
+
+// The hosts these scenarios took when run with `norma run --hosts`.
+func TestEstimate_CountsTheHostsRealRunsTook_WhenGivenRepositoryScenarios(t *testing.T) {
+	tests := map[string]int{
+		"../../scenarios/examples/validators_are_really_validators.yml":                   4,
+		"../../scenarios/release_testing/features/genesis/genesis_self_compatibility.yml": 3,
+		"../../scenarios/examples/rejoin_upgraded_with_data_volume.yml":                   4,
+	}
+	for path, want := range tests {
+		t.Run(path, func(t *testing.T) {
+			scenario, err := ParseFile(path)
+			require.NoError(t, err)
+
+			got, err := scenario.Estimate()
+
+			require.NoError(t, err)
+			require.Equal(t, want, got.Hosts)
+		})
+	}
+}

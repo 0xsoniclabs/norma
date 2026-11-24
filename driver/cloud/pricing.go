@@ -36,6 +36,7 @@ type Machine struct {
 // ponytail: static us-central1 on-demand prices as of 2025-11; read them from
 // the Cloud Billing Catalog API if they drift or other regions are needed.
 var machines = []Machine{
+	{"n2-standard-2", 2, 8, 0.0971},
 	{"n2-standard-4", 4, 16, 0.1942},
 	{"n2-standard-8", 8, 32, 0.3885},
 	{"n2-standard-16", 16, 64, 0.7769},
@@ -47,42 +48,44 @@ var machines = []Machine{
 }
 
 const (
-	// The boot disk (pd-balanced) holds only the OS; Docker and the run's
-	// files are on one local NVMe SSD of a fixed 375 GB.
+	// Every VM has a boot disk (pd-balanced) holding only the OS, and one
+	// local NVMe SSD of a fixed 375 GB for Docker and the run's files.
 	bootDiskGB      = 10
 	bootDiskGBMonth = 0.10
 	localSSDGB      = 375
 	localSSDGBMonth = 0.08
 	hoursPerMonth   = 730
 
-	// Resources a node needs (the client image sets GOMEMLIMIT=1GiB) and
-	// those the driver and its load generators need.
-	nodeVCPUs, nodeMemGB     = 1, 2
-	driverVCPUs, driverMemGB = 2, 4
+	// defaultNodeMachine runs one node, which needs about 1 vCPU and 2 GB
+	// (the client image sets GOMEMLIMIT=1GiB).
+	defaultNodeMachine = "n2-standard-2"
 
-	// setupTime covers booting the VM, installing Docker, copying the sources,
-	// building the client image and collecting the results.
+	// setupTime covers creating the VMs, installing Docker, copying the
+	// sources, building the client image and collecting the results.
 	setupTime = 10 * time.Minute
-	// ttlMargin is added to the scenario timeout for the VM's lifetime; GCP
-	// deletes the VM once it passes.
+	// ttlMargin is added to the scenario timeout for the VMs' lifetime; GCP
+	// deletes the VMs once it passes.
 	ttlMargin  = 30 * time.Minute
 	minTimeout = 10 * time.Minute
 )
 
-// Plan is what running scenarios on one VM takes and costs.
+// Plan is what running scenarios on one VM per node, plus one VM for the
+// driver, takes and costs.
 type Plan struct {
-	Estimate     parser.Estimate
-	Machine      Machine
-	VCPUs, MemGB int
-	// Timeout is the scenario timeout; GCP deletes the VM after TTL.
+	Estimate parser.Estimate
+	// Hosts is the number of node VMs.
+	Hosts                      int
+	NodeMachine, DriverMachine Machine
+	// Timeout is the scenario timeout; GCP deletes the VMs after TTL.
 	Timeout, TTL time.Duration
 	ExpectedCost float64
-	// WorstCaseCost is a hard limit: the VM cannot outlive TTL.
+	// WorstCaseCost is a hard limit: the VMs cannot outlive TTL.
 	WorstCaseCost float64
 }
 
 // EstimateFiles sums the expected durations of the scenarios in files, which
-// run one after the other, and takes the largest of their peaks.
+// run one after the other on the same VMs, and takes the largest of their
+// peaks and host counts.
 func EstimateFiles(files []string) (parser.Estimate, error) {
 	var res parser.Estimate
 	for _, file := range files {
@@ -97,46 +100,63 @@ func EstimateFiles(files []string) (parser.Estimate, error) {
 		res.Duration += est.Duration
 		res.PeakNodes = max(res.PeakNodes, est.PeakNodes)
 		res.PeakApps = max(res.PeakApps, est.PeakApps)
+		res.Hosts = max(res.Hosts, est.Hosts)
 		res.Uncalibrated = append(res.Uncalibrated, est.Uncalibrated...)
 	}
 	return res, nil
 }
 
-// NewPlan picks the named machine type, or the smallest one that fits the
-// estimate, and the timeout, or twice the expected duration when timeout is 0.
-func NewPlan(est parser.Estimate, machineType string, timeout time.Duration) (Plan, error) {
-	p := Plan{
-		Estimate: est,
-		VCPUs:    driverVCPUs + est.PeakNodes*nodeVCPUs,
-		MemGB:    driverMemGB + est.PeakNodes*nodeMemGB,
-		Timeout:  timeout,
+// NewPlan sizes the VMs for the estimate. Empty machine types pick the
+// defaults, and a zero timeout picks twice the expected duration.
+func NewPlan(est parser.Estimate, nodeMachineType, driverMachineType string, timeout time.Duration) (Plan, error) {
+	if est.Hosts == 0 {
+		return Plan{}, fmt.Errorf("the scenario starts no nodes")
 	}
-	m, err := pickMachine(machineType, p.VCPUs, p.MemGB)
-	if err != nil {
+	if nodeMachineType == "" {
+		nodeMachineType = defaultNodeMachine
+	}
+	if driverMachineType == "" {
+		driverMachineType = driverMachineFor(est.Hosts)
+	}
+	p := Plan{Estimate: est, Hosts: est.Hosts, Timeout: timeout}
+	var err error
+	if p.NodeMachine, err = lookupMachine(nodeMachineType); err != nil {
 		return Plan{}, err
 	}
-	p.Machine = m
+	if p.DriverMachine, err = lookupMachine(driverMachineType); err != nil {
+		return Plan{}, err
+	}
 	if p.Timeout <= 0 {
 		p.Timeout = max(minTimeout, 2*est.Duration).Round(time.Minute)
 	}
 	p.TTL = p.Timeout + ttlMargin
-	hourly := m.Hourly + (bootDiskGB*bootDiskGBMonth+localSSDGB*localSSDGBMonth)/hoursPerMonth
+	vms := float64(p.Hosts + 1)
+	disks := vms * (bootDiskGB*bootDiskGBMonth + localSSDGB*localSSDGBMonth) / hoursPerMonth
+	hourly := p.DriverMachine.Hourly + float64(p.Hosts)*p.NodeMachine.Hourly + disks
 	p.ExpectedCost = (setupTime + est.Duration).Hours() * hourly
 	p.WorstCaseCost = p.TTL.Hours() * hourly
 	return p, nil
 }
 
+// VCPUs is the number of vCPUs of all the VMs.
+func (p Plan) VCPUs() int {
+	return p.DriverMachine.VCPUs + p.Hosts*p.NodeMachine.VCPUs
+}
+
+// LocalSSDGB is the local SSD capacity of all the VMs.
+func (p Plan) LocalSSDGB() int {
+	return (p.Hosts + 1) * localSSDGB
+}
+
 // Fprint writes the plan for people to read.
 func (p Plan) Fprint(w io.Writer) {
 	fmt.Fprintf(w, "expected run:    %s (+%s setup)\n", p.Estimate.Duration, setupTime)
-	fmt.Fprintf(w, "peak:            %d nodes, %d apps (needs %d vCPU, %d GB)\n", p.Estimate.PeakNodes, p.Estimate.PeakApps, p.VCPUs, p.MemGB)
-	fmt.Fprintf(w, "machine:         %s (%d vCPU, %d GB, $%.4f/h)\n", p.Machine.Name, p.Machine.VCPUs, p.Machine.MemGB, p.Machine.Hourly)
-	fmt.Fprintf(w, "timeout:         %s (VM deleted after %s)\n", p.Timeout, p.TTL)
+	fmt.Fprintf(w, "nodes:           %d, at most %d at once; %d apps\n", p.Hosts, p.Estimate.PeakNodes, p.Estimate.PeakApps)
+	fmt.Fprintf(w, "VMs:             %d × %s ($%.4f/h) for the nodes, %s ($%.4f/h) for the driver\n",
+		p.Hosts, p.NodeMachine.Name, p.NodeMachine.Hourly, p.DriverMachine.Name, p.DriverMachine.Hourly)
+	fmt.Fprintf(w, "timeout:         %s (VMs deleted after %s)\n", p.Timeout, p.TTL)
 	fmt.Fprintf(w, "expected cost:   $%.2f\n", p.ExpectedCost)
 	fmt.Fprintf(w, "worst-case cost: $%.2f\n", p.WorstCaseCost)
-	if p.Machine.VCPUs < p.VCPUs || p.Machine.MemGB < p.MemGB {
-		fmt.Fprintf(w, "WARNING:         %s is smaller than the scenario needs\n", p.Machine.Name)
-	}
 	if u := uncalibrated(p.Estimate); len(u) > 0 {
 		fmt.Fprintf(w, "uncalibrated:    %s (their times are guesses)\n", strings.Join(u, ", "))
 	}
@@ -154,15 +174,25 @@ func uncalibrated(est parser.Estimate) []string {
 	return res
 }
 
-// pickMachine returns the named machine, or the smallest one that fits.
-func pickMachine(name string, vcpus, memGB int) (Machine, error) {
+// driverMachineFor sizes the driver VM, which runs the load generators and
+// monitors every node.
+// ponytail: thresholds are guesses; calibrate them from runs of many nodes.
+func driverMachineFor(hosts int) string {
+	switch {
+	case hosts <= 16:
+		return "n2-standard-4"
+	case hosts <= 48:
+		return "n2-standard-8"
+	default:
+		return "n2-standard-16"
+	}
+}
+
+func lookupMachine(name string) (Machine, error) {
 	for _, m := range machines {
-		if m.Name == name || (name == "" && m.VCPUs >= vcpus && m.MemGB >= memGB) {
+		if m.Name == name {
 			return m, nil
 		}
 	}
-	if name != "" {
-		return Machine{}, fmt.Errorf("no price known for machine type %q", name)
-	}
-	return Machine{}, fmt.Errorf("no single machine fits %d vCPU and %d GB; the scenario needs more than one host", vcpus, memGB)
+	return Machine{}, fmt.Errorf("no price known for machine type %q", name)
 }

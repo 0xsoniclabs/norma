@@ -30,9 +30,10 @@ var estimateCommand = cli.Command{
 	Action:    estimate,
 	Name:      "estimate",
 	Usage:     "estimates offline how long scenarios run and what they cost on a GCP VM",
-	UsageText: "norma estimate [--machine-type T] [--timeout D] <scenario-file-or-dir>",
+	UsageText: "norma estimate [--machine-type T] [--driver-machine-type T] [--timeout D] <scenario-file-or-dir>",
 	Flags: []cli.Flag{
 		&machineTypeFlag,
+		&driverMachineTypeFlag,
 		&estimateTimeoutFlag,
 	},
 }
@@ -40,7 +41,12 @@ var estimateCommand = cli.Command{
 var (
 	machineTypeFlag = cli.StringFlag{
 		Name:  "machine-type",
-		Usage: "GCP machine type; by default the smallest that fits the scenario",
+		Usage: "GCP machine type of the node VMs, one per node",
+		Value: "n2-standard-2",
+	}
+	driverMachineTypeFlag = cli.StringFlag{
+		Name:  "driver-machine-type",
+		Usage: "GCP machine type of the driver VM; by default sized by the number of nodes",
 	}
 	estimateTimeoutFlag = cli.DurationFlag{
 		Name:  "timeout",
@@ -71,5 +77,6 @@ func planCloudRun(ctx *cli.Context) (cloud.Plan, error) {
 	if err != nil {
 		return cloud.Plan{}, err
 	}
-	return cloud.NewPlan(est, ctx.String(machineTypeFlag.Name), ctx.Duration(estimateTimeoutFlag.Name))
+	return cloud.NewPlan(est, ctx.String(machineTypeFlag.Name), ctx.String(driverMachineTypeFlag.Name),
+		ctx.Duration(estimateTimeoutFlag.Name))
 }

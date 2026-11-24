@@ -18,11 +18,13 @@ package parser
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/steps"
+	"github.com/0xsoniclabs/norma/driver/steps/nodelifetime"
 	"github.com/0xsoniclabs/norma/driver/steps/wait"
 	"github.com/0xsoniclabs/sonic/inter"
 )
@@ -51,6 +53,10 @@ type Estimate struct {
 	Duration  time.Duration
 	PeakNodes int
 	PeakApps  int
+	// Hosts is the number of machines the scenario needs when every node
+	// runs on one of its own: one per node, but nodes continuing from the
+	// same data volume share the volume's machine.
+	Hosts int
 	// Uncalibrated lists the steps whose time is a guess rather than measured.
 	Uncalibrated []string
 }
@@ -61,12 +67,19 @@ func (s *Scenario) Estimate() (Estimate, error) {
 	var res Estimate
 	epoch := time.Duration(inter.Timestamp(*s.InitialRules.Epochs.MaxEpochDuration))
 	model := steps.NewModel()
+	hosts := map[string]bool{}
 	for i, step := range s.Steps {
+		before := maps.Clone(model.Nodes)
 		if err := step.UpdateModel(model); err != nil {
 			return Estimate{}, fmt.Errorf("step %d (%s): %w", i+1, strings.TrimSpace(step.Name()+" "+steps.TargetOf(step)), err)
 		}
 		res.PeakNodes = max(res.PeakNodes, len(model.Nodes))
 		res.PeakApps = max(res.PeakApps, len(model.Apps))
+		for label := range model.Nodes {
+			if _, existed := before[label]; !existed {
+				hosts[hostKey(step, label)] = true
+			}
+		}
 
 		switch step := step.(type) {
 		case *wait.WaitFor:
@@ -87,5 +100,15 @@ func (s *Scenario) Estimate() (Estimate, error) {
 	}
 	slices.Sort(res.Uncalibrated)
 	res.Uncalibrated = slices.Compact(res.Uncalibrated)
+	res.Hosts = len(hosts)
 	return res, nil
+}
+
+// hostKey names the machine a node created by step runs on, by the rule the
+// network places nodes with.
+func hostKey(step steps.Step, label string) string {
+	if start, ok := step.(*nodelifetime.StartNode); ok && start.DataVolume != "" {
+		return "volume " + start.DataVolume
+	}
+	return label
 }

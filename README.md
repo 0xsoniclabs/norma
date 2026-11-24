@@ -71,7 +71,7 @@ changes.
 | `run <file-or-dir>` | runs a scenario, or every scenario in a directory |
 | `check <file>` | checks a scenario for errors without running it |
 | `scenario-help` | lists all steps and their parameters |
-| `run-cloud --project <p> <file-or-dir>` | runs scenarios on a short-lived GCP VM; see [Cloud runs](#cloud-runs) |
+| `run-cloud --project <p> <file-or-dir>` | runs scenarios on short-lived GCP VMs, one per node; see [Cloud runs](#cloud-runs) |
 | `estimate <file-or-dir>` | estimates offline how long scenarios run and what they cost in the cloud |
 | `render <measurements.csv>` | renders the report of a past run |
 | `diff <measurements.csv...>` | renders a report comparing several runs |
@@ -167,58 +167,68 @@ To compare runs, for instance of two client versions, pass their
 
 ## Cloud runs
 
-Small scenarios run on your machine. Larger ones can run on a short-lived GCP
-VM:
+Small scenarios run on your machine. Larger ones, and performance
+measurements that need nodes not to compete for one machine, run on
+short-lived GCP VMs, one per node:
 ```
 go run ./driver/norma run-cloud --project <project> [--tui] <file-or-dir>
 ```
-Norma creates the VM, copies your working tree to it (including uncommitted
-changes), builds there, and runs `norma run` on the VM, next to the nodes, so
-load and measurements are the same as in a local run. Your terminal is
+Norma creates a VM for every node and one for the driver, copies your working
+tree to the driver VM (including uncommitted changes), builds there, and runs
+`norma run --hosts` on it. The driver starts each node on a VM of its own,
+which the node keeps when it restarts, and generates the load and monitors the
+nodes from inside the run's network, as it would locally. Your terminal is
 connected to the remote run: `--tui` shows the remote TUI, and Ctrl-C or `q`
 stops the run as it would locally.
+
+`norma run --hosts hosts.json` is the same on any machines with a Docker
+daemon the driver can reach, listed as
+`[{"name": ..., "ip": ..., "docker": "tcp://<ip>:2375"}]`.
 
 Afterwards, the run's data is copied to your machine and handled as `norma run`
 handles its own: `norma_data_<label>_<n>` lands in `/tmp` or in `-o <dir>`, and
 the report is rendered locally unless `--skip-report-rendering` is given, and
 opened with `--open-report`. `--label` and `--skip-checks` work as in `run`.
 
-Before creating anything, `run-cloud` prints its estimate and checks two
-things: that your account has the permissions the run needs, and that the
-worst-case cost is below `--max-cost` (USD, default 5). The estimate is also
-available on its own, offline:
+Before creating anything, `run-cloud` prints its estimate and checks that
+your account has the permissions the run needs, that the region has the quota
+for its VMs, and that the worst-case cost is below `--max-cost` (USD, default
+5). The estimate is also available on its own, offline:
 ```
-go run ./driver/norma estimate scenarios/release_testing/liveness/db_heal/bundles_heal_after_two_epochs.yml
+go run ./driver/norma estimate scenarios/release_testing/stress/multi_node_mix_payload_constant.yml
 ```
 ```
-expected run:    28m46s (+10m0s setup)
-peak:            3 nodes, 3 apps (needs 5 vCPU, 10 GB)
-machine:         n2-standard-8 (8 vCPU, 32 GB, $0.3885/h)
-timeout:         58m0s (VM deleted after 1h28m0s)
-expected cost:   $0.28
-worst-case cost: $0.63
-uncalibrated:    checkDb, healDb, killSonic, stopSonic, waitForBlocks (their times are guesses)
+expected run:    3m8s (+10m0s setup)
+nodes:           4, at most 4 at once; 3 apps
+VMs:             4 × n2-standard-2 ($0.0971/h) for the nodes, n2-standard-4 ($0.1942/h) for the driver
+timeout:         10m0s (VMs deleted after 40m0s)
+expected cost:   $0.17
+worst-case cost: $0.53
 ```
-The step times are calibrated from past runs; steps listed as `uncalibrated`
-are guesses. Prices are static us-central1 on-demand prices. The worst case is
-a hard limit, because GCP deletes the VM when its time runs out. Other flags:
+The number of VMs comes from the scenario's dry run: one per node, but a node
+continuing from another's data volume goes to that volume's VM. The step times
+are calibrated from past runs; steps listed as `uncalibrated` are guesses.
+Prices are static us-central1 on-demand prices. The worst case is a hard
+limit, because GCP deletes the VMs when their time runs out. Other flags:
 - `--zone`: default `us-central1-a`.
-- `--machine-type`: default the smallest machine that fits the scenario.
+- `--machine-type`: the node VMs, default `n2-standard-2`.
+- `--driver-machine-type`: default sized by the number of nodes.
 - `--timeout`: default twice the estimated duration.
 
-Each run gets a network of its own: a VPC, subnet, firewall rule (SSH through
-IAP only) and Cloud NAT, all named `norma-run-<run-id>`. The VM has no public
-IP, and nothing else in the project shares its network, so runs neither touch
-other VMs nor each other. Docker and the nodes' data live on a local NVMe SSD,
-which disappears with the VM. The resources are declared in
+Each run gets a network of its own: a VPC, subnet, firewall rules and Cloud
+NAT, all named `norma-run-<run-id>`. Only the driver VM accepts SSH, through
+IAP; the nodes' Docker daemons, which have no TLS, accept only the driver VM.
+No VM has a public IP, and nothing else in the project shares their network,
+so runs neither touch other VMs nor each other. Every VM keeps Docker and its
+data on a local NVMe SSD, which disappears with the VM. The resources are declared in
 [driver/cloud/main.tf](driver/cloud/main.tf); each run keeps its Terraform
 state and logs in `cloud-runs/<run-id>/`.
 
 Everything a run creates is deleted, however it ends:
 - On success, failure, Ctrl-C or SIGTERM, Norma collects the results, destroys
-  the VM and its network, and checks that none of them is left. It fails
+  the VMs and their network, and checks that none of them is left. It fails
   loudly if something is. Further interrupts cannot stop the teardown.
-- If Norma itself is killed, GCP deletes the VM and its disks once the timeout
+- If Norma itself is killed, GCP deletes the VMs and their disks once the timeout
   plus 30 minutes have passed. The network is left; it costs next to nothing
   but counts against the project's quota of VPC networks (15 by default).
   Remove it with `terraform -chdir=cloud-runs/<run-id>/tf destroy`.

@@ -17,12 +17,14 @@
 package cloud
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -58,7 +60,7 @@ func TestRun_DeletesEverything_WhenTheRunEnds(t *testing.T) {
 		},
 		"the VM never answers": {
 			env:          map[string]string{"FAKE_READY_SLEEP": "30"},
-			wantErr:      "the VM was not ready after 1s",
+			wantErr:      "the driver VM: not ready after 1s",
 			wantDestroys: 1,
 		},
 		"terraform destroy fails once": {
@@ -96,6 +98,13 @@ func TestRun_DeletesEverything_WhenTheRunEnds(t *testing.T) {
 			require.NoFileExists(t, filepath.Join(fake, "exists"), "resources are left")
 			calls := fakeCalls(t, fake)
 			require.Equal(t, test.wantDestroys, countPrefix(calls, "terraform", " destroy "))
+			hosts, err := filepath.Glob(filepath.Join(cfg.Root, "cloud-runs", "*", "hosts.json"))
+			require.NoError(t, err)
+			require.Len(t, hosts, 1)
+			data, err := os.ReadFile(hosts[0])
+			require.NoError(t, err)
+			require.JSONEq(t, `[{"name": "node-0", "ip": "10.0.0.3", "docker": "tcp://10.0.0.3:2375"},
+				{"name": "node-1", "ip": "10.0.0.4", "docker": "tcp://10.0.0.4:2375"}]`, string(data))
 			if test.wantCollected {
 				require.Len(t, collected, 1)
 				require.FileExists(t, filepath.Join(cfg.OutputDir, "norma_data_eval_1_42", "measurements.csv"))
@@ -117,9 +126,10 @@ func TestRun_ReportsLeftovers_WhenDestroyKeepsFailing(t *testing.T) {
 
 func TestRun_CreatesNothing_WhenTheRunIsRefused(t *testing.T) {
 	tests := map[string]struct {
-		granted []string
-		cost    float64
-		wantErr string
+		granted  []string
+		cost     float64
+		cpuLimit string
+		wantErr  string
 	}{
 		"a permission is missing": {
 			granted: requiredPermissions[1:],
@@ -130,10 +140,18 @@ func TestRun_CreatesNothing_WhenTheRunIsRefused(t *testing.T) {
 			cost:    6,
 			wantErr: "the worst-case cost of $6.00 exceeds the maximum of $5.00",
 		},
+		"the region lacks CPUs for the VMs": {
+			granted:  requiredPermissions,
+			cpuLimit: "6",
+			wantErr:  "region us-central1 lacks quota for 2 node VMs: CPUS needs 8, 6 of 6 are free",
+		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			fake := useFakeCloud(t, test.granted)
+			if test.cpuLimit != "" {
+				t.Setenv("FAKE_CPU_LIMIT", test.cpuLimit)
+			}
 			cfg := testConfig(t)
 			cfg.Plan.WorstCaseCost = test.cost
 
@@ -150,7 +168,8 @@ func TestRun_CreatesNothing_WhenTheRunIsRefused(t *testing.T) {
 }
 
 func TestRun_PassesTheRunFlagsOn_WhenTheyNeedQuoting(t *testing.T) {
-	prefix := "ssh cd /opt/norma && sudo ./build/norma run --skip-report-rendering -o /opt/norma/out --timeout 10m0s "
+	prefix := "ssh cd /opt/norma && sudo ./build/norma run --skip-report-rendering -o /opt/norma/out --timeout 10m0s " +
+		"--hosts /opt/norma/hosts.json "
 	tests := map[string]struct {
 		flags []string
 		tty   bool
@@ -200,7 +219,9 @@ func testConfig(t *testing.T) Config {
 		Project: "test-project",
 		Zone:    "us-central1-a",
 		Plan: Plan{
-			Machine:       Machine{Name: "n2-standard-4"},
+			Hosts:         2,
+			NodeMachine:   Machine{Name: "n2-standard-2", VCPUs: 2},
+			DriverMachine: Machine{Name: "n2-standard-4", VCPUs: 4},
 			Timeout:       10 * time.Minute,
 			TTL:           40 * time.Minute,
 			WorstCaseCost: 0.2,
@@ -224,13 +245,25 @@ func useFakeCloud(t *testing.T, granted []string) string {
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("TF_PLUGIN_CACHE_DIR", t.TempDir())
 
+	// Grants the permissions, and quotas with room for everything unless
+	// FAKE_CPU_LIMIT lowers the CPUs of the region.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string][]string{"permissions": granted})
+		if strings.HasPrefix(r.URL.Path, "/iam/") {
+			_ = json.NewEncoder(w).Encode(map[string][]string{"permissions": granted})
+			return
+		}
+		cpus, err := strconv.ParseFloat(cmp.Or(os.Getenv("FAKE_CPU_LIMIT"), "1000"), 64)
+		require.NoError(t, err)
+		_ = json.NewEncoder(w).Encode(map[string]any{"quotas": []map[string]any{
+			{"metric": "CPUS", "limit": cpus, "usage": 0},
+			{"metric": "LOCAL_SSD_TOTAL_GB", "limit": 100000, "usage": 0},
+		}})
 	}))
 	t.Cleanup(server.Close)
-	oldURL, oldTimeout, oldInterval := iamURL, readyTimeout, pollInterval
-	iamURL, readyTimeout, pollInterval = server.URL+"/%s", time.Second, 10*time.Millisecond
-	t.Cleanup(func() { iamURL, readyTimeout, pollInterval = oldURL, oldTimeout, oldInterval })
+	oldIAM, oldRegion, oldTimeout, oldInterval := iamURL, regionURL, readyTimeout, pollInterval
+	iamURL, regionURL = server.URL+"/iam/%s", server.URL+"/regions/%s/%s"
+	readyTimeout, pollInterval = time.Second, 10*time.Millisecond
+	t.Cleanup(func() { iamURL, regionURL, readyTimeout, pollInterval = oldIAM, oldRegion, oldTimeout, oldInterval })
 	return dir
 }
 
@@ -255,11 +288,13 @@ func countPrefix(calls []string, prefix, contains string) int {
 }
 
 // fakeTerraform records its calls; apply creates the resources, which a
-// destroy removes unless "destroy-fails" says how many destroys still fail.
+// destroy removes unless "destroy-fails" says how many destroys still fail,
+// and the output lists two node IPs.
 const fakeTerraform = `#!/bin/sh
 echo "terraform $*" >> "$FAKE_DIR/calls"
 case " $* " in
   *" apply "*) touch "$FAKE_DIR/exists" ;;
+  *" output "*) echo '["10.0.0.3","10.0.0.4"]' ;;
   *" destroy "*)
     n=$(cat "$FAKE_DIR/destroy-fails" 2>/dev/null || echo 0)
     if [ "$n" -gt 0 ]; then echo $((n - 1)) > "$FAKE_DIR/destroy-fails"; echo "destroy failed"; exit 1; fi
