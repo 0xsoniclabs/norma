@@ -143,6 +143,10 @@ type OperaNodeConfig struct {
 	// GenesisFile names a g-file in the shared directory to bootstrap
 	// from instead of genesis.json.
 	GenesisFile string
+	// HostIP, when set, runs the node on its host's network, which it has to
+	// itself, and makes it reachable at this IP. Empty puts it on the
+	// network's Docker bridge.
+	HostIP string
 }
 
 // StartOperaDockerNode creates a new OperaNode running in a Docker
@@ -197,8 +201,8 @@ func CreateOperaDockerNode(
 		return nil, fmt.Errorf("invalid label for node: '%v'", config.Label)
 	}
 
-	if dn == nil {
-		return nil, fmt.Errorf("docker network is required to start an Opera node")
+	if dn == nil && config.HostIP == "" {
+		return nil, fmt.Errorf("a docker network or a host IP is required to start an Opera node")
 	}
 
 	exists, err := client.ContainerExists(ctx, config.Label)
@@ -313,7 +317,7 @@ func NewOperaNode(
 	config *OperaNodeConfig,
 ) (*OperaNode, error) {
 	image := driver.ResolveClientImageName(config.Image)
-	if err := docker.EnsureImages(ctx, []string{image}, ""); err != nil {
+	if err := client.EnsureImage(ctx, image); err != nil {
 		return nil, fmt.Errorf("failed to ensure image %q: %w", image, err)
 	}
 
@@ -382,6 +386,7 @@ func NewOperaNode(
 			Network:         dn,
 			Volumes:         volumes,
 			LogsDir:         &logsDir,
+			HostIP:          config.HostIP,
 		})
 	if err != nil {
 		cleanupTempDirs()

@@ -130,7 +130,55 @@ func EnsureImages(ctx context.Context, imageRefs []string, buildRoot string) err
 	return nil
 }
 
-// ensured holds the images ensured by this process, by imageKey.
+// EnsureImage makes the image available to the client's daemon. Images are
+// built or pulled by the local daemon, which a remote daemon gets a copy from
+// once per image.
+func (c *Client) EnsureImage(ctx context.Context, ref string) error {
+	if err := EnsureImages(ctx, []string{ref}, ""); err != nil {
+		return err
+	}
+	if c.host == "" {
+		return nil
+	}
+	_, err := ensured.do(ctx, c.host+" "+imageKey(ref), func() (struct{}, error) {
+		return struct{}{}, c.copyImageFromLocal(ctx, ref)
+	})
+	return err
+}
+
+func (c *Client) copyImageFromLocal(ctx context.Context, ref string) error {
+	if _, _, err := c.cli.ImageInspectWithRaw(ctx, ref); err == nil {
+		return nil
+	}
+	slog.Info("copying image to remote docker", "image", ref, "host", c.host)
+	local, err := NewClient()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = local.Close() }()
+	archive, err := local.cli.ImageSave(ctx, []string{ref})
+	if err != nil {
+		return fmt.Errorf("failed to export image %s: %w", ref, err)
+	}
+	defer func() { _ = archive.Close() }()
+	resp, err := c.cli.ImageLoad(ctx, archive, true)
+	if err != nil {
+		return fmt.Errorf("failed to load image %s into %s: %w", ref, c.host, err)
+	}
+	// The load completes as its response is read; errors are reported in it.
+	_, err = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+	if err != nil {
+		return err
+	}
+	if _, _, err := c.cli.ImageInspectWithRaw(ctx, ref); err != nil {
+		return fmt.Errorf("image %s is missing in %s after loading it: %w", ref, c.host, err)
+	}
+	return nil
+}
+
+// ensured holds the images ensured by this process, by imageKey, and the
+// copies of them on remote daemons, by host and imageKey.
 var ensured onceByKey[struct{}]
 
 // imageKey identifies the Docker image a reference names, so that references

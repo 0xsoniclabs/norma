@@ -65,9 +65,19 @@ type LocalNetwork struct {
 	// suspended set.
 	nodesMutex sync.Mutex
 
+	// id names the network's Docker objects, so concurrent runs stay apart.
+	id string
+
+	// hosts are the machines nodes run on, one each, when the network is
+	// configured with hosts. placement records which host a node took, by
+	// placementKey. Guarded by nodesMutex.
+	hosts     []*host
+	placement map[string]*host
+
 	// volumes holds the Docker volumes created for the data volumes of the
-	// scenario, removed on Shutdown. Guarded by nodesMutex.
-	volumes map[string]bool
+	// scenario, and the daemon each is on, removed on Shutdown. Guarded by
+	// nodesMutex.
+	volumes map[string]*docker.Client
 
 	// bootstrapped is set once the first node has joined and never resets:
 	// the chain has history from then on, so a later (re)join must not be
@@ -142,9 +152,20 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 		return nil, fmt.Errorf("failed to create docker client; %v", err)
 	}
 
-	dn, err := client.CreateBridgeNetwork(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create bridge network; %v", err)
+	// Nodes on hosts use their host's network instead of a bridge.
+	var dn *docker.Network
+	var hosts []*host
+	for _, h := range config.Hosts {
+		hostClient, err := docker.NewClientAt(h.Docker)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create docker client of host %s; %v", h.Name, err)
+		}
+		hosts = append(hosts, &host{Host: h, client: hostClient})
+	}
+	if len(hosts) == 0 {
+		if dn, err = client.CreateBridgeNetwork(ctx); err != nil {
+			return nil, fmt.Errorf("failed to create bridge network; %v", err)
+		}
 	}
 
 	// Create chain account, which will be used for the initialization
@@ -158,11 +179,14 @@ func NewLocalNetwork(ctx context.Context, config *driver.NetworkConfig) (*LocalN
 		ctx:            ctx,
 		docker:         client,
 		network:        dn,
+		id:             fmt.Sprintf("norma_%d", rand.Int()),
+		hosts:          hosts,
+		placement:      map[string]*host{},
 		config:         *config,
 		primaryAccount: primaryAccount,
 		nodes:          map[driver.NodeID]*node.OperaNode{},
 		suspended:      map[driver.Node]bool{},
-		volumes:        map[string]bool{},
+		volumes:        map[string]*docker.Client{},
 		apps:           []driver.Application{},
 		listeners:      map[driver.NetworkListener]bool{},
 		rpcWorkerPool:  rpc.NewRpcWorkerPool(ctx),
@@ -361,10 +385,14 @@ func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNod
 	if n.config.OutputDir != "" {
 		nodeConfig.SharedFilesDir = filepath.Join(n.config.OutputDir, "shared")
 	}
+	client, err := n.place(nodeConfig)
+	if err != nil {
+		return nil, err
+	}
 	// A node bootstrapped from a g-file is left stopped and suspended;
 	// starting its client later peers it and announces it to monitoring.
 	if nodeConfig.GenesisFile != "" {
-		prepared, err := node.CreateOperaDockerNode(ctx, n.docker, n.network, nodeConfig)
+		prepared, err := node.CreateOperaDockerNode(ctx, client, n.network, nodeConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -376,7 +404,7 @@ func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNod
 		return prepared, nil
 	}
 
-	node, err := node.StartOperaDockerNode(ctx, n.docker, n.network, nodeConfig)
+	node, err := node.StartOperaDockerNode(ctx, client, n.network, nodeConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start opera docker; %v", err)
 	}
@@ -409,12 +437,8 @@ func (n *LocalNetwork) CreateNode(ctx context.Context, config *driver.NodeConfig
 
 	var volume *string
 	if config.DataVolume != nil {
-		// Named after the network, so concurrent runs do not share data.
 		volume = new(string)
-		*volume = n.network.Name() + "_" + *config.DataVolume
-		n.nodesMutex.Lock()
-		n.volumes[*volume] = true
-		n.nodesMutex.Unlock()
+		*volume = n.id + "_" + *config.DataVolume
 	}
 
 	return n.createNode(ctx, &node.OperaNodeConfig{
@@ -882,10 +906,10 @@ func (n *LocalNetwork) Shutdown() error {
 	// Third, remove the data volumes, now that no container uses them.
 	n.nodesMutex.Lock()
 	volumes := n.volumes
-	n.volumes = map[string]bool{}
+	n.volumes = map[string]*docker.Client{}
 	n.nodesMutex.Unlock()
-	for volume := range volumes {
-		if err := n.docker.RemoveVolume(ctx, volume); err != nil {
+	for volume, client := range volumes {
+		if err := client.RemoveVolume(ctx, volume); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -898,6 +922,10 @@ func (n *LocalNetwork) Shutdown() error {
 	}
 
 	errs = append(errs, n.rpcWorkerPool.Close())
+	for _, h := range n.hosts {
+		errs = append(errs, h.client.Close())
+	}
+	errs = append(errs, n.docker.Close())
 	if n.genesisTmpDir != "" {
 		errs = append(errs, os.RemoveAll(n.genesisTmpDir))
 		n.genesisTmpDir = ""
@@ -910,4 +938,41 @@ func (n *LocalNetwork) Shutdown() error {
 // GetDockerNetwork returns the underlying docker network.
 func (n *LocalNetwork) GetDockerNetwork() *docker.Network {
 	return n.network
+}
+
+// host is a machine of the network and the client of its Docker daemon.
+type host struct {
+	driver.Host
+	client *docker.Client
+}
+
+// place chooses the daemon a node runs on and records the node's data
+// volume on it. On hosts, each node gets one to itself, and keeps it: a node
+// that restarts, or a later node continuing from the same data volume, goes
+// back to the host that has its data.
+func (n *LocalNetwork) place(config *node.OperaNodeConfig) (*docker.Client, error) {
+	n.nodesMutex.Lock()
+	defer n.nodesMutex.Unlock()
+	client := n.docker
+	if len(n.hosts) > 0 {
+		key := config.Label
+		if config.DataVolume != nil {
+			key = "volume " + *config.DataVolume
+		}
+		h, ok := n.placement[key]
+		if !ok {
+			if len(n.placement) == len(n.hosts) {
+				return nil, fmt.Errorf("node %s needs a host, but all %d are taken", config.Label, len(n.hosts))
+			}
+			h = n.hosts[len(n.placement)]
+			n.placement[key] = h
+			slog.Info("placing node", "node", config.Label, "host", h.Name, "ip", h.IP)
+		}
+		client = h.client
+		config.HostIP = h.IP
+	}
+	if config.DataVolume != nil {
+		n.volumes[*config.DataVolume] = client
+	}
+	return client, nil
 }

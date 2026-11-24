@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -58,6 +59,7 @@ var runCommand = cli.Command{
 		&openReport,
 		&scenarioTimeout,
 		&tuiFlag,
+		&hostsFlag,
 	},
 }
 
@@ -85,6 +87,11 @@ var (
 		Name:  "open-report",
 		Usage: "automatically open the rendered report in the default browser after rendering",
 	}
+	hostsFlag = cli.StringFlag{
+		Name: "hosts",
+		Usage: "JSON file listing machines, each running one node on its own Docker daemon, " +
+			`as [{"name": ..., "ip": ..., "docker": "tcp://<ip>:2375"}]; without it, nodes run on the local Docker`,
+	}
 	scenarioTimeout = cli.DurationFlag{
 		Name:  "timeout",
 		Usage: "maximum time the scenario may run before being aborted, e.g. 25m",
@@ -105,6 +112,11 @@ func run(ctx *cli.Context) (err error) {
 	timeout := ctx.Duration(scenarioTimeout.Name)
 	if timeout <= 0 {
 		return fmt.Errorf("--%s must be positive, got %s", scenarioTimeout.Name, timeout)
+	}
+
+	hosts, err := readHosts(ctx.String(hostsFlag.Name))
+	if err != nil {
+		return err
 	}
 
 	path := args.First()
@@ -138,7 +150,7 @@ func run(ctx *cli.Context) (err error) {
 			}
 			if err := runScenario(
 				runCtx, file, outputDir, label,
-				skipChecks, skipReportRendering, openReport, timeout, ui,
+				skipChecks, skipReportRendering, openReport, timeout, hosts, ui,
 			); err != nil {
 				return fmt.Errorf("failed to run scenario %q: %w", file, err)
 			}
@@ -159,6 +171,7 @@ func runScenario(
 	path, outputDir, label string,
 	skipChecks, skipReportRendering, openReport bool,
 	timeout time.Duration,
+	hosts []driver.Host,
 	ui *tui,
 ) error {
 	ctx, cancel := context.WithCancel(ctx)
@@ -216,6 +229,7 @@ func runScenario(
 		NetworkRules: scenario.InitialRules,
 		OutputDir:    outputDir,
 		ClientImages: collectClientImages(scenario),
+		Hosts:        hosts,
 	})
 	if err != nil {
 		return err
@@ -473,4 +487,26 @@ func renderReport(
 			slog.Warn("failed to open report in browser", "error", err)
 		}
 	}
+}
+
+// readHosts reads the machines listed in the file at path; an empty path
+// lists none.
+func readHosts(path string) ([]driver.Host, error) {
+	if path == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var hosts []driver.Host
+	if err := json.Unmarshal(data, &hosts); err != nil {
+		return nil, fmt.Errorf("failed to read hosts from %s: %w", path, err)
+	}
+	for _, h := range hosts {
+		if h.Name == "" || h.IP == "" || h.Docker == "" {
+			return nil, fmt.Errorf("host %+v in %s needs a name, an ip and a docker endpoint", h, path)
+		}
+	}
+	return hosts, nil
 }

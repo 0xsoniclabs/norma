@@ -156,6 +156,18 @@ type NetworkConfig struct {
 	// them read the same genesis file, whose subsidies registry depends on the
 	// oldest client among them; see GetClientImages.
 	ClientImages []string
+	// Hosts are machines that each run one node of the network on their own
+	// Docker daemon. Without hosts, all nodes run on the local daemon.
+	Hosts []Host
+}
+
+// Host is a machine with a Docker daemon that runs one node at a time.
+type Host struct {
+	Name string `json:"name"`
+	// IP is where the host's node is reached, by the driver and by peers.
+	IP string `json:"ip"`
+	// Docker is the endpoint of the host's daemon, such as tcp://10.0.0.3:2375.
+	Docker string `json:"docker"`
 }
 
 // NetworkRules defines a set of network rules that can be applied to the network.

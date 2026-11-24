@@ -57,6 +57,8 @@ var SigInt Signal = "SIGINT"
 // services like the go-opera client.
 type Client struct {
 	cli *client.Client
+	// host is the endpoint of a remote daemon, empty for the local one.
+	host string
 }
 
 // Network represents a Docker network. It is used to connect Containers
@@ -170,6 +172,9 @@ type ContainerConfig struct {
 	// Missing volumes are created, labelled as norma's.
 	Volumes map[string]string
 	LogsDir *string // host directory for exec output logs
+	// HostIP, when set, puts the container on the network of its host, whose
+	// IP its services are reached at. Network is then not used.
+	HostIP string
 }
 
 // NewClient creates a new client facilitating the creation of Docker
@@ -180,7 +185,18 @@ func NewClient() (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{cli}, nil
+	return &Client{cli: cli}, nil
+}
+
+// NewClientAt creates a client of the Docker daemon at endpoint, such as
+// tcp://10.0.0.3:2375. Images are built or pulled by the local daemon and
+// copied to this one when a container needs them.
+func NewClientAt(endpoint string) (*Client, error) {
+	cli, err := client.NewClientWithOpts(client.WithHost(endpoint), client.WithAPIVersionNegotiation())
+	if err != nil {
+		return nil, err
+	}
+	return &Client{cli: cli, host: endpoint}, nil
 }
 
 // Purge removes all Docker objects created by norma.
@@ -281,9 +297,10 @@ func (c *Client) Start(ctx context.Context, config *ContainerConfig) (_ *Contain
 		},
 		StopTimeout: &stopTimeout,
 	}, &container.HostConfig{
-		Init:   &init,
-		CapAdd: []string{"NET_ADMIN"},
-		Mounts: mounts,
+		NetworkMode: networkMode(config),
+		Init:        &init,
+		CapAdd:      []string{"NET_ADMIN"},
+		Mounts:      mounts,
 	}, nil, nil, config.Hostname)
 	if err != nil {
 		return nil, err
@@ -322,13 +339,22 @@ func (c *Client) Start(ctx context.Context, config *ContainerConfig) (_ *Contain
 		cleaned: false,
 	}
 
-	if config.Network != nil {
+	if config.HostIP != "" {
+		ctr.ip = config.HostIP
+	} else if config.Network != nil {
 		if err := ctr.resolveIP(ctx); err != nil {
 			return nil, err
 		}
 	}
 
 	return ctr, nil
+}
+
+func networkMode(config *ContainerConfig) container.NetworkMode {
+	if config.HostIP != "" {
+		return "host"
+	}
+	return ""
 }
 
 // CreateBridgeNetwork creates a new Docker bridge network.
