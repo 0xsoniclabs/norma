@@ -87,6 +87,13 @@ func (r *Report) Render(datafile, outputDir, scenario, description, scenarioFile
 	if err := ensureRenderer(); err != nil {
 		return "", err
 	}
+	// docker run reads a relative -v source as a volume name, not a path.
+	if datafile, err = filepath.Abs(datafile); err != nil {
+		return "", err
+	}
+	if outputDir, err = filepath.Abs(outputDir); err != nil {
+		return "", err
+	}
 	script, err := createTempFile(renderScript, ".R")
 	if err != nil {
 		return "", err
