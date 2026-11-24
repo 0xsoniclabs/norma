@@ -349,11 +349,11 @@ or the suite becomes actively misleading:
 ### Step 5 — Verify
 
 ```
-go test ./scenarios/                        # parses every scenario, and asserts
-                                            # each release_testing one runs the
-                                            # candidate on at least one node
-build/norma build scenarios/release_testing # pre-builds all referenced images
-build/norma run scenarios/release_testing   # runs the suite (accepts directories)
+go test ./scenarios/                                  # parses every scenario, and asserts
+                                                      # each release_testing one runs the
+                                                      # candidate on at least one node
+go run ./driver/norma build scenarios/release_testing # pre-builds all referenced images
+go run ./driver/norma run scenarios/release_testing   # runs the suite (accepts directories)
 ```
 
 Then check the two properties this document is about — that every feature has a

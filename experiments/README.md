@@ -9,5 +9,5 @@ scenarios usually run past the default ten minute budget, so give them a
 `--timeout`:
 
 ```sh
-build/norma run --timeout 25m experiments/testnet_brio_hardfork.yml
+go run ./driver/norma run --timeout 25m experiments/testnet_brio_hardfork.yml
 ```

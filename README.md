@@ -1,263 +1,262 @@
-Project Norma
-=============
+# Norma
 
-Project Norma is a system testing infrastructure for the Sonic blockchain client.
+Norma is the system testing and performance measurement tool for the
+[Sonic](https://github.com/0xsoniclabs/sonic) blockchain client. It starts a
+network of Sonic nodes in Docker containers, drives it through a scenario
+written in YAML, generates transaction load, checks that the network behaves
+correctly, and measures how it performs.
 
-# Building and Running
+## Goals
 
-## Requirements
+### A testing tool
 
-For building/running the project, the following tools are required:
-* Go: version 1.27 or later; we recommend to use your system's package manager; alternatively, you can follow Go's [installation manual](https://go.dev/doc/install) or; if you need to maintain multiple versions, [this tutorial](https://go.dev/doc/manage-install) describes how to do so
-* Docker: version 23.0 or later; we recommend to use your system's package manager or the installation manuals listed in the [Using Docker](#using-docker) section below
-  * [Docker buildx](https://docs.docker.com/reference/cli/docker/buildx/): to install it on Ubuntu run `apt install docker-buildx`.
-* GNU make, or compatible
-* R report rendering is handled via Docker - no local R installation required.
+Norma checks that Sonic does the right thing in the situations that are hard to
+reproduce in unit tests: many nodes, several client versions, failures and
+recoveries, and changes to the network rules while it runs. A scenario can:
 
-Optionally, before running `make generate-mocks`, make sure you installed:
-* mockgen from `go.uber.org/mock`: `go install go.uber.org/mock/mockgen@latest`
-  * Make sure `$GOPATH/bin` is in your `$PATH`. `$GOPATH` defaults to `$HOME/go` if not set, i.e. configure `$PATH`
-  * either to `PATH=$GOPATH/bin:$PATH` or `PATH=$HOME/go/bin:$PATH`
+- start, stop, kill and restart nodes, and heal their databases;
+- run validators with different stakes and client versions, and delegate and
+  undelegate stake;
+- change the network rules and enable upgrades mid-run;
+- export and import genesis files and events between nodes;
+- assert on the network with checks: blocks are produced or halted, all nodes
+  agree on block hashes and heights, databases are consistent, historical state
+  matches, validators are active, and more.
 
-Optionally, before running `make generate-abi`, make sure you have installed:
-* Solidity Compiler (solc) - see [Installing the Solidity Compiler](https://docs.soliditylang.org/en/latest/installing-solidity.html)
-  * Install version [0.8.19](https://github.com/ethereum/solidity/releases/tag/v0.8.19)
-* go-ethereum's abigen: 
-  * Checkout [go-ethereum](https://github.com/ethereum/go-ethereum/) `git clone https://github.com/ethereum/go-ethereum/`
-  * Checkout the right version `git checkout v1.10.8`
-  * Build Geth will all tools: `cd go-ethereum` and `make all`
-  * Copy `abigen` from `build/bin/abigen` into your PATH, e.g.: `cp build/bin/abigen /usr/local/bin`
+Unless a scenario opts out, it ends with checks that all nodes agree on the
+chain. The suite in
+[scenarios/release_testing](scenarios/release_testing) is run for every Sonic
+release; [RELEASE_TESTING.md](RELEASE_TESTING.md) explains how it is kept up to
+date. CI checks every scenario for validity and runs those a pull request adds
+or changes.
 
+### A performance measurement tool
 
-## Building
+Norma measures how the network performs under load. Load generators send
+transactions to on-chain applications (counters, ERC-20 tokens, Uniswap,
+bundles, smart accounts and more) at a constant, rising, wave-shaped, or
+self-tuning rate. While they run, Norma records:
 
-Before building, initialize the git submodules
+- block production: block times, transactions and gas per block, base fee;
+- transaction throughput and latency, following every transaction from
+  submission through emission to inclusion in a block;
+- per-node metrics and CPU profiles.
+
+Each run produces a CSV with all measurements and an HTML report, and runs can
+be compared with each other.
+
+## Getting started
+
+Requirements:
+- Go 1.27 or later;
+- Docker 23.0 or later, with [buildx](https://docs.docker.com/reference/cli/docker/buildx/);
+  your user must be able to run `docker` (see [Docker setup](#docker-setup)).
+
+Norma is run with `go run`; there is nothing to build first. Fetch the Sonic
+submodule once, then run a scenario:
 ```
 git submodule update --init
+go run ./driver/norma run scenarios/load_generators/counter.yml
 ```
-To build the project, run
-```
-make -j
-```
-This will build the required docker images (make sure you have Docker access permissions!) and the Norma go application. To run tests, use
-```
-make test
-```
-To clean up a build, use `make clean`.
+The Docker images are built the first time they are needed: `sonic:local` from
+the [sonic](sonic) submodule, pinned releases such as `sonic:v2.1.6` from their
+tags, and the report renderer. `go run ./driver/norma build <file-or-dir>`
+builds them ahead of time, and rebuilds the renderer after its Dockerfile
+changes.
 
-Norma also counts with a native build command
-```
-go run ./driver/norma build
-```
-which build all the docker images needed by the scenarios in `./scenarios`. One can alternatively provide a specific path for the scenarios.
+`go run ./driver/norma` lists all commands. The ones used most:
 
-## Running
+| Command | What it does |
+|---|---|
+| `run <file-or-dir>` | runs a scenario, or every scenario in a directory |
+| `check <file>` | checks a scenario for errors without running it |
+| `scenario-help` | lists all steps and their parameters |
+| `estimate <file>` | estimates offline how long a scenario runs and what it costs in the cloud |
+| `render <measurements.csv>` | renders the report of a past run |
+| `diff <measurements.csv...>` | renders a report comparing several runs |
+| `build [<file-or-dir>]` | builds the client images the scenarios need, and the report renderer |
+| `purge` | removes all containers and networks Norma created |
 
-To run Norma, you can run the `norma` executable created by the build process:
+`go run ./driver/norma --sonic-path <dir> run ...` builds `sonic:local` from
+another Sonic checkout instead of the submodule.
+
+## Scenarios
+
+A scenario is a list of steps that run one after the other:
+```yaml
+Name: Liveness Blackout Recovery After Quorum Loss
+Description: Block production halts when quorum is lost.
+Scenario:
+  - startNode: validator-majority
+    type: validator
+    stake: 7000000
+  - startNode: validator-minority
+    type: validator
+    stake: 3000000
+  - runApp: load
+    type: counter
+    users: 20
+    rate:
+      constant: 20
+  - waitFor: 20s
+  - checks:
+      - blocksProduced
+  - stopNode: validator-majority
+  - waitFor: 15s
+  - checks:
+      - blocksHalted
 ```
-build/norma <cmd> <args...>
+[SCENARIO_SPECIFICATION.md](SCENARIO_SPECIFICATION.md) describes every step,
+check and network rule. The [scenarios](scenarios) directory holds:
+
+- [examples](scenarios/examples): one feature each, a good place to start;
+- [load_generators](scenarios/load_generators): one scenario per load
+  generator;
+- [release_testing](scenarios/release_testing): the release suite, by area
+  (features, liveness, rules, stress, validators);
+- [rules_upgrades](scenarios/rules_upgrades): network upgrades across client
+  versions.
+
+## Watching a run: the TUI
+
+Add `--tui` to follow a run in the terminal:
 ```
-To list the available commands, run
-```
-build/norma
-```
-Alternatively use 
-```
-go run ./driver/norma
+go run ./driver/norma run --tui scenarios/release_testing/liveness
 ```
 
+![The Norma TUI](docs/tui.png)
 
-# Developer Information
+- The left column lists the scenario's steps, with the current one highlighted,
+  and below them each node with its block height and epoch.
+- The logs fill the right side: a `Norma` tab for the run and one tab per node.
+  Switch tabs with `Tab`, `Shift+Tab` or the number keys.
+- Below the logs, live plots show blocks per second for each node and
+  transactions per second, sent and committed.
+- `q` or `Ctrl+C` aborts the run. After the run, the TUI stays open until you
+  quit it.
 
-## Using Docker
+## Results and reports
 
-Some experiments simulate network using Docker. For a local development the Docker must be installed:
-* MacOS: https://docs.docker.com/desktop/install/mac-install/
-* Linux: https://docs.docker.com/engine/install/ubuntu/
+Each run writes its results into a directory, `/tmp/norma_data_<label>_<n>` by
+default (`-o <dir>` changes the parent directory, `--label` the label). The
+latest run of a label is also linked as `norma_data_<label>_latest`. It
+contains:
 
-### Permissions on Linux
-After installation, make sure your user has the needed permissions to run docker containers on your system. You can test this by running
+- `measurements.csv`: every measurement of the run;
+- the HTML report rendered from it;
+- `node_logs` and `client-logs`: the logs of every node;
+- `cpu_profiles`: `pprof` CPU profiles of every node.
+
+The report shows:
+- the timeline of the scenario's steps;
+- block metrics: gas, transactions, delay, base fee;
+- network metrics: incoming and committed transaction rates, number of nodes;
+- node metrics: block processing time, height, epoch, stakes, transaction
+  pool, disk space;
+- the transaction lifecycle per load generator: time per phase, transactions
+  in the system, rejections, and the composition of blocks;
+- application and event metrics. It is rendered with R inside Docker; no local R is
+needed. `--open-report` opens it when the run ends, and
+`--skip-report-rendering` skips it.
+
+To compare runs, for instance of two client versions, pass their
+`measurements.csv` files to `go run ./driver/norma diff`.
+
+[docs/METRICS.md](docs/METRICS.md) describes the CSV format and every metric.
+
+## Cloud runs
+
+Small scenarios run on your machine. Larger ones can run on a short-lived GCP
+VM, which runs the same `norma run` against its own Docker. (Spreading one
+network over several VMs is planned.)
+
+First, estimate what the run takes and costs. This is offline:
 ```
-docker images
+go run ./driver/norma estimate scenarios/release_testing/liveness/db_heal/bundles_heal_after_two_epochs.yml
 ```
-If you get an error stating a lack of permissions, you might have to add your non-root user to the docker group (see [this stackoverflow post](https://stackoverflow.com/questions/48957195/how-to-fix-docker-got-permission-denied-issue) for details):
 ```
-sudo groupadd docker
+scenario:        Liveness DB Heal Bundles After Two Epochs
+expected run:    28m46s (+15m0s setup)
+peak:            3 nodes, 3 apps (needs 5 vCPU, 10 GB)
+machine:         n2-standard-8 (8 vCPU, 32 GB, $0.3885/h)
+timeout:         58m0s (VM deleted after 1h28m0s)
+expected cost:   $0.30
+worst-case cost: $0.61
+uncalibrated:    checkDb, healDb, killSonic, stopSonic, waitForBlocks (their times are guesses)
+```
+The step times are calibrated from past runs; steps listed as `uncalibrated`
+are guesses. Prices are static us-central1 on-demand prices. The worst case is
+a hard limit, because GCP deletes the VM when its time runs out.
+
+Then run it:
+```
+GCP_PROJECT=<project> scripts/cloud-run.sh <scenario.yml> [norma run flags]
+```
+Optional variables:
+- `GCP_ZONE`: default `us-central1-a`.
+- `MACHINE_TYPE`: default the smallest machine that fits the scenario.
+- `TIMEOUT`: default twice the estimated duration.
+- `MAX_COST`: in USD, default 5. The script refuses to start if the worst-case
+  cost is higher.
+
+The script creates the VM with Terraform ([infra/gcp/main.tf](infra/gcp/main.tf)),
+copies your working tree to it (including uncommitted changes), builds there,
+and runs the scenario. Ctrl-C reaches the remote run, which stops its nodes as
+it would locally.
+
+Each run gets a network of its own: a VPC, subnet, firewall rule (SSH through
+IAP only) and Cloud NAT, all named `norma-run-<run-id>`. The VM has no public
+IP, and nothing else in the project shares its network, so runs neither touch
+other VMs nor each other.
+
+Everything a run creates is deleted, however it ends:
+- On success, failure or Ctrl-C, the script copies the results into
+  `cloud-runs/<run-id>/results` and destroys the VM and its network. Then it
+  checks that none of them is left, and fails loudly if something is.
+- If the script itself dies, GCP deletes the VM and its disk once the timeout
+  plus 30 minutes have passed. The network is left; it costs next to nothing
+  but counts against the project's quota of VPC networks (15 by default).
+  Remove it with `terraform -chdir=cloud-runs/<run-id>/tf destroy`.
+
+Requirements:
+- `terraform` and `gcloud`;
+- two logins: `gcloud auth login` for SSH, and
+  `gcloud auth application-default login` for Terraform;
+- the Compute Engine and IAP APIs enabled in the project
+  (`gcloud services enable compute.googleapis.com iap.googleapis.com`);
+- the roles Compute Admin (or Editor) and IAP-secured Tunnel User in the
+  project. The script checks the permissions before it creates anything.
+
+Use a project with a billing budget alert.
+
+## Development
+
+```
+make test                       # all tests
+go test ./driver/...            # a part of them
+```
+
+Optional tools:
+- `make generate-mocks` needs `mockgen`:
+  `go install go.uber.org/mock/mockgen@latest`, with `$HOME/go/bin` in your `PATH`.
+- `make generate-abi` needs [solc 0.8.19](https://github.com/ethereum/solidity/releases/tag/v0.8.19)
+  and go-ethereum's `abigen`.
+
+New load generators live in [load/app](load/app) and register themselves by
+name; new steps live in [driver/steps](driver/steps).
+
+### Docker setup
+
+On Linux, if `docker images` fails with a permission error, add your user to
+the `docker` group and log in again:
+```
 sudo usermod -aG docker $USER
-newgrp docker
 ```
-If the `newgrp docker` command is not working, a `reboot` might help.
-
-### Docker Sock on MacOS
-If Norma tests produce error that Docker is not listening on  `unix:///var/run/docker.sock`, execute
-* `docker context inspect` and make note of `Host`, which should be `unix:///$HOME/.docker/run/docker.sock`
-* export system variable, i.e. add to either `/etc/zprofile` or `$HOME/.zprofile`: 
-* `export DOCKER_HOST=unix:///$HOME/.docker/run/docker.sock`
-
-alternatively
-* Open `Desktop Tool` --> `Settings` --> `Advanced` --> `Enable Default Docker socket`
-  * this will bind the docker socket to default `unix:///var/run/docker.sock`
-
-
-### Building
-The experiments use the docker image that wraps the Sonic client. The image is built as part of
-the build process, and can be explicitly triggered:
+On macOS, if Norma cannot reach `unix:///var/run/docker.sock`, either enable
+*Settings → Advanced → Allow the default Docker socket* in Docker Desktop, or
+point Norma at Docker Desktop's socket:
 ```
-go run ./driver/norma build
+export DOCKER_HOST=unix://$HOME/.docker/run/docker.sock
 ```
-
-### Commands
-During the development, a few Docker commands can come handy:
-```
-docker run -i -t -d sonic         // runs container with Sonic in background (without -d it would run in foreground)
-docker ps                         // shows running container
-docker exec -it <ID> /bin/sh      // opens interactive shell inside the container, the ID is obtained by previous command
-docker logs <ID>                  // prints stdout (log) of the container
-docker stop <ID>                  // stop (kills) the container
-docker rm -f $(docker ps -a -q)   // stop and clean everything 
-```
-
-# Analyzing Build-In Metrics
-
-Norma manages and observes a network of Opera nodes and collects a set of metrics. The metrics are automatically enabled and their outcome is stored in a CSV file, which allows for later processing in spreadsheet software. 
-
-For instance, metric data can be generated by just running the example scenario:
-
-```
-build/norma run scenarios/examples/mixed_version_two_validators.yml
-```
-
-which produces a directory filled with measurement results, which is printed at the end of the application output. Look for two lines like
-
-```
-Monitoring data was written to /tmp/norma_data_<random_number>
-Raw data was exported to /tmp/norma_data_<random_number>/measurements.csv
-```
-
-The first line lists the directory in which all monitoring data was written to. This, in particular, includes the `measurements.csv` file, containing most of the collected monitoring data in a CSV format. It merges all the metrics in one file, and every line is one result of a single meassurement. The header of the file is:
-```
-| Metric | Network | Node | App | Time | Block | Workers | Value |
-```
-* Metric -- is the string name of the metric
-* Network -- is the network name, currently always the same
-* Node -- if the metric is attached to a node, the name is shows, otherwise the column is empty
-* App -- if the metric is attached to an application (smart contract), the name is shows, otherwise the column is empty
-* Time -- if the metric is meassured for time series (i.e. time on X-axis), the timestamp is provided, otherwise the column is empty
-* Block -- if the metric is meassured for block series (i.e. block height on X-axis), the block number is provided, otherwise the column is empty
-* Workers -- if the metric is meassured for the number of workers sending transactions (i.e. the number of workers on X-axis), the number is provided, otherwise the column is empty
-* Value -- this column is always filled and contains the actual valu (i.e. Y-axis) meassured for the metrcis. 
-
-It means that Metrics can meassure values for block numbers or timeseries, and it can be done for the whole network, individual nodes, or applications. The metrics are all stored in the same file and values 
-that do not apply for particular metric are left empty. 
-
-This structure allows for easily filtering metrics of interest and importing them in a unified format to a spreadshead. The rows oriented format can be turned into rows/cells format using a Pivot table. 
-
-For instance, lets analyse the transaction throughput of the nodes. List the metric using grep:
-```
-grep TransactionsThroughput output.csv 
-```
-or directly store the result to the clipboard (MacOS)
-```
-grep TransactionsThroughput output.csv | pbcopy
-```
-
-The content of the clipboard can be inserted into Google Sheet. For the Pivot table to work, the header must be in the first row. 
-When the rows are inserted, it must be clicked to `Split text column`, then the data is ready:
-
-<img width="875" alt="image" src="https://github.com/Fantom-foundation/Norma/assets/7114574/29b51cf6-8d9e-44d6-a1e1-d8984902451e">
-
-Notice that the CSV file could be inserted as whole (`cat output.csv | pbcopy`) to have all metrics at hand for the analysis.
-This can be impossible for same large files though, as for instance a spreadsheet tool can become unresponsive.    
-
-To create the Pivot table, one has to click: `Insert -> Pivot table`, Select `data range` and Insert to a `New sheet`
-
-
-<img width="853" alt="image" src="https://github.com/Fantom-foundation/Norma/assets/7114574/c3b8086b-37bb-49c8-bfdc-edff68a35ddb">
-<img width="851" alt="image" src="https://github.com/Fantom-foundation/Norma/assets/7114574/9cc049b0-f919-44b2-bdd6-f5f5599b7cf7">
-
-The new empty Pivot table will pop-up. What to show in the table depends on particular needs, but since the metric we have chosen contains the throughput 
-of each node, meassured for block height, it is a good idea to have the nodes as columns and values as rows, the first row being the block number. It must be set:
-* Rows: `Block` 
-* Column: `Node`
-* Values: `Value`
-
-Notice that the items selected from drop down menus are actually the columns from the flat CSV file that has been imported. 
-
-The metrics used actually contains three additional metricts, in total:
-* `TransactionsThroughput` - transaction throughput for every block and node, measured between the times consensus created the blocks
-* `TransactionsThroughputSMA_10` - simple moving average for 10 blocks
-* `TransactionsThroughputSMA_100` - simple moving average for 100 blocks
-* `TransactionsThroughputSMA_1000` - simple moving average for 1000 blocks
-
-To see only metric of interest, one has to filter it in the `Filters` drop down menu. 
-
-Notice that the Pivot table groups potentially clashing rows (like SQL GROUP BY) and applies a selected function such as Sum, Avr, Max, Min etc. At the moment we do not have metrics where such a grouping would make sense, i.e. it is imporrtant to enable filter just for one metric at a time, and then the applied grouping can be ignored (it cannot be dissabled).
-Also it is good to uncheck `Show totals` for many metrics where the sums do not make sense. 
-
-As a last step, charts can be plot from the data as usual, like this:
-
-
-<img width="2413" alt="image" src="https://github.com/Fantom-foundation/Norma/assets/7114574/5aeba3ec-a7ea-4b67-9aa4-12453bd149e6">
-
-
-## Transaction Lifecycle Metrics
-
-The transactions of load generators are followed individually, from the moment they are submitted to a node until they are part of a block. They are attributed to the application that produced them, so the `App` column tells which load a measurement belongs to. Three moments are observed: a transaction is **submitted** when a node's RPC interface accepted it, **emitted** when a validator put it into an event of the DAG, and **included** when it became part of a block.
-
-Counted once per second, per application:
-* `TransactionsPending` - submitted transactions the network could emit right away, waiting for capacity
-* `TransactionsStalled` - submitted transactions parked behind a missing nonce of their own sender, which cannot be emitted until that gap is filled
-* `TransactionsEmitted` - transactions carried by an event but not yet by a block
-* `TransactionsIncluded` - transactions that reached a block, accumulated over the run
-* `TransactionsRejected` - transactions a node refused to accept, accumulated over the run
-
-The first three are disjoint and add up to the transactions of an application currently in the system. Together they match what the nodes report as their pool contents (`txpool_pending`, `txpool_queued`), broken down per application.
-
-Measured per transaction, in nanoseconds, positioned at the moment of the submission:
-* `TransactionTimeToEmit` - from the submission until a validator emitted it
-* `TransactionTimeEmitToInclude` - from the emission until it reached a block
-* `TransactionTimeToInclude` - from the submission until it reached a block, the latency a user of the network observes
-
-Recorded per block, per application:
-* `BlockTransactionsPerApp` - the number of transactions of an application in a block
-* `BlockGasPerApp` - the gas those transactions used in that block
-
-Both are attributed to `(other)` for the transactions of no load generator, i.e. the ones Norma sends itself, so the values of a block add up to that block's own `BlockNumberOfTransactions` and `BlockGasUsed`. The report stacks them to show how the applications shared each block.
-
-Recorded per block, for the network:
-* `BlockGasLimit` - the gas limit the block was formed under, read from its header
-
-This is the `Blocks.MaxBlockGas` rule of the network, a technical hard limit rather than the throughput a network is expected to reach: how much gas a block really carries is governed by the gas validators may spend per second (`Economy.ShortGasPower.AllocPerSec`) and by the gas one event may hold (`Economy.Gas.MaxEventGas`). A run of the priority lanes pilot fills a quarter of a percent of it. The report plots it next to the gas of the applications, on a logarithmic axis, so the headroom is visible.
-
-There is one measurement per transaction, far too many to read one by one: the rendered report summarises them as distributions per application and over time. For long runs the retained measurements are thinned out, evenly over the run, so the number of rows of a duration metric is not the number of transactions sent - use `TransactionsIncluded` for that.
-
-Note that the older `ReceivedTransactions` metric measures something different: it reads the state of an application's contract, i.e. the effect its transactions had, and therefore counts neither reverted nor pending ones.
-
-## CPU Profile Data
-
-In addition to the Norma metrics, the `pprof` CPU proifile is collected every 10s from each node. The profiles are stored in the temp directory. The directory name is printed together with the Norma output, for instance:
-
-```
-Monitoring data was written to /tmp/norma_data_1852477583
-```
-
-The directory has the following structure:
-```
-/tmp/norma_data_<rand>
-+ - cpu_profiles
-  + - <node-name>
-    + - <sample_number>.prof
-    | - <sample_number>.prof
-      ...
-```
-These files can be transferred to a developer's machine, and analysed by running
-
-```
-go tool pprof -http=":8000" <sample_number>.prof
-```
-
-## Known Norma Restrictions
-
-Known restrictions
- - validator nodes must be started at the beginning of the simulation and must remain running throughout; adding validators after the simulation has started is not supported
- - generating double-sign events simulating misbehaving validators is not supported
+`go run ./driver/norma purge` removes everything Norma left behind, for
+instance after an aborted run.
