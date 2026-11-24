@@ -1,8 +1,5 @@
-# Dockerfile for the Norma R report renderer.
-# Build with: 
-#    make build-r-renderer-image
-# or
-#    go run ./driver/norma build
+# Dockerfile for the Norma R report renderer. Norma builds it on first use from
+# this file, which it embeds; `go run ./driver/norma build` rebuilds it.
 #
 # rocker/tidyverse already includes R, rmarkdown, knitr, pandoc, and the full
 # tidyverse (including lubridate). Only `slider` needs to be added on top.
