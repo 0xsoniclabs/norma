@@ -21,6 +21,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -60,9 +61,32 @@ var (
 //go:embed render.R
 var renderScript []byte
 
+//go:embed Dockerfile
+var rendererDockerfile []byte
+
+const rendererImage = "norma-r-renderer"
+
+// ensureRenderer builds the renderer image unless it exists. An existing image
+// is not rebuilt when the Dockerfile changes; `norma build` does that.
+func ensureRenderer() error {
+	if exec.Command("docker", "image", "inspect", rendererImage).Run() == nil {
+		return nil
+	}
+	slog.Info("building the report renderer image; this happens only once", "image", rendererImage)
+	cmd := exec.Command("docker", "build", "-t", rendererImage, "-")
+	cmd.Stdin = bytes.NewReader(rendererDockerfile)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to build %s: %w\n%s", rendererImage, err, out)
+	}
+	return nil
+}
+
 // Render renders this report using the given input data file (in CSV format)
 // and places its results into the defined output directory.
 func (r *Report) Render(datafile, outputDir, scenario, description, scenarioFilePath string) (outputFile string, err error) {
+	if err := ensureRenderer(); err != nil {
+		return "", err
+	}
 	script, err := createTempFile(renderScript, ".R")
 	if err != nil {
 		return "", err
@@ -93,7 +117,7 @@ func (r *Report) Render(datafile, outputDir, scenario, description, scenarioFile
 		"-v", template+":/template.Rmd:ro",
 		"-v", datafile+":/input.csv:ro",
 		"-v", outputDir+":/output",
-		"norma-r-renderer",
+		rendererImage,
 		"Rscript", "/render.R", "/template.Rmd", "/input.csv", "/output", outputFile,
 		scenario,
 		description,
