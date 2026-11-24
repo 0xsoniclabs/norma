@@ -158,7 +158,7 @@ Creates a node. The value is the node’s **identifier** (its label).
 ```yaml
 - startNode: validator-1
   type: validator          # one of: validator, observer, rpc
-  imageName: sonic:local   # optional; default: DefaultClientDockerImageName
+  imageName: sonic:v2.1.6  # optional; omit for the client under test
   dataVolume: my-volume    # optional; Docker volume mounted as data dir
   stake: 5_000_000         # optional; validator stake in S, default 5_000_000
   instances: 3             # optional; create N nodes named <id>-0..<id>-N-1
@@ -780,9 +780,8 @@ InitialNetworkRules:
     MaxBlockGas: 20_500_000_000
 
 Scenario:
-  - startNode: local
+  - startNode: candidate
     type: validator
-    imageName: sonic:local
 
   - startNode: v2.1.6
     type: validator
