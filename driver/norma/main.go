@@ -40,6 +40,7 @@ func main() {
 		Flags:     globalflags.AllGlobalFlags,
 		Commands: []*cli.Command{
 			&checkCommand,
+			&estimateCommand,
 			&runCommand,
 			&buildCommand,
 			&purgeCommand,
