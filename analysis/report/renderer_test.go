@@ -25,20 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeDocker logs its arguments, saves what a build reads from stdin, finds
-// the renderer image only if the file "image" exists, and fails a build with
-// the message in "build-error".
-const fakeDocker = `#!/bin/sh
-echo "$*" >> "$FAKE_DOCKER_DIR/calls"
-case "$1" in
-  image) [ -f "$FAKE_DOCKER_DIR/image" ] ;;
-  build)
-    cat > "$FAKE_DOCKER_DIR/dockerfile"
-    if [ -f "$FAKE_DOCKER_DIR/build-error" ]; then cat "$FAKE_DOCKER_DIR/build-error"; exit 1; fi ;;
-esac
-`
-
-func TestRender_BuildsTheRendererImageOnlyWhenItIsMissing(t *testing.T) {
+func TestRender_BuildsTheRendererImage_OnlyWhenItIsMissing(t *testing.T) {
 	inspect := "image inspect " + rendererImage
 	build := "build -t " + rendererImage + " -"
 	tests := map[string]struct {
@@ -97,3 +84,16 @@ func TestRender_BuildsTheRendererImageOnlyWhenItIsMissing(t *testing.T) {
 		})
 	}
 }
+
+// fakeDocker logs its arguments, saves what a build reads from stdin, finds
+// the renderer image only if the file "image" exists, and fails a build with
+// the message in "build-error".
+const fakeDocker = `#!/bin/sh
+echo "$*" >> "$FAKE_DOCKER_DIR/calls"
+case "$1" in
+  image) [ -f "$FAKE_DOCKER_DIR/image" ] ;;
+  build)
+    cat > "$FAKE_DOCKER_DIR/dockerfile"
+    if [ -f "$FAKE_DOCKER_DIR/build-error" ]; then cat "$FAKE_DOCKER_DIR/build-error"; exit 1; fi ;;
+esac
+`
