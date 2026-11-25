@@ -1,0 +1,35 @@
+Name: Release Stress Sixteen Validators Mix Payload Constant
+
+Description: >-
+  Sixteen validators with equal stake under mixed transaction payloads
+  (counter, erc20, uniswap) at constant rates. The network remains live
+  and all validators agree on the chain under sustained mixed load.
+
+Scenario:
+  - startNode: validators
+    type: validator
+    instances: 16
+
+  - runApp: counter-constant
+    type: counter
+    users: 80
+    rate:
+      constant: 50
+
+  - runApp: erc20-constant
+    type: erc20
+    users: 80
+    rate:
+      constant: 50
+
+  - runApp: uniswap-constant
+    type: uniswap
+    users: 80
+    rate:
+      constant: 50
+
+  - waitFor: 3m
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
