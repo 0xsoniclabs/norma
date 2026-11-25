@@ -473,3 +473,35 @@ func TestContainer_CopyToAndFrom_MoveFilesThroughTheApi_WhenNestedAndLarge(t *te
 
 	require.Error(t, cont.CopyFrom(t.Context(), "/shared/missing.g", back))
 }
+
+func TestContainer_CopyTo_KeepsSymlinks_WhenTheRootOrAnEntryIsOne(t *testing.T) {
+	cli, err := NewClient()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cli.Close() })
+	timeout := time.Second
+	cont, err := cli.Start(t.Context(), &ContainerConfig{
+		Hostname:        t.Name(),
+		ImageName:       "alpine",
+		Entrypoint:      []string{"tail", "-f", "/dev/null"},
+		ShutdownTimeout: &timeout,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cont.Cleanup(context.Background()) })
+
+	hostDir := t.TempDir()
+	genesis := filepath.Join(hostDir, "genesis.json")
+	require.NoError(t, os.WriteFile(genesis, []byte("{}"), 0o644))
+	linkedGenesis := filepath.Join(hostDir, "linked.json")
+	require.NoError(t, os.Symlink(genesis, linkedGenesis))
+	tree := filepath.Join(hostDir, "tree")
+	require.NoError(t, os.MkdirAll(tree, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(tree, "file"), []byte("content"), 0o644))
+	require.NoError(t, os.Symlink("file", filepath.Join(tree, "link")))
+
+	require.NoError(t, cont.CopyTo(t.Context(), linkedGenesis, "/genesis.json"))
+	require.NoError(t, cont.CopyTo(t.Context(), tree, "/tree"))
+	output, err := cont.Exec(t.Context(), []string{"sh", "-c",
+		"cat /genesis.json && readlink /tree/link && cat /tree/link"})
+	require.NoError(t, err, output)
+	require.Equal(t, "{}filecontent", strings.ReplaceAll(strings.TrimSpace(output), "\n", ""))
+}

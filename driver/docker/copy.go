@@ -100,7 +100,12 @@ func writeTar(archive *tar.Writer, hostPath, name string) error {
 			return err
 		}
 	}
-	err := filepath.WalkDir(hostPath, func(current string, entry fs.DirEntry, err error) error {
+	// A symlinked root stands for what it points to, as a bind mount did.
+	hostPath, err := filepath.EvalSymlinks(hostPath)
+	if err != nil {
+		return errors.Join(err, archive.Close())
+	}
+	err = filepath.WalkDir(hostPath, func(current string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -112,7 +117,13 @@ func writeTar(archive *tar.Writer, hostPath, name string) error {
 		if err != nil {
 			return err
 		}
-		header, err := tar.FileInfoHeader(info, "")
+		var link string
+		if entry.Type()&fs.ModeSymlink != 0 {
+			if link, err = os.Readlink(current); err != nil {
+				return err
+			}
+		}
+		header, err := tar.FileInfoHeader(info, link)
 		if err != nil {
 			return err
 		}

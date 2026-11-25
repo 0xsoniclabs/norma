@@ -392,7 +392,11 @@ func NewOperaNode(
 	// node needs are copied in rather than mounted.
 	if err := provideNodeFiles(ctx, container, genesisJSONPath, keystoreTempDir); err != nil {
 		cleanupTempDirs()
-		return nil, errors.Join(err, container.Cleanup(ctx))
+		// ctx may be what ended the provisioning, and nobody else holds the
+		// container.
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), containerShutdownTimeout+time.Minute)
+		defer cancel()
+		return nil, errors.Join(err, container.Cleanup(cleanupCtx))
 	}
 
 	// Use a private copy of the config to avoid modifying the original.
