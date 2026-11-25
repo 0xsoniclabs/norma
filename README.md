@@ -173,9 +173,10 @@ short-lived GCP VMs, one per node:
 ```
 go run ./driver/norma run-cloud --project <project> [--tui] <file-or-dir>
 ```
-Norma creates a VM for every node and one for the driver, copies your working
-tree to the driver VM (including uncommitted changes), builds there, and runs
-`norma run --hosts` on it. The driver starts each node on a VM of its own,
+Norma builds itself on your machine (Linux on amd64), creates a VM for every
+node and one for the driver, copies the binary and your working tree to the
+driver VM (including uncommitted changes, which the Sonic images are built
+from), and runs `norma run --hosts` on it. The driver starts each node on a VM of its own,
 which the node keeps when it restarts, and generates the load and monitors the
 nodes from inside the run's network, as it would locally. Your terminal is
 connected to the remote run: `--tui` shows the remote TUI, and Ctrl-C or `q`

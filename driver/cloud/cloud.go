@@ -97,7 +97,7 @@ type Config struct {
 // network afterwards, also when the run fails or is interrupted. It returns
 // the norma_data_* directories it collected, even when the run failed.
 func Run(ctx context.Context, cfg Config) (collected []string, err error) {
-	for _, tool := range []string{"terraform", "gcloud", "tar"} {
+	for _, tool := range []string{"terraform", "gcloud", "tar", "go"} {
 		if _, err := exec.LookPath(tool); err != nil {
 			return nil, fmt.Errorf("cloud runs need %s: %w", tool, err)
 		}
@@ -144,6 +144,17 @@ func (r *run) execute(ctx context.Context) error {
 	if err := os.MkdirAll(tfDir, 0o755); err != nil {
 		return err
 	}
+	slog.Info("building norma", "log", r.path("build.log"))
+	// ponytail: cgo links against this machine's glibc (norma needs 2.34,
+	// Debian 13 has 2.41) and only builds on linux/amd64; build in a
+	// golang:<ver>-trixie container if either stops holding.
+	build := exec.CommandContext(ctx, "go", "build", "-o", r.path("norma"), "./driver/norma")
+	build.Dir = r.cfg.Root
+	build.Env = append(os.Environ(), "GOOS=linux", "GOARCH=amd64")
+	if err := logged(build, r.path("build.log")); err != nil {
+		return fmt.Errorf("failed to build norma: %w", err)
+	}
+
 	if err := os.WriteFile(filepath.Join(tfDir, "main.tf"), terraformConfig, 0o644); err != nil {
 		return err
 	}
@@ -193,15 +204,8 @@ func (r *run) execute(ctx context.Context) error {
 		return fmt.Errorf("failed to copy the hosts: %w", err)
 	}
 
-	goImage, err := r.goImage()
-	if err != nil {
-		return err
-	}
-	slog.Info("building norma on the VM", "log", r.path("build.log"))
-	build := fmt.Sprintf("sudo docker run --rm -v %s:/src -w /src %s go build -o build/norma ./driver/norma",
-		remoteRoot, goImage)
-	if err := logged(r.ssh(ctx, build), r.path("build.log")); err != nil {
-		return fmt.Errorf("failed to build norma on the VM: %w", err)
+	if err := r.upload(ctx, r.dir, "norma", remoteRoot+"/build"); err != nil {
+		return fmt.Errorf("failed to copy norma: %w", err)
 	}
 
 	args := append([]string{"sudo", "./build/norma", "run", "--skip-report-rendering",
@@ -426,20 +430,6 @@ func (r *run) writeHosts(ctx context.Context) ([]driver.Host, error) {
 		return nil, err
 	}
 	return hosts, os.WriteFile(r.path("hosts.json"), data, 0o644)
-}
-
-// goImage is the Go image the client images are built with, in the Debian
-// release of the VM, so that the norma binary runs there.
-func (r *run) goImage() (string, error) {
-	dockerfile, err := os.ReadFile(filepath.Join(r.cfg.Root, "Dockerfile"))
-	if err != nil {
-		return "", err
-	}
-	image := regexp.MustCompile(`golang:[0-9.]+`).Find(dockerfile)
-	if image == nil {
-		return "", errors.New("no golang image in the Dockerfile")
-	}
-	return string(image) + "-trixie", nil
 }
 
 func (r *run) path(name string) string {

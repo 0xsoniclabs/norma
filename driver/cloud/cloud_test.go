@@ -208,11 +208,23 @@ func TestRun_PassesTheRunFlagsOn_WhenTheyNeedQuoting(t *testing.T) {
 	}
 }
 
+func TestRun_CreatesNothing_WhenNormaDoesNotBuild(t *testing.T) {
+	fake := useFakeCloud(t, requiredPermissions)
+	t.Setenv("FAKE_GO_FAILS", "1")
+
+	_, err := Run(t.Context(), testConfig(t))
+
+	require.ErrorContains(t, err, "failed to build norma")
+	require.ErrorContains(t, err, "does not compile")
+	for _, call := range fakeCalls(t, fake) {
+		require.True(t, strings.HasPrefix(call, "go build"), "unexpected call: %s", call)
+	}
+}
+
 // testConfig is a run of one scenario from a minimal Norma tree.
 func testConfig(t *testing.T) Config {
 	t.Helper()
 	root := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(root, "Dockerfile"), []byte("FROM golang:1.27.3 AS build\n"), 0o644))
 	scenario := filepath.Join(t.TempDir(), "s.yml")
 	require.NoError(t, os.WriteFile(scenario, []byte("Name: s\n"), 0o644))
 	return Config{
@@ -233,7 +245,7 @@ func testConfig(t *testing.T) Config {
 	}
 }
 
-// useFakeCloud puts fake terraform and gcloud first on PATH, serves the
+// useFakeCloud puts fake terraform, gcloud and go first on PATH, serves the
 // permission check with granted, and returns the directory the fakes record
 // their calls in.
 func useFakeCloud(t *testing.T, granted []string) string {
@@ -241,6 +253,7 @@ func useFakeCloud(t *testing.T, granted []string) string {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "terraform"), []byte(fakeTerraform), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "gcloud"), []byte(fakeGcloud), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go"), []byte(fakeGo), 0o755))
 	t.Setenv("FAKE_DIR", dir)
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("TF_PLUGIN_CACHE_DIR", t.TempDir())
@@ -300,6 +313,18 @@ case " $* " in
     if [ "$n" -gt 0 ]; then echo $((n - 1)) > "$FAKE_DIR/destroy-fails"; echo "destroy failed"; exit 1; fi
     rm -f "$FAKE_DIR/exists" ;;
 esac
+`
+
+// fakeGo records its calls and writes the binary it is asked for, unless
+// FAKE_GO_FAILS is set.
+const fakeGo = `#!/bin/sh
+echo "go $*" >> "$FAKE_DIR/calls"
+if [ -n "$FAKE_GO_FAILS" ]; then echo "does not compile"; exit 1; fi
+prev=""
+for a in "$@"; do
+  [ "$prev" = "-o" ] && echo binary > "$a"
+  prev="$a"
+done
 `
 
 // fakeGcloud records the commands run over ssh, plays a VM that hangs for
