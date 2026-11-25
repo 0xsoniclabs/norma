@@ -1025,7 +1025,7 @@ func TestLocalNetwork_DataVolume_Can_Be_Reused(t *testing.T) {
 	}
 
 	// The volume lives in Docker, so it is read through a helper container.
-	volume := net.network.Name() + "_" + dataVolume
+	volume := net.id + "_" + dataVolume
 	getModificationTime := func() (string, error) {
 		out, err := exec.Command("docker", "run", "--rm", "-v", volume+":/d", "alpine",
 			"sh", "-c", "find /d -name transactions.rlp -exec stat -c %y {} \\;").CombinedOutput()
