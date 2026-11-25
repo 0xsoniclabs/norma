@@ -472,6 +472,10 @@ func TestContainer_CopyToAndFrom_MoveFilesThroughTheApi_WhenNestedAndLarge(t *te
 	require.Equal(t, want, got)
 
 	require.Error(t, cont.CopyFrom(t.Context(), "/shared/missing.g", back))
+	require.ErrorContains(t, cont.CopyFrom(t.Context(), "/datadir", back), "not a file")
+	got, err = os.ReadFile(back)
+	require.NoError(t, err)
+	require.Equal(t, want, got)
 }
 
 func TestContainer_CopyTo_KeepsSymlinks_WhenTheRootOrAnEntryIsOne(t *testing.T) {

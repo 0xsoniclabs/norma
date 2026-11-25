@@ -46,11 +46,14 @@ func (c *Container) CopyTo(ctx context.Context, hostPath, containerPath string) 
 
 // CopyFrom copies the file at containerPath out of the container to hostPath.
 func (c *Container) CopyFrom(ctx context.Context, containerPath, hostPath string) error {
-	archive, _, err := c.client.cli.CopyFromContainer(ctx, c.id, containerPath)
+	archive, stat, err := c.client.cli.CopyFromContainer(ctx, c.id, containerPath)
 	if err != nil {
 		return fmt.Errorf("failed to copy %s out of the container: %w", containerPath, err)
 	}
 	defer func() { _ = archive.Close() }()
+	if stat.Mode.IsDir() {
+		return fmt.Errorf("%s is not a file in the container", containerPath)
+	}
 
 	reader := tar.NewReader(archive)
 	for {
