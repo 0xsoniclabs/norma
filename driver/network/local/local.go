@@ -389,6 +389,11 @@ func (n *LocalNetwork) createNode(ctx context.Context, nodeConfig *node.OperaNod
 	if err != nil {
 		return nil, err
 	}
+	if nodeConfig.HostIP != "" {
+		if err := client.WaitReady(ctx, hostReadyTimeout); err != nil {
+			return nil, err
+		}
+	}
 	// A node bootstrapped from a g-file is left stopped and suspended;
 	// starting its client later peers it and announces it to monitoring.
 	if nodeConfig.GenesisFile != "" {
@@ -945,6 +950,10 @@ type host struct {
 	driver.Host
 	client *docker.Client
 }
+
+// hostReadyTimeout bounds the wait for a host's Docker daemon, which a fresh
+// cloud VM may still be installing when the run starts.
+const hostReadyTimeout = 10 * time.Minute
 
 // place chooses the daemon a node runs on and records the node's data
 // volume on it. On hosts, each node gets one to itself, and keeps it: a node

@@ -199,6 +199,29 @@ func NewClientAt(endpoint string) (*Client, error) {
 	return &Client{cli: cli, host: endpoint}, nil
 }
 
+// WaitReady waits for at most timeout until the daemon answers, for a host
+// that may still be starting it.
+func (c *Client) WaitReady(ctx context.Context, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	for logged := false; ; logged = true {
+		attempt, cancelAttempt := context.WithTimeout(ctx, 5*time.Second)
+		_, err := c.cli.Ping(attempt)
+		cancelAttempt()
+		if err == nil {
+			return nil
+		}
+		if !logged {
+			slog.Info("waiting for docker", "host", c.host)
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("docker at %s does not answer: %w", c.host, err)
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+}
+
 // Purge removes all Docker objects created by norma.
 func Purge(ctx context.Context) error {
 	cli, err := NewClient()

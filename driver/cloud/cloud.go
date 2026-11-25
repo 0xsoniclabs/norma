@@ -171,19 +171,13 @@ func (r *run) execute(ctx context.Context) error {
 		return err
 	}
 
-	hosts, err := r.writeHosts(ctx)
-	if err != nil {
+	if _, err := r.writeHosts(ctx); err != nil {
 		return err
 	}
-	slog.Info("waiting for the VMs to install Docker")
+	// The node VMs install Docker while the driver builds the images; norma
+	// waits for each when it first places a node there.
+	slog.Info("waiting for the driver VM to install Docker")
 	if err := r.waitReady(ctx, "driver VM", "test -f /ready"); err != nil {
-		return err
-	}
-	var ping []string
-	for _, h := range hosts {
-		ping = append(ping, fmt.Sprintf("curl -sf -m 5 http://%s:2375/_ping >/dev/null", h.IP))
-	}
-	if err := r.waitReady(ctx, "node VMs", strings.Join(ping, " && ")); err != nil {
 		return err
 	}
 
