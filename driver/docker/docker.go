@@ -35,7 +35,9 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/mount"
 	dockerNetwork "github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 )
@@ -158,17 +160,16 @@ func NewExitedExecHandle(exitCode int, err error) *ExecHandle {
 
 // ContainerConfig defines parameters for running Docker Containers.
 type ContainerConfig struct {
-	Hostname         string
-	ImageName        string
-	ShutdownTimeout  *time.Duration
-	Environment      map[string]string
-	Entrypoint       []string // Entrypoint to run when starting the container. Optional.
-	Network          *Network // Docker network to join
-	DataDirBinding   *string  // mount client datadir to this path on host
-	GenesisFileBind  *string  // mount genesis file on host to /genesis.json:ro in container
-	KeystoreBinding  *string  // mount keystore dir on host to /datadir/keystore:ro in container
-	SharedDirBinding *string  // mount a directory shared by all nodes of the network
-	LogsDir          *string  // host directory for exec output logs
+	Hostname        string
+	ImageName       string
+	ShutdownTimeout *time.Duration
+	Environment     map[string]string
+	Entrypoint      []string // Entrypoint to run when starting the container. Optional.
+	Network         *Network // Docker network to join
+	// Volumes maps the names of volumes to the paths they are mounted at.
+	// Missing volumes are created, labelled as norma's.
+	Volumes map[string]string
+	LogsDir *string // host directory for exec output logs
 }
 
 // NewClient creates a new client facilitating the creation of Docker
@@ -218,7 +219,25 @@ func Purge(ctx context.Context) error {
 		}
 	}
 
+	// remove all volumes
+	volumes, err := cli.cli.VolumeList(ctx, volume.ListOptions{
+		Filters: filters.NewArgs(getObjectsLabelFilter()),
+	})
+	if err != nil {
+		return err
+	}
+	for _, v := range volumes.Volumes {
+		if err := cli.RemoveVolume(ctx, v.Name); err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+// RemoveVolume removes the named volume, which no container may still use.
+func (c *Client) RemoveVolume(ctx context.Context, name string) error {
+	return c.cli.VolumeRemove(ctx, name, false)
 }
 
 func (c *Client) Close() error {
@@ -239,23 +258,15 @@ func (c *Client) Start(ctx context.Context, config *ContainerConfig) (_ *Contain
 		envVars = append(envVars, fmt.Sprintf("%s=%s", key, value))
 	}
 
-	var binds []string
-	if config.DataDirBinding != nil {
-		binds = append(binds, *config.DataDirBinding)
-	}
-	if config.GenesisFileBind != nil {
-		// ensure the genesis file exists on the host before starting the container
-		genesisPath, _, _ := strings.Cut(*config.GenesisFileBind, ":")
-		if _, err := os.Stat(genesisPath); err != nil {
-			return nil, fmt.Errorf("genesis file %s does not exist: %w", genesisPath, err)
+	var mounts []mount.Mount
+	for name, target := range config.Volumes {
+		if _, err := c.cli.VolumeCreate(ctx, volume.CreateOptions{
+			Name:   name,
+			Labels: map[string]string{objectsLabel: "true"},
+		}); err != nil {
+			return nil, fmt.Errorf("failed to create volume %s: %w", name, err)
 		}
-		binds = append(binds, *config.GenesisFileBind)
-	}
-	if config.KeystoreBinding != nil {
-		binds = append(binds, *config.KeystoreBinding)
-	}
-	if config.SharedDirBinding != nil {
-		binds = append(binds, *config.SharedDirBinding)
+		mounts = append(mounts, mount.Mount{Type: mount.TypeVolume, Source: name, Target: target})
 	}
 
 	init := true
@@ -272,7 +283,7 @@ func (c *Client) Start(ctx context.Context, config *ContainerConfig) (_ *Contain
 	}, &container.HostConfig{
 		Init:   &init,
 		CapAdd: []string{"NET_ADMIN"},
-		Binds:  binds,
+		Mounts: mounts,
 	}, nil, nil, config.Hostname)
 	if err != nil {
 		return nil, err

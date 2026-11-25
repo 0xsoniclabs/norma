@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -111,10 +112,20 @@ func (n *OperaNode) Initialize(ctx context.Context) (err error) {
 		genesisArgs = []string{"genesis", "--experimental", path}
 		slog.Info("Bootstrapping from g-file",
 			"node", n.config.Label, "file", path)
+		if err := n.fetchSharedFile(ctx, n.config.GenesisFile); err != nil {
+			return err
+		}
 	}
 
-	// Skip initialization only when re-using a populated mount directory.
-	needsInit := n.config.MountDataDir == nil || isDirEmpty(*n.config.MountDataDir)
+	// Skip initialization only when re-using a volume a node already ran on.
+	needsInit := true
+	if n.config.DataVolume != nil {
+		hasState, err := n.hasState(ctx)
+		if err != nil {
+			return err
+		}
+		needsInit = !hasState
+	}
 	if needsInit {
 		mkdirCmd := []string{"mkdir", "-m", "755", "-p", dataDir}
 		if output, err := n.container.Exec(ctx, mkdirCmd); err != nil {
@@ -144,11 +155,13 @@ func (n *OperaNode) Initialize(ctx context.Context) (err error) {
 	// Network latency simulation via tc netem.
 	latency := n.config.NetworkConfig.RoundTripTime / 2
 	if latency > 0 {
+		// Every interface the node talks through, which excludes Docker's
+		// own when the container shares the host's network.
 		tcCmd := fmt.Sprintf(
-			"tc qdisc replace dev eth0 root netem delay %v"+
-				" && (ip link show eth1 2>/dev/null"+
-				" && tc qdisc replace dev eth1 root netem delay %v || true)",
-			latency, latency)
+			"for dev in $(ls /sys/class/net); do"+
+				" case $dev in lo|docker*|veth*|br-*) continue;; esac;"+
+				" tc qdisc replace dev $dev root netem delay %v || exit 1;"+
+				" done", latency)
 		cmd := []string{"sh", "-c", tcCmd}
 		if _, err := n.container.ExecWithOptions(ctx, cmd,
 			docker.ExecOptions{LogName: "tc-setup"}); err != nil {
@@ -594,19 +607,38 @@ func (n *OperaNode) waitForSonicdExit(ctx context.Context) error {
 	}
 }
 
-// isDirEmpty reports whether the directory at path contains no
-// entries (ignoring the "keystore" directory written before init).
-func isDirEmpty(path string) bool {
-	entries, err := os.ReadDir(path)
+// hasState reports whether the data directory holds more than the keystore,
+// which is copied in before initialization.
+func (n *OperaNode) hasState(ctx context.Context) (bool, error) {
+	output, err := n.container.Exec(ctx, []string{"sh", "-c",
+		"ls -A " + dataDir + " 2>/dev/null | grep -vx keystore || true"})
 	if err != nil {
-		return true
+		return false, fmt.Errorf("failed to inspect the data directory: %w - output: %s", err, output)
 	}
-	for _, e := range entries {
-		if e.Name() != "keystore" {
-			return false
-		}
+	return strings.TrimSpace(output) != "", nil
+}
+
+// publishSharedFile copies a file the node wrote into its shared directory
+// to the network's, from where any node can fetch it.
+func (n *OperaNode) publishSharedFile(ctx context.Context, name string) error {
+	if err := os.MkdirAll(n.config.SharedFilesDir, 0o755); err != nil {
+		return err
 	}
-	return true
+	if err := n.container.CopyFrom(ctx, sharedDir+"/"+name,
+		filepath.Join(n.config.SharedFilesDir, name)); err != nil {
+		return fmt.Errorf("failed to publish %s: %w", name, err)
+	}
+	return nil
+}
+
+// fetchSharedFile copies a file of the network's shared directory into the
+// node's.
+func (n *OperaNode) fetchSharedFile(ctx context.Context, name string) error {
+	if err := n.container.CopyTo(ctx, filepath.Join(n.config.SharedFilesDir, name),
+		sharedDir+"/"+name); err != nil {
+		return fmt.Errorf("failed to fetch %s: %w", name, err)
+	}
+	return nil
 }
 
 // ExportGenesis writes the node's chain, archive included, to fileName in
@@ -631,6 +663,10 @@ func (n *OperaNode) ExportGenesis(ctx context.Context, fileName string) error {
 		return fmt.Errorf("sonictool genesis export failed: %w - output: %s",
 			err, output)
 	}
+	if err := n.publishSharedFile(ctx, fileName); err != nil {
+		n.forceSetState(NodeStateReady)
+		return err
+	}
 	slog.Info("G-file exported", "node", n.config.Label, "file", path)
 	return n.transition(NodeStateMaintenance, NodeStateReady)
 }
@@ -647,6 +683,10 @@ func (n *OperaNode) ImportGenesis(ctx context.Context, fileName string) error {
 		return err
 	}
 	slog.Info("Importing g-file", "node", n.config.Label, "file", path)
+	if err := n.fetchSharedFile(ctx, fileName); err != nil {
+		n.forceSetState(NodeStateReady)
+		return err
+	}
 
 	// sonictool needs an empty data directory, so drop the database only;
 	// the validator keystore stays and the node keeps its identity.
@@ -696,6 +736,10 @@ func (n *OperaNode) ExportEvents(ctx context.Context, fileName string) error {
 		return fmt.Errorf("sonictool events export failed: %w - output: %s",
 			err, output)
 	}
+	if err := n.publishSharedFile(ctx, fileName); err != nil {
+		n.forceSetState(NodeStateReady)
+		return err
+	}
 	slog.Info("Events exported", "node", n.config.Label, "file", path)
 	return n.transition(NodeStateMaintenance, NodeStateReady)
 }
@@ -712,6 +756,10 @@ func (n *OperaNode) ImportEvents(ctx context.Context, fileName string) error {
 		return err
 	}
 	slog.Info("Importing events", "node", n.config.Label, "file", path)
+	if err := n.fetchSharedFile(ctx, fileName); err != nil {
+		n.forceSetState(NodeStateReady)
+		return err
+	}
 
 	output, err := n.container.ExecWithOptions(ctx, []string{
 		sonicToolBinaryPath,
