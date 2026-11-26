@@ -52,7 +52,7 @@ var (
 
 	TransactionsRejected = mon.Metric[mon.App, mon.Series[mon.Time, int]]{
 		Name:        "TransactionsRejected",
-		Description: "The total number of transactions a node refused to accept",
+		Description: "The total number of submissions a node refused or did not answer in time",
 	}
 )
 

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"log/slog"
 	"math/rand/v2"
+	"strings"
 	"sync"
 	"time"
 
@@ -57,7 +58,8 @@ var errNoNode = errors.New("none of the nodes the application is restricted to i
 
 // submitTimeout bounds the wait for a node to answer a submission. A sender
 // waits for the answer even after its application stopped, so a node that
-// never answers must not hold it up forever.
+// never answers must not hold it up forever. The node may still have taken a
+// transaction it did not answer in time; only a resubmission tells.
 var submitTimeout = 10 * time.Second
 
 func NewRpcWorkerPool(ctx context.Context) *RpcWorkerPool {
@@ -354,8 +356,11 @@ func (p *worker) runRpcSenderLoop() error {
 		ctx, cancel := context.WithTimeout(p.ctx, submitTimeout)
 		err := rpcClient.SendTransaction(ctx, tx.tx)
 		cancel()
-		// The submission is reported before any logging, keeping the
-		// measured moment as close to the actual submission as possible.
+		if err != nil && strings.Contains(err.Error(), "already known") {
+			err = nil // the node has it from an earlier submission
+		}
+		// The submission is reported right away, keeping the measured moment
+		// as close to the actual submission as possible.
 		p.observers.notify(tx.source, tx.tx, time.Now(), err)
 		tx.result <- err
 	}

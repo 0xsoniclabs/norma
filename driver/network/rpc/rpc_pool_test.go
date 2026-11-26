@@ -18,7 +18,9 @@ package rpc
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -105,13 +107,32 @@ func TestSendTransaction_Returns_WhenItsContextEndsBeforeAWorkerTookIt(t *testin
 	})
 }
 
-func TestWorker_AnswersWithAnError_WhenItsNodeNeverAnswers(t *testing.T) {
+func TestRunRpcSenderLoop_AnswersWithTheOutcome_WhenItsNodeAnswersLateOrNotAtAll(t *testing.T) {
 	tests := map[string]struct {
+		answer  string // the error the node answers with; none if empty
 		timeout time.Duration
 		close   bool
+		check   func(t *testing.T, err error)
 	}{
-		"submission times out": {timeout: 100 * time.Millisecond},
-		"worker is closed":     {timeout: time.Hour, close: true},
+		"node refuses it": {
+			answer:  "txpool is full",
+			timeout: time.Hour,
+			check:   func(t *testing.T, err error) { require.ErrorContains(t, err, "txpool is full") },
+		},
+		"node has it already": {
+			answer:  "already known",
+			timeout: time.Hour,
+			check:   func(t *testing.T, err error) { require.NoError(t, err) },
+		},
+		"submission times out": {
+			timeout: 100 * time.Millisecond,
+			check:   func(t *testing.T, err error) { require.ErrorIs(t, err, context.DeadlineExceeded) },
+		},
+		"worker is closed": {
+			timeout: time.Hour,
+			close:   true,
+			check:   func(t *testing.T, err error) { require.ErrorIs(t, err, context.Canceled) },
+		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -121,13 +142,26 @@ func TestWorker_AnswersWithAnError_WhenItsNodeNeverAnswers(t *testing.T) {
 			received, release := make(chan struct{}, 1), make(chan struct{})
 			node := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				received <- struct{}{}
-				<-release
+				if test.answer == "" {
+					<-release
+					return
+				}
+				var request struct{ ID json.RawMessage }
+				_ = json.NewDecoder(r.Body).Decode(&request)
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%s,"error":{"code":-32000,"message":%q}}`,
+					request.ID, test.answer)
 			}))
 			defer node.Close()
 			defer close(release)
 
+			observed := make(chan error, 1)
+			observer := driver.NewMockTransactionObserver(gomock.NewController(t))
+			observer.EXPECT().OnTransactionSubmitted(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(
+				func(_ driver.TransactionSource, _ *types.Transaction, _ time.Time, err error) { observed <- err })
+
 			txs := make(chan transactionWithSource)
-			w := newWorker("test", driver.URL(node.URL), txs, nil, &observers{})
+			w := newWorker("test", driver.URL(node.URL), txs, nil, &observers{list: []driver.TransactionObserver{observer}})
 			defer w.close()
 			tx := transactionWithSource{tx: types.NewTx(&types.LegacyTx{}), result: make(chan error, 1)}
 			txs <- tx
@@ -137,7 +171,8 @@ func TestWorker_AnswersWithAnError_WhenItsNodeNeverAnswers(t *testing.T) {
 			}
 			select {
 			case err := <-tx.result:
-				require.Error(t, err)
+				test.check(t, err)
+				test.check(t, <-observed)
 			case <-time.After(5 * time.Second):
 				t.Fatal("the worker kept waiting for the node")
 			}

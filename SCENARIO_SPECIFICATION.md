@@ -311,8 +311,8 @@ rate:
 ```
 
 Each user submits one transaction at a time and moves on to the next only
-once the network accepted it; a rejected transaction, for example because the
-pool is full, is resubmitted until it is. This keeps the nonces of every user
+once the network accepted it; a rejected transaction, for example one its
+node did not answer in time, is resubmitted until it is. This keeps the nonces of every user
 free of gaps. Under `constant` and `slope`, when all users are still waiting
 for their previous transaction, the application holds back, logs that it
 cannot sustain its rate, and does not make up for the lost time later. Under

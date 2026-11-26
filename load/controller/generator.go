@@ -112,9 +112,8 @@ func submit(
 	}
 }
 
-// known are the rejections of a transaction the network already has, in its
-// pool or on chain.
-var known = []string{"already known", "nonce too low", "bundle has already been processed"}
+// known are the rejections of a transaction the network already has on chain.
+var known = []string{"nonce too low", "bundle has already been processed"}
 
 // refused are the rejections no resubmission overcomes. Only bundles are
 // refused like this, and bundle apps take the nonces of each bundle from the

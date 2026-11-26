@@ -37,10 +37,13 @@ func TestSubmit_SendsTheTransactionUntilTheNetworkDecides_WhenItIsRejected(t *te
 		answers []error
 		taken   bool
 	}{
-		"accepted at once":    {answers: []error{nil}, taken: true},
-		"pool full twice":     {answers: []error{full, full, nil}, taken: true},
-		"already in the pool": {answers: []error{full, errors.New("already known")}, taken: true},
-		"already on chain":    {answers: []error{errors.New("nonce too low")}, taken: true},
+		"accepted at once": {answers: []error{nil}, taken: true},
+		"pool full twice":  {answers: []error{full, full, nil}, taken: true},
+		"timed out, then found on chain": {
+			answers: []error{context.DeadlineExceeded, errors.New("nonce too low")},
+			taken:   true,
+		},
+		"already on chain": {answers: []error{errors.New("nonce too low")}, taken: true},
 		"bundle processed": {
 			answers: []error{errors.New("bundle has already been processed recently")},
 			taken:   true,

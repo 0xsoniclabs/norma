@@ -743,10 +743,11 @@ if (nrow(in_system) > 0) {
 
 ### Rejected Transactions
 
-The transactions a node refused to accept, which therefore never reached a pool.
-A pool at its limit is the usual reason; the chart says whose transactions were
-refused, while `txpool_overflowed` and `txpool_underpriced` per node say why. The
-chart is left out of a run in which nothing was refused.
+The submissions a node refused or did not answer in time. A load generator
+resubmits a refused transaction until a node takes it, so a transaction counts
+once per rejection. The chart says whose submissions were refused, while
+`txpool_overflowed` and `txpool_underpriced` per node say why a pool refused
+them. The chart is left out of a run in which nothing was refused.
 
 ```{r transactions_rejected, echo=FALSE, message=FALSE, warning=FALSE, fig.dim = figure_dimensions}
 rejected <- filter_metric(all_data, "TransactionsRejected")
