@@ -62,6 +62,38 @@ func TestCheckFile_ReportsTheProblem_WhenTheScenarioIsNotValid(t *testing.T) {
 	require.ErrorContains(t, err, "failed to parse scenario file")
 }
 
+func TestLacksObservers_IsTrue_WhenOnlyPureValidatorsCanTakeTransactions(t *testing.T) {
+	tests := map[string]struct {
+		steps string
+		want  bool
+	}{
+		"no pure validator": {
+			steps: "  - startNode: val\n    type: validator\n",
+		},
+		"pure validators only": {
+			steps: "  - startNode: val\n    type: validator\n    pure: true\n",
+			want:  true,
+		},
+		"pure validator with an observer": {
+			steps: "  - startNode: val\n    type: validator\n    pure: true\n  - startNode: obs\n",
+		},
+		"pure validator with an rpc node": {
+			steps: "  - startNode: val\n    type: validator\n    pure: true\n  - startNode: rpc\n    type: rpc\n",
+		},
+		"pure validator with a prepared node": {
+			steps: "  - startNode: val\n    type: validator\n    pure: true\n" +
+				"  - prepareNode: obs\n    file: a.g\n",
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			scenario, err := ParseBytes([]byte("Name: T\nDescription: d\nScenario:\n" + test.steps))
+			require.NoError(t, err)
+			require.Equal(t, test.want, scenario.lacksObservers())
+		})
+	}
+}
+
 func writeScenario(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "scenario.yml")

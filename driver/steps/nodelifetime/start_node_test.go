@@ -41,8 +41,13 @@ func TestStartNode_Validate(t *testing.T) {
 		"observer by default": {step: StartNode{Node: steps.Node{Node: "a"}}},
 		"validator":           {step: StartNode{Node: steps.Node{Node: "a"}, Type: "validator"}},
 		"rpc":                 {step: StartNode{Node: steps.Node{Node: "a"}, Type: "rpc"}},
-		"missing name":        {step: StartNode{}, wantError: "requires a node identifier"},
-		"name with spaces":    {step: StartNode{Node: steps.Node{Node: "a b"}}, wantError: "node name must match"},
+		"pure validator":      {step: StartNode{Node: steps.Node{Node: "a"}, Type: "validator", Pure: true}},
+		"pure observer": {
+			step:      StartNode{Node: steps.Node{Node: "a"}, Pure: true},
+			wantError: "only a validator can be pure",
+		},
+		"missing name":     {step: StartNode{}, wantError: "requires a node identifier"},
+		"name with spaces": {step: StartNode{Node: steps.Node{Node: "a b"}}, wantError: "node name must match"},
 		"unknown type": {
 			step:      StartNode{Node: steps.Node{Node: "a"}, Type: "miner"},
 			wantError: "type of node must be",

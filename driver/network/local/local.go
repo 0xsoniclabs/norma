@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -426,6 +427,7 @@ func (n *LocalNetwork) CreateNode(ctx context.Context, config *driver.NodeConfig
 		GenesisJsonPath: &n.genesisJsonPath,
 		DataVolume:      volume,
 		ExtraArguments:  config.ExtraArguments,
+		Pure:            config.Pure,
 		GenesisFile:     config.GenesisFile,
 	})
 }
@@ -530,10 +532,15 @@ func (n *LocalNetwork) DialRandomRpc() (rpcdriver.Client, error) {
 
 // dialAnyRpc dials a randomly chosen reachable node, reporting which one it
 // settled on so callers that need to keep using it can remember the label.
+// Pure validators are never chosen, as they are not sent transactions.
 func (n *LocalNetwork) dialAnyRpc(ctx context.Context) (rpcdriver.Client, string, error) {
-	nodes := n.GetActiveNodes()
-	if len(nodes) == 0 {
+	all := n.GetActiveNodes()
+	if len(all) == 0 {
 		return nil, "", driver.ErrEmptyNetwork
+	}
+	nodes := slices.DeleteFunc(all, driver.Node.IsPure)
+	if len(nodes) == 0 {
+		return nil, "", errors.New("every active node is a pure validator; start an observer to send transactions through")
 	}
 	reliable := make([]driver.Node, 0, len(nodes))
 	for _, node := range nodes {

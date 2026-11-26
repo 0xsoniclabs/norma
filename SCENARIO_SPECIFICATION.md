@@ -164,6 +164,7 @@ Creates a node. The value is the node’s **identifier** (its label).
   instances: 3             # optional; create N nodes named <id>-0..<id>-N-1
   failing: false           # optional; when true, the node is expected to fail
   extraArguments: "--..."  # optional; passed to sonicd command line
+  pure: false              # optional; validators only, see below
 ```
 
 Parameter details:
@@ -179,6 +180,13 @@ Parameter details:
   is treated as an error by later checks.
 - **`dataVolume`** — Named Docker volume that persists across `stopNode` /
   `startNode` of the same identifier (used for rejoin-with-state scenarios).
+- **`pure`** — Only for validators. A pure validator runs in sonicd's
+  validator mode, as in production: no archive, no log or transaction index.
+  It is never sent transactions — neither the applications' nor the system's,
+  such as epoch advances and validator registrations — so they all go through
+  observer and rpc nodes, and `runApp` may not name it in `nodes`. The
+  `historicalState` check leaves it out. `norma check` warns when a scenario
+  starts pure validators but no observer or rpc node.
 
 **Rejoin semantics:** Calling `startNode` with an identifier that was
 previously started and stopped is treated as a rejoin. No new validator is

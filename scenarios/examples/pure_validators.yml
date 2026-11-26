@@ -1,0 +1,33 @@
+# Pure validators run in validator mode, as in production, and are never sent
+# transactions; the observer carries the load and the system transactions.
+
+Name: Pure validators
+Description: >-
+  Three pure validators and an observer. Load and system transactions go
+  through the observer only; a pure validator registered mid-run joins the
+  validator set, and the network keeps producing blocks.
+
+Scenario:
+  - startNode: validator
+    type: validator
+    pure: true
+    instances: 3
+
+  - startNode: observer
+
+  - runApp: load
+    type: counter
+    users: 10
+    rate:
+      constant: 10
+
+  - startNode: late
+    type: validator
+    pure: true
+
+  - waitFor: 10s
+
+  - checks:
+      - blocksProduced
+      - validatorsActive
+      - historicalState

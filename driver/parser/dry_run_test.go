@@ -87,6 +87,11 @@ func TestDryRun_ReportsTheStep_WhenItCannotRun(t *testing.T) {
 			steps:     "  - startNode: obs\n  - killSonic: obs\n  - runApp: load\n    type: counter\n    rate:\n      constant: 1\n    nodes: [obs]\n",
 			wantError: `step 4 (runApp load): node "obs" has no running client to submit through`,
 		},
+		"send through a pure validator": {
+			steps: "  - startNode: pv\n    type: validator\n    pure: true\n" +
+				"  - runApp: load\n    type: counter\n    rate:\n      constant: 1\n    nodes: [pv]\n",
+			wantError: `step 3 (runApp load): node "pv" is a pure validator, which is never sent transactions`,
+		},
 		"stop an app that is not running": {
 			steps:     "  - stopApp: load\n",
 			wantError: `application "load" not found in active apps`,

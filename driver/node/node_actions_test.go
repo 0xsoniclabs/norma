@@ -585,7 +585,7 @@ func TestOperaNode_BootstrapsNetwork_FalseForNodesJoiningARunningNetwork(t *test
 }
 
 func TestBuildSonicdCmd_UsesExecFormWithoutShell(t *testing.T) {
-	cmd := buildSonicdCmd(nil, "", "1.2.3.4", "")
+	cmd := buildSonicdCmd(nil, "", "1.2.3.4", false, "")
 
 	if len(cmd) == 0 {
 		t.Fatalf("command must not be empty")
@@ -605,7 +605,7 @@ func TestBuildSonicdCmd_UsesExecFormWithoutShell(t *testing.T) {
 
 func TestBuildSonicdCmd_UsesAbsolutePathsForGeneratedFiles(t *testing.T) {
 	validatorId := 3
-	cmd := buildSonicdCmd(&validatorId, "pubkey", "1.2.3.4", "")
+	cmd := buildSonicdCmd(&validatorId, "pubkey", "1.2.3.4", false, "")
 
 	for _, want := range []string{configFilePath, passwordFilePath} {
 		if !slices.Contains(cmd, want) {
@@ -630,7 +630,7 @@ func TestBuildSonicdCmd_AddsValidatorFlagsOnlyForValidators(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			cmd := buildSonicdCmd(test.id, "pubkey", "1.2.3.4", "")
+			cmd := buildSonicdCmd(test.id, "pubkey", "1.2.3.4", false, "")
 			got := slices.Contains(cmd, "--validator.id")
 			if got != test.wantValidator {
 				t.Errorf("--validator.id present = %t, want %t in %v",
@@ -640,8 +640,31 @@ func TestBuildSonicdCmd_AddsValidatorFlagsOnlyForValidators(t *testing.T) {
 	}
 }
 
+func TestBuildSonicdCmd_RunsValidatorsInValidatorMode_WhenTheyArePure(t *testing.T) {
+	validatorId := 7
+	tests := map[string]struct {
+		id       *int
+		pure     bool
+		wantMode string
+	}{
+		"observer":       {id: nil, wantMode: ""},
+		"validator":      {id: &validatorId, wantMode: "rpc"},
+		"pure validator": {id: &validatorId, pure: true, wantMode: "validator"},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			cmd := buildSonicdCmd(test.id, "pubkey", "1.2.3.4", test.pure, "")
+			mode := ""
+			if i := slices.Index(cmd, "--mode"); i >= 0 {
+				mode = cmd[i+1]
+			}
+			require.Equal(t, test.wantMode, mode)
+		})
+	}
+}
+
 func TestBuildSonicdCmd_AppendsExtraArgumentsAsSeparateEntries(t *testing.T) {
-	cmd := buildSonicdCmd(nil, "", "1.2.3.4", "--statedb.checkpointinterval 1")
+	cmd := buildSonicdCmd(nil, "", "1.2.3.4", false, "--statedb.checkpointinterval 1")
 
 	i := slices.Index(cmd, "--statedb.checkpointinterval")
 	if i < 0 {

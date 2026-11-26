@@ -45,6 +45,9 @@ type StartNode struct {
 	// height and rules checks expect it to fall behind or disagree.
 	Failing        bool   `yaml:"failing" help:"When true, the node is expected to diverge; it is not waited on."`
 	ExtraArguments string `yaml:"extraArguments" help:"Extra command line arguments for sonicd."`
+	// Pure runs a validator the way production does, so transactions have to
+	// go through an observer or rpc node.
+	Pure bool `yaml:"pure" help:"Validators only: run in validator mode, without archive; never sent transactions."`
 }
 
 func (*StartNode) Name() string { return "startNode" }
@@ -90,6 +93,10 @@ func (s *StartNode) Validate() error {
 		errs = append(errs, fmt.Errorf("type of node must be observer, rpc or validator, was set to %s", nodeType))
 	}
 
+	if s.Pure && !s.IsValidator() {
+		errs = append(errs, fmt.Errorf("only a validator can be pure, not a node of type %s", nodeType))
+	}
+
 	if s.Instances != nil && *s.Instances < 1 {
 		errs = append(errs, fmt.Errorf("number of instances must be >= 1, got %d", *s.Instances))
 	}
@@ -133,6 +140,7 @@ func (s *StartNode) UpdateModel(m *steps.Model) error {
 		label := s.InstanceName(instance)
 		m.Nodes[label] = &steps.ModelNode{
 			Validator:       s.IsValidator(),
+			Pure:            s.Pure,
 			Client:          node.NodeStateRunning,
 			ExitsWhenSynced: exitsWhenSynced(s.ExtraArguments),
 		}
@@ -233,6 +241,7 @@ func (s *StartNode) Run(ctx context.Context, env *steps.Env) error {
 				Failing:        s.Failing,
 				Image:          image,
 				Validator:      s.IsValidator(),
+				Pure:           s.Pure,
 				ValidatorId:    validatorIds[instance],
 				DataVolume:     dataVolumePtr(s.DataVolume),
 				ExtraArguments: s.ExtraArguments,

@@ -19,6 +19,7 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/0xsoniclabs/norma/driver/steps"
@@ -69,7 +70,28 @@ func CheckFile(path string) (Scenario, error) {
 	if err := scenario.DryRun(); err != nil {
 		return Scenario{}, fmt.Errorf("dry run failed: %w", err)
 	}
+	if scenario.lacksObservers() {
+		slog.Warn("scenario starts pure validators but no observer or rpc node; "+
+			"pure validators are never sent transactions, so there is no node to send them through",
+			"path", path)
+	}
 	return scenario, nil
+}
+
+// lacksObservers reports whether the scenario starts a pure validator but no
+// observer or rpc node to send transactions through.
+func (s *Scenario) lacksObservers() bool {
+	pure, observer := false, false
+	for _, step := range s.Steps {
+		switch start := step.(type) {
+		case *nodelifetime.StartNode:
+			pure = pure || start.Pure
+			observer = observer || !start.IsValidator()
+		case *nodelifetime.PrepareNode:
+			observer = true
+		}
+	}
+	return pure && !observer
 }
 
 // DryRun applies the steps in order to a model of the network, the way a run

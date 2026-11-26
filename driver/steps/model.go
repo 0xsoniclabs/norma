@@ -49,6 +49,8 @@ type Model struct {
 // ModelNode is a node of the model.
 type ModelNode struct {
 	Validator bool
+	// Pure records a pure validator, which is never sent transactions.
+	Pure bool
 	// Client is the state of the node's client: Running, Ready when it was
 	// stopped, or Killed.
 	Client node.NodeState

@@ -192,7 +192,8 @@ func dialFirstReachable(
 	ctx context.Context, nodes []driver.Node,
 ) (rpc.Client, error) {
 	for _, n := range nodes {
-		if n.IsExpectedFailure() {
+		// A pure validator keeps no archive, so it cannot serve state reads.
+		if n.IsExpectedFailure() || n.IsPure() {
 			continue
 		}
 		client, err := n.DialRpc(ctx)

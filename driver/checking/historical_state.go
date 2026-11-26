@@ -59,7 +59,7 @@ func init() {
 // balance, nonce, code and leading storage slots of the SFC, the contracts
 // that emitted logs and the senders of sampled blocks, at those blocks. A node
 // must also serve the same logs from its index as from its receipts. Nodes
-// expected to fail are left out.
+// expected to fail and pure validators, which keep no archive, are left out.
 type historicalStateChecker struct {
 	net driver.Network
 }
@@ -78,7 +78,7 @@ func (c *historicalStateChecker) Check(ctx context.Context) error {
 		}
 	}()
 	for _, n := range c.net.GetActiveNodes() {
-		if n.IsExpectedFailure() {
+		if n.IsExpectedFailure() || n.IsPure() {
 			continue
 		}
 		client, err := n.DialRpc(ctx)
