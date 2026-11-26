@@ -168,6 +168,9 @@ type Host struct {
 	IP string `json:"ip"`
 	// Docker is the endpoint of the host's daemon, such as tcp://10.0.0.3:2375.
 	Docker string `json:"docker"`
+	// Validator, when set, reserves the host for validators or for the other
+	// nodes.
+	Validator *bool `json:"validator,omitempty"`
 }
 
 // NetworkRules defines a set of network rules that can be applied to the network.

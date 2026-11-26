@@ -73,9 +73,10 @@ const (
 // driver, takes and costs.
 type Plan struct {
 	Estimate parser.Estimate
-	// Hosts is the number of node VMs.
-	Hosts                      int
-	NodeMachine, DriverMachine Machine
+	// Hosts is the number of node VMs, RPCHosts of which run nodes that are
+	// not validators on RPCMachine; the others run on NodeMachine.
+	Hosts, RPCHosts                        int
+	NodeMachine, RPCMachine, DriverMachine Machine
 	// Timeout is the scenario timeout; GCP deletes the VMs after TTL.
 	Timeout, TTL time.Duration
 	ExpectedCost float64
@@ -100,27 +101,36 @@ func EstimateFiles(files []string) (parser.Estimate, error) {
 		res.Duration += est.Duration
 		res.PeakNodes = max(res.PeakNodes, est.PeakNodes)
 		res.PeakApps = max(res.PeakApps, est.PeakApps)
-		res.Hosts = max(res.Hosts, est.Hosts)
+		res.RPCHosts = max(res.RPCHosts, est.RPCHosts)
+		res.Hosts = res.RPCHosts + max(res.Hosts-res.RPCHosts, est.Hosts-est.RPCHosts)
 		res.Uncalibrated = append(res.Uncalibrated, est.Uncalibrated...)
 	}
 	return res, nil
 }
 
 // NewPlan sizes the VMs for the estimate. Empty machine types pick the
-// defaults, and a zero timeout picks twice the expected duration.
-func NewPlan(est parser.Estimate, nodeMachineType, driverMachineType string, timeout time.Duration) (Plan, error) {
+// defaults, the RPC nodes' being the other nodes', and a zero timeout picks
+// twice the expected duration.
+func NewPlan(est parser.Estimate, nodeMachineType, rpcMachineType, driverMachineType string,
+	timeout time.Duration) (Plan, error) {
 	if est.Hosts == 0 {
 		return Plan{}, fmt.Errorf("the scenario starts no nodes")
 	}
 	if nodeMachineType == "" {
 		nodeMachineType = defaultNodeMachine
 	}
+	if rpcMachineType == "" {
+		rpcMachineType = nodeMachineType
+	}
 	if driverMachineType == "" {
 		driverMachineType = driverMachineFor(est.Hosts)
 	}
-	p := Plan{Estimate: est, Hosts: est.Hosts, Timeout: timeout}
+	p := Plan{Estimate: est, Hosts: est.Hosts, RPCHosts: est.RPCHosts, Timeout: timeout}
 	var err error
 	if p.NodeMachine, err = lookupMachine(nodeMachineType); err != nil {
+		return Plan{}, err
+	}
+	if p.RPCMachine, err = lookupMachine(rpcMachineType); err != nil {
 		return Plan{}, err
 	}
 	if p.DriverMachine, err = lookupMachine(driverMachineType); err != nil {
@@ -132,7 +142,8 @@ func NewPlan(est parser.Estimate, nodeMachineType, driverMachineType string, tim
 	p.TTL = p.Timeout + ttlMargin
 	vms := float64(p.Hosts + 1)
 	disks := vms * (bootDiskGB*bootDiskGBMonth + localSSDGB*localSSDGBMonth) / hoursPerMonth
-	hourly := p.DriverMachine.Hourly + float64(p.Hosts)*p.NodeMachine.Hourly + disks
+	hourly := p.DriverMachine.Hourly + float64(p.Hosts-p.RPCHosts)*p.NodeMachine.Hourly +
+		float64(p.RPCHosts)*p.RPCMachine.Hourly + disks
 	p.ExpectedCost = (setupTime + est.Duration).Hours() * hourly
 	p.WorstCaseCost = p.TTL.Hours() * hourly
 	return p, nil
@@ -140,7 +151,7 @@ func NewPlan(est parser.Estimate, nodeMachineType, driverMachineType string, tim
 
 // VCPUs is the number of vCPUs of all the VMs.
 func (p Plan) VCPUs() int {
-	return p.DriverMachine.VCPUs + p.Hosts*p.NodeMachine.VCPUs
+	return p.DriverMachine.VCPUs + (p.Hosts-p.RPCHosts)*p.NodeMachine.VCPUs + p.RPCHosts*p.RPCMachine.VCPUs
 }
 
 // LocalSSDGB is the local SSD capacity of all the VMs.
@@ -152,8 +163,10 @@ func (p Plan) LocalSSDGB() int {
 func (p Plan) Fprint(w io.Writer) {
 	fmt.Fprintf(w, "expected run:    %s (+%s setup)\n", p.Estimate.Duration, setupTime)
 	fmt.Fprintf(w, "nodes:           %d, at most %d at once; %d apps\n", p.Hosts, p.Estimate.PeakNodes, p.Estimate.PeakApps)
-	fmt.Fprintf(w, "VMs:             %d × %s ($%.4f/h) for the nodes, %s ($%.4f/h) for the driver\n",
-		p.Hosts, p.NodeMachine.Name, p.NodeMachine.Hourly, p.DriverMachine.Name, p.DriverMachine.Hourly)
+	fmt.Fprintf(w, "VMs:             %d × %s ($%.4f/h) for the validators, %d × %s ($%.4f/h) for the other nodes,\n"+
+		"                 %s ($%.4f/h) for the driver\n",
+		p.Hosts-p.RPCHosts, p.NodeMachine.Name, p.NodeMachine.Hourly, p.RPCHosts, p.RPCMachine.Name,
+		p.RPCMachine.Hourly, p.DriverMachine.Name, p.DriverMachine.Hourly)
 	fmt.Fprintf(w, "timeout:         %s (VMs deleted after %s)\n", p.Timeout, p.TTL)
 	fmt.Fprintf(w, "expected cost:   $%.2f\n", p.ExpectedCost)
 	fmt.Fprintf(w, "worst-case cost: $%.2f\n", p.WorstCaseCost)

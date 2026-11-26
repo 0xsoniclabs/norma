@@ -57,27 +57,32 @@ Scenario:
 
 func TestEstimate_CountsTheHostsNodesTakePlacedOnePerMachine_WhenNodesComeAndGo(t *testing.T) {
 	tests := map[string]struct {
-		steps string
-		want  int
+		steps         string
+		want, wantRPC int
 	}{
 		"instances take a host each": {
 			steps: "  - startNode: val\n    type: validator\n    instances: 3\n",
 			want:  3,
 		},
+		"nodes that are not validators are counted apart": {
+			steps: "  - startNode: val\n    type: validator\n    instances: 2\n" +
+				"  - startNode: rpc\n    type: rpc\n    instances: 2\n  - startNode: obs\n",
+			want: 5, wantRPC: 3,
+		},
 		"a node started again keeps its host": {
 			steps: "  - startNode: val\n    type: validator\n  - startNode: obs\n" +
 				"  - stopNode: obs\n  - startNode: obs\n",
-			want: 2,
+			want: 2, wantRPC: 1,
 		},
 		"a restarted client stays in its container": {
 			steps: "  - startNode: val\n    type: validator\n  - startNode: obs\n" +
 				"  - stopSonic: obs\n  - startNode: obs\n",
-			want: 2,
+			want: 2, wantRPC: 1,
 		},
 		"nodes continuing from one data volume share its host": {
 			steps: "  - startNode: val\n    type: validator\n  - startNode: a\n    dataVolume: v\n" +
 				"  - stopNode: a\n  - startNode: b\n    dataVolume: v\n",
-			want: 2,
+			want: 2, wantRPC: 1,
 		},
 	}
 	for name, test := range tests {
@@ -89,6 +94,7 @@ func TestEstimate_CountsTheHostsNodesTakePlacedOnePerMachine_WhenNodesComeAndGo(
 
 			require.NoError(t, err)
 			require.Equal(t, test.want, got.Hosts)
+			require.Equal(t, test.wantRPC, got.RPCHosts)
 		})
 	}
 }

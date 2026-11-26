@@ -30,9 +30,10 @@ var estimateCommand = cli.Command{
 	Action:    estimate,
 	Name:      "estimate",
 	Usage:     "estimates offline how long scenarios run and what they cost on a GCP VM",
-	UsageText: "norma estimate [--machine-type T] [--driver-machine-type T] [--timeout D] <scenario-file-or-dir>",
+	UsageText: "norma estimate [--machine-type T] [--rpc-machine-type T] [--driver-machine-type T] [--timeout D] <scenario-file-or-dir>",
 	Flags: []cli.Flag{
 		&machineTypeFlag,
+		&rpcMachineTypeFlag,
 		&driverMachineTypeFlag,
 		&estimateTimeoutFlag,
 	},
@@ -41,8 +42,12 @@ var estimateCommand = cli.Command{
 var (
 	machineTypeFlag = cli.StringFlag{
 		Name:  "machine-type",
-		Usage: "GCP machine type of the node VMs, one per node",
+		Usage: "GCP machine type of the validators' VMs, one per node",
 		Value: "n2-standard-2",
+	}
+	rpcMachineTypeFlag = cli.StringFlag{
+		Name:  "rpc-machine-type",
+		Usage: "GCP machine type of the VMs of the nodes that are not validators; by default --machine-type",
 	}
 	driverMachineTypeFlag = cli.StringFlag{
 		Name:  "driver-machine-type",
@@ -77,6 +82,6 @@ func planCloudRun(ctx *cli.Context) (cloud.Plan, error) {
 	if err != nil {
 		return cloud.Plan{}, err
 	}
-	return cloud.NewPlan(est, ctx.String(machineTypeFlag.Name), ctx.String(driverMachineTypeFlag.Name),
-		ctx.Duration(estimateTimeoutFlag.Name))
+	return cloud.NewPlan(est, ctx.String(machineTypeFlag.Name), ctx.String(rpcMachineTypeFlag.Name),
+		ctx.String(driverMachineTypeFlag.Name), ctx.Duration(estimateTimeoutFlag.Name))
 }

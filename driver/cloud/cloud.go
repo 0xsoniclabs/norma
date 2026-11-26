@@ -37,6 +37,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -393,11 +394,24 @@ func (r *run) terraform(ctx context.Context, logName string, args ...string) err
 }
 
 func (r *run) tfvars() []byte {
+	types := make([]string, r.cfg.Plan.Hosts)
+	for i := range types {
+		types[i] = strconv.Quote(r.cfg.Plan.RPCMachine.Name)
+		if r.validatorHost(i) {
+			types[i] = strconv.Quote(r.cfg.Plan.NodeMachine.Name)
+		}
+	}
 	return fmt.Appendf(nil, "project             = %q\nzone                = %q\nrun_id              = %q\n"+
-		"driver_machine_type = %q\nnode_machine_type   = %q\nnode_count          = %d\n"+
+		"driver_machine_type = %q\nnode_machine_types  = [%s]\n"+
 		"disk_gb             = %d\nttl_minutes         = %d\n",
-		r.cfg.Project, r.cfg.Zone, r.id, r.cfg.Plan.DriverMachine.Name, r.cfg.Plan.NodeMachine.Name,
-		r.cfg.Plan.Hosts, bootDiskGB, int(math.Ceil(r.cfg.Plan.TTL.Minutes())))
+		r.cfg.Project, r.cfg.Zone, r.id, r.cfg.Plan.DriverMachine.Name, strings.Join(types, ", "),
+		bootDiskGB, int(math.Ceil(r.cfg.Plan.TTL.Minutes())))
+}
+
+// validatorHost tells whether node VM i is for a validator; the validators'
+// VMs come first.
+func (r *run) validatorHost(i int) bool {
+	return i < r.cfg.Plan.Hosts-r.cfg.Plan.RPCHosts
 }
 
 // writeHosts lists the node VMs Terraform created in hosts.json, for the
@@ -417,7 +431,8 @@ func (r *run) writeHosts(ctx context.Context) ([]driver.Host, error) {
 	}
 	hosts := make([]driver.Host, len(ips))
 	for i, ip := range ips {
-		hosts[i] = driver.Host{Name: fmt.Sprintf("node-%d", i), IP: ip, Docker: "tcp://" + ip + ":2375"}
+		hosts[i] = driver.Host{Name: fmt.Sprintf("node-%d", i), IP: ip, Docker: "tcp://" + ip + ":2375",
+			Validator: new(r.validatorHost(i))}
 	}
 	data, err := json.MarshalIndent(hosts, "", "  ")
 	if err != nil {

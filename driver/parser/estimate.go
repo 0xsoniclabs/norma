@@ -57,6 +57,8 @@ type Estimate struct {
 	// runs on one of its own: one per node, but nodes continuing from the
 	// same data volume share the volume's machine.
 	Hosts int
+	// RPCHosts is how many of the Hosts run nodes that are not validators.
+	RPCHosts int
 	// Uncalibrated lists the steps whose time is a guess rather than measured.
 	Uncalibrated []string
 }
@@ -67,7 +69,7 @@ func (s *Scenario) Estimate() (Estimate, error) {
 	var res Estimate
 	epoch := time.Duration(inter.Timestamp(*s.InitialRules.Epochs.MaxEpochDuration))
 	model := steps.NewModel()
-	hosts := map[string]bool{}
+	hosts := map[string]bool{} // whether the host's first node is a validator
 	for i, step := range s.Steps {
 		before := maps.Clone(model.Nodes)
 		if err := step.UpdateModel(model); err != nil {
@@ -76,8 +78,11 @@ func (s *Scenario) Estimate() (Estimate, error) {
 		res.PeakNodes = max(res.PeakNodes, len(model.Nodes))
 		res.PeakApps = max(res.PeakApps, len(model.Apps))
 		for label := range model.Nodes {
+			key := hostKey(step, label)
 			if _, existed := before[label]; !existed {
-				hosts[hostKey(step, label)] = true
+				if _, placed := hosts[key]; !placed {
+					hosts[key] = model.Nodes[label].Validator
+				}
 			}
 		}
 
@@ -101,6 +106,11 @@ func (s *Scenario) Estimate() (Estimate, error) {
 	slices.Sort(res.Uncalibrated)
 	res.Uncalibrated = slices.Compact(res.Uncalibrated)
 	res.Hosts = len(hosts)
+	for _, validator := range hosts {
+		if !validator {
+			res.RPCHosts++
+		}
+	}
 	return res, nil
 }
 

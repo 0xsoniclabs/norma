@@ -184,7 +184,9 @@ stops the run as it would locally.
 
 `norma run --hosts hosts.json` is the same on any machines with a Docker
 daemon the driver can reach, listed as
-`[{"name": ..., "ip": ..., "docker": "tcp://<ip>:2375"}]`.
+`[{"name": ..., "ip": ..., "docker": "tcp://<ip>:2375"}]`. A host with
+`"validator": true` or `false` is reserved for validators or for the other
+nodes.
 
 Afterwards, the run's data is copied to your machine and handled as `norma run`
 handles its own: `norma_data_<label>_<n>` lands in `/tmp` or in `-o <dir>`, and
@@ -212,7 +214,9 @@ are calibrated from past runs; steps listed as `uncalibrated` are guesses.
 Prices are static us-central1 on-demand prices. The worst case is a hard
 limit, because GCP deletes the VMs when their time runs out. Other flags:
 - `--zone`: default `us-central1-a`.
-- `--machine-type`: the node VMs, default `n2-standard-2`.
+- `--machine-type`: the validators' VMs, default `n2-standard-2`.
+- `--rpc-machine-type`: the VMs of the other nodes (`rpc` and `observer`),
+  default `--machine-type`.
 - `--driver-machine-type`: default sized by the number of nodes.
 - `--timeout`: default twice the estimated duration.
 

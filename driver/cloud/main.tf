@@ -25,11 +25,10 @@ variable "driver_machine_type" {
   type    = string
   default = "n2-standard-4"
 }
-variable "node_machine_type" {
-  type    = string
-  default = "n2-standard-2"
+variable "node_machine_types" {
+  type        = list(string)
+  description = "the machine type of each node VM"
 }
-variable "node_count" { type = number }
 variable "disk_gb" {
   type        = number
   default     = 10
@@ -178,9 +177,9 @@ resource "google_compute_instance" "vm" {
 }
 
 resource "google_compute_instance" "node" {
-  count        = var.node_count
+  count        = length(var.node_machine_types)
   name         = "${local.name}-node-${count.index}"
-  machine_type = var.node_machine_type
+  machine_type = var.node_machine_types[count.index]
   labels       = { norma-run = var.run_id }
   tags         = [local.node_tag]
 

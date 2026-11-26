@@ -26,17 +26,18 @@ import (
 
 func TestNewPlan_SizesAndPricesOneVMPerNode_WhenGivenAnEstimate(t *testing.T) {
 	tests := map[string]struct {
-		hosts                      int
-		duration                   time.Duration
-		nodeMachine, driverMachine string
-		timeout                    time.Duration
-		wantNode, wantDriver       string
-		wantTimeout                time.Duration
+		hosts, rpcHosts                        int
+		duration                               time.Duration
+		nodeMachine, rpcMachine, driverMachine string
+		timeout                                time.Duration
+		wantNode, wantRPC, wantDriver          string
+		wantTimeout                            time.Duration
 	}{
 		"a small scenario gets the defaults and the minimum timeout": {
 			hosts:       1,
 			duration:    2 * time.Minute,
 			wantNode:    "n2-standard-2",
+			wantRPC:     "n2-standard-2",
 			wantDriver:  "n2-standard-4",
 			wantTimeout: minTimeout,
 		},
@@ -44,6 +45,7 @@ func TestNewPlan_SizesAndPricesOneVMPerNode_WhenGivenAnEstimate(t *testing.T) {
 			hosts:       40,
 			duration:    20 * time.Minute,
 			wantNode:    "n2-standard-2",
+			wantRPC:     "n2-standard-2",
 			wantDriver:  "n2-standard-8",
 			wantTimeout: 40 * time.Minute,
 		},
@@ -54,26 +56,42 @@ func TestNewPlan_SizesAndPricesOneVMPerNode_WhenGivenAnEstimate(t *testing.T) {
 			driverMachine: "n2-standard-32",
 			timeout:       15 * time.Minute,
 			wantNode:      "n2-standard-4",
+			wantRPC:       "n2-standard-4",
 			wantDriver:    "n2-standard-32",
 			wantTimeout:   15 * time.Minute,
+		},
+		"the nodes that are not validators get their own machine": {
+			hosts:       43,
+			rpcHosts:    3,
+			duration:    4 * time.Minute,
+			rpcMachine:  "n2-standard-4",
+			wantNode:    "n2-standard-2",
+			wantRPC:     "n2-standard-4",
+			wantDriver:  "n2-standard-8",
+			wantTimeout: minTimeout,
 		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			est := parser.Estimate{Duration: test.duration, Hosts: test.hosts}
+			est := parser.Estimate{Duration: test.duration, Hosts: test.hosts, RPCHosts: test.rpcHosts}
 
-			plan, err := NewPlan(est, test.nodeMachine, test.driverMachine, test.timeout)
+			plan, err := NewPlan(est, test.nodeMachine, test.rpcMachine, test.driverMachine, test.timeout)
 
 			require.NoError(t, err)
 			require.Equal(t, test.hosts, plan.Hosts)
+			require.Equal(t, test.rpcHosts, plan.RPCHosts)
 			require.Equal(t, test.wantNode, plan.NodeMachine.Name)
+			require.Equal(t, test.wantRPC, plan.RPCMachine.Name)
 			require.Equal(t, test.wantDriver, plan.DriverMachine.Name)
 			require.Equal(t, test.wantTimeout, plan.Timeout)
 			require.Equal(t, test.wantTimeout+ttlMargin, plan.TTL)
-			require.Equal(t, plan.DriverMachine.VCPUs+test.hosts*plan.NodeMachine.VCPUs, plan.VCPUs())
+			validators := test.hosts - test.rpcHosts
+			require.Equal(t, plan.DriverMachine.VCPUs+validators*plan.NodeMachine.VCPUs+
+				test.rpcHosts*plan.RPCMachine.VCPUs, plan.VCPUs())
 			require.Equal(t, (test.hosts+1)*localSSDGB, plan.LocalSSDGB())
 			hourly := plan.WorstCaseCost / plan.TTL.Hours()
-			require.Greater(t, hourly, plan.DriverMachine.Hourly+float64(test.hosts)*plan.NodeMachine.Hourly)
+			require.Greater(t, hourly, plan.DriverMachine.Hourly+float64(validators)*plan.NodeMachine.Hourly+
+				float64(test.rpcHosts)*plan.RPCMachine.Hourly)
 			require.Greater(t, plan.WorstCaseCost, plan.ExpectedCost)
 		})
 	}
@@ -90,7 +108,7 @@ func TestNewPlan_Fails_WhenItCannotBePriced(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := NewPlan(parser.Estimate{Hosts: test.hosts}, test.nodeMachine, "", 0)
+			_, err := NewPlan(parser.Estimate{Hosts: test.hosts}, test.nodeMachine, "", "", 0)
 			require.ErrorContains(t, err, test.wantErr)
 		})
 	}

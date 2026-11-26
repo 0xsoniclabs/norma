@@ -951,6 +951,21 @@ type host struct {
 	client *docker.Client
 }
 
+// freeHost returns the first host no node took that may run a validator, or
+// a node that is not one, or nil if there is none.
+func (n *LocalNetwork) freeHost(validator bool) *host {
+	taken := map[*host]bool{}
+	for _, h := range n.placement {
+		taken[h] = true
+	}
+	for _, h := range n.hosts {
+		if !taken[h] && (h.Validator == nil || *h.Validator == validator) {
+			return h
+		}
+	}
+	return nil
+}
+
 // hostReadyTimeout bounds the wait for a host's Docker daemon, which a fresh
 // cloud VM may still be installing when the run starts.
 const hostReadyTimeout = 10 * time.Minute
@@ -970,10 +985,9 @@ func (n *LocalNetwork) place(config *node.OperaNodeConfig) (*docker.Client, erro
 		}
 		h, ok := n.placement[key]
 		if !ok {
-			if len(n.placement) == len(n.hosts) {
+			if h = n.freeHost(config.ValidatorId != nil && *config.ValidatorId > 0); h == nil {
 				return nil, fmt.Errorf("node %s needs a host, but all %d are taken", config.Label, len(n.hosts))
 			}
-			h = n.hosts[len(n.placement)]
 			n.placement[key] = h
 			slog.Info("placing node", "node", config.Label, "host", h.Name, "ip", h.IP)
 		}

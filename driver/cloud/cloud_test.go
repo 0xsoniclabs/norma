@@ -103,8 +103,11 @@ func TestRun_DeletesEverything_WhenTheRunEnds(t *testing.T) {
 			require.Len(t, hosts, 1)
 			data, err := os.ReadFile(hosts[0])
 			require.NoError(t, err)
-			require.JSONEq(t, `[{"name": "node-0", "ip": "10.0.0.3", "docker": "tcp://10.0.0.3:2375"},
-				{"name": "node-1", "ip": "10.0.0.4", "docker": "tcp://10.0.0.4:2375"}]`, string(data))
+			require.JSONEq(t, `[{"name": "node-0", "ip": "10.0.0.3", "docker": "tcp://10.0.0.3:2375", "validator": true},
+				{"name": "node-1", "ip": "10.0.0.4", "docker": "tcp://10.0.0.4:2375", "validator": false}]`, string(data))
+			tfvars, err := os.ReadFile(filepath.Join(filepath.Dir(hosts[0]), "tf", "terraform.tfvars"))
+			require.NoError(t, err)
+			require.Contains(t, string(tfvars), `node_machine_types  = ["n2-standard-2", "n2-standard-4"]`)
 			if test.wantCollected {
 				require.Len(t, collected, 1)
 				require.FileExists(t, filepath.Join(cfg.OutputDir, "norma_data_eval_1_42", "measurements.csv"))
@@ -143,7 +146,7 @@ func TestRun_CreatesNothing_WhenTheRunIsRefused(t *testing.T) {
 		"the region lacks CPUs for the VMs": {
 			granted:  requiredPermissions,
 			cpuLimit: "6",
-			wantErr:  "region us-central1 lacks quota for 2 node VMs: CPUS needs 8, 6 of 6 are free",
+			wantErr:  "region us-central1 lacks quota for 2 node VMs: CPUS needs 10, 6 of 6 are free",
 		},
 	}
 	for name, test := range tests {
@@ -232,7 +235,9 @@ func testConfig(t *testing.T) Config {
 		Zone:    "us-central1-a",
 		Plan: Plan{
 			Hosts:         2,
+			RPCHosts:      1,
 			NodeMachine:   Machine{Name: "n2-standard-2", VCPUs: 2},
+			RPCMachine:    Machine{Name: "n2-standard-4", VCPUs: 4},
 			DriverMachine: Machine{Name: "n2-standard-4", VCPUs: 4},
 			Timeout:       10 * time.Minute,
 			TTL:           40 * time.Minute,

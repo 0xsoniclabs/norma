@@ -41,6 +41,7 @@ var runCloudCommand = cli.Command{
 		&projectFlag,
 		&zoneFlag,
 		&machineTypeFlag,
+		&rpcMachineTypeFlag,
 		&driverMachineTypeFlag,
 		&maxCostFlag,
 		&estimateTimeoutFlag,

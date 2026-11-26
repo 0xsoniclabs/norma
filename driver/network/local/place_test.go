@@ -75,6 +75,47 @@ func TestLocalNetwork_Place_GivesEachNodeAHostOfItsOwn_WhenHostsAreConfigured(t 
 	}
 }
 
+func TestLocalNetwork_Place_TakesAHostReservedForTheKindOfNode_WhenHostsAreReserved(t *testing.T) {
+	type placement struct {
+		label     string
+		validator bool
+		wantIP    string
+		wantErr   string
+	}
+	tests := map[string][]placement{
+		"each kind takes its own hosts in order": {
+			{label: "rpc", wantIP: "10.0.0.2"},
+			{label: "val-0", validator: true, wantIP: "10.0.0.1"},
+			{label: "val-1", validator: true, wantIP: "10.0.0.3"},
+		},
+		"a kind without a free host is refused": {
+			{label: "rpc-0", wantIP: "10.0.0.2"},
+			{label: "rpc-1", wantErr: "node rpc-1 needs a host, but all 3 are taken"},
+		},
+	}
+	for name, placements := range tests {
+		t.Run(name, func(t *testing.T) {
+			net := newPlacementTestNetwork("10.0.0.1", "10.0.0.2", "10.0.0.3")
+			net.hosts[0].Validator, net.hosts[1].Validator, net.hosts[2].Validator = new(true), new(false), new(true)
+			for _, p := range placements {
+				config := &node.OperaNodeConfig{Label: p.label}
+				if p.validator {
+					config.ValidatorId = new(1)
+				}
+
+				_, err := net.place(config)
+
+				if p.wantErr != "" {
+					require.ErrorContains(t, err, p.wantErr)
+					continue
+				}
+				require.NoError(t, err)
+				require.Equal(t, p.wantIP, config.HostIP)
+			}
+		})
+	}
+}
+
 func TestLocalNetwork_Place_UsesTheLocalDaemon_WhenNoHostsAreConfigured(t *testing.T) {
 	local := &docker.Client{}
 	net := newPlacementTestNetwork()
