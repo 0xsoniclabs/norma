@@ -1,0 +1,31 @@
+Name: Release Stress Forty Validators Max Throughput Via RPC
+
+Description: >-
+  Forty validators with equal stake under an ERC-20 load that enters
+  the network only through three RPC nodes and ramps up from 100 to
+  1,900 Tx/s. The network remains live and all validators agree on the
+  chain; the report shows where the throughput stops following the load.
+
+Scenario:
+  - startNode: validators
+    type: validator
+    instances: 40
+
+  - startNode: rpc
+    type: rpc
+    instances: 3
+
+  - runApp: erc20-ramp
+    type: erc20
+    users: 500
+    rate:
+      slope:
+        start: 100
+        increment: 10
+    nodes: [rpc]
+
+  - waitFor: 3m
+
+  - checks:
+      - blocksProduced:
+          tolerance: 10
