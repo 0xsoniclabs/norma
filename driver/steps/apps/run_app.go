@@ -86,6 +86,9 @@ func (s *RunApp) UpdateModel(m *steps.Model) error {
 		}) {
 			return fmt.Errorf("node %q has no running client to submit through", name)
 		}
+		if slices.ContainsFunc(labels, func(label string) bool { return m.Nodes[label].Pure }) {
+			return fmt.Errorf("node %q is a pure validator, which is never sent transactions", name)
+		}
 	}
 	m.Apps[s.App.App] = true
 	return nil

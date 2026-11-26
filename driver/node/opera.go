@@ -122,6 +122,8 @@ type OperaNodeConfig struct {
 	GenesisJsonPath *string
 	// ExtraArguments are additional command line arguments to pass to the node.
 	ExtraArguments string
+	// Pure runs a validator in validator mode; see driver.Node.IsPure.
+	Pure bool
 	// NetworkBootstrap is true if this node starts a brand-new network, i.e.
 	// there is no running node it could sync with.
 	NetworkBootstrap bool
@@ -614,6 +616,10 @@ func (n *OperaNode) GetValidatorId() *int {
 	return n.config.ValidatorId
 }
 
+func (n *OperaNode) IsPure() bool {
+	return n.config.Pure
+}
+
 func (n *OperaNode) StreamLog(ctx context.Context) (io.ReadCloser, error) {
 	return n.container.StreamLog(ctx)
 }
@@ -845,7 +851,8 @@ func (n *OperaNode) forceSetState(s NodeState) {
 	n.state = s
 }
 
-// buildSonicdCmd constructs the sonicd argument vector.
+// buildSonicdCmd constructs the sonicd argument vector. A validator runs in
+// rpc mode, unless it is pure, which runs it in validator mode.
 //
 // The command is returned in exec form and is run without a shell: the
 // output is captured from the exec stream on the host, so there is nothing
@@ -854,6 +861,7 @@ func (n *OperaNode) forceSetState(s NodeState) {
 func buildSonicdCmd(
 	validatorId *int,
 	pubKey, externalIP string,
+	pure bool,
 	extraArguments string,
 ) []string {
 	args := []string{
@@ -881,11 +889,15 @@ func buildSonicdCmd(
 	}
 
 	if validatorId != nil && *validatorId > 0 {
+		mode := "rpc"
+		if pure {
+			mode = "validator"
+		}
 		args = append(args,
 			"--validator.id", fmt.Sprintf("%d", *validatorId),
 			"--validator.pubkey", pubKey,
 			"--validator.password", passwordFilePath,
-			"--mode", "rpc",
+			"--mode", mode,
 		)
 	}
 

@@ -25,6 +25,7 @@ import (
 
 	"github.com/0xsoniclabs/norma/driver"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -164,6 +165,7 @@ func TestSendTransaction_ReportsAFailure_WhenTheWorkersOfItsOnlyNodeCannotConnec
 		node := driver.NewMockNode(ctrl)
 		node.EXPECT().GetLabel().Return("a").AnyTimes()
 		url := driver.URL("wrong")
+		node.EXPECT().IsPure().Return(false)
 		node.EXPECT().GetServiceUrl(gomock.Any()).Return(&url, nil)
 		observer := driver.NewMockTransactionObserver(ctrl)
 
@@ -177,4 +179,14 @@ func TestSendTransaction_ReportsAFailure_WhenTheWorkersOfItsOnlyNodeCannotConnec
 		observer.EXPECT().OnTransactionSubmitted(source, &tx, gomock.Any(), errNoNode)
 		pool.SendTransaction(&tx, source)
 	})
+}
+
+func TestAfterNodeCreation_SendsNothingThroughANode_WhenItIsPure(t *testing.T) {
+	node := driver.NewMockNode(gomock.NewController(t))
+	node.EXPECT().IsPure().Return(true)
+
+	pool := NewRpcWorkerPool(t.Context())
+	pool.AfterNodeCreation(node)
+
+	require.Empty(t, pool.nodes)
 }

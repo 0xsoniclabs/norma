@@ -158,6 +158,20 @@ func (mr *MockNodeMockRecorder) IsExpectedFailure() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsExpectedFailure", reflect.TypeOf((*MockNode)(nil).IsExpectedFailure))
 }
 
+// IsPure mocks base method.
+func (m *MockNode) IsPure() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsPure")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsPure indicates an expected call of IsPure.
+func (mr *MockNodeMockRecorder) IsPure() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsPure", reflect.TypeOf((*MockNode)(nil).IsPure))
+}
+
 // IsRunning mocks base method.
 func (m *MockNode) IsRunning() bool {
 	m.ctrl.T.Helper()

@@ -54,6 +54,11 @@ type Node interface {
 	// validator node. If the node is not a validator, it returns nil.
 	GetValidatorId() *int
 
+	// IsPure reports whether the node is a pure validator: one running in
+	// validator mode, without archive or transaction index, that is never
+	// sent transactions.
+	IsPure() bool
+
 	// GetServiceUrl returns the URL of a service running on the
 	// represented node. May be nil if no such service is offered.
 	GetServiceUrl(*network.ServiceDescription) (*URL, error)

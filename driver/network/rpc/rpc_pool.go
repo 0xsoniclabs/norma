@@ -154,8 +154,10 @@ func (o *observers) notify(
 	}
 }
 
+// AfterNodeCreation starts workers submitting through the new node, unless it
+// is a pure validator, which is never sent transactions.
 func (p *RpcWorkerPool) AfterNodeCreation(newNode driver.Node) {
-	if p.ctx.Err() == context.Canceled {
+	if p.ctx.Err() == context.Canceled || newNode.IsPure() {
 		return
 	}
 

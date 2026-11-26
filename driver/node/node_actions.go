@@ -22,6 +22,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -103,13 +104,19 @@ func (n *OperaNode) Initialize(ctx context.Context) (err error) {
 	}()
 
 	// Resolved first, so a bad file name fails before anything is created.
-	genesisArgs := []string{"genesis", "json", "--experimental", "/genesis.json"}
+	// A pure validator refuses to start next to an archive, so its database
+	// is created without one.
+	genesisFlags := []string{"--experimental"}
+	if n.config.Pure {
+		genesisFlags = append(genesisFlags, "--mode", "validator")
+	}
+	genesisArgs := slices.Concat([]string{"genesis", "json"}, genesisFlags, []string{"/genesis.json"})
 	if n.config.GenesisFile != "" {
 		path, err := n.sharedFilePath(n.config.GenesisFile)
 		if err != nil {
 			return err
 		}
-		genesisArgs = []string{"genesis", "--experimental", path}
+		genesisArgs = slices.Concat([]string{"genesis"}, genesisFlags, []string{path})
 		slog.Info("Bootstrapping from g-file",
 			"node", n.config.Label, "file", path)
 		if err := n.fetchSharedFile(ctx, n.config.GenesisFile); err != nil {
@@ -273,6 +280,7 @@ func (n *OperaNode) startSonicd(ctx context.Context, observer bool) error {
 		validatorId,
 		n.config.PubKey,
 		n.container.IP(),
+		n.config.Pure,
 		n.config.ExtraArguments)
 
 	slog.Info("Starting sonicd", "node", n.config.Label, "observer", observer)

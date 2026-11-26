@@ -242,6 +242,33 @@ func TestEventThrottledChecker_ReturnsError_WhenNoReachableNode(t *testing.T) {
 	require.Contains(t, err.Error(), "no reachable node")
 }
 
+func TestDialFirstReachable_SkipsANode_WhenItCannotServeStateReads(t *testing.T) {
+	tests := map[string]struct {
+		failing bool
+		pure    bool
+	}{
+		"expected to fail": {failing: true},
+		"pure validator":   {pure: true},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			skipped := driver.NewMockNode(ctrl)
+			skipped.EXPECT().IsExpectedFailure().Return(test.failing)
+			skipped.EXPECT().IsPure().Return(test.pure).AnyTimes()
+			used := driver.NewMockNode(ctrl)
+			used.EXPECT().IsExpectedFailure().Return(false)
+			used.EXPECT().IsPure().Return(false)
+			client := rpc.NewMockClient(ctrl)
+			used.EXPECT().DialRpc(gomock.Any()).Return(client, nil)
+
+			got, err := dialFirstReachable(t.Context(), []driver.Node{skipped, used})
+			require.NoError(t, err)
+			require.Equal(t, client, got)
+		})
+	}
+}
+
 func TestEventThrottledChecker_Passes_WhenExplicitThrottledNodeMatches(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	net := driver.NewMockNetwork(ctrl)
@@ -256,6 +283,7 @@ func TestEventThrottledChecker_Passes_WhenExplicitThrottledNodeMatches(t *testin
 		[]driver.Node{node1, node2},
 	)
 	node1.EXPECT().IsExpectedFailure().Return(false)
+	node1.EXPECT().IsPure().Return(false)
 	node1.EXPECT().DialRpc(gomock.Any()).Return(rpcClient, nil)
 	// resolveLabels walks the node list once.
 	node1.EXPECT().GetValidatorId().Return(&validatorId1)
@@ -289,6 +317,7 @@ func TestEventThrottledChecker_Fails_WhenListedNodeIsUnthrottled(t *testing.T) {
 		[]driver.Node{node1, node2},
 	)
 	node1.EXPECT().IsExpectedFailure().Return(false)
+	node1.EXPECT().IsPure().Return(false)
 	node1.EXPECT().DialRpc(gomock.Any()).Return(rpcClient, nil)
 	node1.EXPECT().GetValidatorId().Return(&validatorId1)
 	node1.EXPECT().GetLabel().Return("dominant")

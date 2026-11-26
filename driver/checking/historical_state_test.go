@@ -28,6 +28,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -38,6 +39,8 @@ type historyNode struct {
 	label   string
 	height  uint64
 	failing bool
+	// pure marks a pure validator, which keeps no archive.
+	pure bool
 	// stateFork is the first block from which the node reports different
 	// balances; zero means it agrees everywhere.
 	stateFork uint64
@@ -65,6 +68,7 @@ func historyNetwork(t *testing.T, nodes ...historyNode) (driver.Network, map[str
 		node := driver.NewMockNode(ctrl)
 		node.EXPECT().GetLabel().AnyTimes().Return(spec.label)
 		node.EXPECT().IsExpectedFailure().AnyTimes().Return(spec.failing)
+		node.EXPECT().IsPure().AnyTimes().Return(spec.pure)
 
 		client := rpc.NewMockClient(ctrl)
 		client.EXPECT().Close().AnyTimes()
@@ -268,15 +272,17 @@ func TestHistoricalState_NarrowsLogQueriesThatMatchTooManyLogs(t *testing.T) {
 	}
 }
 
-func TestHistoricalState_IgnoresNodesExpectedToFail(t *testing.T) {
-	net, _ := historyNetwork(t,
-		historyNode{label: "node1", height: 250},
-		historyNode{label: "node2", height: 250, failing: true, stateFork: 10},
-	)
-
-	c := historicalStateChecker{net: net}
-	if err := c.Check(t.Context()); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+func TestHistoricalState_IgnoresNodes_WhenTheyFailOrArePure(t *testing.T) {
+	tests := map[string]historyNode{
+		"expected to fail": {label: "node2", height: 250, failing: true, stateFork: 10},
+		"pure validator":   {label: "node2", height: 250, pure: true, stateFork: 10},
+	}
+	for name, ignored := range tests {
+		t.Run(name, func(t *testing.T) {
+			net, _ := historyNetwork(t, historyNode{label: "node1", height: 250}, ignored)
+			c := historicalStateChecker{net: net}
+			require.NoError(t, c.Check(t.Context()))
+		})
 	}
 }
 

@@ -247,6 +247,7 @@ func checkerWithNodes(
 	for id, label := range validators {
 		node := driver.NewMockNode(ctrl)
 		node.EXPECT().IsExpectedFailure().Return(false).AnyTimes()
+		node.EXPECT().IsPure().Return(false).AnyTimes()
 		node.EXPECT().GetValidatorId().Return(&id)
 		node.EXPECT().GetLabel().Return(label)
 		// dialFirstReachable stops at the first node that answers, and the node
