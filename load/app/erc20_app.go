@@ -19,9 +19,9 @@ package app
 import (
 	crand "crypto/rand"
 	"fmt"
+	"iter"
 	"math/big"
 	"math/rand"
-	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
@@ -163,10 +163,15 @@ type ERC20User struct {
 	sender     *Account
 	contract   common.Address
 	recipients []common.Address
-	sentTxs    atomic.Uint64
 }
 
-func (g *ERC20User) GenerateTx() (*types.Transaction, error) {
+// Transactions returns the transactions of the user, built one at a time as
+// they are pulled.
+func (g *ERC20User) Transactions() iter.Seq2[*types.Transaction, error] {
+	return repeat(g.generateTx)
+}
+
+func (g *ERC20User) generateTx() (*types.Transaction, error) {
 	// choose random recipient
 	recipient := g.recipients[rand.Intn(len(g.recipients))]
 
@@ -179,12 +184,5 @@ func (g *ERC20User) GenerateTx() (*types.Transaction, error) {
 	// prepare tx
 	const gasLimit = 52000 // Transfer method call takes 51349 of gas
 	tx, err := createTx(g.sender, g.contract, big.NewInt(0), data, gasLimit)
-	if err == nil {
-		g.sentTxs.Add(1)
-	}
 	return tx, err
-}
-
-func (g *ERC20User) GetSentTransactions() uint64 {
-	return g.sentTxs.Load()
 }

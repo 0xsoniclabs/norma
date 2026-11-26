@@ -20,9 +20,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"math/big"
 	"math/rand"
-	"sync/atomic"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
@@ -44,7 +44,7 @@ const (
 //   - AllOf with 2x incrementCounter(10): both calls must succeed (10% individual fail rate)
 //   - OneOf with 2x incrementCounter(40): first success wins (40% individual fail rate)
 //
-// This app have to fetch nonces from the chain during GenerateTx, therefor it cannot be used
+// This app have to fetch nonces from the chain while building transactions, therefor it cannot be used
 // to generate transactions at a high rate.
 type FailingBundleApplication struct {
 	contract        *contract.ProbabilisticFailing
@@ -155,7 +155,7 @@ func (a *FailingBundleApplication) GetReceivedTransactions(rpcClient rpc.Client)
 	return count.Uint64(), nil
 }
 
-// FailingBundleUser represents one (senderA, senderB) pair. Each GenerateTx call
+// FailingBundleUser represents one (senderA, senderB) pair. Each transaction pulled
 // produces one bundle envelope randomly chosen between:
 //
 //  1. AllOf: senderA.incrementCounter(10), senderB.incrementCounter(10)
@@ -172,10 +172,15 @@ type FailingBundleUser struct {
 	bareRoot        bool
 	signer          types.Signer
 	client          rpc.Client
-	sentTxs         atomic.Uint64
 }
 
-func (u *FailingBundleUser) GenerateTx() (*types.Transaction, error) {
+// Transactions returns the transactions of the user, built one at a time as
+// they are pulled.
+func (u *FailingBundleUser) Transactions() iter.Seq2[*types.Transaction, error] {
+	return repeat(u.generateTx)
+}
+
+func (u *FailingBundleUser) generateTx() (*types.Transaction, error) {
 	ctx := context.Background()
 	useAllOf := rand.Intn(2) == 0
 	var failureProbability uint8
@@ -234,10 +239,5 @@ func (u *FailingBundleUser) GenerateTx() (*types.Transaction, error) {
 		builder = builder.OneOf(stepA, stepB)
 	}
 
-	u.sentTxs.Add(1)
 	return builder.Build(), nil
-}
-
-func (u *FailingBundleUser) GetSentTransactions() uint64 {
-	return u.sentTxs.Load()
 }

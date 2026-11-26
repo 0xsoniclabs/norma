@@ -19,6 +19,7 @@ package app_test
 import (
 	"context"
 	"fmt"
+	"iter"
 	"slices"
 	"testing"
 	"time"
@@ -208,8 +209,10 @@ func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
 	rpcClient := ctxt.GetClient()
 	numTransactions := 10
 	transactions := []*types.Transaction{}
+	next, stop := iter.Pull2(user.Transactions())
+	defer stop()
 	for range numTransactions {
-		tx, err := user.GenerateTx()
+		tx, err, _ := next()
 		require.NoError(t, err, "failed to generate transaction")
 		require.NotNil(t, tx, "generated transaction is nil")
 
@@ -226,7 +229,6 @@ func testGenerator(t *testing.T, app app.Application, ctxt app.AppContext) {
 		require.LessOrEqualf(t, tx.Gas(), 2*receipt.GasUsed,
 			"gas limit unnecessary high: limit %d used %d", tx.Gas(), receipt.GasUsed)
 	}
-	require.Equal(t, uint64(numTransactions), user.GetSentTransactions(), "invalid number of sent transactions reported")
 
 	err = network.Retry(t.Context(), network.DefaultRetryAttempts, 1*time.Second,
 		func(ctx context.Context) error {

@@ -95,10 +95,12 @@ type Network interface {
 	// any potential other resources.
 	Shutdown() error
 
-	// SendTransaction sends a transaction to the network. The source identifies
-	// which load generator produced it, for diagnostics and for attributing it
-	// to an application in the monitoring data.
-	SendTransaction(tx *types.Transaction, source TransactionSource)
+	// SendTransaction submits a transaction to the network and returns the
+	// error the node responded with, if any; a node that already has the
+	// transaction is no error. The source identifies which load generator
+	// produced it, for diagnostics and for attributing it to an application in
+	// the monitoring data.
+	SendTransaction(ctx context.Context, tx *types.Transaction, source TransactionSource) error
 
 	// RegisterTransactionObserver registers an observer to be notified about
 	// every transaction submitted through SendTransaction.

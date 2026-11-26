@@ -22,8 +22,8 @@ import (
 	"crypto/elliptic"
 	crand "crypto/rand"
 	"fmt"
+	"iter"
 	"math/big"
-	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
@@ -129,10 +129,15 @@ type EcdsaUser struct {
 	sender     *Account
 	contract   common.Address
 	privateKey *ecdsa.PrivateKey
-	sentTxs    atomic.Uint64
 }
 
-func (g *EcdsaUser) GenerateTx() (*types.Transaction, error) {
+// Transactions returns the transactions of the user, built one at a time as
+// they are pulled.
+func (g *EcdsaUser) Transactions() iter.Seq2[*types.Transaction, error] {
+	return repeat(g.generateTx)
+}
+
+func (g *EcdsaUser) generateTx() (*types.Transaction, error) {
 	// Generate a random 32-byte hash to sign.
 	var hashBytes [32]byte
 	if _, err := crand.Read(hashBytes[:]); err != nil {
@@ -152,14 +157,7 @@ func (g *EcdsaUser) GenerateTx() (*types.Transaction, error) {
 
 	const gasLimit = 50_000
 	tx, err := createTx(g.sender, g.contract, big.NewInt(0), data, gasLimit)
-	if err == nil {
-		g.sentTxs.Add(1)
-	}
 	return tx, err
-}
-
-func (g *EcdsaUser) GetSentTransactions() uint64 {
-	return g.sentTxs.Load()
 }
 
 // bigIntTo32Bytes encodes v as a 32-byte big-endian array, zero-padded on the left.

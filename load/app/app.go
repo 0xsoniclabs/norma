@@ -17,6 +17,8 @@
 package app
 
 import (
+	"iter"
+
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -33,9 +35,12 @@ type Application interface {
 	GetReceivedTransactions(rpcClient rpc.Client) (uint64, error)
 }
 
-// User produces a stream of transactions to Generate traffic on the chain.
+// User produces a stream of transactions to generate traffic on the chain.
 // Implementations are not required to be thread-safe.
 type User interface {
-	GenerateTx() (*types.Transaction, error)
-	GetSentTransactions() uint64
+	// Transactions returns the transactions of the user. The next one is
+	// built only when it is pulled, which a load generator does only once
+	// the network accepted the previous one. A transaction that could not be
+	// built is yielded as an error and does not take a nonce.
+	Transactions() iter.Seq2[*types.Transaction, error]
 }

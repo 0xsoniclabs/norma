@@ -517,8 +517,19 @@ func (n *LocalNetwork) RemoveNode(ctx context.Context, node driver.Node) error {
 	return errors.Join(errs...)
 }
 
-func (n *LocalNetwork) SendTransaction(tx *types.Transaction, source driver.TransactionSource) {
-	n.rpcWorkerPool.SendTransaction(tx, source)
+// UnansweredSubmissions returns the number of transaction submissions that
+// failed without an answer of their node. The node may have taken such a
+// transaction without the monitoring seeing it.
+func (n *LocalNetwork) UnansweredSubmissions() int64 {
+	return n.rpcWorkerPool.Unanswered()
+}
+
+func (n *LocalNetwork) SendTransaction(
+	ctx context.Context,
+	tx *types.Transaction,
+	source driver.TransactionSource,
+) error {
+	return n.rpcWorkerPool.SendTransaction(ctx, tx, source)
 }
 
 func (n *LocalNetwork) RegisterTransactionObserver(observer driver.TransactionObserver) {

@@ -21,7 +21,10 @@ import (
 	"errors"
 	"log/slog"
 	"math/rand/v2"
+	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -29,13 +32,15 @@ import (
 	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	gethrpc "github.com/ethereum/go-ethereum/rpc"
 )
 
 type RpcWorkerPool struct {
-	txs       chan transactionWithSource
-	ctx       context.Context
-	cancel    context.CancelFunc
-	observers *observers
+	txs        chan transactionWithSource
+	ctx        context.Context
+	cancel     context.CancelFunc
+	observers  *observers
+	unanswered atomic.Int64 // submissions a node may have taken unanswered
 
 	mu sync.Mutex
 	// nodes holds the workers of each node, by label.
@@ -55,11 +60,18 @@ type nodeWorkers struct {
 
 var errNoNode = errors.New("none of the nodes the application is restricted to is active")
 
+// submitTimeout bounds the wait for a node to answer a submission. A sender
+// waits for the answer even after its application stopped, so a node that
+// never answers must not hold it up forever. The node may still have taken a
+// transaction it did not answer in time, unseen by the monitoring, which is
+// why such submissions are counted.
+var submitTimeout = 10 * time.Second
+
 func NewRpcWorkerPool(ctx context.Context) *RpcWorkerPool {
 	ctx, cancel := context.WithCancel(ctx)
 
 	return &RpcWorkerPool{
-		txs:       make(chan transactionWithSource, 100),
+		txs:       make(chan transactionWithSource),
 		ctx:       ctx,
 		cancel:    cancel,
 		observers: &observers{},
@@ -82,27 +94,59 @@ func (p *RpcWorkerPool) RestrictApp(app string, nodes []string) {
 }
 
 // SendTransaction hands the transaction to a worker of a node its application
-// may submit through. When the chosen node is removed first, it tries another.
-func (p *RpcWorkerPool) SendTransaction(tx *types.Transaction, source driver.TransactionSource) {
-	t := transactionWithSource{tx: tx, source: source}
+// may submit through and waits for the node's answer. When the chosen node is
+// removed first, it tries another. Once a worker took the transaction, it waits
+// for the answer even if the context ends, since the node may accept it.
+func (p *RpcWorkerPool) SendTransaction(
+	ctx context.Context,
+	tx *types.Transaction,
+	source driver.TransactionSource,
+) error {
+	t := transactionWithSource{tx: tx, source: source, result: make(chan error, 1)}
 	for {
+		queue, closed := p.txs, (chan struct{})(nil)
 		targets, restricted := p.targets(source.App)
-		if !restricted {
-			p.txs <- t
-			return
+		if restricted {
+			if len(targets) == 0 {
+				p.observers.notify(source, tx, time.Now(), errNoNode)
+				return errNoNode
+			}
+			// ponytail: random node, not the least busy one; balance on load if a slow node starts holding up the app.
+			target := targets[rand.IntN(len(targets))]
+			queue, closed = target.txs, target.closed
 		}
-		if len(targets) == 0 {
-			p.observers.notify(source, tx, time.Now(), errNoNode)
-			return
-		}
-		// ponytail: random node, not the least busy one; balance on load if a slow node starts holding up the app.
-		target := targets[rand.IntN(len(targets))]
 		select {
-		case target.txs <- t:
-			return
-		case <-target.closed:
+		case queue <- t:
+			select {
+			case err := <-t.result:
+				if noAnswer(err) {
+					p.unanswered.Add(1)
+				}
+				return err
+			case <-p.ctx.Done():
+				return p.ctx.Err()
+			}
+		case <-closed:
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-p.ctx.Done():
+			return p.ctx.Err()
 		}
 	}
+}
+
+// Unanswered returns the number of submissions that failed without an answer
+// of their node, which may have taken the transaction.
+func (p *RpcWorkerPool) Unanswered() int64 {
+	return p.unanswered.Load()
+}
+
+// noAnswer reports whether a submission failed without an answer of the node,
+// for example because it timed out or lost the connection. A refused
+// connection never reached the node.
+func noAnswer(err error) bool {
+	var answer gethrpc.Error
+	return err != nil && !errors.As(err, &answer) && !errors.Is(err, syscall.ECONNREFUSED)
 }
 
 // targets returns the active nodes the given application is restricted to,
@@ -233,7 +277,6 @@ func (p *RpcWorkerPool) Close() error {
 		n.close()
 	}
 	slog.Info("worker pool has closed")
-	close(p.txs)
 	return nil
 }
 
@@ -332,21 +375,27 @@ func (p *worker) runRpcSenderLoop() error {
 		case <-p.ctx.Done():
 			return nil
 		}
-		err := rpcClient.SendTransaction(context.Background(), tx.tx)
-		// The submission is reported before any logging, keeping the
-		// measured moment as close to the actual submission as possible.
-		p.observers.notify(tx.source, tx.tx, time.Now(), err)
-		if err != nil {
-			slog.Warn("failed to send tx", "node", p.nodeName, "source", tx.source, "error", err)
+		// A call in flight is not cut off when the worker closes, as the node
+		// could take the transaction without the answer being seen; workers
+		// close before their node stops, so it still answers.
+		ctx, cancel := context.WithTimeout(context.Background(), submitTimeout)
+		err := rpcClient.SendTransaction(ctx, tx.tx)
+		cancel()
+		if err != nil && strings.Contains(err.Error(), "already known") {
+			err = nil // the node has it from an earlier submission
 		}
+		// The submission is reported right away, keeping the measured moment
+		// as close to the actual submission as possible.
+		p.observers.notify(tx.source, tx.tx, time.Now(), err)
+		tx.result <- err
 	}
 }
 
-// transactionWithSource is a struct that holds a transaction and its source.
-// It is used to provide feedback about the origin of the transaction in case
-// of an error when sending it to the RPC client, and to attribute it to its
-// load generator when reporting the submission to observers.
+// transactionWithSource is a transaction on its way to a worker, with the load
+// generator it is attributed to and where the worker answers with the node's
+// response.
 type transactionWithSource struct {
 	tx     *types.Transaction
 	source driver.TransactionSource
+	result chan error
 }

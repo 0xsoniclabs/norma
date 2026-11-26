@@ -70,7 +70,7 @@ func TestSlopeShaper(t *testing.T) {
 			shaper := NewSlopeShaper(test.startFrequency, test.increment)
 
 			startTime := time.Now()
-			shaper.Start(startTime, nil)
+			shaper.Start(startTime)
 
 			got := shaper.GetNumMessagesInInterval(startTime.Add(test.from), test.to-test.from)
 			want := test.expected

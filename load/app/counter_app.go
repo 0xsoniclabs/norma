@@ -19,8 +19,8 @@ package app
 import (
 	"context"
 	"fmt"
+	"iter"
 	"math/big"
-	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
@@ -117,10 +117,15 @@ type CounterUser struct {
 	abi      *abi.ABI
 	sender   *Account
 	contract common.Address
-	sentTxs  atomic.Uint64
 }
 
-func (g *CounterUser) GenerateTx() (*types.Transaction, error) {
+// Transactions returns the transactions of the user, built one at a time as
+// they are pulled.
+func (g *CounterUser) Transactions() iter.Seq2[*types.Transaction, error] {
+	return repeat(g.generateTx)
+}
+
+func (g *CounterUser) generateTx() (*types.Transaction, error) {
 	// prepare tx data
 	data, err := g.abi.Pack("incrementCounter")
 	if err != nil || data == nil {
@@ -130,12 +135,5 @@ func (g *CounterUser) GenerateTx() (*types.Transaction, error) {
 	// prepare tx
 	const gasLimit = 28036
 	tx, err := createTx(g.sender, g.contract, big.NewInt(0), data, gasLimit)
-	if err == nil {
-		g.sentTxs.Add(1)
-	}
 	return tx, err
-}
-
-func (g *CounterUser) GetSentTransactions() uint64 {
-	return g.sentTxs.Load()
 }

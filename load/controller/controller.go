@@ -22,6 +22,7 @@ import (
 	"log/slog"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -31,8 +32,9 @@ import (
 )
 
 // AppController emits transactions to the testing network into a blockchain app to generate a load.
-// The Shaper passed into the driver controls the frequency of emitting transactions.
-// The Generator passed into the driver constructs the transactions.
+// The Shaper passed into the driver controls the frequency of emitting transactions,
+// or, if it is shaper.Saturate, lets every user submit as fast as the network accepts.
+// The users of the application construct the transactions.
 // The controller reads the progress of the app through a client of its own,
 // since the client of the app context is shared by all apps. The client lives
 // as long as the controller: the progress of a stopped app is still read.
@@ -41,8 +43,8 @@ type AppController struct {
 	shaper      shaper.Shaper
 	application app.Application
 	network     driver.Network
-	trigger     chan struct{}
 	users       []app.User
+	accepted    []atomic.Uint64 // accepted transactions, by user
 
 	rpcClientMu sync.Mutex // guards rpcClient, used by both the shaper and the monitoring
 	rpcClient   rpc.Client // dialed on first use
@@ -61,8 +63,6 @@ func NewAppController(
 	context app.AppContext,
 	network driver.Network,
 ) (*AppController, error) {
-	trigger := make(chan struct{}, 100)
-
 	start := time.Now()
 
 	// create users for this application
@@ -83,47 +83,69 @@ func NewAppController(
 		shaper:      shaper,
 		application: application,
 		network:     network,
-		trigger:     trigger,
 		users:       users,
+		accepted:    make([]atomic.Uint64, len(users)),
 	}, nil
 }
 
 func (ac *AppController) Run(ctx context.Context) error {
-	// start generators for each user
+	var trigger chan struct{}
+	if _, saturate := ac.shaper.(shaper.Saturate); !saturate {
+		trigger = make(chan struct{})
+	}
+
 	var done sync.WaitGroup
 	for i, user := range ac.users {
 		source := driver.TransactionSource{App: ac.name, User: i}
 		done.Go(func() {
-			runGeneratorLoop(user, source, ac.trigger, ac.network)
+			runGeneratorLoop(ctx, user, source, trigger, ac.network, &ac.accepted[i])
 		})
 	}
+	if trigger != nil {
+		ac.pace(ctx, trigger)
+	}
+	<-ctx.Done()
+	done.Wait()
+	return nil
+}
 
+// maxCatchUp is how much of the time it held for a free user the pacer makes up
+// for, so that short holds keep the rate while an outage causes no burst.
+const maxCatchUp = 100 * time.Millisecond
+
+// pace hands out the signals for the users to submit their next transaction at
+// the rate of the shaper, until the context ends. A signal goes only to a user
+// ready to submit; when all still wait for the network to accept their previous
+// transaction, it holds until one is free and makes up for at most maxCatchUp of
+// the time it held.
+func (ac *AppController) pace(ctx context.Context, trigger chan<- struct{}) {
 	var pending float64
 	lastUpdate := time.Now()
-	ac.shaper.Start(lastUpdate, ac)
-
+	ac.shaper.Start(lastUpdate)
+	var lastWarning time.Time
 	for {
-		// re-plenish the number of pending messages
 		now := time.Now()
 		pending += ac.shaper.GetNumMessagesInInterval(lastUpdate, now.Sub(lastUpdate))
 		lastUpdate = now
 
-		for pending > 0 {
-			ac.trigger <- struct{}{}
-			pending -= 1
+		for ; pending > 0; pending-- {
+			select {
+			case trigger <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+			if overdue := time.Now().Add(-maxCatchUp); lastUpdate.Before(overdue) {
+				lastUpdate = overdue
+				if time.Since(lastWarning) >= 10*time.Second {
+					slog.Warn("app cannot sustain its rate, the network does not accept its transactions fast enough",
+						"app", ac.name)
+					lastWarning = time.Now()
+				}
+			}
 		}
 
-		select {
-		case <-time.After(time.Millisecond):
-			// just waiting for next time to send messages.
-		case <-ctx.Done():
-			close(ac.trigger)
-			done.Wait()
-			err := ctx.Err()
-			if err == context.DeadlineExceeded || err == context.Canceled {
-				return nil // terminated gracefully
-			}
-			return err
+		if !wait(ctx, time.Millisecond) {
+			return
 		}
 	}
 }
@@ -136,14 +158,15 @@ func (ac *AppController) GetTransactionsSentBy(user int) (uint64, error) {
 	if user < 0 || user >= len(ac.users) {
 		return 0, nil
 	}
-	return ac.users[user].GetSentTransactions(), nil
+	return ac.accepted[user].Load(), nil
 }
 
+// GetSentTransactions returns the number of transactions the network accepted
+// from all users.
 func (ac *AppController) GetSentTransactions() (uint64, error) {
 	sum := uint64(0)
-	for i := 0; i < ac.GetNumberOfUsers(); i++ {
-		cur, _ := ac.GetTransactionsSentBy(i)
-		sum += cur
+	for i := range ac.accepted {
+		sum += ac.accepted[i].Load()
 	}
 	return sum, nil
 }

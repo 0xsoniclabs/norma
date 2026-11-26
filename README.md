@@ -209,7 +209,7 @@ Counted once per second, per application:
 * `TransactionsStalled` - submitted transactions parked behind a missing nonce of their own sender, which cannot be emitted until that gap is filled
 * `TransactionsEmitted` - transactions carried by an event but not yet by a block
 * `TransactionsIncluded` - transactions that reached a block, accumulated over the run
-* `TransactionsRejected` - transactions a node refused to accept, accumulated over the run
+* `TransactionsRejected` - submissions a node refused or did not answer in time, accumulated over the run
 
 The first three are disjoint and add up to the transactions of an application currently in the system. Together they match what the nodes report as their pool contents (`txpool_pending`, `txpool_queued`), broken down per application.
 

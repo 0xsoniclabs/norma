@@ -18,6 +18,7 @@ package app
 
 import (
 	"fmt"
+	"iter"
 	"math/big"
 
 	"github.com/holiman/uint256"
@@ -34,7 +35,7 @@ var gasTipCap = big.NewInt(1)
 
 func createTx(from *Account, toAddress common.Address, value *big.Int, data []byte, gasLimit uint64) (*types.Transaction, error) {
 	tx := types.NewTx(&types.DynamicFeeTx{
-		Nonce:     from.getNextNonce(),
+		Nonce:     from.nonce,
 		GasFeeCap: gasFeeCap,
 		GasTipCap: gasTipCap,
 		Gas:       gasLimit,
@@ -42,12 +43,12 @@ func createTx(from *Account, toAddress common.Address, value *big.Int, data []by
 		Value:     value,
 		Data:      data,
 	})
-	return types.SignTx(tx, types.NewLondonSigner(from.chainID), from.privateKey)
+	return signTx(from, tx, types.NewLondonSigner(from.chainID))
 }
 
 func createDeployTx(from *Account, value *big.Int, data []byte, gasLimit uint64) (*types.Transaction, error) {
 	tx := types.NewTx(&types.DynamicFeeTx{
-		Nonce:     from.getNextNonce(),
+		Nonce:     from.nonce,
 		GasFeeCap: gasFeeCap,
 		GasTipCap: gasTipCap,
 		Gas:       gasLimit,
@@ -55,7 +56,7 @@ func createDeployTx(from *Account, value *big.Int, data []byte, gasLimit uint64)
 		Value:     value,
 		Data:      data,
 	})
-	return types.SignTx(tx, types.NewLondonSigner(from.chainID), from.privateKey)
+	return signTx(from, tx, types.NewLondonSigner(from.chainID))
 }
 
 func createSetCodeTx(from *Account, toAddress common.Address, value *uint256.Int, data []byte, gasLimit uint64, authAccounts []*Account, codeAddr common.Address) (*types.Transaction, error) {
@@ -74,7 +75,7 @@ func createSetCodeTx(from *Account, toAddress common.Address, value *uint256.Int
 	}
 
 	tx := types.NewTx(&types.SetCodeTx{
-		Nonce:     from.getNextNonce(),
+		Nonce:     from.nonce,
 		GasFeeCap: uint256.MustFromBig(gasFeeCap),
 		GasTipCap: uint256.MustFromBig(gasTipCap),
 		Gas:       gasLimit,
@@ -83,7 +84,17 @@ func createSetCodeTx(from *Account, toAddress common.Address, value *uint256.Int
 		Data:      data,
 		AuthList:  authList,
 	})
-	return types.SignTx(tx, types.NewPragueSigner(from.chainID), from.privateKey)
+	return signTx(from, tx, types.NewPragueSigner(from.chainID))
+}
+
+// signTx signs the transaction of the given account and moves the account on
+// to its next nonce, which a transaction that cannot be signed does not take.
+func signTx(from *Account, tx *types.Transaction, signer types.Signer) (*types.Transaction, error) {
+	signed, err := types.SignTx(tx, signer, from.privateKey)
+	if err == nil {
+		from.nonce++
+	}
+	return signed, err
 }
 
 func reverseAddresses(in []common.Address) []common.Address {
@@ -92,4 +103,12 @@ func reverseAddresses(in []common.Address) []common.Address {
 		out[i] = in[len(in)-1-i]
 	}
 	return out
+}
+
+// repeat returns the endless sequence of the results of the given generator.
+func repeat(generate func() (*types.Transaction, error)) iter.Seq2[*types.Transaction, error] {
+	return func(yield func(*types.Transaction, error) bool) {
+		for yield(generate()) {
+		}
+	}
 }

@@ -18,9 +18,11 @@ package controller
 
 import (
 	"context"
+	"iter"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -28,6 +30,7 @@ import (
 	"github.com/0xsoniclabs/norma/load/app"
 	"github.com/0xsoniclabs/norma/load/shaper"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -51,10 +54,9 @@ func TestMockedTrafficGenerating(t *testing.T) {
 	mockedApp := app.NewMockApplication(mockCtrl)
 	mockedApp.EXPECT().CreateUsers(appContext, numUsers).Return([]app.User{mockUser, mockUser}, nil)
 
-	// app should be called 10-times to generate 10 txs
-	mockUser.EXPECT().GenerateTx().Return(&demoTx, nil).MinTimes(5).MaxTimes(11)
+	mockUser.EXPECT().Transactions().Return(endless(&demoTx)).Times(numUsers)
 	// network should be called 10-times to send 10 txs
-	mockedNetwork.EXPECT().SendTransaction(&demoTx, gomock.Any()).MinTimes(5).MaxTimes(11)
+	mockedNetwork.EXPECT().SendTransaction(gomock.Any(), &demoTx, gomock.Any()).MinTimes(5).MaxTimes(11)
 
 	// use constant shaper
 	constantShaper := shaper.NewConstantShaper(100) // 100 txs/sec
@@ -95,12 +97,11 @@ func TestStoppingAnAppKeepsTheOthersSending(t *testing.T) {
 		own := rpc.NewMockClient(ctrl)
 		network := driver.NewMockNetwork(ctrl)
 		network.EXPECT().DialRandomRpc().Return(own, nil).Times(1)
-		network.EXPECT().SendTransaction(&demoTx, gomock.Any()).AnyTimes().Do(
-			func(*types.Transaction, driver.TransactionSource) { res.sent.Add(1) })
+		network.EXPECT().SendTransaction(gomock.Any(), &demoTx, gomock.Any()).AnyTimes().Do(
+			func(context.Context, *types.Transaction, driver.TransactionSource) { res.sent.Add(1) })
 
 		user := app.NewMockUser(ctrl)
-		user.EXPECT().GenerateTx().Return(&demoTx, nil).AnyTimes()
-		user.EXPECT().GetSentTransactions().Return(uint64(0)).AnyTimes()
+		user.EXPECT().Transactions().Return(endless(&demoTx))
 		application := app.NewMockApplication(ctrl)
 		application.EXPECT().CreateUsers(appContext, 1).Return([]app.User{user}, nil)
 		application.EXPECT().GetReceivedTransactions(own).AnyTimes().DoAndReturn(
@@ -113,7 +114,7 @@ func TestStoppingAnAppKeepsTheOthersSending(t *testing.T) {
 		return res
 	}
 	a := newApp("A", shaper.NewConstantShaper(100))
-	b := newApp("B", shaper.NewAutoShaper(100, 0.2))
+	b := newApp("B", shaper.NewConstantShaper(100))
 
 	ctxA, stopA := context.WithCancel(t.Context())
 	ctxB, stopB := context.WithCancel(t.Context())
@@ -121,7 +122,7 @@ func TestStoppingAnAppKeepsTheOthersSending(t *testing.T) {
 	runningA.Go(func() { _ = a.controller.Run(ctxA) })
 	running.Go(func() { _ = b.controller.Run(ctxB) })
 	// The monitoring reads the progress of both apps, also once A is
-	// stopped, while the shaper of B does.
+	// stopped.
 	running.Go(func() {
 		for ctxB.Err() == nil {
 			_, _ = a.controller.GetReceivedTransactions()
@@ -146,5 +147,87 @@ func TestStoppingAnAppKeepsTheOthersSending(t *testing.T) {
 	}
 	if a.read.Load() == readOfA {
 		t.Errorf("the progress of A could not be read after it was stopped")
+	}
+}
+
+func TestRun_SubmitsAtItsRateWithoutABurst_WhenTheNetworkRecoversFromAnOutage(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const numUsers = 20 // fewer than the signals of the outage
+		ctrl := gomock.NewController(t)
+		appContext := app.NewMockAppContext(ctrl)
+		var demoTx types.Transaction
+		user := app.NewMockUser(ctrl)
+		user.EXPECT().Transactions().Return(endless(&demoTx)).Times(numUsers)
+		users := make([]app.User, numUsers)
+		for i := range users {
+			users[i] = user
+		}
+		application := app.NewMockApplication(ctrl)
+		application.EXPECT().CreateUsers(appContext, numUsers).Return(users, nil)
+
+		// The network takes nothing for the first 5 seconds.
+		recovery := time.Now().Add(5 * time.Second)
+		var afterRecovery atomic.Int64
+		network := driver.NewMockNetwork(ctrl)
+		network.EXPECT().SendTransaction(gomock.Any(), &demoTx, gomock.Any()).AnyTimes().DoAndReturn(
+			func(context.Context, *types.Transaction, driver.TransactionSource) error {
+				if now := time.Now(); now.Before(recovery) {
+					time.Sleep(recovery.Sub(now))
+				} else if now.Before(recovery.Add(time.Second)) {
+					afterRecovery.Add(1)
+				}
+				return nil
+			})
+
+		controller, err := NewAppController("test-app", application, shaper.NewConstantShaper(10), numUsers, appContext, network)
+		require.NoError(t, err)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
+		require.NoError(t, controller.Run(ctx))
+
+		require.InDelta(t, 10, afterRecovery.Load(), 2, "submissions in the second after the outage")
+	})
+}
+
+func TestRun_SubmitsAtItsRate_WhenItsUsersAreBrieflyBusy(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const numUsers = 2
+		ctrl := gomock.NewController(t)
+		appContext := app.NewMockAppContext(ctrl)
+		var demoTx types.Transaction
+		user := app.NewMockUser(ctrl)
+		user.EXPECT().Transactions().Return(endless(&demoTx)).Times(numUsers)
+		application := app.NewMockApplication(ctrl)
+		application.EXPECT().CreateUsers(appContext, numUsers).Return([]app.User{user, user}, nil)
+
+		// Each user can submit 1250 transactions per second, but some take
+		// longer than the rate leaves them.
+		var sent atomic.Int64
+		network := driver.NewMockNetwork(ctrl)
+		network.EXPECT().SendTransaction(gomock.Any(), &demoTx, gomock.Any()).AnyTimes().DoAndReturn(
+			func(context.Context, *types.Transaction, driver.TransactionSource) error {
+				if sent.Add(1)%2 == 0 {
+					time.Sleep(1500 * time.Microsecond)
+				} else {
+					time.Sleep(100 * time.Microsecond)
+				}
+				return nil
+			})
+
+		controller, err := NewAppController("test-app", application, shaper.NewConstantShaper(2000), numUsers, appContext, network)
+		require.NoError(t, err)
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+		defer cancel()
+		require.NoError(t, controller.Run(ctx))
+
+		require.InDelta(t, 2000, sent.Load(), 40)
+	})
+}
+
+// endless returns a sequence repeating the given transaction.
+func endless(tx *types.Transaction) iter.Seq2[*types.Transaction, error] {
+	return func(yield func(*types.Transaction, error) bool) {
+		for yield(tx, nil) {
+		}
 	}
 }

@@ -10,6 +10,7 @@
 package app
 
 import (
+	iter "iter"
 	reflect "reflect"
 
 	rpc "github.com/0xsoniclabs/norma/driver/rpc"
@@ -95,31 +96,16 @@ func (m *MockUser) EXPECT() *MockUserMockRecorder {
 	return m.recorder
 }
 
-// GenerateTx mocks base method.
-func (m *MockUser) GenerateTx() (*types.Transaction, error) {
+// Transactions mocks base method.
+func (m *MockUser) Transactions() iter.Seq2[*types.Transaction, error] {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenerateTx")
-	ret0, _ := ret[0].(*types.Transaction)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GenerateTx indicates an expected call of GenerateTx.
-func (mr *MockUserMockRecorder) GenerateTx() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateTx", reflect.TypeOf((*MockUser)(nil).GenerateTx))
-}
-
-// GetSentTransactions mocks base method.
-func (m *MockUser) GetSentTransactions() uint64 {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetSentTransactions")
-	ret0, _ := ret[0].(uint64)
+	ret := m.ctrl.Call(m, "Transactions")
+	ret0, _ := ret[0].(iter.Seq2[*types.Transaction, error])
 	return ret0
 }
 
-// GetSentTransactions indicates an expected call of GetSentTransactions.
-func (mr *MockUserMockRecorder) GetSentTransactions() *gomock.Call {
+// Transactions indicates an expected call of Transactions.
+func (mr *MockUserMockRecorder) Transactions() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSentTransactions", reflect.TypeOf((*MockUser)(nil).GetSentTransactions))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Transactions", reflect.TypeOf((*MockUser)(nil).Transactions))
 }

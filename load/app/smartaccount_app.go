@@ -2,14 +2,15 @@ package app
 
 import (
 	"fmt"
+	"iter"
+	"math/big"
+
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
-	"math/big"
-	"sync/atomic"
 )
 
 // NewSmartAccountApplication deploys a new SmartAccount dapp to the chain.
@@ -160,10 +161,15 @@ type SmartAccountUser struct {
 	counterAddr      common.Address
 	codeAddr         common.Address
 	accountsCircular *AccountsCircularPool
-	sentTxs          atomic.Uint64
 }
 
-func (g *SmartAccountUser) GenerateTx() (*types.Transaction, error) {
+// Transactions returns the transactions of the user, built one at a time as
+// they are pulled.
+func (g *SmartAccountUser) Transactions() iter.Seq2[*types.Transaction, error] {
+	return repeat(g.generateTx)
+}
+
+func (g *SmartAccountUser) generateTx() (*types.Transaction, error) {
 	// choose random recipients
 	authAccounts, err := g.accountsCircular.GetAccounts(3)
 	if err != nil {
@@ -204,12 +210,5 @@ func (g *SmartAccountUser) GenerateTx() (*types.Transaction, error) {
 	// prepare tx
 	const gasLimit = 200_000
 	tx, err := createSetCodeTx(g.sender, g.entryPointAddr, new(uint256.Int), entryPointData, gasLimit, authAccounts, g.codeAddr)
-	if err == nil {
-		g.sentTxs.Add(1)
-	}
 	return tx, err
-}
-
-func (g *SmartAccountUser) GetSentTransactions() uint64 {
-	return g.sentTxs.Load()
 }

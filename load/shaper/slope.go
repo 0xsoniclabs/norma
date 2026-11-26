@@ -37,7 +37,7 @@ func NewSlopeShaper(startFrequency, incrementFrequency float64) *SlopeShaper {
 	}
 }
 
-func (s *SlopeShaper) Start(start time.Time, info LoadInfoSource) {
+func (s *SlopeShaper) Start(start time.Time) {
 	s.startTimeStamp = start
 }
 

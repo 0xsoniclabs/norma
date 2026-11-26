@@ -224,15 +224,17 @@ func (mr *MockNetworkMockRecorder) ResumeNode(node any) *gomock.Call {
 }
 
 // SendTransaction mocks base method.
-func (m *MockNetwork) SendTransaction(tx *types.Transaction, source TransactionSource) {
+func (m *MockNetwork) SendTransaction(ctx context.Context, tx *types.Transaction, source TransactionSource) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SendTransaction", tx, source)
+	ret := m.ctrl.Call(m, "SendTransaction", ctx, tx, source)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // SendTransaction indicates an expected call of SendTransaction.
-func (mr *MockNetworkMockRecorder) SendTransaction(tx, source any) *gomock.Call {
+func (mr *MockNetworkMockRecorder) SendTransaction(ctx, tx, source any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTransaction", reflect.TypeOf((*MockNetwork)(nil).SendTransaction), tx, source)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTransaction", reflect.TypeOf((*MockNetwork)(nil).SendTransaction), ctx, tx, source)
 }
 
 // Shutdown mocks base method.

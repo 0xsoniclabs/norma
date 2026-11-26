@@ -160,7 +160,7 @@ func runScenario(
 	skipChecks, skipReportRendering, openReport bool,
 	timeout time.Duration,
 	ui *tui,
-) error {
+) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -231,6 +231,12 @@ func runScenario(
 		slog.Info("shutting down network ...")
 		if err := net.Shutdown(); err != nil {
 			slog.Error("error during network shutdown", "error", err)
+		}
+		// Checked after the shutdown, which stops the applications, so that
+		// their last submissions count as well.
+		if unanswered := net.UnansweredSubmissions(); unanswered > 0 {
+			err = errors.Join(err, fmt.Errorf("%d transaction submissions got no answer from their node; "+
+				"the nodes may have taken them unseen, so the monitoring data may be incomplete", unanswered))
 		}
 	}()
 

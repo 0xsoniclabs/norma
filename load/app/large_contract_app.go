@@ -19,8 +19,8 @@ package app
 import (
 	"context"
 	"fmt"
+	"iter"
 	"math/big"
-	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
@@ -114,12 +114,19 @@ type LargeContractUser struct {
 	initCodePrefix []byte
 	counterAddress common.Address
 	sender         *Account
-	sentTxs        atomic.Uint64
 }
 
-func (g *LargeContractUser) GenerateTx() (*types.Transaction, error) {
-	id := new(big.Int).SetUint64(g.sentTxs.Load())
-	constructorArgs, err := g.abi.Pack("", g.counterAddress, id)
+// Transactions returns the transactions of the user, built one at a time as
+// they are pulled.
+func (g *LargeContractUser) Transactions() iter.Seq2[*types.Transaction, error] {
+	return func(yield func(*types.Transaction, error) bool) {
+		for id := int64(0); yield(g.generateTx(id)); id++ {
+		}
+	}
+}
+
+func (g *LargeContractUser) generateTx(id int64) (*types.Transaction, error) {
+	constructorArgs, err := g.abi.Pack("", g.counterAddress, big.NewInt(id))
 	if err != nil {
 		return nil, fmt.Errorf("failed to pack constructor args; %w", err)
 	}
@@ -130,12 +137,5 @@ func (g *LargeContractUser) GenerateTx() (*types.Transaction, error) {
 
 	const gasLimit = 12_000_000
 	tx, err := createDeployTx(g.sender, big.NewInt(0), deployData, gasLimit)
-	if err == nil {
-		g.sentTxs.Add(1)
-	}
 	return tx, err
-}
-
-func (g *LargeContractUser) GetSentTransactions() uint64 {
-	return g.sentTxs.Load()
 }

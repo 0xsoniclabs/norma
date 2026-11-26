@@ -80,7 +80,9 @@ const (
 	Emitted
 	// Included counts transactions that made it into a block, over the whole run.
 	Included
-	// Rejected counts transactions a node refused to accept, over the whole run.
+	// Rejected counts submissions a node refused or did not answer in time,
+	// over the whole run; a transaction resubmitted after a rejection counts
+	// once per rejection.
 	Rejected
 )
 

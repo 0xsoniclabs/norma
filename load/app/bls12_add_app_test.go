@@ -19,6 +19,7 @@ package app_test
 import (
 	"context"
 	"fmt"
+	"iter"
 	"testing"
 	"time"
 
@@ -80,8 +81,10 @@ func TestBls12AddApplication(t *testing.T) {
 	rpcClient := ctxt.GetClient()
 	numTransactions := 10
 	transactions := []*types.Transaction{}
+	next, stop := iter.Pull2(user.Transactions())
+	defer stop()
 	for range numTransactions {
-		tx, err := user.GenerateTx()
+		tx, err, _ := next()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -103,10 +106,6 @@ func TestBls12AddApplication(t *testing.T) {
 		if receipt.Status != types.ReceiptStatusSuccessful {
 			t.Fatalf("transaction failed, receipt status: %v (gas limit %d used %d)", receipt.Status, tx.Gas(), receipt.GasUsed)
 		}
-	}
-
-	if got, want := user.GetSentTransactions(), numTransactions; got != uint64(want) {
-		t.Errorf("invalid number of sent transactions reported, wanted %d, got %d", want, got)
 	}
 
 	err = network.Retry(t.Context(), network.DefaultRetryAttempts, 1*time.Second,
