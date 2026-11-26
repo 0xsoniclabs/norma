@@ -316,8 +316,11 @@ pool is full, is resubmitted until it is. This keeps the nonces of every user
 free of gaps. Under `constant` and `slope`, when all users are still waiting
 for their previous transaction, the application holds back, logs that it
 cannot sustain its rate, and does not make up for the lost time later. Under
-`saturate`, the users submit back to back and keep the pool full; the
-pressure grows with the number of `users`.
+`saturate`, there is no pacing: each user submits its next transaction as
+soon as the network took the previous one, so the load grows with the number
+of `users`. Nodes count transactions submitted through their RPC interface as
+local ones, which the pool does not limit, so this load is not rejected for a
+full pool.
 
 ### 3.8 `stopApp`
 

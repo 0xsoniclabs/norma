@@ -55,6 +55,11 @@ type nodeWorkers struct {
 
 var errNoNode = errors.New("none of the nodes the application is restricted to is active")
 
+// submitTimeout bounds the wait for a node to answer a submission. A sender
+// waits for the answer even after its application stopped, so a node that
+// never answers must not hold it up forever.
+var submitTimeout = 10 * time.Second
+
 func NewRpcWorkerPool(ctx context.Context) *RpcWorkerPool {
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -346,7 +351,9 @@ func (p *worker) runRpcSenderLoop() error {
 		case <-p.ctx.Done():
 			return nil
 		}
-		err := rpcClient.SendTransaction(context.Background(), tx.tx)
+		ctx, cancel := context.WithTimeout(p.ctx, submitTimeout)
+		err := rpcClient.SendTransaction(ctx, tx.tx)
+		cancel()
 		// The submission is reported before any logging, keeping the
 		// measured moment as close to the actual submission as possible.
 		p.observers.notify(tx.source, tx.tx, time.Now(), err)

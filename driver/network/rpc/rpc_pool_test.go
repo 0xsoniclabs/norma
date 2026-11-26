@@ -19,6 +19,8 @@ package rpc
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -101,6 +103,46 @@ func TestSendTransaction_Returns_WhenItsContextEndsBeforeAWorkerTookIt(t *testin
 		cancel()
 		require.ErrorIs(t, <-done, context.Canceled)
 	})
+}
+
+func TestWorker_AnswersWithAnError_WhenItsNodeNeverAnswers(t *testing.T) {
+	tests := map[string]struct {
+		timeout time.Duration
+		close   bool
+	}{
+		"submission times out": {timeout: 100 * time.Millisecond},
+		"worker is closed":     {timeout: time.Hour, close: true},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			defer func(old time.Duration) { submitTimeout = old }(submitTimeout)
+			submitTimeout = test.timeout
+
+			received, release := make(chan struct{}, 1), make(chan struct{})
+			node := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				received <- struct{}{}
+				<-release
+			}))
+			defer node.Close()
+			defer close(release)
+
+			txs := make(chan transactionWithSource)
+			w := newWorker("test", driver.URL(node.URL), txs, nil, &observers{})
+			defer w.close()
+			tx := transactionWithSource{tx: types.NewTx(&types.LegacyTx{}), result: make(chan error, 1)}
+			txs <- tx
+			<-received
+			if test.close {
+				go w.close()
+			}
+			select {
+			case err := <-tx.result:
+				require.Error(t, err)
+			case <-time.After(5 * time.Second):
+				t.Fatal("the worker kept waiting for the node")
+			}
+		})
+	}
 }
 
 func TestCloseWorkerStartStop(t *testing.T) {
