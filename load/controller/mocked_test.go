@@ -189,6 +189,41 @@ func TestRun_SubmitsAtItsRateWithoutABurst_WhenTheNetworkRecoversFromAnOutage(t 
 	})
 }
 
+func TestRun_SubmitsAtItsRate_WhenItsUsersAreBrieflyBusy(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const numUsers = 2
+		ctrl := gomock.NewController(t)
+		appContext := app.NewMockAppContext(ctrl)
+		var demoTx types.Transaction
+		user := app.NewMockUser(ctrl)
+		user.EXPECT().Transactions().Return(endless(&demoTx)).Times(numUsers)
+		application := app.NewMockApplication(ctrl)
+		application.EXPECT().CreateUsers(appContext, numUsers).Return([]app.User{user, user}, nil)
+
+		// Each user can submit 1250 transactions per second, but some take
+		// longer than the rate leaves them.
+		var sent atomic.Int64
+		network := driver.NewMockNetwork(ctrl)
+		network.EXPECT().SendTransaction(gomock.Any(), &demoTx, gomock.Any()).AnyTimes().DoAndReturn(
+			func(context.Context, *types.Transaction, driver.TransactionSource) error {
+				if sent.Add(1)%2 == 0 {
+					time.Sleep(1500 * time.Microsecond)
+				} else {
+					time.Sleep(100 * time.Microsecond)
+				}
+				return nil
+			})
+
+		controller, err := NewAppController("test-app", application, shaper.NewConstantShaper(2000), numUsers, appContext, network)
+		require.NoError(t, err)
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+		defer cancel()
+		require.NoError(t, controller.Run(ctx))
+
+		require.InDelta(t, 2000, sent.Load(), 40)
+	})
+}
+
 // endless returns a sequence repeating the given transaction.
 func endless(tx *types.Transaction) iter.Seq2[*types.Transaction, error] {
 	return func(yield func(*types.Transaction, error) bool) {

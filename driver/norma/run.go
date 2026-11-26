@@ -234,9 +234,9 @@ func runScenario(
 		}
 		// Checked after the shutdown, which stops the applications, so that
 		// their last submissions count as well.
-		if timeouts := net.SubmissionTimeouts(); timeouts > 0 {
-			err = errors.Join(err, fmt.Errorf("%d transaction submissions were not answered in time; "+
-				"the nodes may have taken them unseen, so the monitoring data may be incomplete", timeouts))
+		if unanswered := net.UnansweredSubmissions(); unanswered > 0 {
+			err = errors.Join(err, fmt.Errorf("%d transaction submissions got no answer from their node; "+
+				"the nodes may have taken them unseen, so the monitoring data may be incomplete", unanswered))
 		}
 	}()
 

@@ -109,11 +109,15 @@ func (ac *AppController) Run(ctx context.Context) error {
 	return nil
 }
 
+// maxCatchUp is how much of the time it held for a free user the pacer makes up
+// for, so that short holds keep the rate while an outage causes no burst.
+const maxCatchUp = 100 * time.Millisecond
+
 // pace hands out the signals for the users to submit their next transaction at
 // the rate of the shaper, until the context ends. A signal goes only to a user
 // ready to submit; when all still wait for the network to accept their previous
-// transaction, it holds until one is free and does not make up for the time it
-// held.
+// transaction, it holds until one is free and makes up for at most maxCatchUp of
+// the time it held.
 func (ac *AppController) pace(ctx context.Context, trigger chan<- struct{}) {
 	var pending float64
 	lastUpdate := time.Now()
@@ -127,21 +131,17 @@ func (ac *AppController) pace(ctx context.Context, trigger chan<- struct{}) {
 		for ; pending > 0; pending-- {
 			select {
 			case trigger <- struct{}{}:
-				continue
-			default:
-			}
-			if time.Since(lastWarning) >= 10*time.Second {
-				slog.Warn("app cannot sustain its rate, the network does not accept its transactions fast enough",
-					"app", ac.name)
-				lastWarning = time.Now()
-			}
-			select {
-			case trigger <- struct{}{}:
 			case <-ctx.Done():
 				return
 			}
-			lastUpdate = time.Now()
-			pending = min(pending, 1)
+			if overdue := time.Now().Add(-maxCatchUp); lastUpdate.Before(overdue) {
+				lastUpdate = overdue
+				if time.Since(lastWarning) >= 10*time.Second {
+					slog.Warn("app cannot sustain its rate, the network does not accept its transactions fast enough",
+						"app", ac.name)
+					lastWarning = time.Now()
+				}
+			}
 		}
 
 		if !wait(ctx, time.Millisecond) {

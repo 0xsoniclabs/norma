@@ -313,9 +313,9 @@ rate:
 Each user submits one transaction at a time and moves on to the next only
 once the network accepted it; a rejected transaction, for example one its
 node did not answer in time, is resubmitted until it is. This keeps the nonces of every user
-free of gaps. A run fails if a node left any submission unanswered for 10
-seconds, since the node may have taken the transaction without the monitoring
-seeing it. Under `constant` and `slope`, when all users are still waiting
+free of gaps. A run fails if a submission got no answer from its node, because
+it took longer than 10 seconds or the connection dropped, since the node may
+have taken the transaction without the monitoring seeing it. Under `constant` and `slope`, when all users are still waiting
 for their previous transaction, the application holds back, logs that it
 cannot sustain its rate, and does not make up for the lost time later. Under
 `saturate`, there is no pacing: each user submits its next transaction as

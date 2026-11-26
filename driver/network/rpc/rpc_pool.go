@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -31,14 +32,15 @@ import (
 	"github.com/0xsoniclabs/norma/driver/node"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	gethrpc "github.com/ethereum/go-ethereum/rpc"
 )
 
 type RpcWorkerPool struct {
-	txs       chan transactionWithSource
-	ctx       context.Context
-	cancel    context.CancelFunc
-	observers *observers
-	timeouts  atomic.Int64 // submissions a node did not answer in time
+	txs        chan transactionWithSource
+	ctx        context.Context
+	cancel     context.CancelFunc
+	observers  *observers
+	unanswered atomic.Int64 // submissions a node may have taken unanswered
 
 	mu sync.Mutex
 	// nodes holds the workers of each node, by label.
@@ -117,8 +119,8 @@ func (p *RpcWorkerPool) SendTransaction(
 		case queue <- t:
 			select {
 			case err := <-t.result:
-				if errors.Is(err, context.DeadlineExceeded) {
-					p.timeouts.Add(1)
+				if noAnswer(err) {
+					p.unanswered.Add(1)
 				}
 				return err
 			case <-p.ctx.Done():
@@ -133,9 +135,18 @@ func (p *RpcWorkerPool) SendTransaction(
 	}
 }
 
-// Timeouts returns the number of submissions a node did not answer in time.
-func (p *RpcWorkerPool) Timeouts() int64 {
-	return p.timeouts.Load()
+// Unanswered returns the number of submissions that failed without an answer
+// of their node, which may have taken the transaction.
+func (p *RpcWorkerPool) Unanswered() int64 {
+	return p.unanswered.Load()
+}
+
+// noAnswer reports whether a submission failed without an answer of the node,
+// for example because it timed out or lost the connection. A refused
+// connection never reached the node.
+func noAnswer(err error) bool {
+	var answer gethrpc.Error
+	return err != nil && !errors.As(err, &answer) && !errors.Is(err, syscall.ECONNREFUSED)
 }
 
 // targets returns the active nodes the given application is restricted to,

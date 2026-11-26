@@ -21,8 +21,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"syscall"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -60,14 +64,16 @@ func TestSendTransaction_ReturnsTheAnswerOfTheNode(t *testing.T) {
 	require.ErrorIs(t, err, rejected)
 }
 
-func TestSendTransaction_CountsTheSubmission_WhenTheNodeDidNotAnswerInTime(t *testing.T) {
+func TestSendTransaction_CountsTheSubmission_WhenTheNodeGaveNoAnswer(t *testing.T) {
 	tests := map[string]struct {
-		answer   error
-		timeouts int64
+		answer     error
+		unanswered int64
 	}{
-		"accepted":  {answer: nil},
-		"refused":   {answer: errors.New("txpool is full")},
-		"timed out": {answer: fmt.Errorf("post failed: %w", context.DeadlineExceeded), timeouts: 1},
+		"accepted":           {answer: nil},
+		"refused":            {answer: rpcError("txpool is full")},
+		"connection refused": {answer: &net.OpError{Op: "dial", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)}},
+		"timed out":          {answer: fmt.Errorf("post failed: %w", context.DeadlineExceeded), unanswered: 1},
+		"connection lost":    {answer: io.ErrUnexpectedEOF, unanswered: 1},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -79,7 +85,7 @@ func TestSendTransaction_CountsTheSubmission_WhenTheNodeDidNotAnswerInTime(t *te
 			var tx types.Transaction
 			err := pool.SendTransaction(t.Context(), &tx, driver.TransactionSource{App: "test"})
 			require.Equal(t, test.answer, err)
-			require.Equal(t, test.timeouts, pool.Timeouts())
+			require.Equal(t, test.unanswered, pool.Unanswered())
 		})
 	}
 }
@@ -134,6 +140,7 @@ func TestSendTransaction_Returns_WhenItsContextEndsBeforeAWorkerTookIt(t *testin
 func TestRunRpcSenderLoop_AnswersWithTheOutcome_WhenItsNodeAnswersLateOrNotAtAll(t *testing.T) {
 	tests := map[string]struct {
 		answer  string // the error the node answers with; none if empty
+		drop    bool   // the node drops the connection instead of answering
 		timeout time.Duration
 		close   bool
 		check   func(t *testing.T, err error)
@@ -141,7 +148,15 @@ func TestRunRpcSenderLoop_AnswersWithTheOutcome_WhenItsNodeAnswersLateOrNotAtAll
 		"node refuses it": {
 			answer:  "txpool is full",
 			timeout: time.Hour,
-			check:   func(t *testing.T, err error) { require.ErrorContains(t, err, "txpool is full") },
+			check: func(t *testing.T, err error) {
+				require.ErrorContains(t, err, "txpool is full")
+				require.False(t, noAnswer(err))
+			},
+		},
+		"node drops the connection": {
+			drop:    true,
+			timeout: time.Hour,
+			check:   func(t *testing.T, err error) { require.True(t, noAnswer(err), "%v", err) },
 		},
 		"node has it already": {
 			answer:  "already known",
@@ -166,6 +181,11 @@ func TestRunRpcSenderLoop_AnswersWithTheOutcome_WhenItsNodeAnswersLateOrNotAtAll
 			received, release := make(chan struct{}, 1), make(chan struct{})
 			node := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				received <- struct{}{}
+				if test.drop {
+					conn, _, _ := w.(http.Hijacker).Hijack()
+					_ = conn.Close()
+					return
+				}
 				if test.answer == "" {
 					<-release
 					return
@@ -312,3 +332,9 @@ func answer(t transactionWithSource) transactionWithSource {
 	t.result <- nil
 	return t
 }
+
+// rpcError is an error a node answers a JSON-RPC request with.
+type rpcError string
+
+func (e rpcError) Error() string  { return string(e) }
+func (e rpcError) ErrorCode() int { return -32000 }

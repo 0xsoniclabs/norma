@@ -517,11 +517,11 @@ func (n *LocalNetwork) RemoveNode(ctx context.Context, node driver.Node) error {
 	return errors.Join(errs...)
 }
 
-// SubmissionTimeouts returns the number of transaction submissions a node did
-// not answer in time. The node may have taken such a transaction without the
-// monitoring seeing it.
-func (n *LocalNetwork) SubmissionTimeouts() int64 {
-	return n.rpcWorkerPool.Timeouts()
+// UnansweredSubmissions returns the number of transaction submissions that
+// failed without an answer of their node. The node may have taken such a
+// transaction without the monitoring seeing it.
+func (n *LocalNetwork) UnansweredSubmissions() int64 {
+	return n.rpcWorkerPool.Unanswered()
 }
 
 func (n *LocalNetwork) SendTransaction(
