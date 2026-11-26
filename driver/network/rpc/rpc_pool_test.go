@@ -60,6 +60,30 @@ func TestSendTransaction_ReturnsTheAnswerOfTheNode(t *testing.T) {
 	require.ErrorIs(t, err, rejected)
 }
 
+func TestSendTransaction_CountsTheSubmission_WhenTheNodeDidNotAnswerInTime(t *testing.T) {
+	tests := map[string]struct {
+		answer   error
+		timeouts int64
+	}{
+		"accepted":  {answer: nil},
+		"refused":   {answer: errors.New("txpool is full")},
+		"timed out": {answer: fmt.Errorf("post failed: %w", context.DeadlineExceeded), timeouts: 1},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			pool := NewRpcWorkerPool(t.Context())
+			go func() {
+				(<-pool.txs).result <- test.answer
+			}()
+
+			var tx types.Transaction
+			err := pool.SendTransaction(t.Context(), &tx, driver.TransactionSource{App: "test"})
+			require.Equal(t, test.answer, err)
+			require.Equal(t, test.timeouts, pool.Timeouts())
+		})
+	}
+}
+
 func TestSendTransaction_Returns_WhenThePoolIsClosed(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		pool := NewRpcWorkerPool(t.Context())
@@ -128,10 +152,10 @@ func TestRunRpcSenderLoop_AnswersWithTheOutcome_WhenItsNodeAnswersLateOrNotAtAll
 			timeout: 100 * time.Millisecond,
 			check:   func(t *testing.T, err error) { require.ErrorIs(t, err, context.DeadlineExceeded) },
 		},
-		"worker is closed": {
-			timeout: time.Hour,
+		"worker is closed while it waits": {
+			timeout: 100 * time.Millisecond,
 			close:   true,
-			check:   func(t *testing.T, err error) { require.ErrorIs(t, err, context.Canceled) },
+			check:   func(t *testing.T, err error) { require.ErrorIs(t, err, context.DeadlineExceeded) },
 		},
 	}
 	for name, test := range tests {

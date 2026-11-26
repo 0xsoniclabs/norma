@@ -23,6 +23,7 @@ import (
 	"math/rand/v2"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -37,6 +38,7 @@ type RpcWorkerPool struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	observers *observers
+	timeouts  atomic.Int64 // submissions a node did not answer in time
 
 	mu sync.Mutex
 	// nodes holds the workers of each node, by label.
@@ -59,7 +61,8 @@ var errNoNode = errors.New("none of the nodes the application is restricted to i
 // submitTimeout bounds the wait for a node to answer a submission. A sender
 // waits for the answer even after its application stopped, so a node that
 // never answers must not hold it up forever. The node may still have taken a
-// transaction it did not answer in time; only a resubmission tells.
+// transaction it did not answer in time, unseen by the monitoring, which is
+// why such submissions are counted.
 var submitTimeout = 10 * time.Second
 
 func NewRpcWorkerPool(ctx context.Context) *RpcWorkerPool {
@@ -114,6 +117,9 @@ func (p *RpcWorkerPool) SendTransaction(
 		case queue <- t:
 			select {
 			case err := <-t.result:
+				if errors.Is(err, context.DeadlineExceeded) {
+					p.timeouts.Add(1)
+				}
 				return err
 			case <-p.ctx.Done():
 				return p.ctx.Err()
@@ -125,6 +131,11 @@ func (p *RpcWorkerPool) SendTransaction(
 			return p.ctx.Err()
 		}
 	}
+}
+
+// Timeouts returns the number of submissions a node did not answer in time.
+func (p *RpcWorkerPool) Timeouts() int64 {
+	return p.timeouts.Load()
 }
 
 // targets returns the active nodes the given application is restricted to,
@@ -353,7 +364,10 @@ func (p *worker) runRpcSenderLoop() error {
 		case <-p.ctx.Done():
 			return nil
 		}
-		ctx, cancel := context.WithTimeout(p.ctx, submitTimeout)
+		// A call in flight is not cut off when the worker closes, as the node
+		// could take the transaction without the answer being seen; workers
+		// close before their node stops, so it still answers.
+		ctx, cancel := context.WithTimeout(context.Background(), submitTimeout)
 		err := rpcClient.SendTransaction(ctx, tx.tx)
 		cancel()
 		if err != nil && strings.Contains(err.Error(), "already known") {

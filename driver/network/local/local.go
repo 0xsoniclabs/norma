@@ -517,6 +517,13 @@ func (n *LocalNetwork) RemoveNode(ctx context.Context, node driver.Node) error {
 	return errors.Join(errs...)
 }
 
+// SubmissionTimeouts returns the number of transaction submissions a node did
+// not answer in time. The node may have taken such a transaction without the
+// monitoring seeing it.
+func (n *LocalNetwork) SubmissionTimeouts() int64 {
+	return n.rpcWorkerPool.Timeouts()
+}
+
 func (n *LocalNetwork) SendTransaction(
 	ctx context.Context,
 	tx *types.Transaction,
