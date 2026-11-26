@@ -20,9 +20,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"math/big"
 	"math/rand"
-	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
@@ -140,7 +140,7 @@ func (a *OneOfBundleApplication) GetReceivedTransactions(rpcClient rpc.Client) (
 	return balance.Uint64(), nil
 }
 
-// OneOfBundleUser holds a single sender account. Each GenerateTx call produces
+// OneOfBundleUser holds a single sender account. Each transaction pulled produces
 // one bundle envelope containing a OneOf section with:
 //
 //  1. sender.transfer(target, 1)           - succeeds
@@ -155,10 +155,15 @@ type OneOfBundleUser struct {
 	accountFactory *AccountFactory
 	signer         types.Signer
 	client         rpc.Client
-	sentTxs        atomic.Uint64
 }
 
-func (u *OneOfBundleUser) GenerateTx() (*types.Transaction, error) {
+// Transactions returns the transactions of the user, built one at a time as
+// they are pulled.
+func (u *OneOfBundleUser) Transactions() iter.Seq2[*types.Transaction, error] {
+	return repeat(u.generateTx)
+}
+
+func (u *OneOfBundleUser) generateTx() (*types.Transaction, error) {
 	successfulFirst := rand.Intn(2) == 0
 
 	transferSuccessfulData, err := u.erc20Abi.Pack("transfer", u.targetAddress, big.NewInt(1))
@@ -227,10 +232,5 @@ func (u *OneOfBundleUser) GenerateTx() (*types.Transaction, error) {
 		SetEarliest(currentBlock).
 		Build()
 
-	u.sentTxs.Add(1)
 	return envelope, nil
-}
-
-func (u *OneOfBundleUser) GetSentTransactions() uint64 {
-	return u.sentTxs.Load()
 }

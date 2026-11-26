@@ -55,67 +55,13 @@ func (mr *MockShaperMockRecorder) GetNumMessagesInInterval(start, duration any) 
 }
 
 // Start mocks base method.
-func (m *MockShaper) Start(arg0 time.Time, arg1 LoadInfoSource) {
+func (m *MockShaper) Start(arg0 time.Time) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Start", arg0, arg1)
+	m.ctrl.Call(m, "Start", arg0)
 }
 
 // Start indicates an expected call of Start.
-func (mr *MockShaperMockRecorder) Start(arg0, arg1 any) *gomock.Call {
+func (mr *MockShaperMockRecorder) Start(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockShaper)(nil).Start), arg0, arg1)
-}
-
-// MockLoadInfoSource is a mock of LoadInfoSource interface.
-type MockLoadInfoSource struct {
-	ctrl     *gomock.Controller
-	recorder *MockLoadInfoSourceMockRecorder
-	isgomock struct{}
-}
-
-// MockLoadInfoSourceMockRecorder is the mock recorder for MockLoadInfoSource.
-type MockLoadInfoSourceMockRecorder struct {
-	mock *MockLoadInfoSource
-}
-
-// NewMockLoadInfoSource creates a new mock instance.
-func NewMockLoadInfoSource(ctrl *gomock.Controller) *MockLoadInfoSource {
-	mock := &MockLoadInfoSource{ctrl: ctrl}
-	mock.recorder = &MockLoadInfoSourceMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockLoadInfoSource) EXPECT() *MockLoadInfoSourceMockRecorder {
-	return m.recorder
-}
-
-// GetReceivedTransactions mocks base method.
-func (m *MockLoadInfoSource) GetReceivedTransactions() (uint64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetReceivedTransactions")
-	ret0, _ := ret[0].(uint64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetReceivedTransactions indicates an expected call of GetReceivedTransactions.
-func (mr *MockLoadInfoSourceMockRecorder) GetReceivedTransactions() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReceivedTransactions", reflect.TypeOf((*MockLoadInfoSource)(nil).GetReceivedTransactions))
-}
-
-// GetSentTransactions mocks base method.
-func (m *MockLoadInfoSource) GetSentTransactions() (uint64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetSentTransactions")
-	ret0, _ := ret[0].(uint64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetSentTransactions indicates an expected call of GetSentTransactions.
-func (mr *MockLoadInfoSourceMockRecorder) GetSentTransactions() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSentTransactions", reflect.TypeOf((*MockLoadInfoSource)(nil).GetSentTransactions))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockShaper)(nil).Start), arg0)
 }

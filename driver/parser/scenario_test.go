@@ -34,6 +34,7 @@ import (
 	"github.com/0xsoniclabs/norma/driver/steps/sonictool"
 	"github.com/0xsoniclabs/norma/driver/steps/wait"
 	"github.com/0xsoniclabs/norma/genesis"
+	"github.com/0xsoniclabs/norma/load/shaper"
 	"github.com/stretchr/testify/require"
 )
 
@@ -590,6 +591,26 @@ Scenario:
 	require.NotNil(t, step.Rate.Slope)
 	require.EqualValues(t, 20, step.Rate.Slope.Start)
 	require.EqualValues(t, 5, step.Rate.Slope.Increment)
+}
+
+func TestParseBytes_SaturateRate(t *testing.T) {
+	input := `
+Name: Saturate Rate Test
+Scenario:
+  - runApp: load
+    type: counter
+    rate:
+      saturate: true
+`
+	scenario, err := ParseBytes([]byte(input))
+	require.NoError(t, err)
+
+	step := stepAs[*apps.RunApp](t, scenario.Steps[0])
+	require.NotNil(t, step.Rate)
+	require.True(t, step.Rate.Saturate)
+	sh, err := shaper.ParseRate(step.Rate)
+	require.NoError(t, err)
+	require.IsType(t, shaper.Saturate{}, sh)
 }
 
 func TestParseBytes_DefaultsApplied(t *testing.T) {

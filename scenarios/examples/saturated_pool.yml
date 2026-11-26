@@ -1,0 +1,24 @@
+Name: Saturated Pool
+Description: >-
+  Saturates the transaction pools of three validators with counter
+  transactions from many users, each submitting as fast as the network
+  accepts and resubmitting what a full pool rejects. The network is expected
+  to keep producing blocks while its pools stay full, and all nodes to agree
+  on the chain afterwards.
+
+Scenario:
+  - startNode: validator
+    type: validator
+    instances: 3
+
+  - runApp: load
+    type: counter
+    users: 200
+    rate:
+      saturate: true
+
+  - waitFor: 30s
+
+  - checks:
+      - blocksProduced:
+        duration: 20s

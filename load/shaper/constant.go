@@ -32,7 +32,7 @@ func NewConstantShaper(frequency float64) *ConstantShaper {
 	}
 }
 
-func (s *ConstantShaper) Start(time.Time, LoadInfoSource) {}
+func (s *ConstantShaper) Start(time.Time) {}
 
 func (s *ConstantShaper) GetNumMessagesInInterval(start time.Time, duration time.Duration) float64 {
 	return math.Max(duration.Seconds()*float64(s.frequency), 0)

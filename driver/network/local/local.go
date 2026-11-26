@@ -517,8 +517,12 @@ func (n *LocalNetwork) RemoveNode(ctx context.Context, node driver.Node) error {
 	return errors.Join(errs...)
 }
 
-func (n *LocalNetwork) SendTransaction(tx *types.Transaction, source driver.TransactionSource) {
-	n.rpcWorkerPool.SendTransaction(tx, source)
+func (n *LocalNetwork) SendTransaction(
+	ctx context.Context,
+	tx *types.Transaction,
+	source driver.TransactionSource,
+) error {
+	return n.rpcWorkerPool.SendTransaction(ctx, tx, source)
 }
 
 func (n *LocalNetwork) RegisterTransactionObserver(observer driver.TransactionObserver) {

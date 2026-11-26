@@ -20,8 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"math/big"
-	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
@@ -186,7 +186,7 @@ func (a *SubsidizedBundleApplication) GetReceivedTransactions(rpcClient rpc.Clie
 	return total, nil
 }
 
-// SubsidizedBundleUser represents one (user, sponsor) pair. Each GenerateTx call
+// SubsidizedBundleUser represents one (user, sponsor) pair. Each transaction pulled
 // produces one AllOf bundle envelope containing:
 //
 //  1. sponsor.sponsor(approvalFundId, value)    — funds the approve subsidy
@@ -203,10 +203,15 @@ type SubsidizedBundleUser struct {
 	signer          types.Signer
 	client          rpc.Client
 	approvalFundId  [32]byte
-	sentTxs         atomic.Uint64
 }
 
-func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
+// Transactions returns the transactions of the user, built one at a time as
+// they are pulled.
+func (u *SubsidizedBundleUser) Transactions() iter.Seq2[*types.Transaction, error] {
+	return repeat(u.generateTx)
+}
+
+func (u *SubsidizedBundleUser) generateTx() (*types.Transaction, error) {
 	// sponsoredValue must cover the user's approve tx gas cost.
 	approveGasLimit := big.NewInt(70_000)
 	sponsoredValue := new(big.Int).Mul(approveGasLimit, gasFeeCap)
@@ -243,7 +248,6 @@ func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
 		return nil, fmt.Errorf("failed to get nonce for user: %w", err)
 	}
 
-	u.sentTxs.Add(1)
 	return bundle.NewBuilder().
 		WithSigner(u.signer).
 		AllOf(
@@ -275,8 +279,4 @@ func (u *SubsidizedBundleUser) GenerateTx() (*types.Transaction, error) {
 		).
 		SetEarliest(currentBlock).
 		Build(), nil
-}
-
-func (u *SubsidizedBundleUser) GetSentTransactions() uint64 {
-	return u.sentTxs.Load()
 }

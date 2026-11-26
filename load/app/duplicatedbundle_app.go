@@ -20,9 +20,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"math/big"
 	"math/rand"
-	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
@@ -169,20 +169,24 @@ type DuplicatedBundleUser struct {
 	targetAddress common.Address
 	signer        types.Signer
 	client        rpc.Client
-	sentTxs       atomic.Uint64
 
 	usedCount     int
 	savedEnvelope *types.Transaction
 }
 
-func (u *DuplicatedBundleUser) GenerateTx() (*types.Transaction, error) {
+// Transactions returns the transactions of the user, built one at a time as
+// they are pulled.
+func (u *DuplicatedBundleUser) Transactions() iter.Seq2[*types.Transaction, error] {
+	return repeat(u.generateTx)
+}
+
+func (u *DuplicatedBundleUser) generateTx() (*types.Transaction, error) {
 	if u.savedEnvelope == nil || u.usedCount >= duplicatedBundleThreshold {
 		tx, err := u.generateNewBundleTx()
 		if err != nil {
 			return nil, err
 		}
 		u.savedEnvelope = tx
-		u.sentTxs.Add(1)
 		u.usedCount = 1
 		return tx, nil
 	}
@@ -255,8 +259,4 @@ func (u *DuplicatedBundleUser) generateNewEnvelopeForExistingBundle(oldBundle *t
 		return nil, fmt.Errorf("failed to sign duplicate envelope: %w", err)
 	}
 	return tx, nil
-}
-
-func (u *DuplicatedBundleUser) GetSentTransactions() uint64 {
-	return u.sentTxs.Load()
 }

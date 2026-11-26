@@ -20,8 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"math/big"
-	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
@@ -140,10 +140,15 @@ func (f *SubsidiesApplication) GetReceivedTransactions(rpcClient rpc.Client) (ui
 type SubsidiesUser struct {
 	counterContract *contract.Counter
 	Sender          *Account
-	sentTxs         atomic.Uint64
 }
 
-func (u *SubsidiesUser) GenerateTx() (*types.Transaction, error) {
+// Transactions returns the transactions of the user, built one at a time as
+// they are pulled.
+func (u *SubsidiesUser) Transactions() iter.Seq2[*types.Transaction, error] {
+	return repeat(u.generateTx)
+}
+
+func (u *SubsidiesUser) generateTx() (*types.Transaction, error) {
 	opts, err := bind.NewKeyedTransactorWithChainID(u.Sender.privateKey, u.Sender.chainID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transactor; %w", err)
@@ -151,18 +156,14 @@ func (u *SubsidiesUser) GenerateTx() (*types.Transaction, error) {
 
 	opts.GasLimit = 28036
 	opts.GasPrice = big.NewInt(0) // request subsidy
-	opts.Nonce = big.NewInt(int64(u.Sender.getNextNonce()))
+	opts.Nonce = new(big.Int).SetUint64(u.Sender.nonce)
 	opts.NoSend = true // do not send the tx, norma will send it to the network
 	opts.Value = big.NewInt(0)
 	tx, err := u.counterContract.IncrementCounter(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create increment tx; %w", err)
 	}
+	u.Sender.nonce++
 
-	u.sentTxs.Add(1)
 	return tx, nil
-}
-
-func (u *SubsidiesUser) GetSentTransactions() uint64 {
-	return u.sentTxs.Load()
 }

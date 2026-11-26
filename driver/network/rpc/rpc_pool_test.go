@@ -17,8 +17,8 @@
 package rpc
 
 import (
-	"sync"
-	"sync/atomic"
+	"context"
+	"errors"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -44,43 +44,46 @@ func TestRetryRpcReturnGracefully(t *testing.T) {
 	}
 }
 
-func TestClosePool(t *testing.T) {
-	t.Parallel()
-
+func TestSendTransaction_ReturnsTheAnswerOfTheNode(t *testing.T) {
 	pool := NewRpcWorkerPool(t.Context())
-	counter := &atomic.Int32{}
-	wg := &sync.WaitGroup{}
-
+	rejected := errors.New("txpool is full")
 	go func() {
-		for range pool.txs {
-			counter.Add(1)
-			wg.Done()
-		}
-		wg.Done() // will get here when the channel is closed
+		(<-pool.txs).result <- rejected
 	}()
 
 	var tx types.Transaction
-	for range 10 {
-		wg.Add(1)
-		pool.SendTransaction(&tx, driver.TransactionSource{App: "test"})
-	}
+	err := pool.SendTransaction(t.Context(), &tx, driver.TransactionSource{App: "test"})
+	require.ErrorIs(t, err, rejected)
+}
 
-	wg.Wait()
-	wg.Add(1) // extra count to check the go routine ended
+func TestSendTransaction_Returns_WhenThePoolIsClosed(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		pool := NewRpcWorkerPool(t.Context())
+		done := make(chan error)
+		go func() {
+			var tx types.Transaction
+			done <- pool.SendTransaction(t.Context(), &tx, driver.TransactionSource{App: "test"})
+		}()
+		synctest.Wait() // the sender waits for a worker
 
-	if got, want := counter.Load(), int32(10); got != want {
-		t.Errorf("not all data read from the channel: %d != %d", got, want)
-	}
+		require.NoError(t, pool.Close())
+		require.ErrorIs(t, <-done, context.Canceled)
+	})
+}
 
-	if err := pool.Close(); err != nil {
-		t.Fatalf("error: %s", err)
-	}
-
-	wg.Wait()
-
-	if got, want := counter.Load(), int32(10); got > want {
-		t.Errorf("not all data read from the channel: %d != %d", got, want)
-	}
+func TestSendTransaction_Returns_WhenItsContextIsCancelledWhileWaitingForTheNode(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		pool := NewRpcWorkerPool(t.Context())
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan error)
+		go func() {
+			var tx types.Transaction
+			done <- pool.SendTransaction(ctx, &tx, driver.TransactionSource{App: "test"})
+		}()
+		<-pool.txs // taken by a worker which never answers
+		cancel()
+		require.ErrorIs(t, <-done, context.Canceled)
+	})
 }
 
 func TestCloseWorkerStartStop(t *testing.T) {
@@ -106,18 +109,15 @@ func TestSendTransaction_RoutesARestrictedAppThroughItsNodesOnly(t *testing.T) {
 	pool.RestrictApp("restricted", []string{"a"})
 
 	var tx types.Transaction
-	pool.SendTransaction(&tx, driver.TransactionSource{App: "restricted"})
-	pool.SendTransaction(&tx, driver.TransactionSource{App: "free"})
+	for _, app := range []string{"restricted", "free"} {
+		go func() {
+			_ = pool.SendTransaction(t.Context(), &tx, driver.TransactionSource{App: app})
+		}()
+	}
 
-	if got := (<-a.txs).source.App; got != "restricted" {
-		t.Errorf("node a got a transaction of %q", got)
-	}
-	if got := (<-pool.txs).source.App; got != "free" {
-		t.Errorf("shared queue got a transaction of %q", got)
-	}
-	if len(b.txs) != 0 {
-		t.Errorf("node b got a transaction")
-	}
+	require.Equal(t, "restricted", answer(<-a.txs).source.App)
+	require.Equal(t, "free", answer(<-pool.txs).source.App)
+	require.Empty(t, b.txs)
 }
 
 func TestSendTransaction_ReportsARestrictedAppWithoutActiveNodes(t *testing.T) {
@@ -129,7 +129,7 @@ func TestSendTransaction_ReportsARestrictedAppWithoutActiveNodes(t *testing.T) {
 	var tx types.Transaction
 	source := driver.TransactionSource{App: "restricted"}
 	observer.EXPECT().OnTransactionSubmitted(source, &tx, gomock.Any(), errNoNode)
-	pool.SendTransaction(&tx, source)
+	require.ErrorIs(t, pool.SendTransaction(t.Context(), &tx, source), errNoNode)
 }
 
 func TestSendTransaction_MovesToAnotherNode_WhenTheChosenOneIsRemoved(t *testing.T) {
@@ -142,7 +142,7 @@ func TestSendTransaction_MovesToAnotherNode_WhenTheChosenOneIsRemoved(t *testing
 
 		go func() {
 			var tx types.Transaction
-			pool.SendTransaction(&tx, driver.TransactionSource{App: "restricted"})
+			_ = pool.SendTransaction(t.Context(), &tx, driver.TransactionSource{App: "restricted"})
 		}()
 		synctest.Wait() // the sender waits for a worker of node a
 
@@ -153,9 +153,7 @@ func TestSendTransaction_MovesToAnotherNode_WhenTheChosenOneIsRemoved(t *testing
 		node.EXPECT().GetLabel().Return("a").AnyTimes()
 		pool.BeforeNodeRemoval(node)
 
-		if got := (<-b.txs).source.App; got != "restricted" {
-			t.Errorf("node b got a transaction of %q", got)
-		}
+		require.Equal(t, "restricted", answer(<-b.txs).source.App)
 	})
 }
 
@@ -177,7 +175,7 @@ func TestSendTransaction_ReportsAFailure_WhenTheWorkersOfItsOnlyNodeCannotConnec
 		var tx types.Transaction
 		source := driver.TransactionSource{App: "restricted"}
 		observer.EXPECT().OnTransactionSubmitted(source, &tx, gomock.Any(), errNoNode)
-		pool.SendTransaction(&tx, source)
+		require.ErrorIs(t, pool.SendTransaction(t.Context(), &tx, source), errNoNode)
 	})
 }
 
@@ -189,4 +187,10 @@ func TestAfterNodeCreation_SendsNothingThroughANode_WhenItIsPure(t *testing.T) {
 	pool.AfterNodeCreation(node)
 
 	require.Empty(t, pool.nodes)
+}
+
+// answer plays the worker that submitted the given transaction successfully.
+func answer(t transactionWithSource) transactionWithSource {
+	t.result <- nil
+	return t
 }

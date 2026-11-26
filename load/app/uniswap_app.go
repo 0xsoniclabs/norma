@@ -19,9 +19,9 @@ package app
 import (
 	"bytes"
 	"fmt"
+	"iter"
 	"math/big"
 	"math/rand"
-	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
@@ -259,10 +259,15 @@ type UniswapUser struct {
 	pairsAddresses          []common.Address
 	tokensAddressesReversed []common.Address
 	pairsAddressesReversed  []common.Address
-	sentTxs                 atomic.Uint64
 }
 
-func (g *UniswapUser) GenerateTx() (*types.Transaction, error) {
+// Transactions returns the transactions of the user, built one at a time as
+// they are pulled.
+func (g *UniswapUser) Transactions() iter.Seq2[*types.Transaction, error] {
+	return repeat(g.generateTx)
+}
+
+func (g *UniswapUser) generateTx() (*types.Transaction, error) {
 	var data []byte
 	var err error
 
@@ -282,12 +287,5 @@ func (g *UniswapUser) GenerateTx() (*types.Transaction, error) {
 	// swapExactTokensForTokens consumes 157571 for 2 tokens + cca 94314 for each additional token
 	const gasLimit = 160_000 + (TokensInChain-2)*95000
 	tx, err := createTx(g.sender, g.routerAddress, big.NewInt(0), data, gasLimit)
-	if err == nil {
-		g.sentTxs.Add(1)
-	}
 	return tx, err
-}
-
-func (g *UniswapUser) GetSentTransactions() uint64 {
-	return g.sentTxs.Load()
 }

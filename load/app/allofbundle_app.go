@@ -20,8 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"math/big"
-	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
@@ -84,7 +84,7 @@ func NewAllOfBundleApplication(appContext AppContext, feederId, appId uint32) (A
 
 // CreateUsers creates numUsers user triples (approver, spender, bundler).
 // Each triple shares one AllOfBundleUser that generates one bundle envelope per
-// GenerateTx call.
+// pulled transaction.
 func (a *AllOfBundleApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
 	users := make([]User, numUsers)
 	approverAddresses := make([]common.Address, numUsers)
@@ -151,7 +151,7 @@ func (a *AllOfBundleApplication) GetReceivedTransactions(rpcClient rpc.Client) (
 }
 
 // AllOfBundleUser represents one (approver, spender, bundler) triple. Each
-// GenerateTx call produces one bundle envelope containing:
+// pulled transaction is one bundle envelope containing:
 //
 //  1. approver.approve(spender, 1)               — grants allowance of 1 token
 //  2. spender.transferFrom(approver, spender, 1) — claims the token
@@ -166,10 +166,15 @@ type AllOfBundleUser struct {
 	accountFactory *AccountFactory
 	signer         types.Signer
 	client         rpc.Client
-	sentTxs        atomic.Uint64
 }
 
-func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
+// Transactions returns the transactions of the user, built one at a time as
+// they are pulled.
+func (u *AllOfBundleUser) Transactions() iter.Seq2[*types.Transaction, error] {
+	return repeat(u.generateTx)
+}
+
+func (u *AllOfBundleUser) generateTx() (*types.Transaction, error) {
 	ctx := context.Background()
 
 	approveData, err := u.erc20Abi.Pack("approve", u.spender.address, big.NewInt(1))
@@ -197,7 +202,6 @@ func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
 		return nil, fmt.Errorf("failed to get current block number: %w", err)
 	}
 
-	u.sentTxs.Add(1)
 	return bundle.NewBuilder().
 		WithSigner(u.signer).
 		AllOf(
@@ -220,8 +224,4 @@ func (u *AllOfBundleUser) GenerateTx() (*types.Transaction, error) {
 		).
 		SetEarliest(currentBlock).
 		Build(), nil
-}
-
-func (u *AllOfBundleUser) GetSentTransactions() uint64 {
-	return u.sentTxs.Load()
 }

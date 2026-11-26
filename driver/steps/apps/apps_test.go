@@ -38,7 +38,7 @@ func validRunApp() *RunApp {
 }
 
 func TestRunApp_Validate(t *testing.T) {
-	negative, zero, rate := float32(-1), 0, float32(5)
+	negative, zero := float32(-1), 0
 	tests := map[string]struct {
 		edit      func(*RunApp)
 		wantError string
@@ -54,7 +54,7 @@ func TestRunApp_Validate(t *testing.T) {
 			wantError: "must be >= 0",
 		},
 		"two load shapes": {
-			edit:      func(s *RunApp) { s.Rate.Wave = &shaper.Wave{Max: rate, Period: 1} },
+			edit:      func(s *RunApp) { s.Rate.Saturate = true },
 			wantError: "exactly one load shape",
 		},
 		"no users":      {edit: func(s *RunApp) { s.Users = &zero }, wantError: "number of users must be >= 1"},

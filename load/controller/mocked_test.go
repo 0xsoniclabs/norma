@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"iter"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -51,10 +52,9 @@ func TestMockedTrafficGenerating(t *testing.T) {
 	mockedApp := app.NewMockApplication(mockCtrl)
 	mockedApp.EXPECT().CreateUsers(appContext, numUsers).Return([]app.User{mockUser, mockUser}, nil)
 
-	// app should be called 10-times to generate 10 txs
-	mockUser.EXPECT().GenerateTx().Return(&demoTx, nil).MinTimes(5).MaxTimes(11)
+	mockUser.EXPECT().Transactions().Return(endless(&demoTx)).Times(numUsers)
 	// network should be called 10-times to send 10 txs
-	mockedNetwork.EXPECT().SendTransaction(&demoTx, gomock.Any()).MinTimes(5).MaxTimes(11)
+	mockedNetwork.EXPECT().SendTransaction(gomock.Any(), &demoTx, gomock.Any()).MinTimes(5).MaxTimes(11)
 
 	// use constant shaper
 	constantShaper := shaper.NewConstantShaper(100) // 100 txs/sec
@@ -95,12 +95,11 @@ func TestStoppingAnAppKeepsTheOthersSending(t *testing.T) {
 		own := rpc.NewMockClient(ctrl)
 		network := driver.NewMockNetwork(ctrl)
 		network.EXPECT().DialRandomRpc().Return(own, nil).Times(1)
-		network.EXPECT().SendTransaction(&demoTx, gomock.Any()).AnyTimes().Do(
-			func(*types.Transaction, driver.TransactionSource) { res.sent.Add(1) })
+		network.EXPECT().SendTransaction(gomock.Any(), &demoTx, gomock.Any()).AnyTimes().Do(
+			func(context.Context, *types.Transaction, driver.TransactionSource) { res.sent.Add(1) })
 
 		user := app.NewMockUser(ctrl)
-		user.EXPECT().GenerateTx().Return(&demoTx, nil).AnyTimes()
-		user.EXPECT().GetSentTransactions().Return(uint64(0)).AnyTimes()
+		user.EXPECT().Transactions().Return(endless(&demoTx))
 		application := app.NewMockApplication(ctrl)
 		application.EXPECT().CreateUsers(appContext, 1).Return([]app.User{user}, nil)
 		application.EXPECT().GetReceivedTransactions(own).AnyTimes().DoAndReturn(
@@ -113,7 +112,7 @@ func TestStoppingAnAppKeepsTheOthersSending(t *testing.T) {
 		return res
 	}
 	a := newApp("A", shaper.NewConstantShaper(100))
-	b := newApp("B", shaper.NewAutoShaper(100, 0.2))
+	b := newApp("B", shaper.NewConstantShaper(100))
 
 	ctxA, stopA := context.WithCancel(t.Context())
 	ctxB, stopB := context.WithCancel(t.Context())
@@ -121,7 +120,7 @@ func TestStoppingAnAppKeepsTheOthersSending(t *testing.T) {
 	runningA.Go(func() { _ = a.controller.Run(ctxA) })
 	running.Go(func() { _ = b.controller.Run(ctxB) })
 	// The monitoring reads the progress of both apps, also once A is
-	// stopped, while the shaper of B does.
+	// stopped.
 	running.Go(func() {
 		for ctxB.Err() == nil {
 			_, _ = a.controller.GetReceivedTransactions()
@@ -146,5 +145,13 @@ func TestStoppingAnAppKeepsTheOthersSending(t *testing.T) {
 	}
 	if a.read.Load() == readOfA {
 		t.Errorf("the progress of A could not be read after it was stopped")
+	}
+}
+
+// endless returns a sequence repeating the given transaction.
+func endless(tx *types.Transaction) iter.Seq2[*types.Transaction, error] {
+	return func(yield func(*types.Transaction, error) bool) {
+		for yield(tx, nil) {
+		}
 	}
 }

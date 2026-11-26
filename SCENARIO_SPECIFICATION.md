@@ -286,7 +286,8 @@ submitted through. Each name selects the node with that name and every
 instance started under it (as for `stopNode`); each name must select at least
 one node whose client is running when the app starts. When omitted, any node
 may be used. Transactions go through the selected nodes whose client is
-running; one sent while there is none is reported as a failed submission.
+running; one sent while there is none is reported as a failed submission and
+retried.
 
 **Supported application types** (case-insensitive): `counter`, `erc20`,
 `store`, `uniswap`, `smartaccount`, `subsidies`, `transient`,
@@ -306,16 +307,17 @@ rate:
     increment: 1           # increase per second
 
 rate:
-  wave:                    # sinusoidal rate
-    min: 5                 # optional; default 0
-    max: 50                # Tx/s at peak
-    period: 30             # seconds per cycle
-
-rate:
-  auto:                    # auto-tune to max throughput
-    increase: 1            # optional; +Tx/s per second when not overloaded
-    decrease: 0.2          # optional; fractional decrease on overload
+  saturate: true           # submit as fast as the network accepts
 ```
+
+Each user submits one transaction at a time and moves on to the next only
+once the network accepted it; a rejected transaction, for example because the
+pool is full, is resubmitted until it is. This keeps the nonces of every user
+free of gaps. Under `constant` and `slope`, when all users are still waiting
+for their previous transaction, the application holds back, logs that it
+cannot sustain its rate, and does not make up for the lost time later. Under
+`saturate`, the users submit back to back and keep the pool full; the
+pressure grows with the number of `users`.
 
 ### 3.8 `stopApp`
 

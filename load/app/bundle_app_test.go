@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"fmt"
+	"iter"
 	"math/big"
 	"strings"
 	"testing"
@@ -84,8 +85,11 @@ func testBundleGenerator(t *testing.T, application app.Application, ctxt app.App
 	numBundles := 5
 	rpcClient := ctxt.GetClient()
 	signer := types.LatestSignerForChainID(big.NewInt(FakeNetworkID))
+	next, stop := iter.Pull2(user.Transactions())
+	defer stop()
+	sent := uint64(0)
 	for i := range numBundles {
-		tx, err := user.GenerateTx()
+		tx, err, _ := next()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -102,6 +106,7 @@ func testBundleGenerator(t *testing.T, application app.Application, ctxt app.App
 			}
 			t.Fatal(err)
 		}
+		sent++
 
 		txBundle, err := bundle.OpenEnvelope(signer, tx)
 		if err != nil {
@@ -128,7 +133,6 @@ func testBundleGenerator(t *testing.T, application app.Application, ctxt app.App
 
 	err = network.Retry(t.Context(), network.DefaultRetryAttempts, 1*time.Second,
 		func(ctx context.Context) error {
-			sent := user.GetSentTransactions()
 			received, err := application.GetReceivedTransactions(rpcClient)
 			if err != nil {
 				return fmt.Errorf("unable to get amount of received txs; %v", err)
@@ -156,8 +160,10 @@ func testRpcNonceBundleGenerator(t *testing.T, application app.Application, ctxt
 	numBundles := 5
 	rpcClient := ctxt.GetClient()
 	lastReceived := uint64(0)
+	next, stop := iter.Pull2(user.Transactions())
+	defer stop()
 	for i := range numBundles {
-		tx, err := user.GenerateTx()
+		tx, err, _ := next()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -171,7 +177,7 @@ func testRpcNonceBundleGenerator(t *testing.T, application app.Application, ctxt
 		}
 		t.Logf("Sent bundle %d\n", i)
 
-		// wait for tx to be processed (necessary because of nonce loading in GenerateTx())
+		// wait for tx to be processed (necessary because the next one loads its nonces from the chain)
 		_ = network.Retry(t.Context(), 5, 1*time.Second,
 			func(ctx context.Context) error {
 				received, err := application.GetReceivedTransactions(rpcClient)

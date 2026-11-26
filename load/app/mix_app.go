@@ -18,8 +18,8 @@ package app
 
 import (
 	"fmt"
+	"iter"
 	"math/rand"
-	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -93,7 +93,7 @@ func NewMixApplication(appContext AppContext, feederId, appId uint32) (Applicati
 
 // CreateUsers creates numUsers users per sub-application and returns them in a
 // flat slice. Each MixUser independently draws a weighted random sub-app on
-// every GenerateTx call.
+// every pulled transaction.
 func (m *MixApplication) CreateUsers(appContext AppContext, numUsers int) ([]User, error) {
 	var err error
 	subAppUsers := make([][]User, len(m.apps))
@@ -133,12 +133,11 @@ func (m *MixApplication) GetReceivedTransactions(rpcClient rpc.Client) (uint64, 
 }
 
 // MixUser holds one user per sub-application and picks one with weighted
-// random selection on each GenerateTx call.
+// random selection for each pulled transaction.
 type MixUser struct {
 	users             []User
 	totalWeight       int
 	cumulativeWeights []int
-	sentTxs           atomic.Uint64
 }
 
 // pickRandomUser returns the index of the app selected by a weighted random draw.
@@ -152,16 +151,21 @@ func (u *MixUser) pickRandomUser() int {
 	return len(u.cumulativeWeights) - 1
 }
 
-func (u *MixUser) GenerateTx() (*types.Transaction, error) {
-	chosen := u.pickRandomUser()
-	tx, err := u.users[chosen].GenerateTx()
-	if err != nil {
-		return nil, err
+// Transactions returns the transactions of the user, each pulled from a sub-user
+// drawn at random. A sub-user moves on only when its own transaction is pulled.
+func (u *MixUser) Transactions() iter.Seq2[*types.Transaction, error] {
+	return func(yield func(*types.Transaction, error) bool) {
+		nexts := make([]func() (*types.Transaction, error, bool), len(u.users))
+		for i, user := range u.users {
+			next, stop := iter.Pull2(user.Transactions())
+			defer stop()
+			nexts[i] = next
+		}
+		for {
+			tx, err, ok := nexts[u.pickRandomUser()]()
+			if !ok || !yield(tx, err) {
+				return
+			}
+		}
 	}
-	u.sentTxs.Add(1)
-	return tx, nil
-}
-
-func (u *MixUser) GetSentTransactions() uint64 {
-	return u.sentTxs.Load()
 }

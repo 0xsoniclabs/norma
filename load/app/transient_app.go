@@ -19,8 +19,8 @@ package app
 import (
 	"context"
 	"fmt"
+	"iter"
 	"math/big"
-	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
 	contract "github.com/0xsoniclabs/norma/load/contracts/abi"
@@ -112,10 +112,15 @@ type TransientUser struct {
 	abi      *abi.ABI
 	sender   *Account
 	contract common.Address
-	sentTxs  atomic.Uint64
 }
 
-func (g *TransientUser) GenerateTx() (*types.Transaction, error) {
+// Transactions returns the transactions of the user, built one at a time as
+// they are pulled.
+func (g *TransientUser) Transactions() iter.Seq2[*types.Transaction, error] {
+	return repeat(g.generateTx)
+}
+
+func (g *TransientUser) generateTx() (*types.Transaction, error) {
 	data, err := g.abi.Pack("incrementCounterTwice")
 	if err != nil || data == nil {
 		return nil, fmt.Errorf("failed to prepare tx data; %w", err)
@@ -123,12 +128,5 @@ func (g *TransientUser) GenerateTx() (*types.Transaction, error) {
 
 	const gasLimit = 60000
 	tx, err := createTx(g.sender, g.contract, big.NewInt(0), data, gasLimit)
-	if err == nil {
-		g.sentTxs.Add(1)
-	}
 	return tx, err
-}
-
-func (g *TransientUser) GetSentTransactions() uint64 {
-	return g.sentTxs.Load()
 }

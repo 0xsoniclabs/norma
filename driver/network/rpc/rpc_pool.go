@@ -82,25 +82,41 @@ func (p *RpcWorkerPool) RestrictApp(app string, nodes []string) {
 }
 
 // SendTransaction hands the transaction to a worker of a node its application
-// may submit through. When the chosen node is removed first, it tries another.
-func (p *RpcWorkerPool) SendTransaction(tx *types.Transaction, source driver.TransactionSource) {
-	t := transactionWithSource{tx: tx, source: source}
+// may submit through and waits for the node's answer. When the chosen node is
+// removed first, it tries another.
+func (p *RpcWorkerPool) SendTransaction(
+	ctx context.Context,
+	tx *types.Transaction,
+	source driver.TransactionSource,
+) error {
+	t := transactionWithSource{tx: tx, source: source, result: make(chan error, 1)}
 	for {
+		queue, closed := p.txs, (chan struct{})(nil)
 		targets, restricted := p.targets(source.App)
-		if !restricted {
-			p.txs <- t
-			return
+		if restricted {
+			if len(targets) == 0 {
+				p.observers.notify(source, tx, time.Now(), errNoNode)
+				return errNoNode
+			}
+			// ponytail: random node, not the least busy one; balance on load if a slow node starts holding up the app.
+			target := targets[rand.IntN(len(targets))]
+			queue, closed = target.txs, target.closed
 		}
-		if len(targets) == 0 {
-			p.observers.notify(source, tx, time.Now(), errNoNode)
-			return
-		}
-		// ponytail: random node, not the least busy one; balance on load if a slow node starts holding up the app.
-		target := targets[rand.IntN(len(targets))]
 		select {
-		case target.txs <- t:
-			return
-		case <-target.closed:
+		case queue <- t:
+			select {
+			case err := <-t.result:
+				return err
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-p.ctx.Done():
+				return p.ctx.Err()
+			}
+		case <-closed:
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-p.ctx.Done():
+			return p.ctx.Err()
 		}
 	}
 }
@@ -233,7 +249,6 @@ func (p *RpcWorkerPool) Close() error {
 		n.close()
 	}
 	slog.Info("worker pool has closed")
-	close(p.txs)
 	return nil
 }
 
@@ -336,17 +351,15 @@ func (p *worker) runRpcSenderLoop() error {
 		// The submission is reported before any logging, keeping the
 		// measured moment as close to the actual submission as possible.
 		p.observers.notify(tx.source, tx.tx, time.Now(), err)
-		if err != nil {
-			slog.Warn("failed to send tx", "node", p.nodeName, "source", tx.source, "error", err)
-		}
+		tx.result <- err
 	}
 }
 
-// transactionWithSource is a struct that holds a transaction and its source.
-// It is used to provide feedback about the origin of the transaction in case
-// of an error when sending it to the RPC client, and to attribute it to its
-// load generator when reporting the submission to observers.
+// transactionWithSource is a transaction on its way to a worker, with the load
+// generator it is attributed to and where the worker answers with the node's
+// response.
 type transactionWithSource struct {
 	tx     *types.Transaction
 	source driver.TransactionSource
+	result chan error
 }

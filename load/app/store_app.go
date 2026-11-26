@@ -19,8 +19,8 @@ package app
 import (
 	"context"
 	"fmt"
+	"iter"
 	"math/big"
-	"sync/atomic"
 
 	"github.com/0xsoniclabs/norma/driver/rpc"
 
@@ -117,16 +117,23 @@ type StoreUser struct {
 	abi      *abi.ABI
 	sender   *Account
 	contract common.Address
-	sentTxs  atomic.Uint64
 }
 
-func (g *StoreUser) GenerateTx() (*types.Transaction, error) {
+// Transactions returns the transactions of the user, built one at a time as
+// they are pulled.
+func (g *StoreUser) Transactions() iter.Seq2[*types.Transaction, error] {
+	return func(yield func(*types.Transaction, error) bool) {
+		for val := int64(1); yield(g.generateTx(val)); val++ {
+		}
+	}
+}
+
+func (g *StoreUser) generateTx(val int64) (*types.Transaction, error) {
 	const updateSize = 260 // ~ 1 GB/minute new netto data at 1000 Tx/s
 
 	// prepare tx data -- since as single put is rather cheap, we use the 'fill' operation
 	// to perform a number of updates at once. Each transaction is allocating updateSize
 	// extra slots, which correspond to ~(32 byte key + 32 byte value) extra storage.
-	val := int64(g.sentTxs.Load()) + 1
 	from := val * updateSize
 	to := from + updateSize
 	data, err := g.abi.Pack("fill", big.NewInt(from), big.NewInt(to), big.NewInt(val))
@@ -137,12 +144,5 @@ func (g *StoreUser) GenerateTx() (*types.Transaction, error) {
 	// prepare tx
 	const gasLimit = 52000 + 25000*updateSize // wild guess ...
 	tx, err := createTx(g.sender, g.contract, big.NewInt(0), data, gasLimit)
-	if err == nil {
-		g.sentTxs.Add(1)
-	}
 	return tx, err
-}
-
-func (g *StoreUser) GetSentTransactions() uint64 {
-	return g.sentTxs.Load()
 }
