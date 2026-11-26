@@ -71,7 +71,7 @@ func TestSendTransaction_Returns_WhenThePoolIsClosed(t *testing.T) {
 	})
 }
 
-func TestSendTransaction_Returns_WhenItsContextIsCancelledWhileWaitingForTheNode(t *testing.T) {
+func TestSendTransaction_ReturnsTheAnswerOfTheNode_WhenItsContextEndsAfterAWorkerTookIt(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		pool := NewRpcWorkerPool(t.Context())
 		ctx, cancel := context.WithCancel(t.Context())
@@ -80,7 +80,24 @@ func TestSendTransaction_Returns_WhenItsContextIsCancelledWhileWaitingForTheNode
 			var tx types.Transaction
 			done <- pool.SendTransaction(ctx, &tx, driver.TransactionSource{App: "test"})
 		}()
-		<-pool.txs // taken by a worker which never answers
+		taken := <-pool.txs
+		cancel()
+		synctest.Wait()
+		taken.result <- nil
+		require.NoError(t, <-done)
+	})
+}
+
+func TestSendTransaction_Returns_WhenItsContextEndsBeforeAWorkerTookIt(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		pool := NewRpcWorkerPool(t.Context())
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan error)
+		go func() {
+			var tx types.Transaction
+			done <- pool.SendTransaction(ctx, &tx, driver.TransactionSource{App: "test"})
+		}()
+		synctest.Wait() // no worker takes it
 		cancel()
 		require.ErrorIs(t, <-done, context.Canceled)
 	})

@@ -91,7 +91,7 @@ func NewAppController(
 func (ac *AppController) Run(ctx context.Context) error {
 	var trigger chan struct{}
 	if _, saturate := ac.shaper.(shaper.Saturate); !saturate {
-		trigger = make(chan struct{}, len(ac.users))
+		trigger = make(chan struct{})
 	}
 
 	var done sync.WaitGroup
@@ -110,9 +110,10 @@ func (ac *AppController) Run(ctx context.Context) error {
 }
 
 // pace hands out the signals for the users to submit their next transaction at
-// the rate of the shaper, until the context ends. When all users still wait for
-// the network to accept their previous transaction, it holds until one is free
-// rather than piling up signals, and does not make up for the time it held.
+// the rate of the shaper, until the context ends. A signal goes only to a user
+// ready to submit; when all still wait for the network to accept their previous
+// transaction, it holds until one is free and does not make up for the time it
+// held.
 func (ac *AppController) pace(ctx context.Context, trigger chan<- struct{}) {
 	var pending float64
 	lastUpdate := time.Now()

@@ -22,6 +22,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/0xsoniclabs/norma/driver"
@@ -29,6 +30,7 @@ import (
 	"github.com/0xsoniclabs/norma/load/app"
 	"github.com/0xsoniclabs/norma/load/shaper"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -146,6 +148,45 @@ func TestStoppingAnAppKeepsTheOthersSending(t *testing.T) {
 	if a.read.Load() == readOfA {
 		t.Errorf("the progress of A could not be read after it was stopped")
 	}
+}
+
+func TestRun_SubmitsAtItsRateWithoutABurst_WhenTheNetworkRecoversFromAnOutage(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const numUsers = 20 // fewer than the signals of the outage
+		ctrl := gomock.NewController(t)
+		appContext := app.NewMockAppContext(ctrl)
+		var demoTx types.Transaction
+		user := app.NewMockUser(ctrl)
+		user.EXPECT().Transactions().Return(endless(&demoTx)).Times(numUsers)
+		users := make([]app.User, numUsers)
+		for i := range users {
+			users[i] = user
+		}
+		application := app.NewMockApplication(ctrl)
+		application.EXPECT().CreateUsers(appContext, numUsers).Return(users, nil)
+
+		// The network takes nothing for the first 5 seconds.
+		recovery := time.Now().Add(5 * time.Second)
+		var afterRecovery atomic.Int64
+		network := driver.NewMockNetwork(ctrl)
+		network.EXPECT().SendTransaction(gomock.Any(), &demoTx, gomock.Any()).AnyTimes().DoAndReturn(
+			func(context.Context, *types.Transaction, driver.TransactionSource) error {
+				if now := time.Now(); now.Before(recovery) {
+					time.Sleep(recovery.Sub(now))
+				} else if now.Before(recovery.Add(time.Second)) {
+					afterRecovery.Add(1)
+				}
+				return nil
+			})
+
+		controller, err := NewAppController("test-app", application, shaper.NewConstantShaper(10), numUsers, appContext, network)
+		require.NoError(t, err)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
+		require.NoError(t, controller.Run(ctx))
+
+		require.InDelta(t, 10, afterRecovery.Load(), 2, "submissions in the second after the outage")
+	})
 }
 
 // endless returns a sequence repeating the given transaction.

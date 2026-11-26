@@ -59,7 +59,7 @@ func NewRpcWorkerPool(ctx context.Context) *RpcWorkerPool {
 	ctx, cancel := context.WithCancel(ctx)
 
 	return &RpcWorkerPool{
-		txs:       make(chan transactionWithSource, 100),
+		txs:       make(chan transactionWithSource),
 		ctx:       ctx,
 		cancel:    cancel,
 		observers: &observers{},
@@ -83,7 +83,8 @@ func (p *RpcWorkerPool) RestrictApp(app string, nodes []string) {
 
 // SendTransaction hands the transaction to a worker of a node its application
 // may submit through and waits for the node's answer. When the chosen node is
-// removed first, it tries another.
+// removed first, it tries another. Once a worker took the transaction, it waits
+// for the answer even if the context ends, since the node may accept it.
 func (p *RpcWorkerPool) SendTransaction(
 	ctx context.Context,
 	tx *types.Transaction,
@@ -107,8 +108,6 @@ func (p *RpcWorkerPool) SendTransaction(
 			select {
 			case err := <-t.result:
 				return err
-			case <-ctx.Done():
-				return ctx.Err()
 			case <-p.ctx.Done():
 				return p.ctx.Err()
 			}
