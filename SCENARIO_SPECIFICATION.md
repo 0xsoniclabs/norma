@@ -186,7 +186,9 @@ Parameter details:
   such as epoch advances and validator registrations — so they all go through
   observer and rpc nodes, and `runApp` may not name it in `nodes`. The
   `historicalState` check leaves it out. `norma check` warns when a scenario
-  starts pure validators but no observer or rpc node.
+  starts pure validators but no observer or rpc node. A node never changes
+  between pure and not pure: a restart in place keeps its mode, and a rejoin
+  must repeat `pure: true` exactly when the node was first started with it.
 
 **Rejoin semantics:** Calling `startNode` with an identifier that was
 previously started and stopped is treated as a rejoin. No new validator is

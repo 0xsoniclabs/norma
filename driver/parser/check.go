@@ -79,16 +79,19 @@ func CheckFile(path string) (Scenario, error) {
 }
 
 // lacksObservers reports whether the scenario starts a pure validator but no
-// observer or rpc node to send transactions through.
+// observer or rpc node to send transactions through. It replays the steps on a
+// model, which knows the role a restarted node keeps, so it expects a scenario
+// that passed the dry run.
 func (s *Scenario) lacksObservers() bool {
+	model := steps.NewModel()
 	pure, observer := false, false
 	for _, step := range s.Steps {
-		switch start := step.(type) {
-		case *nodelifetime.StartNode:
-			pure = pure || start.Pure
-			observer = observer || !start.IsValidator()
-		case *nodelifetime.PrepareNode:
-			observer = true
+		if err := step.UpdateModel(model); err != nil {
+			return false
+		}
+		for _, n := range model.Nodes {
+			pure = pure || n.Pure
+			observer = observer || !n.Validator
 		}
 	}
 	return pure && !observer

@@ -107,13 +107,19 @@ func (s *StartNode) Validate() error {
 // UpdateModel starts the node or its instances, or restarts the client of a
 // node that is still tracked. A restart keeps the node's role: an omitted type
 // means the role it was started with, and a different one is refused, since
-// the node's validator id is fixed when it is created.
+// the node's validator id is fixed when it is created. A node never changes
+// between pure and not pure: a rejoin has to repeat the mode it was first
+// started in, and a restart in place keeps it.
 func (s *StartNode) UpdateModel(m *steps.Model) error {
 	name := s.Node.Node
 	if existing, ok := m.Nodes[name]; ok {
 		if s.Type != "" && s.IsValidator() != existing.Validator {
 			return fmt.Errorf("node %q was started as %s; restarting it in place as %s is not supported",
 				name, role(existing.Validator), role(s.IsValidator()))
+		}
+		if s.Pure && !existing.Pure {
+			return fmt.Errorf("node %q was started as %s; restarting it in place as %s is not supported",
+				name, mode(false), mode(true))
 		}
 		if s.InstanceCount() > 1 {
 			return fmt.Errorf("restarting node %q in place cannot start %d instances", name, s.InstanceCount())
@@ -135,6 +141,10 @@ func (s *StartNode) UpdateModel(m *steps.Model) error {
 		if s.IsValidator() && !m.Validators[label] && isRejoin {
 			return fmt.Errorf("validator %s is rejoining but has no preserved validator ID", label)
 		}
+		if m.Started[label] && m.Pure[label] != s.Pure {
+			return fmt.Errorf("node %q was started as %s; it cannot rejoin as %s",
+				label, mode(m.Pure[label]), mode(s.Pure))
+		}
 	}
 	for instance := range s.InstanceCount() {
 		label := s.InstanceName(instance)
@@ -148,6 +158,9 @@ func (s *StartNode) UpdateModel(m *steps.Model) error {
 		if s.IsValidator() {
 			m.Validators[label] = true
 		}
+		if s.Pure {
+			m.Pure[label] = true
+		}
 	}
 	m.Started[name] = true
 	return nil
@@ -159,6 +172,13 @@ func exitsWhenSynced(extraArguments string) bool {
 	return slices.ContainsFunc(strings.Fields(extraArguments), func(argument string) bool {
 		return strings.HasPrefix(argument, "--exitwhensynced.")
 	})
+}
+
+func mode(pure bool) string {
+	if pure {
+		return "a pure node"
+	}
+	return "a non-pure node"
 }
 
 func role(validator bool) string {

@@ -87,6 +87,19 @@ func TestDryRun_ReportsTheStep_WhenItCannotRun(t *testing.T) {
 			steps:     "  - startNode: obs\n  - killSonic: obs\n  - runApp: load\n    type: counter\n    rate:\n      constant: 1\n    nodes: [obs]\n",
 			wantError: `step 4 (runApp load): node "obs" has no running client to submit through`,
 		},
+		"restart in place as pure": {
+			steps:     "  - stopSonic: val\n  - startNode: val\n    type: validator\n    pure: true\n",
+			wantError: `node "val" was started as a non-pure node; restarting it in place as a pure node is not supported`,
+		},
+		"rejoin as pure": {
+			steps:     "  - stopNode: val\n  - startNode: val\n    type: validator\n    pure: true\n",
+			wantError: `node "val" was started as a non-pure node; it cannot rejoin as a pure node`,
+		},
+		"rejoin a pure validator as not pure": {
+			steps: "  - startNode: pv\n    type: validator\n    pure: true\n" +
+				"  - stopNode: pv\n  - startNode: pv\n    type: validator\n",
+			wantError: `node "pv" was started as a pure node; it cannot rejoin as a non-pure node`,
+		},
 		"send through a pure validator": {
 			steps: "  - startNode: pv\n    type: validator\n    pure: true\n" +
 				"  - runApp: load\n    type: counter\n    rate:\n      constant: 1\n    nodes: [pv]\n",
@@ -166,6 +179,10 @@ func TestDryRun_Succeeds_WhenEveryStepCanRun(t *testing.T) {
 		"bootstrap a node from a g-file": "  - stopSonic: val\n  - exportGenesis: val\n    file: a.g\n" +
 			"  - prepareNode: fresh\n    file: a.g\n  - checkDb: fresh\n  - startNode: fresh\n",
 		"rejoin a validator": "  - stopNode: val\n  - startNode: val\n    type: validator\n",
+		"restart a pure validator in place keeping its mode": "  - startNode: pv\n    type: validator\n    pure: true\n" +
+			"  - stopSonic: pv\n  - startNode: pv\n",
+		"rejoin a pure validator": "  - startNode: pv\n    type: validator\n    pure: true\n" +
+			"  - stopNode: pv\n  - startNode: pv\n    type: validator\n    pure: true\n",
 		"drain a delegation": "  - delegate:\n    - node: val\n      delegator: alice\n      stake: 100\n" +
 			"  - undelegate:\n    - node: val\n      delegator: alice\n",
 		"stop the instances of a name": "  - startNode: obs\n    instances: 2\n  - stopNode: obs\n",

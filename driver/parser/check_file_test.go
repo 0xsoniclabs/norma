@@ -80,6 +80,10 @@ func TestLacksObservers_IsTrue_WhenOnlyPureValidatorsCanTakeTransactions(t *test
 		"pure validator with an rpc node": {
 			steps: "  - startNode: val\n    type: validator\n    pure: true\n  - startNode: rpc\n    type: rpc\n",
 		},
+		"pure validator restarted in place": {
+			steps: "  - startNode: val\n    type: validator\n    pure: true\n  - stopSonic: val\n  - startNode: val\n",
+			want:  true,
+		},
 		"pure validator with a prepared node": {
 			steps: "  - startNode: val\n    type: validator\n    pure: true\n" +
 				"  - prepareNode: obs\n    file: a.g\n",

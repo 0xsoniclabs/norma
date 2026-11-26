@@ -35,6 +35,9 @@ type Model struct {
 	// Validators holds every label that has been given a validator id,
 	// including stopped ones, which can rejoin under it.
 	Validators map[string]bool
+	// Pure holds every label started as a pure validator, including stopped
+	// ones: a node keeps its mode for good.
+	Pure map[string]bool
 	// Apps holds the running applications.
 	Apps map[string]bool
 	// Delegators holds every delegator account used so far.
@@ -70,6 +73,7 @@ func NewModel() *Model {
 		Nodes:       map[string]*ModelNode{},
 		Started:     map[string]bool{},
 		Validators:  map[string]bool{},
+		Pure:        map[string]bool{},
 		Apps:        map[string]bool{},
 		Delegators:  map[string]bool{},
 		Delegations: map[Delegation]uint64{},
